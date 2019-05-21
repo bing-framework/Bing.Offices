@@ -1,12 +1,12 @@
 ﻿using System;
 
-namespace Bing.Offices.Attributes
+namespace Bing.Offices.Attributes.Decorators
 {
     /// <summary>
     /// 自动换行
     /// </summary>
     [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
-    public class WrapTextAttribute : Attribute
+    public class WrapTextAttribute : DecorateBaseAttribute
     {
     }
 }
