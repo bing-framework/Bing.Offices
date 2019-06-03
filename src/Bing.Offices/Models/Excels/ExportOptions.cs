@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using Bing.Offices.Abstractions;
 using Bing.Offices.Enums;
 
 namespace Bing.Offices.Models.Excels
@@ -33,5 +34,10 @@ namespace Bing.Offices.Models.Excels
         /// 数据行起始索引。默认：1
         /// </summary>
         public int DataRowStartIndex { get; set; } = 1;
+
+        /// <summary>
+        /// 导出提供程序
+        /// </summary>
+        public IExcelExportProvider ExportProvider { get; set; }
     }
 }

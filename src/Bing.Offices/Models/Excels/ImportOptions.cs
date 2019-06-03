@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using Bing.Offices.Abstractions;
 using Bing.Offices.Enums;
 
 namespace Bing.Offices.Models.Excels
@@ -37,5 +38,10 @@ namespace Bing.Offices.Models.Excels
         /// 校验模式
         /// </summary>
         public ValidateMode ValidateMode { get; set; } = ValidateMode.Stop;
+
+        /// <summary>
+        /// 导入提供程序
+        /// </summary>
+        public IExcelImportProvider ImportProvider { get; set; }
     }
 }
