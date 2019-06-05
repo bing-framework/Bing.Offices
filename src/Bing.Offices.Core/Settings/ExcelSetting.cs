@@ -1,9 +1,11 @@
-﻿namespace Bing.Offices.Abstractions.Settings
+﻿using Bing.Offices.Abstractions.Settings;
+
+namespace Bing.Offices.Settings
 {
     /// <summary>
     /// Excel 文档属性设置
     /// </summary>
-    public sealed class ExcelSetting
+    public sealed class ExcelSetting : IExcelSetting
     {
         /// <summary>
         /// 作者

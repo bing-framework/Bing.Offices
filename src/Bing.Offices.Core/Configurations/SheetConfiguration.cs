@@ -1,5 +1,5 @@
 ﻿using Bing.Offices.Abstractions.Configurations;
-using Bing.Offices.Abstractions.Settings;
+using Bing.Offices.Settings;
 
 namespace Bing.Offices.Configurations
 {

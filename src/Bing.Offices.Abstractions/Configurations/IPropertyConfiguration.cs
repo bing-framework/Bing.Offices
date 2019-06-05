@@ -1,10 +1,17 @@
-﻿namespace Bing.Offices.Abstractions.Configurations
+﻿using Bing.Offices.Abstractions.Settings;
+
+namespace Bing.Offices.Abstractions.Configurations
 {
     /// <summary>
     /// 属性配置
     /// </summary>
     public interface IPropertyConfiguration
     {
+        /// <summary>
+        /// 属性设置
+        /// </summary>
+        IPropertySetting PropertySetting { get; }
+
         /// <summary>
         /// 设置索引
         /// </summary>

@@ -1,5 +1,6 @@
 ﻿using Bing.Offices.Abstractions.Configurations;
 using Bing.Offices.Abstractions.Settings;
+using Bing.Offices.Settings;
 
 namespace Bing.Offices.Configurations
 {
@@ -11,7 +12,12 @@ namespace Bing.Offices.Configurations
         /// <summary>
         /// 属性设置
         /// </summary>
-        internal PropertySetting PropertySetting { get; }
+        private readonly PropertySetting _propertySetting;
+
+        /// <summary>
+        /// 属性设置
+        /// </summary>
+        public IPropertySetting PropertySetting => _propertySetting;
 
         /// <summary>
         /// 初始化一个<see cref="PropertyConfiguration"/>类型的实例
@@ -24,9 +30,9 @@ namespace Bing.Offices.Configurations
         /// 初始化一个<see cref="PropertyConfiguration"/>类型的实例
         /// </summary>
         /// <param name="propertySetting">属性设置</param>
-        public PropertyConfiguration(PropertySetting propertySetting)
+        public PropertyConfiguration(IPropertySetting propertySetting)
         {
-            PropertySetting = propertySetting;
+            _propertySetting = propertySetting as PropertySetting;
         }
 
         /// <summary>
@@ -37,7 +43,7 @@ namespace Bing.Offices.Configurations
         {
             if (index >= 0)
             {
-                PropertySetting.Index = index;
+                _propertySetting.Index = index;
             }
 
             return this;
@@ -51,7 +57,7 @@ namespace Bing.Offices.Configurations
         {
             if (!string.IsNullOrWhiteSpace(title))
             {
-                PropertySetting.Title = title;
+                _propertySetting.Title = title;
             }
 
             return this;
@@ -65,7 +71,7 @@ namespace Bing.Offices.Configurations
         {
             if (!string.IsNullOrWhiteSpace(formatter))
             {
-                PropertySetting.Formatter = formatter;
+                _propertySetting.Formatter = formatter;
             }
 
             return this;
@@ -76,7 +82,7 @@ namespace Bing.Offices.Configurations
         /// </summary>
         public IPropertyConfiguration Ignored()
         {
-            PropertySetting.Ignored = true;
+            _propertySetting.Ignored = true;
             return this;
         }
 
@@ -88,7 +94,7 @@ namespace Bing.Offices.Configurations
         {
             if (value != null)
             {
-                PropertySetting.DefaultValue = value;
+                _propertySetting.DefaultValue = value;
             }
 
             return this;

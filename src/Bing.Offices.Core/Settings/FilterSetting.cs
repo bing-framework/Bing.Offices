@@ -1,9 +1,11 @@
-﻿namespace Bing.Offices.Abstractions.Settings
+﻿using Bing.Offices.Abstractions.Settings;
+
+namespace Bing.Offices.Settings
 {
     /// <summary>
     /// 过滤器设置
     /// </summary>
-    public sealed class FilterSetting
+    public sealed class FilterSetting : IFilterSetting
     {
         /// <summary>
         /// 首列索引

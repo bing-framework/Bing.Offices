@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq.Expressions;
+using System.Reflection;
 using Bing.Offices.Abstractions.Settings;
 
 namespace Bing.Offices.Abstractions.Configurations
@@ -9,10 +11,34 @@ namespace Bing.Offices.Abstractions.Configurations
     /// </summary>
     public interface IExcelConfiguration
     {
+        #region Setting(设置)
+
         /// <summary>
         /// Excel 文档属性设置
         /// </summary>
-        ExcelSetting ExcelSetting { get; }
+        IExcelSetting ExcelSetting { get; }
+
+        /// <summary>
+        /// 冻结设置
+        /// </summary>
+        IList<IFreezeSetting> FreezeSettings { get; }
+
+        /// <summary>
+        /// 过滤器设置
+        /// </summary>
+        IFilterSetting FilterSetting { get; }
+
+        /// <summary>
+        /// 工作表设置
+        /// </summary>
+        IList<ISheetSetting> SheetSettings { get; }
+
+        /// <summary>
+        /// 属性配置字典
+        /// </summary>
+        IDictionary<PropertyInfo, IPropertyConfiguration> PropertyConfigurationsDictionary { get; }
+
+        #endregion
 
         #region ExcelSetting(Excel文档属性设置)
 

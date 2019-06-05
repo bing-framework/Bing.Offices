@@ -1,9 +1,11 @@
-﻿namespace Bing.Offices.Abstractions.Settings
+﻿using Bing.Offices.Abstractions.Settings;
+
+namespace Bing.Offices.Settings
 {
     /// <summary>
     /// 冻结设置
     /// </summary>
-    public sealed class FreezeSetting
+    public sealed class FreezeSetting : IFreezeSetting
     {
         /// <summary>
         /// 冻结单元格的列号

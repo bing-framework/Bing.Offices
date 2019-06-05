@@ -1,9 +1,11 @@
-﻿namespace Bing.Offices.Abstractions.Settings
+﻿using Bing.Offices.Abstractions.Settings;
+
+namespace Bing.Offices.Settings
 {
     /// <summary>
     /// 统计信息设置
     /// </summary>
-    public sealed class StatisticsSetting
+    public sealed class StatisticsSetting : IStatisticsSetting
     {
         /// <summary>
         /// 统计信息名称，默认名称位置为（最后一行，第一个单元格）

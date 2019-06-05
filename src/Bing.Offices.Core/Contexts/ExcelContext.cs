@@ -30,5 +30,6 @@ namespace Bing.Offices.Contexts
         /// <typeparam name="TEntity">实体类型</typeparam>
         public IExcelConfiguration<TEntity> GetExportSetting<TEntity>() => InternalCache.ExcelExportConfigurationDictionary.GetOrAdd(typeof(TEntity),
             t => Helper.GetExcelConfigurationMapping<TEntity>()) as IExcelConfiguration<TEntity>;
+
     }
 }
