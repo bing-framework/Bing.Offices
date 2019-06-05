@@ -8,12 +8,12 @@
         /// <summary>
         /// 工作表索引
         /// </summary>
-        private int _sheetIndex = 0;
+        private int _index = 0;
 
         /// <summary>
         /// 工作表名称
         /// </summary>
-        private string _sheetName = "Sheet0";
+        private string _name = "Sheet0";
 
         /// <summary>
         /// 起始行索引
@@ -23,19 +23,19 @@
         /// <summary>
         /// 工作表索引
         /// </summary>
-        public int SheetIndex
+        public int Index
         {
-            get => _sheetIndex;
-            set => _sheetIndex = value >= 0 ? value : 0;
+            get => _index;
+            set => _index = value >= 0 ? value : 0;
         }
 
         /// <summary>
         /// 工作表名称
         /// </summary>
-        public string SheetName
+        public string Name
         {
-            get => _sheetName;
-            set => _sheetName = string.IsNullOrWhiteSpace(value) ? value : "Sheet0";
+            get => _name;
+            set => _name = string.IsNullOrWhiteSpace(value) ? value : "Sheet0";
         }
 
         /// <summary>
