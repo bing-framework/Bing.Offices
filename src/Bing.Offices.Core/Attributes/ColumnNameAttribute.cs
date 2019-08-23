@@ -3,7 +3,7 @@
 namespace Bing.Offices.Attributes
 {
     /// <summary>
-    /// 列名
+    /// 列名特性
     /// </summary>
     [AttributeUsage(AttributeTargets.Property)]
     public class ColumnNameAttribute : Attribute

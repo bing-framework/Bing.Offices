@@ -3,7 +3,7 @@
 namespace Bing.Offices.Abstractions.Attributes
 {
     /// <summary>
-    /// 过滤器属性基类
+    /// 过滤器特性基类
     /// </summary>
     public abstract class FilterAttributeBase : Attribute
     {
