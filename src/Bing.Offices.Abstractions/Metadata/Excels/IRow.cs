@@ -10,7 +10,7 @@ namespace Bing.Offices.Abstractions.Metadata.Excels
         /// <summary>
         /// 行索引
         /// </summary>
-        int Index { get; set; }
+        int RowIndex { get; set; }
 
         /// <summary>
         /// 是否有效

@@ -1,15 +1,17 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
-VisualStudioVersion = 15.0.28307.539
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.29102.190
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Bing.Offices", "src\Bing.Offices\Bing.Offices.csproj", "{08D30AD4-FEAC-45A9-8821-3CB338E93EA6}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Bing.Offices.Abstractions", "src\Bing.Offices.Abstractions\Bing.Offices.Abstractions.csproj", "{069807D2-8CC8-4CA8-8B89-D95D6E93BE51}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Bing.Offices.Core", "src\Bing.Offices.Core\Bing.Offices.Core.csproj", "{A73AA5CA-12D4-4588-B4A0-39FD047DE8DB}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Bing.Offices.Core", "src\Bing.Offices.Core\Bing.Offices.Core.csproj", "{A73AA5CA-12D4-4588-B4A0-39FD047DE8DB}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Bing.Offices.Npoi", "src\Bing.Offices.Npoi\Bing.Offices.Npoi.csproj", "{82D3D474-FB96-4FA7-B0EF-FBE1667B1237}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Bing.Offices.Npoi", "src\Bing.Offices.Npoi\Bing.Offices.Npoi.csproj", "{82D3D474-FB96-4FA7-B0EF-FBE1667B1237}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Bing.Offices.Tests", "test\Bing.Offices.Tests\Bing.Offices.Tests.csproj", "{B10A4F99-C06F-41B5-AC4B-B3E14F88EEB3}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -33,6 +35,10 @@ Global
 		{82D3D474-FB96-4FA7-B0EF-FBE1667B1237}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{82D3D474-FB96-4FA7-B0EF-FBE1667B1237}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{82D3D474-FB96-4FA7-B0EF-FBE1667B1237}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B10A4F99-C06F-41B5-AC4B-B3E14F88EEB3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B10A4F99-C06F-41B5-AC4B-B3E14F88EEB3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B10A4F99-C06F-41B5-AC4B-B3E14F88EEB3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B10A4F99-C06F-41B5-AC4B-B3E14F88EEB3}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -6,14 +6,49 @@
     public interface ICell
     {
         /// <summary>
-        /// 单元格索引
+        /// 值
         /// </summary>
-        int Index { get; set; }
+        object Value { get; set; }
 
         /// <summary>
-        /// 单元行索引
+        /// 行
         /// </summary>
-        int RowIndex { get; set; }
+        IRow Row { get; set; }
+
+        /// <summary>
+        /// 列跨度
+        /// </summary>
+        int ColumnSpan { get; set; }
+
+        /// <summary>
+        /// 行跨度
+        /// </summary>
+        int RowSpan { get; }
+
+        /// <summary>
+        /// 列索引
+        /// </summary>
+        int ColumnIndex { get; set; }
+
+        /// <summary>
+        /// 行索引
+        /// </summary>
+        int RowIndex { get; }
+
+        /// <summary>
+        /// 结束列索引
+        /// </summary>
+        int EndColumnIndex { get; }
+
+        /// <summary>
+        /// 结束行索引
+        /// </summary>
+        int EndRowIndex { get; }
+
+        /// <summary>
+        /// 是否需要合并单元格。true:是,false:否
+        /// </summary>
+        bool NeedMerge { get; }
 
         /// <summary>
         /// 名称
@@ -21,24 +56,13 @@
         string Name { get; set; }
 
         /// <summary>
-        /// 属性名
+        /// 属性名称
         /// </summary>
         string PropertyName { get; set; }
 
         /// <summary>
-        /// 单元格值
+        /// 是否为空单元格
         /// </summary>
-        object Value { get; set; }
-
-        /// <summary>
-        /// 单元行
-        /// </summary>
-        IRow Row { get; set; }
-
-        /// <summary>
-        /// 设置单元格值
-        /// </summary>
-        /// <param name="value">值</param>
-        void SetValue(object value);
+        bool IsNull();
     }
 }

@@ -25,7 +25,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Bing.Utils" Version="0.0.1-preview-20190605-1" />
+    <PackageReference Include="Bing.Utils" Version="1.1.0" />
   </ItemGroup>
 
 </Project>
