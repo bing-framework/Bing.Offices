@@ -1,10 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using System.Collections.Generic;
 
 namespace Bing.Offices.Abstractions.Decorators
 {
-    interface IDecorator
+    /// <summary>
+    /// 装饰器
+    /// </summary>
+    public interface IDecorator
     {
+        byte[] Handler<T>(byte[] workbookBytes, List<T> data, IDecoratorContext context);
     }
 }
