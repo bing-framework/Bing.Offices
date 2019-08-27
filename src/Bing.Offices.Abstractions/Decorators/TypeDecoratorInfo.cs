@@ -11,11 +11,11 @@ namespace Bing.Offices.Abstractions.Decorators
         /// <summary>
         /// 类型装饰器列表
         /// </summary>
-        public List<DecorateAttributeBase> TypeDecorators { get; set; }
+        public IList<DecorateAttributeBase> TypeDecorators { get; set; }
 
         /// <summary>
         /// 属性装饰器信息列表
         /// </summary>
-        public List<PropertyDecoratorInfo> PropertyDecoratorInfos { get; set; }
+        public IList<PropertyDecoratorInfo> PropertyDecoratorInfos { get; set; }
     }
 }

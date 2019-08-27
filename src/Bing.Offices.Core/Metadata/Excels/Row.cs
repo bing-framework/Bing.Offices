@@ -29,7 +29,12 @@ namespace Bing.Offices.Metadata.Excels
         /// <summary>
         /// 是否有效
         /// </summary>
-        public bool Valid { get; }
+        public bool Valid => string.IsNullOrWhiteSpace(ErrorMsg);
+
+        /// <summary>
+        /// 错误消息
+        /// </summary>
+        public string ErrorMsg { get; set; }
 
         /// <summary>
         /// 单元格列表

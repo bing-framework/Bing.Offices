@@ -18,6 +18,11 @@ namespace Bing.Offices.Abstractions.Metadata.Excels
         bool Valid { get; }
 
         /// <summary>
+        /// 错误消息
+        /// </summary>
+        string ErrorMsg { get; set; }
+
+        /// <summary>
         /// 单元格列表
         /// </summary>
         IList<ICell> Cells { get; set; }

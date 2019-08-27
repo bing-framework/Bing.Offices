@@ -1,8 +1,12 @@
 using System.Linq;
+using System.Threading.Tasks;
 using Bing.Offices.Abstractions.Imports;
 using Bing.Offices.Attributes;
+using Bing.Offices.Extensions;
+using Bing.Offices.Imports;
 using Bing.Offices.Npoi.Imports;
 using Bing.Utils.Extensions;
+using Bing.Utils.Json;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -21,12 +25,21 @@ namespace Bing.Offices.Tests
         /// <summary>
         /// Excel导入提供程序
         /// </summary>
-        private IExcelImportProvider _excelImportProvider;
+        private readonly IExcelImportProvider _excelImportProvider;
 
+        /// <summary>
+        /// Excel导入服务
+        /// </summary>
+        private readonly IExcelImportService _excelImportService;
+
+        /// <summary>
+        /// 初始化一个<see cref="TestBase"/>类型的实例
+        /// </summary>
         public TestBase(ITestOutputHelper output)
         {
             Output = output;
             _excelImportProvider = new ExcelImportProvider();
+            _excelImportService = new ExcelImportService(_excelImportProvider);
         }
 
         /// <summary>
@@ -48,6 +61,21 @@ namespace Bing.Offices.Tests
                     Output.WriteLine(body.Cells.Select(x => x.Value.ToString()).Join());
                 }
             }
+        }
+
+        /// <summary>
+        /// 测试 - 服务导入
+        /// </summary>
+        [Fact]
+        public async Task Test_Import_1()
+        {
+            var workbook = await _excelImportService.ImportAsync<Barcode>(new ImportOptions()
+            {
+                FileUrl = "D:\\导入国标码_导入格式.xlsx",
+            });
+            var result = workbook.GetResult<Barcode>();
+            Output.WriteLine(result.Count().ToString());
+            Output.WriteLine(result.ToJson());
         }
     }
 
