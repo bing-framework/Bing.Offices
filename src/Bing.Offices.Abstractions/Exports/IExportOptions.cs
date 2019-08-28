@@ -14,9 +14,9 @@ namespace Bing.Offices.Abstractions.Exports
         IList<T> Data { get; set; }
 
         /// <summary>
-        /// 导出Excel类型
+        /// 导出格式
         /// </summary>
-        ExportType ExportType { get; set; }
+        ExportFormat ExportFormat { get; set; }
 
         /// <summary>
         /// 工作表名称

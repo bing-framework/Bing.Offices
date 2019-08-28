@@ -15,9 +15,9 @@ namespace Bing.Offices.Exports
         public IList<T> Data { get; set; }
 
         /// <summary>
-        /// 导出Excel类型
+        /// 导出格式
         /// </summary>
-        public ExportType ExportType { get; set; } = ExportType.Xlsx;
+        public ExportFormat ExportFormat { get; set; } = ExportFormat.Xlsx;
 
         /// <summary>
         /// 工作表名称

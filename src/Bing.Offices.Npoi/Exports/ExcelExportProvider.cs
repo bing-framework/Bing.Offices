@@ -7,9 +7,6 @@ using Bing.Offices.Attributes;
 using Bing.Offices.Npoi.Extensions;
 using Bing.Offices.Npoi.Factories;
 using Bing.Offices.Npoi.Resolvers;
-using NPOI.HSSF.UserModel;
-using NPOI.SS.UserModel;
-using NPOI.XSSF.UserModel;
 
 namespace Bing.Offices.Npoi.Exports
 {
@@ -25,7 +22,7 @@ namespace Bing.Offices.Npoi.Exports
         /// <param name="options">导出选项配置</param>
         public byte[] Export<T>(IExportOptions<T> options) where T : class, new()
         {
-            var workbook = CreateWorkbook(options.ExportType);
+            var workbook = CreateWorkbook(options.ExportFormat);
             var sheet = workbook.CreateSheet(options.SheetName);
             var headerDict = ExportMappingFactory.CreateInstance(typeof(T));
             HandleHeader(sheet, options.HeaderRowIndex, headerDict);
@@ -37,18 +34,17 @@ namespace Bing.Offices.Npoi.Exports
         /// <summary>
         /// 创建工作簿
         /// </summary>
-        /// <param name="type">导出类型</param>
-        private NPOI.SS.UserModel.IWorkbook CreateWorkbook(ExportType type)
+        /// <param name="format">导出格式</param>
+        private NPOI.SS.UserModel.IWorkbook CreateWorkbook(ExportFormat format)
         {
-            switch (type)
+            switch (format)
             {
-                case ExportType.Xls:
-                    return new HSSFWorkbook();
-                case ExportType.Xlsx:
-                    return new XSSFWorkbook();
-                default:
-                    return new XSSFWorkbook();
+                case ExportFormat.Xls:
+                    return new NPOI.HSSF.UserModel.HSSFWorkbook();
+                case ExportFormat.Xlsx:
+                    return new NPOI.XSSF.UserModel.XSSFWorkbook();
             }
+            throw new NotImplementedException();
         }
 
         /// <summary>
@@ -58,7 +54,7 @@ namespace Bing.Offices.Npoi.Exports
         /// <param name="sheet">NPOI工作表</param>
         /// <param name="headerRowIndex">表头行索引</param>
         /// <param name="headerDict">表头映射字典</param>
-        private void HandleHeader(ISheet sheet, int headerRowIndex, IDictionary<string, string> headerDict)
+        private void HandleHeader(NPOI.SS.UserModel.ISheet sheet, int headerRowIndex, IDictionary<string, string> headerDict)
         {
             var row = sheet.CreateRow(headerRowIndex);
             var columnIndex = 0;
@@ -77,7 +73,7 @@ namespace Bing.Offices.Npoi.Exports
         /// <param name="dataRowStartIndex">数据行起始索引</param>
         /// <param name="data">数据集</param>
         /// <param name="headerDict">表头映射字典</param>
-        private void HandleBody<T>(ISheet sheet, int dataRowStartIndex, IList<T> data,
+        private void HandleBody<T>(NPOI.SS.UserModel.ISheet sheet, int dataRowStartIndex, IList<T> data,
             IDictionary<string, string> headerDict) where T : class, new()
         {
             if (data.Count <= 0)
@@ -153,6 +149,9 @@ namespace Bing.Offices.Npoi.Exports
         /// <param name="context">装饰器上下文</param>
         public byte[] WarpText<T>(byte[] workbookBytes, IExportOptions<T> options, IDecoratorContext context) where T : class, new()
         {
+            if (context == null)
+                throw new ArgumentNullException(nameof(context));
+
             throw new System.NotImplementedException();
         }
 
