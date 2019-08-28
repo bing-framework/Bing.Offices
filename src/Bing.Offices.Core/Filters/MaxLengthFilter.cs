@@ -11,7 +11,7 @@ namespace Bing.Offices.Filters
     /// 最大长度过滤器
     /// </summary>
     [BindFilter(typeof(MaxLengthAttribute))]
-    public class MaxLengthFilter : FilterBase, IFilter
+    internal class MaxLengthFilter : FilterBase, IFilter
     {
         /// <summary>
         /// 最大长度

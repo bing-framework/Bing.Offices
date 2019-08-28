@@ -11,7 +11,7 @@ namespace Bing.Offices.Filters
     /// 区间范围过滤器
     /// </summary>
     [BindFilter(typeof(RangeAttribute))]
-    public class RangeFilter : FilterBase, IFilter
+    internal class RangeFilter : FilterBase, IFilter
     {
         /// <summary>
         /// 最小值

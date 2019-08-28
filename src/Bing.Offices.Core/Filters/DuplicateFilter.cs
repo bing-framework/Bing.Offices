@@ -12,7 +12,7 @@ namespace Bing.Offices.Filters
     /// 重复过滤器
     /// </summary>
     [BindFilter(typeof(DuplicationAttribute))]
-    public class DuplicateFilter : FilterBase, IFilter
+    internal class DuplicateFilter : FilterBase, IFilter
     {
         /// <summary>
         /// 过滤

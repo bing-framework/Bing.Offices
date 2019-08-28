@@ -41,7 +41,7 @@ namespace Bing.Offices.Imports
             {
                 Filters = FilterFactory.CreateInstances<T>()
             };
-            var context = new FilterContext()
+            var context = new FilterContext
             {
                 TypeFilterInfo = TypeFilterInfoFactory.CreateInstance(typeof(T))
             };

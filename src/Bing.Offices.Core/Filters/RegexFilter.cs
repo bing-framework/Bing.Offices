@@ -12,7 +12,7 @@ namespace Bing.Offices.Filters
     /// 正则表达式过滤器
     /// </summary>
     [BindFilter(typeof(RegexAttribute))]
-    public class RegexFilter : FilterBase, IFilter
+    internal class RegexFilter : FilterBase, IFilter
     {
         /// <summary>
         /// 正则表达式字符串

@@ -7,7 +7,7 @@ namespace Bing.Offices.Attributes
     /// 合并单元格特性
     /// </summary>
     [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
-    public class MergeColumnsAttribute : DecorateAttributeBase
+    public class MergeColumnsAttribute : DecoratorAttributeBase
     {
     }
 }

@@ -22,16 +22,16 @@ namespace Bing.Offices.Factories
         /// <summary>
         /// 创建类型过滤器信息实例
         /// </summary>
-        /// <param name="importType">导入类型</param>
-        public static TypeFilterInfo CreateInstance(Type importType)
+        /// <param name="type">类型</param>
+        public static TypeFilterInfo CreateInstance(Type type)
         {
-            if (importType == null)
-                throw new ArgumentNullException(nameof(importType));
-            if (TypeFilterDict.ContainsKey(importType))
-                return TypeFilterDict[importType];
+            if (type == null)
+                throw new ArgumentNullException(nameof(type));
+            if (TypeFilterDict.ContainsKey(type))
+                return TypeFilterDict[type];
             var typeFilterInfo = new TypeFilterInfo();
-            var props = importType.GetProperties().Where(x => x.IsDefined(typeof(ColumnNameAttribute)));
-            props.ToList().ForEach(item =>
+            var props = type.GetProperties().Where(x => x.IsDefined(typeof(ColumnNameAttribute))).ToList();
+            props.ForEach(item =>
             {
                 typeFilterInfo.PropertyFilterInfos.Add(new PropertyFilterInfo()
                 {
@@ -39,7 +39,7 @@ namespace Bing.Offices.Factories
                     Filters = item.GetCustomAttributes<FilterAttributeBase>().ToList()
                 });
             });
-            TypeFilterDict[importType] = typeFilterInfo;
+            TypeFilterDict[type] = typeFilterInfo;
             return typeFilterInfo;
         }
     }

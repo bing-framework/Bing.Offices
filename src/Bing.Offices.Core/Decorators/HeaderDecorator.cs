@@ -5,10 +5,10 @@ using Bing.Offices.Attributes;
 namespace Bing.Offices.Decorators
 {
     /// <summary>
-    /// 自动换行装饰器
+    /// 表头装饰器
     /// </summary>
-    [BindDecorator(typeof(WrapTextAttribute))]
-    internal class WarpTextDecorator : IDecorator
+    [BindDecorator(typeof(HeaderAttribute))]
+    internal class HeaderDecorator : IDecorator
     {
         /// <summary>
         /// 处理
@@ -19,7 +19,7 @@ namespace Bing.Offices.Decorators
         /// <param name="context">装饰器上下文</param>
         /// <param name="excelExportProvider">Excel导出提供程序</param>
         public byte[] Handler<T>(byte[] workbookBytes, IExportOptions<T> options, IDecoratorContext context,
-            IExcelExportProvider excelExportProvider)
-            where T : class, new() => excelExportProvider.WarpText(workbookBytes, options, context);
+            IExcelExportProvider excelExportProvider) where T : class, new() =>
+            excelExportProvider.HandleHeader(workbookBytes, options, context);
     }
 }

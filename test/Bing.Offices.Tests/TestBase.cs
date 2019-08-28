@@ -1,9 +1,14 @@
+using System;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Bing.Offices.Abstractions.Exports;
 using Bing.Offices.Abstractions.Imports;
 using Bing.Offices.Attributes;
+using Bing.Offices.Exports;
 using Bing.Offices.Extensions;
 using Bing.Offices.Imports;
+using Bing.Offices.Npoi.Exports;
 using Bing.Offices.Npoi.Imports;
 using Bing.Utils.Extensions;
 using Bing.Utils.Json;
@@ -33,6 +38,16 @@ namespace Bing.Offices.Tests
         private readonly IExcelImportService _excelImportService;
 
         /// <summary>
+        /// Excel导出提供程序
+        /// </summary>
+        private readonly IExcelExportProvider _excelExportProvider;
+
+        /// <summary>
+        /// Excel导出服务
+        /// </summary>
+        private readonly IExcelExportService _excelExportService;
+
+        /// <summary>
         /// 初始化一个<see cref="TestBase"/>类型的实例
         /// </summary>
         public TestBase(ITestOutputHelper output)
@@ -40,6 +55,8 @@ namespace Bing.Offices.Tests
             Output = output;
             _excelImportProvider = new ExcelImportProvider();
             _excelImportService = new ExcelImportService(_excelImportProvider);
+            _excelExportProvider = new ExcelExportProvider();
+            _excelExportService = new ExcelExportService(_excelExportProvider);
         }
 
         /// <summary>
@@ -76,6 +93,25 @@ namespace Bing.Offices.Tests
             var result = workbook.GetResult<Barcode>();
             Output.WriteLine(result.Count().ToString());
             Output.WriteLine(result.ToJson());
+        }
+        
+        /// <summary>
+        /// 测试 - 导出
+        /// </summary>
+        [Fact]
+        public async Task Test_Export()
+        {
+            var workbook = await _excelImportService.ImportAsync<Barcode>(new ImportOptions()
+            {
+                FileUrl = "D:\\导入国标码_导入格式.xlsx",
+            });
+            var result = workbook.GetResult<Barcode>();
+
+            var bytes = await _excelExportService.ExportAsync(new ExportOptions<Barcode>()
+            {
+                Data = result.ToList()
+            });
+            await File.WriteAllBytesAsync($"D:\\测试导出_{DateTime.Now:yyyyMMddHHmmss}.xlsx", bytes);
         }
     }
 

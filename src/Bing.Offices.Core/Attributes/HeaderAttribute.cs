@@ -8,7 +8,7 @@ namespace Bing.Offices.Attributes
     /// 表头特性
     /// </summary>
     [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
-    public class HeaderAttribute : DecorateAttributeBase
+    public class HeaderAttribute : DecoratorAttributeBase
     {
         /// <summary>
         /// 颜色

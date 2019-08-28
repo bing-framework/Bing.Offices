@@ -9,7 +9,7 @@ namespace Bing.Offices.Filters
     /// <summary>
     /// 且过滤器
     /// </summary>
-    public class AndFilter : IFilter
+    internal class AndFilter : IFilter
     {
         /// <summary>
         /// 过滤器列表

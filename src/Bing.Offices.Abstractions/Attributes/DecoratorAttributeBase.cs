@@ -3,9 +3,9 @@
 namespace Bing.Offices.Abstractions.Attributes
 {
     /// <summary>
-    /// 装饰特性基类
+    /// 装饰器特性基类
     /// </summary>
-    public abstract class DecorateAttributeBase : Attribute
+    public abstract class DecoratorAttributeBase : Attribute
     {
     }
 }

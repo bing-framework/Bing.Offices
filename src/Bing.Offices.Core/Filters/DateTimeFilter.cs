@@ -11,7 +11,7 @@ namespace Bing.Offices.Filters
     /// 日期过滤器
     /// </summary>
     [BindFilter(typeof(DateTimeAttribute))]
-    public class DateTimeFilter : FilterBase, IFilter
+    internal class DateTimeFilter : FilterBase, IFilter
     {
         /// <summary>
         /// 过滤

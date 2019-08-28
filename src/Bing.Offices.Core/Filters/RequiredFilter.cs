@@ -11,7 +11,7 @@ namespace Bing.Offices.Filters
     /// 必填过滤器
     /// </summary>
     [BindFilter(typeof(RequiredAttribute))]
-    public class RequiredFilter : FilterBase, IFilter
+    internal class RequiredFilter : FilterBase, IFilter
     {
         /// <summary>
         /// 过滤

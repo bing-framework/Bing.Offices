@@ -7,7 +7,7 @@ namespace Bing.Offices.Attributes
     /// 自动换行特性
     /// </summary>
     [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
-    public class WrapTextAttribute : DecorateAttributeBase
+    public class WrapTextAttribute : DecoratorAttributeBase
     {
     }
 }

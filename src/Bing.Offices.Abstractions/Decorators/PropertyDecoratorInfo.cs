@@ -16,6 +16,6 @@ namespace Bing.Offices.Abstractions.Decorators
         /// <summary>
         /// 装饰器列表
         /// </summary>
-        public List<DecorateAttributeBase> Decorators { get; set; }
+        public IList<DecoratorAttributeBase> Decorators { get; set; } = new List<DecoratorAttributeBase>();
     }
 }

@@ -29,29 +29,29 @@ namespace Bing.Offices.Factories
         /// <summary>
         /// 创建过滤器实例
         /// </summary>
-        /// <param name="attributeType">绑定过滤器的特性类型s</param>
-        public static IFilter CreateInstance(Type attributeType)
+        /// <param name="type">绑定过滤器的特性类型s</param>
+        public static IFilter CreateInstance(Type type)
         {
-            if (FilterDict.ContainsKey(attributeType))
-                return FilterDict[attributeType];
-            var filterType = Assembly.GetAssembly(attributeType).GetTypes().ToList()
+            if (FilterDict.ContainsKey(type))
+                return FilterDict[type];
+            var filterType = Assembly.GetAssembly(type).GetTypes().ToList()
                 ?.Where(t => typeof(IFilter).IsAssignableFrom(t))?.FirstOrDefault(t =>
                     t.IsDefined(typeof(BindFilterAttribute)) &&
-                    t.GetCustomAttribute<BindFilterAttribute>()?.FilterType == attributeType);
+                    t.GetCustomAttribute<BindFilterAttribute>()?.FilterType == type);
             if (filterType == null)
                 throw new ArgumentNullException(nameof(filterType), "找不到指定过滤器类型");
             var filter = Activator.CreateInstance(filterType) as IFilter;
-            FilterDict[attributeType] = filter;
+            FilterDict[type] = filter;
             return filter;
         }
 
         /// <summary>
         /// 创建过滤器实例集合
         /// </summary>
-        /// <typeparam name="TTemplate">模板类型</typeparam>
-        public static IList<IFilter> CreateInstances<TTemplate>()
+        /// <typeparam name="T">实体类型</typeparam>
+        public static IList<IFilter> CreateInstances<T>()
         {
-            var templateType = typeof(TTemplate);
+            var templateType = typeof(T);
             if (FiltersDict.ContainsKey(templateType))
                 return FiltersDict[templateType];
             var filters = new List<IFilter>();
