@@ -14,4 +14,4 @@ dotnet pack ./src/Bing.Offices.Core/Bing.Offices.Core.csproj
 dotnet pack ./src/Bing.Offices.Npoi/Bing.Offices.Npoi.csproj
 
 rem push
-for %%i in (output\release\*.nupkg) do dotnet nuget push %%i -k %1 -s https://www.nuget.org/api/v2/package
+for %%i in (output\*.nupkg) do dotnet nuget push %%i -k %1 -s https://www.nuget.org/api/v2/package
