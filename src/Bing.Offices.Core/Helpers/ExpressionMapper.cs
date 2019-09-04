@@ -56,10 +56,16 @@ namespace Bing.Offices.Helpers
                 // 当前属性类型常量
                 var propTypeConst = Expression.Constant(prop.PropertyType);
                 // 获取单元格值表达，Cells.SingleOrDefault(c=>c.PropertyName == prop.Name).Value
-                var cellValueExpr = Expression.Property(firstOrDefaultMethodExpr, typeof(ICell), "Value");
+                //var cellValueExpr = Expression.Property(firstOrDefaultMethodExpr, typeof(ICell), "Value");
+                var cellValueExpr =
+                    Expression.Condition(Expression.Equal(firstOrDefaultMethodExpr, Expression.Constant(null)),
+                        Expression.Constant(null),
+                        Expression.Property(firstOrDefaultMethodExpr, typeof(ICell), "Value"));
                 // 变更类型
                 var changeTypeExpr = Expression.Call(changeTypeMethod,
-                    Expression.Convert(cellValueExpr, typeof(string)), propTypeConst);
+                    Expression.Condition(Expression.Equal(cellValueExpr, Expression.Constant(null)),
+                        Expression.Constant(string.Empty), Expression.Convert(cellValueExpr, typeof(string))),
+                    propTypeConst);
                 Expression expr = Expression.Convert(changeTypeExpr, prop.PropertyType);
                 memberBindingList.Add(Expression.Bind(prop, expr));
             }
@@ -81,20 +87,27 @@ namespace Bing.Offices.Helpers
         {
             object obj = null;
             var nullableType = Nullable.GetUnderlyingType(type);
-            if (nullableType != null)
+            try
             {
-                if (value == null)
-                    obj = null;
+                if (nullableType != null)
+                {
+                    if (value == null)
+                        obj = null;
+                }
+                else if (typeof(Enum).IsAssignableFrom(type))
+                {
+                    obj = Enum.Parse(type, value);
+                }
+                else
+                {
+                    obj = Convert.ChangeType(value, type);
+                }
+                return obj;
             }
-            else if (typeof(Enum).IsAssignableFrom(type))
+            catch
             {
-                obj = Enum.Parse(type, value);
+                return default;
             }
-            else
-            {
-                obj = Convert.ChangeType(value, type);
-            }
-            return obj;
         }
     }
 }

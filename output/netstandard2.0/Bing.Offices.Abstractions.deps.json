@@ -1,0 +1,56 @@
+{
+  "runtimeTarget": {
+    "name": ".NETStandard,Version=v2.0/",
+    "signature": "58cdb72273772a37e0502b09c2053203e0498378"
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETStandard,Version=v2.0": {},
+    ".NETStandard,Version=v2.0/": {
+      "Bing.Offices.Abstractions/0.0.1-preview-20190904-1": {
+        "dependencies": {
+          "Microsoft.Net.Compilers": "2.10.0",
+          "NETStandard.Library": "2.0.3"
+        },
+        "runtime": {
+          "Bing.Offices.Abstractions.dll": {}
+        }
+      },
+      "Microsoft.Net.Compilers/2.10.0": {},
+      "Microsoft.NETCore.Platforms/1.1.0": {},
+      "NETStandard.Library/2.0.3": {
+        "dependencies": {
+          "Microsoft.NETCore.Platforms": "1.1.0"
+        }
+      }
+    }
+  },
+  "libraries": {
+    "Bing.Offices.Abstractions/0.0.1-preview-20190904-1": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "Microsoft.Net.Compilers/2.10.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-IsOvl2e3xhNG00P7pS0FYp6Ej4zKjGCB00tfY4XXm2lU7kd6GKmHj5R8hPUKHoP0PO4ahB2ZQ8HH5AdUlFqJAA==",
+      "path": "microsoft.net.compilers/2.10.0",
+      "hashPath": "microsoft.net.compilers.2.10.0.nupkg.sha512"
+    },
+    "Microsoft.NETCore.Platforms/1.1.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-6x50RheoJy5//AQPd2PuuFT29PCUsTwe8GaNct+zCisSMy/PTU7ZOouK4fqynqdYE9+6VP0YiugqIr2lnNn/sQ==",
+      "path": "microsoft.netcore.platforms/1.1.0",
+      "hashPath": "microsoft.netcore.platforms.1.1.0.nupkg.sha512"
+    },
+    "NETStandard.Library/2.0.3": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-st47PosZSHrjECdjeIzZQbzivYBJFv6P2nv4cj2ypdI204DO+vZ7l5raGMiX4eXMJ53RfOIg+/s4DHVZ54Nu2A==",
+      "path": "netstandard.library/2.0.3",
+      "hashPath": "netstandard.library.2.0.3.nupkg.sha512"
+    }
+  }
+}

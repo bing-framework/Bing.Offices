@@ -125,5 +125,8 @@ namespace Bing.Offices.Tests
 
         [ColumnName("国标码")]
         public string Code { get; set; }
+
+        [ColumnName("创建时间")]
+        public DateTime? CreateDate { get; set; }
     }
 }

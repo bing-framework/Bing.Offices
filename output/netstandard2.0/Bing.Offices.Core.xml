@@ -1,0 +1,2182 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Bing.Offices.Core</name>
+    </assembly>
+    <members>
+        <member name="T:Bing.Offices.Attributes.BindDecoratorAttribute">
+            <summary>
+            绑定装饰器特性
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Attributes.BindDecoratorAttribute.DecoratorType">
+            <summary>
+            装饰器类型
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Attributes.BindDecoratorAttribute.#ctor(System.Type)">
+            <summary>
+            初始化一个<see cref="T:Bing.Offices.Attributes.BindDecoratorAttribute"/>类型的实例
+            </summary>
+            <param name="decoratorType">装饰器类型</param>
+        </member>
+        <member name="T:Bing.Offices.Attributes.BindFilterAttribute">
+            <summary>
+            绑定过滤器特性
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Attributes.BindFilterAttribute.FilterType">
+            <summary>
+            过滤器类型
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Attributes.BindFilterAttribute.#ctor(System.Type)">
+            <summary>
+            初始化一个<see cref="T:Bing.Offices.Attributes.BindFilterAttribute"/>类型的实例
+            </summary>
+            <param name="filterType">过滤器类型</param>
+        </member>
+        <member name="T:Bing.Offices.Attributes.ColumnNameAttribute">
+            <summary>
+            列名特性
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Attributes.ColumnNameAttribute.Name">
+            <summary>
+            名称
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Attributes.ColumnNameAttribute.#ctor(System.String)">
+            <summary>
+            初始化一个<see cref="T:Bing.Offices.Attributes.ColumnNameAttribute"/>类型的实例
+            </summary>
+            <param name="name">名称</param>
+        </member>
+        <member name="T:Bing.Offices.Attributes.DateTimeAttribute">
+            <summary>
+            日期特性
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Attributes.DateTimeAttribute.ErrorMsg">
+            <summary>
+            错误消息
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Attributes.DuplicationAttribute">
+            <summary>
+            重复数据校验特性
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Attributes.DuplicationAttribute.ErrorMsg">
+            <summary>
+            错误消息
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Attributes.HeaderAttribute">
+            <summary>
+            表头特性
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Attributes.HeaderAttribute.Color">
+            <summary>
+            颜色
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Attributes.HeaderAttribute.FontName">
+            <summary>
+            字体名称
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Attributes.HeaderAttribute.FontSize">
+            <summary>
+            字体大小
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Attributes.HeaderAttribute.Bold">
+            <summary>
+            是否加粗
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Attributes.MaxLengthAttribute">
+            <summary>
+            最大长度特性
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Attributes.MaxLengthAttribute.MaxLength">
+            <summary>
+            最大长度
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Attributes.MaxLengthAttribute.ErrorMsg">
+            <summary>
+            错误消息
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Attributes.MaxLengthAttribute.#ctor(System.Int32)">
+            <summary>
+            初始化一个<see cref="T:Bing.Offices.Attributes.MaxLengthAttribute"/>类型的实例
+            </summary>
+            <param name="maxLength">最大长度</param>
+        </member>
+        <member name="T:Bing.Offices.Attributes.MergeColumnsAttribute">
+            <summary>
+            合并单元格特性
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Attributes.PlaceholderAttribute">
+            <summary>
+            普通占位符特性
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Attributes.PlaceholderAttribute.Placeholder">
+            <summary>
+            占位符
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Attributes.PlaceholderAttribute.#ctor(System.String)">
+            <summary>
+            初始化一个<see cref="T:Bing.Offices.Attributes.PlaceholderAttribute"/>类型的实例
+            </summary>
+            <param name="placeholder">占位符</param>
+        </member>
+        <member name="T:Bing.Offices.Attributes.RangeAttribute">
+            <summary>
+            区间特性
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Attributes.RangeAttribute.Min">
+            <summary>
+            最小值
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Attributes.RangeAttribute.Max">
+            <summary>
+            最大值
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Attributes.RangeAttribute.ErrorMsg">
+            <summary>
+            错误消息
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Attributes.RangeAttribute.#ctor(System.Int32,System.Int32)">
+            <summary>
+            初始化一个<see cref="T:Bing.Offices.Attributes.RangeAttribute"/>类型的实例
+            </summary>
+            <param name="min">最小值</param>
+            <param name="max">最大值</param>
+        </member>
+        <member name="T:Bing.Offices.Attributes.RegexAttribute">
+            <summary>
+            正则表达式特性
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Attributes.RegexAttribute.RegexString">
+            <summary>
+            正则表达式字符串
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Attributes.RegexAttribute.#ctor(System.String)">
+            <summary>
+            初始化一个<see cref="T:Bing.Offices.Attributes.RegexAttribute"/>类型的实例
+            </summary>
+            <param name="regex">正则表达式</param>
+        </member>
+        <member name="T:Bing.Offices.Attributes.RequiredAttribute">
+            <summary>
+            必填特性
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Attributes.RequiredAttribute.ErrorMsg">
+            <summary>
+            错误消息
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Attributes.WrapTextAttribute">
+            <summary>
+            自动换行特性
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Configurations.ExcelConfiguration`1">
+            <summary>
+            Excel 配置
+            </summary>
+            <typeparam name="TEntity">实体类型</typeparam>
+        </member>
+        <member name="F:Bing.Offices.Configurations.ExcelConfiguration`1._entityType">
+            <summary>
+            实体类型
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Configurations.ExcelConfiguration`1._excelSetting">
+            <summary>
+            Excel 文档属性设置
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Configurations.ExcelConfiguration`1._sheetSettings">
+            <summary>
+            工作表设置
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Configurations.ExcelConfiguration`1.PropertyConfigurationsDictionary">
+            <summary>
+            属性配置字典
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Configurations.ExcelConfiguration`1.ExcelSetting">
+            <summary>
+            Excel 文档属性设置
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Configurations.ExcelConfiguration`1.FreezeSettings">
+            <summary>
+            冻结设置
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Configurations.ExcelConfiguration`1.FilterSetting">
+            <summary>
+            过滤器设置
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Configurations.ExcelConfiguration`1.SheetSettings">
+            <summary>
+            工作表设置
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Configurations.ExcelConfiguration`1.#ctor">
+            <summary>
+            初始化一个<see cref="T:Bing.Offices.Configurations.ExcelConfiguration`1"/>类型的实例
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Configurations.ExcelConfiguration`1.#ctor(Bing.Offices.Settings.ExcelSetting)">
+            <summary>
+            初始化一个<see cref="T:Bing.Offices.Configurations.ExcelConfiguration`1"/>类型的实例
+            </summary>
+            <param name="setting">Excel 文档属性设置</param>
+        </member>
+        <member name="M:Bing.Offices.Configurations.ExcelConfiguration`1.HasAuthor(System.String)">
+            <summary>
+            设置作者
+            </summary>
+            <param name="author">作者</param>
+        </member>
+        <member name="M:Bing.Offices.Configurations.ExcelConfiguration`1.HasCompany(System.String)">
+            <summary>
+            设置公司
+            </summary>
+            <param name="company">公司</param>
+        </member>
+        <member name="M:Bing.Offices.Configurations.ExcelConfiguration`1.HasTitle(System.String)">
+            <summary>
+            设置标题
+            </summary>
+            <param name="title">标题</param>
+        </member>
+        <member name="M:Bing.Offices.Configurations.ExcelConfiguration`1.HasDescription(System.String)">
+            <summary>
+            设置描述
+            </summary>
+            <param name="description">描述</param>
+        </member>
+        <member name="M:Bing.Offices.Configurations.ExcelConfiguration`1.HasSubject(System.String)">
+            <summary>
+            设置主题
+            </summary>
+            <param name="subject">主题</param>
+        </member>
+        <member name="M:Bing.Offices.Configurations.ExcelConfiguration`1.HasCategory(System.String)">
+            <summary>
+            设置目录
+            </summary>
+            <param name="category">目录</param>
+        </member>
+        <member name="M:Bing.Offices.Configurations.ExcelConfiguration`1.HasFreezePane(System.Int32,System.Int32)">
+            <summary>
+            设置冻结区域
+            </summary>
+            <param name="colSplit">冻结单元格列号</param>
+            <param name="rowSplit">冻结单元格行号</param>
+        </member>
+        <member name="M:Bing.Offices.Configurations.ExcelConfiguration`1.HasFreezePane(System.Int32,System.Int32,System.Int32,System.Int32)">
+            <summary>
+            设置冻结区域
+            </summary>
+            <param name="colSplit">冻结单元格列号</param>
+            <param name="rowSplit">冻结单元格行号</param>
+            <param name="leftMostColumn">顶列索引</param>
+            <param name="topRow">顶行索引</param>
+        </member>
+        <member name="M:Bing.Offices.Configurations.ExcelConfiguration`1.HasFilter(System.Int32)">
+            <summary>
+            设置过滤器
+            </summary>
+            <param name="firstColumn">首列索引</param>
+        </member>
+        <member name="M:Bing.Offices.Configurations.ExcelConfiguration`1.HasFilter(System.Int32,System.Nullable{System.Int32})">
+            <summary>
+            设置过滤器
+            </summary>
+            <param name="firstColumn">首列索引</param>
+            <param name="lastColumn">最后一列索引</param>
+        </member>
+        <member name="M:Bing.Offices.Configurations.ExcelConfiguration`1.HasSheetConfiguration(System.Int32,System.String)">
+            <summary>
+            设置工作表配置
+            </summary>
+            <param name="sheetIndex">工作表索引</param>
+            <param name="sheetName">工作表名称</param>
+        </member>
+        <member name="M:Bing.Offices.Configurations.ExcelConfiguration`1.HasSheetConfiguration(System.Int32,System.String,System.Int32)">
+            <summary>
+            设置工作表配置
+            </summary>
+            <param name="sheetIndex">工作表索引</param>
+            <param name="sheetName">工作表名称</param>
+            <param name="startRowIndex">起始行索引</param>
+        </member>
+        <member name="M:Bing.Offices.Configurations.ExcelConfiguration`1.Property``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
+            <summary>
+            设置属性
+            </summary>
+            <typeparam name="TProperty">属性类型</typeparam>
+            <param name="propertyExpression">属性表达式</param>
+            <returns></returns>
+        </member>
+        <member name="T:Bing.Offices.Configurations.PropertyConfiguration">
+            <summary>
+            属性配置
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Configurations.PropertyConfiguration._propertySetting">
+            <summary>
+            属性设置
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Configurations.PropertyConfiguration.PropertySetting">
+            <summary>
+            属性设置
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Configurations.PropertyConfiguration.#ctor">
+            <summary>
+            初始化一个<see cref="T:Bing.Offices.Configurations.PropertyConfiguration"/>类型的实例
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Configurations.PropertyConfiguration.#ctor(Bing.Offices.Abstractions.Settings.IPropertySetting)">
+            <summary>
+            初始化一个<see cref="T:Bing.Offices.Configurations.PropertyConfiguration"/>类型的实例
+            </summary>
+            <param name="propertySetting">属性设置</param>
+        </member>
+        <member name="M:Bing.Offices.Configurations.PropertyConfiguration.HasColumnIndex(System.Int32)">
+            <summary>
+            设置索引
+            </summary>
+            <param name="index">索引</param>
+        </member>
+        <member name="M:Bing.Offices.Configurations.PropertyConfiguration.HasColumnTitle(System.String)">
+            <summary>
+            设置标题
+            </summary>
+            <param name="title">标题</param>
+        </member>
+        <member name="M:Bing.Offices.Configurations.PropertyConfiguration.HasColumnFormatter(System.String)">
+            <summary>
+            设置格式化程序
+            </summary>
+            <param name="formatter">格式化程序</param>
+        </member>
+        <member name="M:Bing.Offices.Configurations.PropertyConfiguration.Ignored">
+            <summary>
+            设置忽略
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Configurations.PropertyConfiguration.DefaultValue(System.Object)">
+            <summary>
+            设置默认值
+            </summary>
+            <param name="value">默认值</param>
+        </member>
+        <member name="T:Bing.Offices.Configurations.SheetConfiguration">
+            <summary>
+            工作表配置
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Configurations.SheetConfiguration.SheetSetting">
+            <summary>
+            工作表设置
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Configurations.SheetConfiguration.#ctor">
+            <summary>
+            初始化一个<see cref="T:Bing.Offices.Configurations.SheetConfiguration"/>类型的实例
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Configurations.SheetConfiguration.#ctor(Bing.Offices.Settings.SheetSetting)">
+            <summary>
+            初始化一个<see cref="T:Bing.Offices.Configurations.SheetConfiguration"/>类型的实例
+            </summary>
+            <param name="sheetSetting">工作表设置</param>
+        </member>
+        <member name="M:Bing.Offices.Configurations.SheetConfiguration.HasIndex(System.Int32)">
+            <summary>
+            设置索引
+            </summary>
+            <param name="index">索引</param>
+        </member>
+        <member name="M:Bing.Offices.Configurations.SheetConfiguration.HasTitle(System.String)">
+            <summary>
+            设置工作表名称
+            </summary>
+            <param name="sheetName">名称</param>
+        </member>
+        <member name="M:Bing.Offices.Configurations.SheetConfiguration.HasStartRowIndex(System.Int32)">
+            <summary>
+            设置起始行索引
+            </summary>
+            <param name="index">索引</param>
+        </member>
+        <member name="T:Bing.Offices.Contexts.ExcelContext">
+            <summary>
+            Excel 上下文
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Contexts.ExcelContext.Init">
+            <summary>
+            初始化
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Contexts.ExcelContext.GetExportSetting``1">
+            <summary>
+            获取导出设置
+            </summary>
+            <typeparam name="TEntity">实体类型</typeparam>
+        </member>
+        <member name="T:Bing.Offices.Decorators.DecoratorAttributeComparer">
+            <summary>
+            装饰器特性比较器
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Decorators.DecoratorAttributeComparer.Equals(Bing.Offices.Abstractions.Attributes.DecoratorAttributeBase,Bing.Offices.Abstractions.Attributes.DecoratorAttributeBase)">
+            <summary>
+            是否相等
+            </summary>
+            <param name="x">对象A</param>
+            <param name="y">对象B</param>
+        </member>
+        <member name="M:Bing.Offices.Decorators.DecoratorAttributeComparer.GetHashCode(Bing.Offices.Abstractions.Attributes.DecoratorAttributeBase)">
+            <summary>
+            获取哈希编码
+            </summary>
+            <param name="obj">对象</param>
+        </member>
+        <member name="T:Bing.Offices.Decorators.DecoratorContext">
+            <summary>
+            装饰器上下文
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Decorators.DecoratorContext.TypeDecoratorInfo">
+            <summary>
+            类型装饰器信息
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Decorators.HeaderDecorator">
+            <summary>
+            表头装饰器
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Decorators.HeaderDecorator.Handler``1(System.Byte[],Bing.Offices.Abstractions.Exports.IExportOptions{``0},Bing.Offices.Abstractions.Decorators.IDecoratorContext,Bing.Offices.Abstractions.Exports.IExcelExportProvider)">
+            <summary>
+            处理
+            </summary>
+            <typeparam name="T">实体类型</typeparam>
+            <param name="workbookBytes">工作簿字节数组</param>
+            <param name="options">导出选项配置</param>
+            <param name="context">装饰器上下文</param>
+            <param name="excelExportProvider">Excel导出提供程序</param>
+        </member>
+        <member name="T:Bing.Offices.Decorators.MergeColumnsDecorator">
+            <summary>
+            合并单元格装饰器
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Decorators.MergeColumnsDecorator.Handler``1(System.Byte[],Bing.Offices.Abstractions.Exports.IExportOptions{``0},Bing.Offices.Abstractions.Decorators.IDecoratorContext,Bing.Offices.Abstractions.Exports.IExcelExportProvider)">
+            <summary>
+            处理
+            </summary>
+            <typeparam name="T">实体类型</typeparam>
+            <param name="workbookBytes">工作簿字节数组</param>
+            <param name="options">导出选项配置</param>
+            <param name="context">装饰器上下文</param>
+            <param name="excelExportProvider">Excel导出提供程序</param>
+        </member>
+        <member name="T:Bing.Offices.Decorators.WarpTextDecorator">
+            <summary>
+            自动换行装饰器
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Decorators.WarpTextDecorator.Handler``1(System.Byte[],Bing.Offices.Abstractions.Exports.IExportOptions{``0},Bing.Offices.Abstractions.Decorators.IDecoratorContext,Bing.Offices.Abstractions.Exports.IExcelExportProvider)">
+            <summary>
+            处理
+            </summary>
+            <typeparam name="T">实体类型</typeparam>
+            <param name="workbookBytes">工作簿字节数组</param>
+            <param name="options">导出选项配置</param>
+            <param name="context">装饰器上下文</param>
+            <param name="excelExportProvider">Excel导出提供程序</param>
+        </member>
+        <member name="T:Bing.Offices.DefaultSettings">
+            <summary>
+            默认设置
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.DefaultSettings.DefaultExcelSetting">
+            <summary>
+            默认Excel文档属性设置
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Exports.ExcelExportProcess`1">
+            <summary>
+            Excel 导出处理
+            </summary>
+            <typeparam name="TEntity">实体类型</typeparam>
+        </member>
+        <member name="F:Bing.Offices.Exports.ExcelExportProcess`1._exportDataFunc">
+            <summary>
+            导出数据函数
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Exports.ExcelExportProcess`1.Config">
+            <summary>
+            导出配置
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Exports.ExcelExportProcess`1.#ctor(Bing.Offices.Abstractions.Exports.GetExportDataEvent{`0},System.Object)">
+            <summary>
+            初始化一个<see cref="T:Bing.Offices.Exports.ExcelExportProcess`1"/>类型的实例
+            </summary>
+            <param name="func">导出数据函数</param>
+            <param name="condition">查询条件</param>
+        </member>
+        <member name="M:Bing.Offices.Exports.ExcelExportProcess`1.Run(System.String,System.String)">
+            <summary>
+            执行方法
+            </summary>
+            <param name="baseDir">基础路径</param>
+            <param name="fileName">文件名。不包含扩展名</param>
+        </member>
+        <member name="M:Bing.Offices.Exports.ExcelExportProcess`1.Run(System.String,System.String,System.String)">
+            <summary>
+            执行方法
+            </summary>
+            <param name="baseDir">基础路径</param>
+            <param name="fileName">文件名。不包含扩展名</param>
+            <param name="exportFields">导出字段。以","分割</param>
+        </member>
+        <member name="M:Bing.Offices.Exports.ExcelExportProcess`1.CreateFile(System.Collections.Generic.IEnumerable{`0},System.String,System.String,System.String)">
+            <summary>
+            创建文件
+            </summary>
+            <param name="data">数据</param>
+            <param name="baseDir">基础路径</param>
+            <param name="fileName">文件名。不包含扩展名</param>
+            <param name="exportFields">导出字段</param>
+        </member>
+        <member name="T:Bing.Offices.Exports.ExcelExportService">
+            <summary>
+            Excel导出服务
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Exports.ExcelExportService._excelExportProvider">
+            <summary>
+            Excel导出提供程序
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Exports.ExcelExportService.#ctor(Bing.Offices.Abstractions.Exports.IExcelExportProvider)">
+            <summary>
+            初始化一个<see cref="T:Bing.Offices.Exports.ExcelExportService"/>类型的实例
+            </summary>
+            <param name="excelExportProvider">Excel导出提供程序</param>
+        </member>
+        <member name="M:Bing.Offices.Exports.ExcelExportService.ExportAsync``1(Bing.Offices.Abstractions.Exports.IExportOptions{``0})">
+            <summary>
+            导出
+            </summary>
+            <typeparam name="T">实体类型</typeparam>
+            <param name="options">导出选项配置</param>
+        </member>
+        <member name="M:Bing.Offices.Exports.ExcelExportService.GetExportProvider``1(Bing.Offices.Abstractions.Exports.IExportOptions{``0})">
+            <summary>
+            获取导出提供程序
+            </summary>
+            <typeparam name="T">实体类型</typeparam>
+            <param name="options">导出选项配置</param>
+        </member>
+        <member name="M:Bing.Offices.Exports.ExcelExportService.HandleDecorate``1(System.Byte[],Bing.Offices.Abstractions.Exports.IExportOptions{``0})">
+            <summary>
+            处理装饰
+            </summary>
+            <typeparam name="T">实体类型</typeparam>
+            <param name="workbookBytes">工作簿字节数组</param>
+            <param name="options">导出选项配置</param>
+        </member>
+        <member name="T:Bing.Offices.Exports.ExportConfig`1">
+            <summary>
+            导出配置
+            </summary>
+            <typeparam name="TEntity">实体类型</typeparam>
+        </member>
+        <member name="P:Bing.Offices.Exports.ExportConfig`1.Setting">
+            <summary>
+            导出设置
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Exports.ExportConfig`1.Condition">
+            <summary>
+            查询条件
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Exports.ExportConfig`1.#ctor">
+            <summary>
+            初始化一个<see cref="T:Bing.Offices.Exports.ExportConfig`1"/>类型的实例
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Exports.ExportConfig`1.#ctor(System.Object)">
+            <summary>
+            初始化一个<see cref="T:Bing.Offices.Exports.ExportConfig`1"/>类型的实例
+            </summary>
+            <param name="condition">查询条件</param>
+        </member>
+        <member name="M:Bing.Offices.Exports.ExportConfig`1.GetSetting">
+            <summary>
+            获取导出设置
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="T:Bing.Offices.Exports.ExportOptions`1">
+            <summary>
+            导出选项配置
+            </summary>
+            <typeparam name="T">实体类型</typeparam>
+        </member>
+        <member name="P:Bing.Offices.Exports.ExportOptions`1.Data">
+            <summary>
+            数据集合
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Exports.ExportOptions`1.ExportFormat">
+            <summary>
+            导出格式
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Exports.ExportOptions`1.SheetName">
+            <summary>
+            工作表名称
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Exports.ExportOptions`1.HeaderRowIndex">
+            <summary>
+            表头行索引。默认为0
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Exports.ExportOptions`1.DataRowStartIndex">
+            <summary>
+            数据行起始索引。默认为1
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Exports.ExportOptions`1.CustomExportProvider">
+            <summary>
+            自定义导出提供程序
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Extensions.CellExtensions">
+            <summary>
+            单元格(<see cref="T:Bing.Offices.Abstractions.Metadata.Excels.ICell"/>) 扩展
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Extensions.CellExtensions.GetFilterAttribute``1(Bing.Offices.Abstractions.Metadata.Excels.ICell,Bing.Offices.Abstractions.Filters.TypeFilterInfo)">
+            <summary>
+            获取单元格的过滤器特性
+            </summary>
+            <typeparam name="T">过滤器特性类型</typeparam>
+            <param name="cell">单元格</param>
+            <param name="typeFilterInfo">类型过滤器信息</param>
+        </member>
+        <member name="M:Bing.Offices.Extensions.CellExtensions.GetFilterAttributes``1(Bing.Offices.Abstractions.Metadata.Excels.ICell,Bing.Offices.Abstractions.Filters.TypeFilterInfo)">
+            <summary>
+            获取单元格的过滤器特性集合
+            </summary>
+            <typeparam name="T">过滤器特性类型</typeparam>
+            <param name="cell">单元格</param>
+            <param name="typeFilterInfo">类型过滤器信息</param>
+        </member>
+        <member name="M:Bing.Offices.Extensions.CellExtensions.IsDateTime(Bing.Offices.Abstractions.Metadata.Excels.ICell)">
+            <summary>
+            是否日期
+            </summary>
+            <param name="cell">单元格</param>
+        </member>
+        <member name="M:Bing.Offices.Extensions.CellExtensions.IsInRange(Bing.Offices.Abstractions.Metadata.Excels.ICell,System.Decimal,System.Decimal)">
+            <summary>
+            是否在范围内
+            </summary>
+            <param name="cell">单元格</param>
+            <param name="min">最小值</param>
+            <param name="max">最大值</param>
+        </member>
+        <member name="T:Bing.Offices.Extensions.ExpressionExtension">
+            <summary>
+            Lambda表达式扩展
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Extensions.ExpressionExtension.GetMemberInfo``2(System.Linq.Expressions.Expression{System.Func{``0,``1}})">
+            <summary>
+            获取成员信息
+            </summary>
+            <typeparam name="TEntity">实体类型</typeparam>
+            <typeparam name="TMember">成员类型</typeparam>
+            <param name="expression">表达式</param>
+        </member>
+        <member name="M:Bing.Offices.Extensions.ExpressionExtension.ExtractMemberExpression(System.Linq.Expressions.Expression)">
+            <summary>
+            提取成员表达式
+            </summary>
+            <param name="expression">表达式</param>
+        </member>
+        <member name="T:Bing.Offices.Extensions.RowExtensions">
+            <summary>
+            单元行(<see cref="T:Bing.Offices.Abstractions.Metadata.Excels.IRow"/>) 扩展
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Extensions.RowExtensions.Valid(Bing.Offices.Abstractions.Metadata.Excels.IRow,System.Boolean,Bing.Offices.Abstractions.Metadata.Excels.ICell,System.String)">
+            <summary>
+            设置行校验结果
+            </summary>
+            <param name="row">单元行</param>
+            <param name="valid">是否校验通过</param>
+            <param name="cell">单元格</param>
+            <param name="errorMsg">错误消息</param>
+        </member>
+        <member name="M:Bing.Offices.Extensions.RowExtensions.Convert``1(System.Collections.Generic.IEnumerable{Bing.Offices.Abstractions.Metadata.Excels.IRow})">
+            <summary>
+            转换
+            </summary>
+            <typeparam name="T">对象类型</typeparam>
+            <param name="rows">单元行集合</param>
+        </member>
+        <member name="M:Bing.Offices.Extensions.RowExtensions.ConvertByExpressTree``1(System.Collections.Generic.IEnumerable{Bing.Offices.Abstractions.Metadata.Excels.IRow})">
+            <summary>
+            通过表达式树，将单元行集合快速转换为指定类型集合
+            </summary>
+            <typeparam name="T">对象类型</typeparam>
+            <param name="rows">单元行集合</param>
+        </member>
+        <member name="M:Bing.Offices.Extensions.RowExtensions.GetFunc``1(Bing.Offices.Abstractions.Metadata.Excels.IRow)">
+            <summary>
+            获取转换函数
+            </summary>
+            <typeparam name="T">类型</typeparam>
+            <param name="row">单元行</param>
+        </member>
+        <member name="T:Bing.Offices.Extensions.TypeDecoratorInfoExtensions">
+            <summary>
+            类型装饰器信息(<see cref="T:Bing.Offices.Abstractions.Decorators.TypeDecoratorInfo"/>) 扩展
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Extensions.TypeDecoratorInfoExtensions.GetDecoratorAttribute``1(Bing.Offices.Abstractions.Decorators.TypeDecoratorInfo)">
+            <summary>
+            获取装饰器特性
+            </summary>
+            <typeparam name="T">装饰器特性类型</typeparam>
+            <param name="typeDecoratorInfo">类型装饰器信息</param>
+        </member>
+        <member name="M:Bing.Offices.Extensions.TypeDecoratorInfoExtensions.GetDecoratorAttributes``1(Bing.Offices.Abstractions.Decorators.TypeDecoratorInfo)">
+            <summary>
+            获取装饰器特性集合
+            </summary>
+            <typeparam name="T">装饰器特性类型</typeparam>
+            <param name="typeDecoratorInfo">类型装饰器信息</param>
+        </member>
+        <member name="T:Bing.Offices.Extensions.WorkbookExtensions">
+            <summary>
+            工作簿(<see cref="T:Bing.Offices.Abstractions.Metadata.Excels.IWorkbook"/>) 扩展
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Extensions.WorkbookExtensions.GetResult``1(Bing.Offices.Abstractions.Metadata.Excels.IWorkbook,System.Int32)">
+            <summary>
+            获取结果
+            </summary>
+            <typeparam name="T">实体类型</typeparam>
+            <param name="workbook">工作簿</param>
+            <param name="sheetIndex">工作表索引</param>
+        </member>
+        <member name="M:Bing.Offices.Extensions.WorkbookExtensions.GetResult``1(Bing.Offices.Abstractions.Metadata.Excels.IWorkbook)">
+            <summary>
+            获取结果
+            </summary>
+            <typeparam name="T">实体类型</typeparam>
+            <param name="workbook">工作簿</param>
+        </member>
+        <member name="T:Bing.Offices.Factories.DecoratorFactory">
+            <summary>
+            装饰器工厂
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Factories.DecoratorFactory.DecoratorDict">
+            <summary>
+            装饰器字典
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Factories.DecoratorFactory.DecoratorsDict">
+            <summary>
+            装饰器集合字典
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Factories.DecoratorFactory.CreateInstance(System.Type)">
+            <summary>
+            创建装饰器实例
+            </summary>
+            <param name="type">绑定装饰器的特性类型</param>
+        </member>
+        <member name="M:Bing.Offices.Factories.DecoratorFactory.CreateInstances``1">
+            <summary>
+            创建装饰器实例集合
+            </summary>
+            <typeparam name="T">实体类型</typeparam>
+        </member>
+        <member name="M:Bing.Offices.Factories.DecoratorFactory.CreateInstances(System.Type)">
+            <summary>
+            创建装饰器实例集合
+            </summary>
+            <param name="type">类型</param>
+        </member>
+        <member name="T:Bing.Offices.Factories.FilterFactory">
+            <summary>
+            过滤器工厂
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Factories.FilterFactory.FilterDict">
+            <summary>
+            过滤器字典
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Factories.FilterFactory.FiltersDict">
+            <summary>
+            过滤器集合字典
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Factories.FilterFactory.CreateInstance(System.Type)">
+            <summary>
+            创建过滤器实例
+            </summary>
+            <param name="type">绑定过滤器的特性类型s</param>
+        </member>
+        <member name="M:Bing.Offices.Factories.FilterFactory.CreateInstances``1">
+            <summary>
+            创建过滤器实例集合
+            </summary>
+            <typeparam name="T">实体类型</typeparam>
+        </member>
+        <member name="T:Bing.Offices.Factories.TypeDecoratorInfoFactory">
+            <summary>
+            类型装饰器信息工厂
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Factories.TypeDecoratorInfoFactory.TypeDecoratorDict">
+            <summary>
+            类型装饰器字典
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Factories.TypeDecoratorInfoFactory.CreateInstance(System.Type)">
+            <summary>
+            创建类型装饰器信息实例
+            </summary>
+            <param name="type">类型</param>
+        </member>
+        <member name="T:Bing.Offices.Factories.TypeFilterInfoFactory">
+            <summary>
+            类型过滤器信息工厂
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Factories.TypeFilterInfoFactory.TypeFilterDict">
+            <summary>
+            类型过滤器字典
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Factories.TypeFilterInfoFactory.CreateInstance(System.Type)">
+            <summary>
+            创建类型过滤器信息实例
+            </summary>
+            <param name="type">类型</param>
+        </member>
+        <member name="T:Bing.Offices.Filters.AndFilter">
+            <summary>
+            且过滤器
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Filters.AndFilter.Filters">
+            <summary>
+            过滤器列表
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Filters.AndFilter.AttributeType">
+            <summary>
+            特性类型
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Filters.AndFilter.Filter(Bing.Offices.Abstractions.Metadata.Excels.IWorkbook,Bing.Offices.Abstractions.Filters.IFilterContext,Bing.Offices.Abstractions.Imports.IImportOptions)">
+            <summary>
+            过滤
+            </summary>
+            <param name="workbook">工作簿</param>
+            <param name="context">过滤器上下文</param>
+            <param name="options">导入选项配置</param>
+        </member>
+        <member name="T:Bing.Offices.Filters.DateTimeFilter">
+            <summary>
+            日期过滤器
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Filters.DateTimeFilter.Filter(Bing.Offices.Abstractions.Metadata.Excels.IWorkbook,Bing.Offices.Abstractions.Filters.IFilterContext,Bing.Offices.Abstractions.Imports.IImportOptions)">
+            <summary>
+            过滤
+            </summary>
+            <param name="workbook">工作簿</param>
+            <param name="context">过滤器上下文</param>
+            <param name="options">导入选项配置</param>
+        </member>
+        <member name="T:Bing.Offices.Filters.DuplicateFilter">
+            <summary>
+            重复过滤器
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Filters.DuplicateFilter.Filter(Bing.Offices.Abstractions.Metadata.Excels.IWorkbook,Bing.Offices.Abstractions.Filters.IFilterContext,Bing.Offices.Abstractions.Imports.IImportOptions)">
+            <summary>
+            过滤
+            </summary>
+            <param name="workbook">工作簿</param>
+            <param name="context">过滤器上下文</param>
+            <param name="options">导入选项配置</param>
+        </member>
+        <member name="T:Bing.Offices.Filters.FilterAttributeComparer">
+            <summary>
+            过滤器特性比较器
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Filters.FilterAttributeComparer.Equals(Bing.Offices.Abstractions.Attributes.FilterAttributeBase,Bing.Offices.Abstractions.Attributes.FilterAttributeBase)">
+            <summary>
+            是否相等
+            </summary>
+            <param name="x">对象A</param>
+            <param name="y">对象B</param>
+        </member>
+        <member name="M:Bing.Offices.Filters.FilterAttributeComparer.GetHashCode(Bing.Offices.Abstractions.Attributes.FilterAttributeBase)">
+            <summary>
+            获取哈希编码
+            </summary>
+            <param name="obj">对象</param>
+        </member>
+        <member name="T:Bing.Offices.Filters.FilterContext">
+            <summary>
+            过滤器上下文
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Filters.FilterContext.TypeFilterInfo">
+            <summary>
+            类型过滤器信息
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Filters.MaxLengthFilter">
+            <summary>
+            最大长度过滤器
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Filters.MaxLengthFilter.MaxLength">
+            <summary>
+            最大长度
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Filters.MaxLengthFilter.Filter(Bing.Offices.Abstractions.Metadata.Excels.IWorkbook,Bing.Offices.Abstractions.Filters.IFilterContext,Bing.Offices.Abstractions.Imports.IImportOptions)">
+            <summary>
+            过滤
+            </summary>
+            <param name="workbook">工作簿</param>
+            <param name="context">过滤器上下文</param>
+            <param name="options">导入选项配置</param>
+        </member>
+        <member name="T:Bing.Offices.Filters.RangeFilter">
+            <summary>
+            区间范围过滤器
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Filters.RangeFilter.Min">
+            <summary>
+            最小值
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Filters.RangeFilter.Max">
+            <summary>
+            最大值
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Filters.RangeFilter.Filter(Bing.Offices.Abstractions.Metadata.Excels.IWorkbook,Bing.Offices.Abstractions.Filters.IFilterContext,Bing.Offices.Abstractions.Imports.IImportOptions)">
+            <summary>
+            过滤
+            </summary>
+            <param name="workbook">工作簿</param>
+            <param name="context">过滤器上下文</param>
+            <param name="options">导入选项配置</param>
+        </member>
+        <member name="T:Bing.Offices.Filters.RegexFilter">
+            <summary>
+            正则表达式过滤器
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Filters.RegexFilter.RegexString">
+            <summary>
+            正则表达式字符串
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Filters.RegexFilter.Filter(Bing.Offices.Abstractions.Metadata.Excels.IWorkbook,Bing.Offices.Abstractions.Filters.IFilterContext,Bing.Offices.Abstractions.Imports.IImportOptions)">
+            <summary>
+            过滤
+            </summary>
+            <param name="workbook">工作簿</param>
+            <param name="context">过滤器上下文</param>
+            <param name="options">导入选项配置</param>
+        </member>
+        <member name="T:Bing.Offices.Filters.RequiredFilter">
+            <summary>
+            必填过滤器
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Filters.RequiredFilter.Filter(Bing.Offices.Abstractions.Metadata.Excels.IWorkbook,Bing.Offices.Abstractions.Filters.IFilterContext,Bing.Offices.Abstractions.Imports.IImportOptions)">
+            <summary>
+            过滤
+            </summary>
+            <param name="workbook">工作簿</param>
+            <param name="context">过滤器上下文</param>
+            <param name="options">导入选项配置</param>
+        </member>
+        <member name="T:Bing.Offices.Helpers.ExpressionMapper">
+            <summary>
+            表达式树映射
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Helpers.ExpressionMapper.Table">
+            <summary>
+            哈希表
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Helpers.ExpressionMapper.FastConvert``1(Bing.Offices.Abstractions.Metadata.Excels.IRow,System.Func{System.Collections.Generic.IList{Bing.Offices.Abstractions.Metadata.Excels.ICell},``0})">
+            <summary>
+            将单元行快速转换为指定类型
+            </summary>
+            <typeparam name="T">类型</typeparam>
+            <param name="row">单元行</param>
+            <param name="func">转换函数</param>
+        </member>
+        <member name="M:Bing.Offices.Helpers.ExpressionMapper.GetFunc``1(System.String,System.Collections.Generic.IEnumerable{System.Reflection.PropertyInfo})">
+            <summary>
+            获取转换函数
+            </summary>
+            <typeparam name="T">类型</typeparam>
+            <param name="key">键</param>
+            <param name="props">属性信息集合</param>
+        </member>
+        <member name="M:Bing.Offices.Helpers.ExpressionMapper.ChangeType(System.String,System.Type)">
+            <summary>
+            变更类型
+            </summary>
+            <param name="value">值</param>
+            <param name="type">类型</param>
+        </member>
+        <member name="T:Bing.Offices.Imports.ExcelImportService">
+            <summary>
+            Excel导入服务
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Imports.ExcelImportService._excelImportProvider">
+            <summary>
+            Excel导入提供程序
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Imports.ExcelImportService.#ctor(Bing.Offices.Abstractions.Imports.IExcelImportProvider)">
+            <summary>
+            初始一个<see cref="T:Bing.Offices.Imports.ExcelImportService"/>类型的实例
+            </summary>
+            <param name="excelImportProvider">Excel导入提供程序</param>
+        </member>
+        <member name="M:Bing.Offices.Imports.ExcelImportService.ImportAsync``1(Bing.Offices.Abstractions.Imports.IImportOptions)">
+            <summary>
+            导入
+            </summary>
+            <typeparam name="T">实体类型</typeparam>
+            <param name="options">导入选项配置</param>
+        </member>
+        <member name="M:Bing.Offices.Imports.ExcelImportService.GetWorkbook``1(Bing.Offices.Abstractions.Imports.IImportOptions)">
+            <summary>
+            获取工作簿
+            </summary>
+            <typeparam name="T">实体类型</typeparam>
+            <param name="options">导入选项配置</param>
+        </member>
+        <member name="M:Bing.Offices.Imports.ExcelImportService.MappingHeaderDictionary(Bing.Offices.Abstractions.Metadata.Excels.IWorkbook,System.Collections.Generic.IDictionary{System.String,System.String})">
+            <summary>
+            映射表头字典数据
+            </summary>
+            <param name="workbook">工作簿</param>
+            <param name="headerDictionary">表头映射字典</param>
+        </member>
+        <member name="T:Bing.Offices.Imports.ImportOptions">
+            <summary>
+            导入选项配置
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.ImportOptions.FileUrl">
+            <summary>
+            文件地址
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.ImportOptions.SheetIndex">
+            <summary>
+            工作表索引
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.ImportOptions.HeaderRowIndex">
+            <summary>
+            表头行索引
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.ImportOptions.DataRowIndex">
+            <summary>
+            数据行索引
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.ImportOptions.MappingDictionary">
+            <summary>
+            映射字典
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.ImportOptions.ValidateMode">
+            <summary>
+            校验模式
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.ImportOptions.CustomImportProvider">
+            <summary>
+            自定义导入提供程序
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.InternalConst">
+            <summary>
+            内部常量
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.InternalConst.MaxSheetNum">
+            <summary>
+            最大工作表数量
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.InternalConst.DefaultPropertyNameForBasicType">
+            <summary>
+            基本类型的默认属性名称
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.InternalConst.ApplicationName">
+            <summary>
+            应用名称
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.InternalExtensions">
+            <summary>
+            内部扩展
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Internal.Helper">
+            <summary>
+            内部帮助类
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Internal.Helper.GetExcelConfigurationMapping``1">
+            <summary>
+            获取Excel配置映射
+            </summary>
+            <typeparam name="TEntity">实体类型</typeparam>
+        </member>
+        <member name="T:Bing.Offices.Internal.InternalCache">
+            <summary>
+            内部缓存
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Internal.InternalCache.ExcelExportConfigurationDictionary">
+            <summary>
+            Excel 导出配置字典
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Internal.InternalContext">
+            <summary>
+            内部上下文
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Internal.InternalContext.GetExportSetting``1">
+            <summary>
+            获取导出设置
+            </summary>
+            <typeparam name="TEntity">实体类型</typeparam>
+        </member>
+        <member name="T:Bing.Offices.Mappings.ExcelExportMapBase`1">
+            <summary>
+            Excel导出映射基类
+            </summary>
+            <typeparam name="TEntity">实体类型</typeparam>
+        </member>
+        <member name="M:Bing.Offices.Mappings.ExcelExportMapBase`1.Init(Bing.Offices.Abstractions.Configurations.IExcelConfiguration{`0})">
+            <summary>
+            初始化
+            </summary>
+            <param name="configuration">Excel配置</param>
+        </member>
+        <member name="M:Bing.Offices.Mappings.ExcelExportMapBase`1.Init">
+            <summary>
+            初始化
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Metadata.Excels.Cell">
+            <summary>
+            单元格
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Metadata.Excels.Cell._columnSpan">
+            <summary>
+            列跨度
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Metadata.Excels.Cell._rowSpan">
+            <summary>
+            行跨度
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Metadata.Excels.Cell.Value">
+            <summary>
+            值
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Metadata.Excels.Cell.Row">
+            <summary>
+            行
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Metadata.Excels.Cell.ColumnSpan">
+            <summary>
+            列跨度
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Metadata.Excels.Cell.RowSpan">
+            <summary>
+            行跨度
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Metadata.Excels.Cell.ColumnIndex">
+            <summary>
+            列索引
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Metadata.Excels.Cell.RowIndex">
+            <summary>
+            行索引
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Metadata.Excels.Cell.EndColumnIndex">
+            <summary>
+            结束列索引
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Metadata.Excels.Cell.EndRowIndex">
+            <summary>
+            结束行索引
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Metadata.Excels.Cell.NeedMerge">
+            <summary>
+            是否需要合并单元格。true:是,false:否
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Metadata.Excels.Cell.Name">
+            <summary>
+            名称
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Metadata.Excels.Cell.PropertyName">
+            <summary>
+            属性名称
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Metadata.Excels.Cell.#ctor(System.Object,System.Int32,System.Int32)">
+            <summary>
+            初始化一个<see cref="T:Bing.Offices.Metadata.Excels.Cell"/>类型的实例
+            </summary>
+            <param name="value">值</param>
+            <param name="columnSpan">列跨度</param>
+            <param name="rowSpan">行跨度</param>
+        </member>
+        <member name="M:Bing.Offices.Metadata.Excels.Cell.IsNull">
+            <summary>
+            是否为空单元格
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Metadata.Excels.Internal.IndexManager">
+            <summary>
+            索引管理器
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Metadata.Excels.Internal.IndexManager._list">
+            <summary>
+            索引列表
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Metadata.Excels.Internal.IndexManager.#ctor">
+            <summary>
+            初始化一个<see cref="T:Bing.Offices.Metadata.Excels.Internal.IndexManager"/>类型的实例
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Metadata.Excels.Internal.IndexManager.GetIndex(System.Int32)">
+            <summary>
+            获取索引
+            </summary>
+            <param name="span">跨度</param>
+        </member>
+        <member name="M:Bing.Offices.Metadata.Excels.Internal.IndexManager.AddIndex(System.Int32,System.Int32)">
+            <summary>
+            添加索引
+            </summary>
+            <param name="index">索引</param>
+            <param name="span">跨度</param>
+        </member>
+        <member name="M:Bing.Offices.Metadata.Excels.Internal.IndexManager.AddIndex(Bing.Offices.Metadata.Excels.Internal.IndexRange,System.Int32,System.Int32)">
+            <summary>
+            添加索引
+            </summary>
+            <param name="range">索引范围</param>
+            <param name="index">索引</param>
+            <param name="span">跨度</param>
+        </member>
+        <member name="T:Bing.Offices.Metadata.Excels.Internal.IndexRange">
+            <summary>
+            索引范围
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Metadata.Excels.Internal.IndexRange.Index">
+            <summary>
+            当前索引
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Metadata.Excels.Internal.IndexRange.EndIndex">
+            <summary>
+            结束索引
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Metadata.Excels.Internal.IndexRange.IsEnd">
+            <summary>
+            是否已结束
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Metadata.Excels.Internal.IndexRange.#ctor(System.Int32,System.Int32)">
+            <summary>
+            初始化一个<see cref="T:Bing.Offices.Metadata.Excels.Internal.IndexRange"/>类型的实例
+            </summary>
+            <param name="index">当前索引</param>
+            <param name="endIndex">结束索引</param>
+        </member>
+        <member name="M:Bing.Offices.Metadata.Excels.Internal.IndexRange.GetIndex(System.Int32)">
+            <summary>
+            获取索引
+            </summary>
+            <param name="span">跨度</param>
+        </member>
+        <member name="M:Bing.Offices.Metadata.Excels.Internal.IndexRange.Contains(System.Int32)">
+            <summary>
+            判断是否包含该索引
+            </summary>
+            <param name="index">索引</param>
+        </member>
+        <member name="M:Bing.Offices.Metadata.Excels.Internal.IndexRange.Split(System.Int32,System.Int32)">
+            <summary>
+            分割索引范围
+            </summary>
+            <param name="index">索引</param>
+            <param name="span">跨度</param>
+        </member>
+        <member name="T:Bing.Offices.Metadata.Excels.NullCell">
+            <summary>
+            空单元格
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Metadata.Excels.NullCell.#ctor">
+            <summary>
+            初始化一个<see cref="T:Bing.Offices.Metadata.Excels.NullCell"/>类型的实例
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Metadata.Excels.NullCell.IsNull">
+            <summary>
+            是否为空单元格
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Metadata.Excels.Range">
+            <summary>
+            单元范围
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Metadata.Excels.Range._rows">
+            <summary>
+            单元行列表
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Metadata.Excels.Range._startIndex">
+            <summary>
+            起始索引
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Metadata.Excels.Range.Item(System.Int32)">
+            <summary>
+            单元行
+            </summary>
+            <param name="rowIndex">行索引</param>
+        </member>
+        <member name="P:Bing.Offices.Metadata.Excels.Range.MaxColumnCount">
+            <summary>
+            最大列数
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Metadata.Excels.Range.RowCount">
+            <summary>
+            行数
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Metadata.Excels.Range.#ctor(System.Int32)">
+            <summary>
+            初始化一个<see cref="T:Bing.Offices.Metadata.Excels.Range"/>类型的实例
+            </summary>
+            <param name="startIndex">起始索引</param>
+        </member>
+        <member name="M:Bing.Offices.Metadata.Excels.Range.GetRow(System.Int32)">
+            <summary>
+            获取单元行
+            </summary>
+            <param name="rowIndex">行索引。对应Excel表格行号</param>
+        </member>
+        <member name="M:Bing.Offices.Metadata.Excels.Range.GetRows">
+            <summary>
+            获取单元行列表
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Metadata.Excels.Range.AddRow(System.Int32,System.Collections.Generic.IEnumerable{Bing.Offices.Abstractions.Metadata.Excels.ICell})">
+            <summary>
+            添加单元行
+            </summary>
+            <param name="rowIndex">行索引</param>
+            <param name="cells">单元格列表</param>
+        </member>
+        <member name="M:Bing.Offices.Metadata.Excels.Range.CreateRow(System.Int32)">
+            <summary>
+            创建单元行
+            </summary>
+            <param name="rowIndex">行索引</param>
+        </member>
+        <member name="M:Bing.Offices.Metadata.Excels.Range.AddCell(Bing.Offices.Abstractions.Metadata.Excels.IRow,Bing.Offices.Abstractions.Metadata.Excels.ICell,System.Int32)">
+            <summary>
+            添加单元格
+            </summary>
+            <param name="row">单元行</param>
+            <param name="cell">单元格</param>
+            <param name="rowIndex">行索引</param>
+        </member>
+        <member name="M:Bing.Offices.Metadata.Excels.Range.AddPlaceholderCell(Bing.Offices.Abstractions.Metadata.Excels.ICell,System.Int32)">
+            <summary>
+            为下方受RowSpan影响的单元行添加占位单元格
+            </summary>
+            <param name="cell">单元格</param>
+            <param name="rowIndex">行索引</param>
+        </member>
+        <member name="M:Bing.Offices.Metadata.Excels.Range.Clear">
+            <summary>
+            清空单元行
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Metadata.Excels.Row">
+            <summary>
+            单元行
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Metadata.Excels.Row._indexManager">
+            <summary>
+            索引管理器
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Metadata.Excels.Row.RowIndex">
+            <summary>
+            行索引
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Metadata.Excels.Row.Valid">
+            <summary>
+            是否有效
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Metadata.Excels.Row.ErrorMsg">
+            <summary>
+            错误消息
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Metadata.Excels.Row.Cells">
+            <summary>
+            单元格列表
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Metadata.Excels.Row.Item(System.Int32)">
+            <summary>
+            单元格
+            </summary>
+            <param name="columnIndex">列索引</param>
+        </member>
+        <member name="P:Bing.Offices.Metadata.Excels.Row.ColumnCount">
+            <summary>
+            列数
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Metadata.Excels.Row.#ctor(System.Int32)">
+            <summary>
+            初始化一个<see cref="T:Bing.Offices.Metadata.Excels.Row"/>类型的实例
+            </summary>
+            <param name="rowIndex">行索引</param>
+        </member>
+        <member name="M:Bing.Offices.Metadata.Excels.Row.Add(System.Object,System.Int32,System.Int32)">
+            <summary>
+            添加单元格
+            </summary>
+            <param name="value">值</param>
+            <param name="columnSpan">列跨度</param>
+            <param name="rowSpan">行跨度</param>
+        </member>
+        <member name="M:Bing.Offices.Metadata.Excels.Row.Add(Bing.Offices.Abstractions.Metadata.Excels.ICell)">
+            <summary>
+            添加单元格
+            </summary>
+            <param name="cell">单元格</param>
+        </member>
+        <member name="M:Bing.Offices.Metadata.Excels.Row.SetColumnIndex(Bing.Offices.Abstractions.Metadata.Excels.ICell)">
+            <summary>
+            设置列索引
+            </summary>
+            <param name="cell">单元格</param>
+        </member>
+        <member name="T:Bing.Offices.Metadata.Excels.WorkSheet">
+            <summary>
+            工作表
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Metadata.Excels.WorkSheet._header">
+            <summary>
+            头部单元范围
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Metadata.Excels.WorkSheet._body">
+            <summary>
+            正文单元范围
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Metadata.Excels.WorkSheet._footer">
+            <summary>
+            底部单元范围
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Metadata.Excels.WorkSheet._rowIndex">
+            <summary>
+            当前行索引
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Metadata.Excels.WorkSheet.Title">
+            <summary>
+            标题
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Metadata.Excels.WorkSheet.Name">
+            <summary>
+            名称
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Metadata.Excels.WorkSheet.MaxColumnCount">
+            <summary>
+            最大列数
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Metadata.Excels.WorkSheet.RowCount">
+            <summary>
+            行数
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Metadata.Excels.WorkSheet.HeadRowCount">
+            <summary>
+            表头行数
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Metadata.Excels.WorkSheet.BodyRowCount">
+            <summary>
+            正文行数
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Metadata.Excels.WorkSheet.FootRowCount">
+            <summary>
+            页脚行数
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Metadata.Excels.WorkSheet.#ctor">
+            <summary>
+            初始化一个<see cref="T:Bing.Offices.Metadata.Excels.WorkSheet"/>类型的实例
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Metadata.Excels.WorkSheet.GetHeader">
+            <summary>
+            获取表头
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Metadata.Excels.WorkSheet.GetBody">
+            <summary>
+            获取正文
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Metadata.Excels.WorkSheet.GetFooter">
+            <summary>
+            获取页脚
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Metadata.Excels.WorkSheet.AddHeadRow(System.String[])">
+            <summary>
+            添加表头
+            </summary>
+            <param name="titles">标题</param>
+        </member>
+        <member name="M:Bing.Offices.Metadata.Excels.WorkSheet.CreateCell(System.Object)">
+            <summary>
+            创建单元格
+            </summary>
+            <param name="value">值</param>
+        </member>
+        <member name="M:Bing.Offices.Metadata.Excels.WorkSheet.AddHeadRow(Bing.Offices.Abstractions.Metadata.Excels.ICell[])">
+            <summary>
+            添加表头
+            </summary>
+            <param name="cells">单元格</param>
+        </member>
+        <member name="M:Bing.Offices.Metadata.Excels.WorkSheet.AddRowToHeader(System.Collections.Generic.IEnumerable{Bing.Offices.Abstractions.Metadata.Excels.ICell})">
+            <summary>
+            添加表头行
+            </summary>
+            <param name="cells">单元格集合</param>
+        </member>
+        <member name="M:Bing.Offices.Metadata.Excels.WorkSheet.ResetFirstColumnSpan">
+            <summary>
+            重置第一行的列跨度，第一行可能为总标题
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Metadata.Excels.WorkSheet.AddBodyRow(System.Object[])">
+            <summary>
+            添加正文
+            </summary>
+            <param name="cellValues">值</param>
+        </member>
+        <member name="M:Bing.Offices.Metadata.Excels.WorkSheet.AddBodyRow(System.Collections.Generic.IEnumerable{Bing.Offices.Abstractions.Metadata.Excels.ICell})">
+            <summary>
+            添加正文
+            </summary>
+            <param name="cells">单元格集合</param>
+        </member>
+        <member name="M:Bing.Offices.Metadata.Excels.WorkSheet.GetBodyRange">
+            <summary>
+            获取正文单元范围
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Metadata.Excels.WorkSheet.AddFootRow(System.String[])">
+            <summary>
+            添加页脚
+            </summary>
+            <param name="cellValues">值</param>
+        </member>
+        <member name="M:Bing.Offices.Metadata.Excels.WorkSheet.AddFootRow(Bing.Offices.Abstractions.Metadata.Excels.ICell[])">
+            <summary>
+            添加页脚
+            </summary>
+            <param name="cells">单元格集合</param>
+        </member>
+        <member name="M:Bing.Offices.Metadata.Excels.WorkSheet.GetFootRange">
+            <summary>
+            获取页脚单元范围
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Metadata.Excels.WorkSheet.ClearHeader">
+            <summary>
+            清空表头
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Properties.Resources">
+            <summary>
+              一个强类型的资源类，用于查找本地化的字符串等。
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Properties.Resources.ResourceManager">
+            <summary>
+              返回此类使用的缓存的 ResourceManager 实例。
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Properties.Resources.Culture">
+            <summary>
+              重写当前线程的 CurrentUICulture 属性
+              重写当前线程的 CurrentUICulture 属性。
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Properties.Resources.PropertyExpression_Must_LambdaExpression">
+            <summary>
+              查找类似 {0} 必须是Lambda表达式。 的本地化字符串。
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Settings.ExcelSetting">
+            <summary>
+            Excel 文档属性设置
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Settings.ExcelSetting.Author">
+            <summary>
+            作者
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Settings.ExcelSetting.Company">
+            <summary>
+            公司
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Settings.ExcelSetting.Title">
+            <summary>
+            标题
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Settings.ExcelSetting.Description">
+            <summary>
+            描述
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Settings.ExcelSetting.Subject">
+            <summary>
+            主题
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Settings.ExcelSetting.Category">
+            <summary>
+            目录
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Settings.ExcelSetting.MaxExportNum">
+            <summary>
+            最大导出数量
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Settings.FilterSetting">
+            <summary>
+            过滤器设置
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Settings.FilterSetting.FirstColumn">
+            <summary>
+            首列索引
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Settings.FilterSetting.LastColumn">
+            <summary>
+            最后一列索引
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Settings.FilterSetting.#ctor(System.Int32)">
+            <summary>
+            初始化一个<see cref="T:Bing.Offices.Settings.FilterSetting"/>类型的实例
+            </summary>
+            <param name="firstColumn">首列索引</param>
+        </member>
+        <member name="M:Bing.Offices.Settings.FilterSetting.#ctor(System.Int32,System.Nullable{System.Int32})">
+            <summary>
+            初始化一个<see cref="T:Bing.Offices.Settings.FilterSetting"/>类型的实例
+            </summary>
+            <param name="firstColumn">首列索引</param>
+            <param name="lastColumn">最后一列索引</param>
+        </member>
+        <member name="T:Bing.Offices.Settings.FreezeSetting">
+            <summary>
+            冻结设置
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Settings.FreezeSetting.ColSplit">
+            <summary>
+            冻结单元格的列号
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Settings.FreezeSetting.RowSplit">
+            <summary>
+            冻结单元格的行号
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Settings.FreezeSetting.LeftMostColumn">
+            <summary>
+            顶列索引
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Settings.FreezeSetting.TopRow">
+            <summary>
+            顶行索引
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Settings.FreezeSetting.#ctor(System.Int32,System.Int32)">
+            <summary>
+            初始化一个<see cref="T:Bing.Offices.Settings.FreezeSetting"/>类型的实例
+            </summary>
+            <param name="colSplit">冻结单元格的列号</param>
+            <param name="rowSplit">冻结单元格的行号</param>
+        </member>
+        <member name="M:Bing.Offices.Settings.FreezeSetting.#ctor(System.Int32,System.Int32,System.Int32,System.Int32)">
+            <summary>
+            初始化一个<see cref="T:Bing.Offices.Settings.FreezeSetting"/>类型的实例
+            </summary>
+            <param name="colSplit">冻结单元格的列号</param>
+            <param name="rowSplit">冻结单元格的行号</param>
+            <param name="leftMostColumn">顶列索引</param>
+            <param name="topRow">顶行索引</param>
+        </member>
+        <member name="T:Bing.Offices.Settings.PropertySetting">
+            <summary>
+            属性设置
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Settings.PropertySetting.Index">
+            <summary>
+            列索引
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Settings.PropertySetting.Title">
+            <summary>
+            列标题
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Settings.PropertySetting.Formatter">
+            <summary>
+            列格式化程序
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Settings.PropertySetting.Ignored">
+            <summary>
+            是否忽略属性
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Settings.PropertySetting.DefaultValue">
+            <summary>
+            默认值
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Settings.SheetSetting">
+            <summary>
+            工作表设置
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Settings.SheetSetting._index">
+            <summary>
+            工作表索引
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Settings.SheetSetting._name">
+            <summary>
+            工作表名称
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Settings.SheetSetting._startRowIndex">
+            <summary>
+            起始行索引
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Settings.SheetSetting.Index">
+            <summary>
+            工作表索引
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Settings.SheetSetting.Name">
+            <summary>
+            工作表名称
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Settings.SheetSetting.StartRowIndex">
+            <summary>
+            起始行索引
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Settings.SheetSetting.HeaderRowIndex">
+            <summary>
+            标题行索引
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Settings.StatisticsSetting">
+            <summary>
+            统计信息设置
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Settings.StatisticsSetting.Name">
+            <summary>
+            统计信息名称，默认名称位置为（最后一行，第一个单元格）
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Settings.StatisticsSetting.Formula">
+            <summary>
+            单元格公式，如：SUM、AVERAGE等。可用于垂直统计
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Settings.StatisticsSetting.Columns">
+            <summary>
+            统计信息的列索引。如果<see cref="P:Bing.Offices.Settings.StatisticsSetting.Formula"/>是SUM，而<see cref="P:Bing.Offices.Settings.StatisticsSetting.Columns"/>是[1,3]，例如：列1和列3将是SUM第一行到最后一行。
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Styles.Color">
+            <summary>
+            颜色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.Black">
+            <summary>
+            黑色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.Brown">
+            <summary>
+            棕色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.OliveGreen">
+            <summary>
+            橄榄绿色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.DarkGreen">
+            <summary>
+            墨绿色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.DarkTeal">
+            <summary>
+            深蓝绿色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.DarkBlue">
+            <summary>
+            深蓝色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.Indigo">
+            <summary>
+            靛蓝色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.Grey80Percent">
+            <summary>
+            深灰色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.Orange">
+            <summary>
+            橙色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.DarkYellow">
+            <summary>
+            深黄色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.Green">
+            <summary>
+            绿色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.Teal">
+            <summary>
+            青色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.Blue">
+            <summary>
+            蓝色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.BlueGrey">
+            <summary>
+            蓝灰色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.Grey50Percent">
+            <summary>
+            浅蓝色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.Red">
+            <summary>
+            红色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.LightOrange">
+            <summary>
+            浅橘色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.Lime">
+            <summary>
+            黄绿色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.SeaGreen">
+            <summary>
+            海绿色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.Aqua">
+            <summary>
+            湖绿色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.LightBlue">
+            <summary>
+            浅蓝色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.Violet">
+            <summary>
+            紫罗兰色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.Grey40Percent">
+            <summary>
+            浅灰色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.Pink">
+            <summary>
+            粉红色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.Gold">
+            <summary>
+            金黄色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.Yellow">
+            <summary>
+            黄色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.BrightGreen">
+            <summary>
+            鲜绿色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.Turquoise">
+            <summary>
+            青绿色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.DarkRed">
+            <summary>
+            深红色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.SkyBlue">
+            <summary>
+            天蓝色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.Plum">
+            <summary>
+            玫红色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.Grey25Percent">
+            <summary>
+            灰白色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.Rose">
+            <summary>
+            玫瑰色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.LightYellow">
+            <summary>
+            浅黄色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.LightGreen">
+            <summary>
+            浅绿色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.LightTurquoise">
+            <summary>
+            浅绿松色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.PaleBlue">
+            <summary>
+            浅蓝色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.Lavender">
+            <summary>
+            淡紫色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.White">
+            <summary>
+            白色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.CornflowerBlue">
+            <summary>
+            蓝紫色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.LemonChiffon">
+            <summary>
+            柠檬绸色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.Maroon">
+            <summary>
+            褐红色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.Orchid">
+            <summary>
+            淡紫色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.Coral">
+            <summary>
+            粉红色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.RoyalBlue">
+            <summary>
+            宝蓝色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.LightCornflowerBlue">
+            <summary>
+            浅蓝紫色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Styles.Color.Tan">
+            <summary>
+            棕褐色
+            </summary>
+        </member>
+    </members>
+</doc>

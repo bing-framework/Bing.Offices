@@ -1,0 +1,271 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Bing.Offices.Npoi</name>
+    </assembly>
+    <members>
+        <member name="T:Bing.Offices.Npoi.Exports.ExcelExportProvider">
+            <summary>
+            Excel导出提供程序
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Npoi.Exports.ExcelExportProvider.Export``1(Bing.Offices.Abstractions.Exports.IExportOptions{``0})">
+            <summary>
+            导出
+            </summary>
+            <typeparam name="T">实体类型</typeparam>
+            <param name="options">导出选项配置</param>
+        </member>
+        <member name="M:Bing.Offices.Npoi.Exports.ExcelExportProvider.CreateWorkbook(Bing.Offices.Abstractions.Exports.ExportFormat)">
+            <summary>
+            创建工作簿
+            </summary>
+            <param name="format">导出格式</param>
+        </member>
+        <member name="M:Bing.Offices.Npoi.Exports.ExcelExportProvider.HandleHeader(NPOI.SS.UserModel.ISheet,System.Int32,System.Collections.Generic.IDictionary{System.String,System.String})">
+            <summary>
+            处理表头
+            </summary>
+            <typeparam name="T">实体类型</typeparam>
+            <param name="sheet">NPOI工作表</param>
+            <param name="headerRowIndex">表头行索引</param>
+            <param name="headerDict">表头映射字典</param>
+        </member>
+        <member name="M:Bing.Offices.Npoi.Exports.ExcelExportProvider.HandleBody``1(NPOI.SS.UserModel.ISheet,System.Int32,System.Collections.Generic.IList{``0},System.Collections.Generic.IDictionary{System.String,System.String})">
+            <summary>
+            处理正文
+            </summary>
+            <typeparam name="T">实体类型</typeparam>
+            <param name="sheet">NPOI工作表</param>
+            <param name="dataRowStartIndex">数据行起始索引</param>
+            <param name="data">数据集</param>
+            <param name="headerDict">表头映射字典</param>
+        </member>
+        <member name="M:Bing.Offices.Npoi.Exports.ExcelExportProvider.HandleHeader``1(System.Byte[],Bing.Offices.Abstractions.Exports.IExportOptions{``0},Bing.Offices.Abstractions.Decorators.IDecoratorContext)">
+            <summary>
+            处理表头
+            </summary>
+            <typeparam name="T">实体类型</typeparam>
+            <param name="workbookBytes">工作簿流</param>
+            <param name="options">导出选项配置</param>
+            <param name="context">装饰器上下文</param>
+        </member>
+        <member name="M:Bing.Offices.Npoi.Exports.ExcelExportProvider.MergeCells``1(System.Byte[],Bing.Offices.Abstractions.Exports.IExportOptions{``0},Bing.Offices.Abstractions.Decorators.IDecoratorContext)">
+            <summary>
+            合并单元格
+            </summary>
+            <typeparam name="T">实体类型</typeparam>
+            <param name="workbookBytes">工作簿流</param>
+            <param name="options">导出选项配置</param>
+            <param name="context">装饰器上下文</param>
+        </member>
+        <member name="M:Bing.Offices.Npoi.Exports.ExcelExportProvider.WarpText``1(System.Byte[],Bing.Offices.Abstractions.Exports.IExportOptions{``0},Bing.Offices.Abstractions.Decorators.IDecoratorContext)">
+            <summary>
+            自动换行
+            </summary>
+            <typeparam name="T">实体类型</typeparam>
+            <param name="workbookBytes">工作簿流</param>
+            <param name="options">导出选项配置</param>
+            <param name="context">装饰器上下文</param>
+        </member>
+        <member name="T:Bing.Offices.Npoi.Extensions.CellExtensions">
+            <summary>
+            单元格(<see cref="T:NPOI.SS.UserModel.ICell"/>) 扩展
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Npoi.Extensions.CellExtensions.GetStringValue(NPOI.SS.UserModel.ICell)">
+            <summary>
+            获取单元格的字符串值
+            </summary>
+            <param name="cell">单元格</param>
+        </member>
+        <member name="T:Bing.Offices.Npoi.Extensions.InternalExtensions">
+            <summary>
+            内部扩展
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Npoi.Extensions.InternalExtensions.GetStringValue``1(``0,System.String)">
+            <summary>
+            获取字符串值
+            </summary>
+            <typeparam name="T">实体类型</typeparam>
+            <param name="dto">数据传输对象</param>
+            <param name="propertyName">属性名</param>
+        </member>
+        <member name="T:Bing.Offices.Npoi.Extensions.WorkbookExtensions">
+            <summary>
+            工作簿<see cref="T:NPOI.SS.UserModel.IWorkbook"/> 扩展
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Npoi.Extensions.WorkbookExtensions.SaveToBuffer(NPOI.SS.UserModel.IWorkbook)">
+            <summary>
+            将工作簿转换成字节数组
+            </summary>
+            <param name="workbook">工作簿</param>
+        </member>
+        <member name="M:Bing.Offices.Npoi.Extensions.WorkbookExtensions.ToWorkbook(System.Byte[])">
+            <summary>
+            转换为工作簿
+            </summary>
+            <param name="workbookBytes">工作簿字节数组</param>
+        </member>
+        <member name="T:Bing.Offices.Npoi.Factories.ExportMappingFactory">
+            <summary>
+            导出映射工厂
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Npoi.Factories.ExportMappingFactory.MappingDict">
+            <summary>
+            映射字典
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Npoi.Factories.ExportMappingFactory.CreateInstance(System.Type)">
+            <summary>
+            创建映射字典实例
+            </summary>
+            <param name="type">导出类型</param>
+        </member>
+        <member name="T:Bing.Offices.Npoi.Imports.ExcelImportProvider">
+            <summary>
+            Excel导入提供程序
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Npoi.Imports.ExcelImportProvider.Table">
+            <summary>
+            哈希表
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Npoi.Imports.ExcelImportProvider.Convert``1(System.String,System.Int32,System.Int32,System.Int32)">
+            <summary>
+            转换
+            </summary>
+            <typeparam name="TTemplate">导入模板类型</typeparam>
+            <param name="fileUrl">文件地址</param>
+            <param name="sheetIndex">工作表索引</param>
+            <param name="headerRowIndex">标题行索引</param>
+            <param name="dataRowStartIndex">数据行起始索引</param>
+        </member>
+        <member name="M:Bing.Offices.Npoi.Imports.ExcelImportProvider.GetWorkbook(System.String)">
+            <summary>
+            获取工作簿
+            </summary>
+            <param name="fileUrl">文件地址</param>
+        </member>
+        <member name="M:Bing.Offices.Npoi.Imports.ExcelImportProvider.GetSheet(NPOI.SS.UserModel.IWorkbook,System.Int32)">
+            <summary>
+            获取工作表
+            </summary>
+            <param name="workbook">工作簿</param>
+            <param name="sheetIndex">工作表索引</param>
+        </member>
+        <member name="M:Bing.Offices.Npoi.Imports.ExcelImportProvider.HandleHeader(Bing.Offices.Abstractions.Metadata.Excels.IWorkSheet,NPOI.SS.UserModel.ISheet,System.Int32)">
+            <summary>
+            处理表头
+            </summary>
+            <param name="sheet">工作表</param>
+            <param name="innerSheet">NPOI工作表</param>
+            <param name="headerRowIndex">标题行索引</param>
+        </member>
+        <member name="M:Bing.Offices.Npoi.Imports.ExcelImportProvider.HandleBody``1(Bing.Offices.Abstractions.Metadata.Excels.IWorkSheet,NPOI.SS.UserModel.ISheet,System.Int32)">
+            <summary>
+            处理正文
+            </summary>
+            <param name="sheet">工作表</param>
+            <param name="innerSheet">NPOI工作表</param>
+            <param name="dataRowStartIndex">数据行起始索引</param>
+        </member>
+        <member name="M:Bing.Offices.Npoi.Imports.ExcelImportProvider.Convert``1(NPOI.SS.UserModel.IRow,Bing.Offices.Abstractions.Metadata.Excels.IRow)">
+            <summary>
+            转换
+            </summary>
+            <typeparam name="TTemplate">模板类型</typeparam>
+            <param name="row">NPOI单元行</param>
+            <param name="header">表头行</param>
+        </member>
+        <member name="T:Bing.Offices.Npoi.Metadata.Excels.NpoiWorkbook">
+            <summary>
+            Npoi工作簿
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Npoi.Metadata.Excels.NpoiWorkbook.MaxSensitveSheetNameLength">
+            <summary>
+            工作表名称最大长度
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Npoi.Metadata.Excels.NpoiWorkbook.Sheets">
+            <summary>
+            工作表列表
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Npoi.Metadata.Excels.NpoiWorkbook.Item(System.Int32)">
+            <summary>
+            工作表
+            </summary>
+            <param name="sheetIndex">工作表索引</param>
+        </member>
+        <member name="M:Bing.Offices.Npoi.Metadata.Excels.NpoiWorkbook.#ctor">
+            <summary>
+            初始化一个<see cref="T:Bing.Offices.Npoi.Metadata.Excels.NpoiWorkbook"/>类型的实例
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Npoi.Metadata.Excels.NpoiWorkbook.GetSheet(System.String)">
+            <summary>
+            获取工作表
+            </summary>
+            <param name="sheetName">工作表名称</param>
+        </member>
+        <member name="M:Bing.Offices.Npoi.Metadata.Excels.NpoiWorkbook.GetSheetAt(System.Int32)">
+            <summary>
+            获取工作表
+            </summary>
+            <param name="sheetIndex">工作表索引</param>
+        </member>
+        <member name="M:Bing.Offices.Npoi.Metadata.Excels.NpoiWorkbook.ValidateSheetIndex(System.Int32)">
+            <summary>
+            校验工作表索引
+            </summary>
+            <param name="index">索引</param>
+        </member>
+        <member name="M:Bing.Offices.Npoi.Metadata.Excels.NpoiWorkbook.CreateSheet">
+            <summary>
+            创建工作表
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Npoi.Metadata.Excels.NpoiWorkbook.CreateSheet(System.String)">
+            <summary>
+            创建工作表
+            </summary>
+            <param name="sheetName">工作表名称</param>
+        </member>
+        <member name="M:Bing.Offices.Npoi.Metadata.Excels.NpoiWorkbook.ValidateSheetName(System.String)">
+            <summary>
+            校验工作表名称
+            </summary>
+            <param name="sheetName">工作表名称</param>
+        </member>
+        <member name="M:Bing.Offices.Npoi.Metadata.Excels.NpoiWorkbook.ContainsSheet(System.String,System.Int32)">
+            <summary>
+            是否包含工作表
+            </summary>
+            <param name="sheetName">工作表名称</param>
+            <param name="excludeSheetIndex">忽略索引</param>
+        </member>
+        <member name="M:Bing.Offices.Npoi.Metadata.Excels.NpoiWorkbook.AddSheet(Bing.Offices.Abstractions.Metadata.Excels.IWorkSheet)">
+            <summary>
+            添加工作表
+            </summary>
+            <param name="sheet">工作表</param>
+        </member>
+        <member name="T:Bing.Offices.Npoi.Resolvers.ColorResolver">
+            <summary>
+            颜色解析器
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Npoi.Resolvers.ColorResolver.Resolve(Bing.Offices.Styles.Color)">
+            <summary>
+            解析
+            </summary>
+            <param name="color">颜色枚举</param>
+        </member>
+    </members>
+</doc>
