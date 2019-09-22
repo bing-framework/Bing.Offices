@@ -5,7 +5,7 @@
     <VersionMinor>0</VersionMinor>
     <VersionPatch>1</VersionPatch>
     <!--<VersionQuality></VersionQuality>-->
-    <VersionQuality>20190922-2</VersionQuality>
+    <VersionQuality>20190922-1</VersionQuality>
     <VersionPrefix>$(VersionMajor).$(VersionMinor).$(VersionPatch)</VersionPrefix>
     <!--<VersionSuffix></VersionSuffix>-->
     <VersionSuffix>preview-$(VersionQuality)</VersionSuffix>

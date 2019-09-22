@@ -195,6 +195,27 @@ namespace Bing.Offices.Tests
             });
             await File.WriteAllBytesAsync($"D:\\测试导出_{DateTime.Now:yyyyMMddHHmmss}.xlsx", bytes);
         }
+
+        /// <summary>
+        /// 测试 - 导出 动态标题
+        /// </summary>
+        /// <returns></returns>
+        [Fact]
+        public async Task Test_Export_DynamicTitle_1()
+        {
+            var workbook = await _excelImportService.ImportAsync<Barcode>(new ImportOptions()
+            {
+                FileUrl = "D:\\导入国标码_导入格式_动态标题1.xlsx",
+            });
+            var result = workbook.GetResult<Barcode>();
+
+            var bytes = await _excelExportService.ExportAsync(new ExportOptions<Barcode>()
+            {
+                Data = result.ToList(),
+                DynamicColumns = new List<string>() { "创建人","更新时间","更新人","备注"}
+            });
+            await File.WriteAllBytesAsync($"D:\\测试导出_{DateTime.Now:yyyyMMddHHmmss}.xlsx", bytes);
+        }
     }
 
     /// <summary>
@@ -210,7 +231,7 @@ namespace Bing.Offices.Tests
         public string Code { get; set; }
 
         [ColumnName("创建时间")]
-        public DateTime? CreateDate { get; set; }
+        public string CreateDate { get; set; }
 
         /// <summary>
         /// 扩展

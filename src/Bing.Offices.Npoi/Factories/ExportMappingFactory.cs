@@ -31,6 +31,8 @@ namespace Bing.Offices.Npoi.Factories
             {
                 if (p.IsDefined(typeof(ColumnNameAttribute)))
                     dict.Add(p.Name, p.GetCustomAttribute<ColumnNameAttribute>().Name);
+                else if (p.IsDefined(typeof(DynamicColumnAttribute)))
+                    dict.Add($"Dynamic:{p.Name}", string.Empty);
                 else
                     dict.Add(p.Name, p.Name);
             });

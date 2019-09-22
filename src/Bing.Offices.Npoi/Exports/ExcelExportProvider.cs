@@ -7,6 +7,7 @@ using Bing.Offices.Attributes;
 using Bing.Offices.Npoi.Extensions;
 using Bing.Offices.Npoi.Factories;
 using Bing.Offices.Npoi.Resolvers;
+using Bing.Utils.Extensions;
 
 namespace Bing.Offices.Npoi.Exports
 {
@@ -25,6 +26,7 @@ namespace Bing.Offices.Npoi.Exports
             var workbook = CreateWorkbook(options.ExportFormat);
             var sheet = workbook.CreateSheet(options.SheetName);
             var headerDict = ExportMappingFactory.CreateInstance(typeof(T));
+            BuildDynamicHeader(headerDict, options.DynamicColumns);
             HandleHeader(sheet, options.HeaderRowIndex, headerDict);
             if (options.Data != null && options.Data.Count > 0)
                 HandleBody(sheet, options.DataRowStartIndex, options.Data, headerDict);
@@ -48,6 +50,21 @@ namespace Bing.Offices.Npoi.Exports
         }
 
         /// <summary>
+        /// 构建动态表头
+        /// </summary>
+        /// <param name="headerDict">表头映射字典</param>
+        /// <param name="dynamicColumns">动态列</param>
+        private void BuildDynamicHeader(IDictionary<string, string> headerDict, IList<string> dynamicColumns)
+        {
+            if (!dynamicColumns.Any())
+                return;
+            var dynamicKey = headerDict.Keys.FirstOrDefault(x => x.StartsWith("Dynamic:"));
+            if (string.IsNullOrWhiteSpace(dynamicKey))
+                return;
+            headerDict[dynamicKey] = dynamicColumns.Join(',');
+        }
+
+        /// <summary>
         /// 处理表头
         /// </summary>
         /// <typeparam name="T">实体类型</typeparam>
@@ -60,6 +77,16 @@ namespace Bing.Offices.Npoi.Exports
             var columnIndex = 0;
             foreach (var kvp in headerDict)
             {
+                if (kvp.Key.StartsWith("Dynamic:"))
+                {
+                    var dynamicColumns = kvp.Value.Split(',');
+                    foreach (var column in dynamicColumns)
+                    {
+                        row.CreateCell(columnIndex).SetCellValue(column);
+                        columnIndex++;
+                    }
+                    continue;
+                }
                 row.CreateCell(columnIndex).SetCellValue(kvp.Value);
                 columnIndex++;
             }
@@ -85,6 +112,22 @@ namespace Bing.Offices.Npoi.Exports
                 var dto = data[i];
                 foreach (var kvp in headerDict)
                 {
+                    if (kvp.Key.StartsWith("Dynamic:"))
+                    {
+                        var extendPropertyName = kvp.Key.Split(':')[1];
+                        var dynamicColumns = kvp.Value.Split(',');
+                        var dictionary = dto.GetExtendDictionary(extendPropertyName);
+                        foreach (var column in dynamicColumns)
+                        {
+                            if (column.IsEmpty())
+                            {
+                                continue;
+                            }
+                            row.CreateCell(columnIndex).SetCellValue(dictionary[column]?.ToString());
+                            columnIndex++;
+                        }
+                        continue;
+                    }
                     row.CreateCell(columnIndex).SetCellValue(dto.GetStringValue(kvp.Key));
                     columnIndex++;
                 }

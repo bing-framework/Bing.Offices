@@ -34,6 +34,11 @@ namespace Bing.Offices.Abstractions.Exports
         int DataRowStartIndex { get; set; }
 
         /// <summary>
+        /// 动态列
+        /// </summary>
+        IList<string> DynamicColumns { get; set; }
+
+        /// <summary>
         /// 自定义导出提供程序
         /// </summary>
         IExcelExportProvider CustomExportProvider { get; set; }
