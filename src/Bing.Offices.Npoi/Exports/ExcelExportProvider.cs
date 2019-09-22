@@ -10,6 +10,8 @@ using Bing.Offices.Npoi.Extensions;
 using Bing.Offices.Npoi.Factories;
 using Bing.Offices.Npoi.Resolvers;
 using Bing.Utils.Extensions;
+using NPOI.SS.UserModel;
+using NPOI.SS.Util;
 
 namespace Bing.Offices.Npoi.Exports
 {
@@ -182,7 +184,62 @@ namespace Bing.Offices.Npoi.Exports
                 throw new ArgumentNullException(nameof(context));
             var propertyDecoratorInfos = context.TypeDecoratorInfo.PropertyDecoratorInfos;
             var workbook = workbookBytes.ToWorkbook();
-            throw new System.NotImplementedException();
+            var sheet = workbook.GetSheet(options.SheetName);
+            foreach (var item in propertyDecoratorInfos)
+            {
+                if (item.Decorators.SingleOrDefault(x => x.GetType() == typeof(MergeColumnsAttribute)) != null)
+                {
+                    MergeCells(sheet, item.ColumnIndex, options);
+                }
+            }
+
+            return workbook.SaveToBuffer();
+        }
+
+        /// <summary>
+        /// 合并单元格
+        /// </summary>
+        /// <typeparam name="T">实体类型</typeparam>
+        /// <param name="sheet">工作表</param>
+        /// <param name="columnIndex">列索引</param>
+        /// <param name="options">导出选项配置</param>
+        private void MergeCells<T>(NPOI.SS.UserModel.ISheet sheet, int columnIndex, IExportOptions<T> options)
+            where T : class, new()
+        {
+            string currentCellValue;
+            var startRowIndex = options.DataRowStartIndex;
+            NPOI.SS.Util.CellRangeAddress mergeRangeAddress;
+            var startRow = sheet.GetRow(startRowIndex);
+            if (startRow == null)
+                return;
+            var startCell = startRow.GetCell(columnIndex);
+            if (startCell == null)
+                return;
+            string startCellValue = startCell.StringCellValue;
+            if (string.IsNullOrWhiteSpace(startCellValue))
+                return;
+
+            for (var rowIndex = options.DataRowStartIndex; rowIndex < sheet.PhysicalNumberOfRows; rowIndex++)
+            {
+                var cell = sheet.GetRow(rowIndex)?.GetCell(columnIndex);
+                currentCellValue = cell == null ? string.Empty : cell.StringCellValue;
+                if (currentCellValue.Trim() != startCellValue.Trim())
+                {
+                    mergeRangeAddress = new CellRangeAddress(startRowIndex, rowIndex - 1, columnIndex, columnIndex);
+                    sheet.AddMergedRegion(mergeRangeAddress);
+                    startRow.GetCell(columnIndex).CellStyle.VerticalAlignment = VerticalAlignment.Center;
+
+                    startRowIndex = rowIndex;
+                    startCellValue = currentCellValue;
+                }
+
+                if (rowIndex == sheet.PhysicalNumberOfRows - 1 && startRowIndex != rowIndex)
+                {
+                    mergeRangeAddress = new CellRangeAddress(startRowIndex, rowIndex, columnIndex, columnIndex);
+                    sheet.AddMergedRegion(mergeRangeAddress);
+                    startRow.GetCell(columnIndex).CellStyle.VerticalAlignment = VerticalAlignment.Center;
+                }
+            }
         }
 
         /// <summary>
@@ -212,7 +269,5 @@ namespace Bing.Offices.Npoi.Exports
             }
             return workbook.SaveToBuffer();
         }
-
-        
     }
 }
