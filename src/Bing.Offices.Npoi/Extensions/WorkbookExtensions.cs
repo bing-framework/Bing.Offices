@@ -84,5 +84,20 @@ namespace Bing.Offices.Npoi.Extensions
 
         #endregion
 
+        #region SetAllSheetAutoCompute(设置所有工作表自动计算)
+
+        /// <summary>
+        /// 设置所有工作表自动计算
+        /// </summary>
+        /// <param name="workbook">工作簿</param>
+        public static void SetAllSheetAutoCompute(this IWorkbook workbook)
+        {
+            if (workbook.NumberOfSheets <= 0)
+                return;
+            for (var i = 0; i < workbook.NumberOfSheets; i++)
+                workbook.GetSheetAt(i).ForceFormulaRecalculation = true;// 让公式自动计算
+        }
+
+        #endregion
     }
 }
