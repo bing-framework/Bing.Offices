@@ -35,18 +35,40 @@ namespace Bing.Offices.Npoi.Imports
         /// <param name="sheetIndex">工作表索引</param>
         /// <param name="headerRowIndex">标题行索引</param>
         /// <param name="dataRowStartIndex">数据行起始索引</param>
-        public IWorkbook Convert<TTemplate>(string fileUrl, int sheetIndex = 0, int headerRowIndex = 0, int dataRowStartIndex = 1) where TTemplate : class, new()
+        /// <param name="multiSheet">是否支持多工作表模式</param>
+        public IWorkbook Convert<TTemplate>(string fileUrl, int sheetIndex = 0, int headerRowIndex = 0, int dataRowStartIndex = 1, bool multiSheet = false) where TTemplate : class, new()
         {
             var workbook = new NpoiWorkbook();
             var innerWorkbook = GetWorkbook(fileUrl);
-            for (var i = 0; i < innerWorkbook.NumberOfSheets - 1; i++)
+            if (multiSheet == false)
             {
-                var innerSheet = GetSheet(innerWorkbook, i);
-                var sheet = workbook.CreateSheet(innerSheet.SheetName);
-                HandleHeader(sheet, innerSheet, headerRowIndex);
-                HandleBody<TTemplate>(sheet, innerSheet, dataRowStartIndex);
+                BuildSheet<TTemplate>(workbook, innerWorkbook, sheetIndex, headerRowIndex, dataRowStartIndex);
+                return workbook;
             }
+
+            for (var i = 0; i < innerWorkbook.NumberOfSheets; i++)
+            {
+                BuildSheet<TTemplate>(workbook, innerWorkbook, i, headerRowIndex, dataRowStartIndex);
+            }
+
             return workbook;
+        }
+
+        /// <summary>
+        /// 构建工作表
+        /// </summary>
+        /// <typeparam name="TTemplate">导入模板类型</typeparam>
+        /// <param name="workbook">工作簿</param>
+        /// <param name="innerWorkbook">内部工作簿</param>
+        /// <param name="sheetIndex">工作表索引</param>
+        /// <param name="headerRowIndex">表头行索引</param>
+        /// <param name="dataRowStartIndex">数据行起始索引</param>
+        private void BuildSheet<TTemplate>(Bing.Offices.Abstractions.Metadata.Excels.IWorkbook workbook, NPOI.SS.UserModel.IWorkbook innerWorkbook, int sheetIndex, int headerRowIndex, int dataRowStartIndex)
+        {
+            var innerSheet = GetSheet(innerWorkbook, sheetIndex);
+            var sheet = workbook.CreateSheet(innerSheet.SheetName);
+            HandleHeader(sheet, innerSheet, headerRowIndex);
+            HandleBody<TTemplate>(sheet, innerSheet, dataRowStartIndex);
         }
 
         /// <summary>

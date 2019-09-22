@@ -19,6 +19,11 @@ namespace Bing.Offices.Imports
         public int SheetIndex { get; set; } = 0;
 
         /// <summary>
+        /// 是否支持多工作表模式
+        /// </summary>
+        public bool MultiSheet { get; set; } = false;
+
+        /// <summary>
         /// 表头行索引
         /// </summary>
         public int HeaderRowIndex { get; set; } = 0;

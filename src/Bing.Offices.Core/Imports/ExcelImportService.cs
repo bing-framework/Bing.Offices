@@ -58,9 +58,9 @@ namespace Bing.Offices.Imports
         {
             return options.CustomImportProvider == null
                 ? _excelImportProvider.Convert<T>(options.FileUrl, options.SheetIndex, options.HeaderRowIndex,
-                    options.DataRowIndex)
+                    options.DataRowIndex, options.MultiSheet)
                 : options.CustomImportProvider.Convert<T>(options.FileUrl, options.SheetIndex, options.HeaderRowIndex,
-                    options.DataRowIndex);
+                    options.DataRowIndex, options.MultiSheet);
         }
 
         /// <summary>

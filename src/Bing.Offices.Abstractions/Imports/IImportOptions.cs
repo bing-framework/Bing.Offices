@@ -18,6 +18,11 @@ namespace Bing.Offices.Abstractions.Imports
         int SheetIndex { get; set; }
 
         /// <summary>
+        /// 是否支持多工作表模式
+        /// </summary>
+        bool MultiSheet { get; set; }
+
+        /// <summary>
         /// 表头行索引
         /// </summary>
         int HeaderRowIndex { get; set; }
