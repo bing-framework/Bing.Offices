@@ -1,5 +1,7 @@
 ﻿using System.Collections.Generic;
+using System.Linq;
 using Bing.Offices.Abstractions.Metadata.Excels;
+using Bing.Offices.Imports;
 
 namespace Bing.Offices.Extensions
 {
@@ -30,6 +32,21 @@ namespace Bing.Offices.Extensions
             var list = new List<T>();
             foreach (var sheet in workbook.Sheets)
                 list.AddRange(sheet.GetBody().Convert<T>());
+            return list;
+        }
+
+        /// <summary>
+        /// 校验
+        /// </summary>
+        /// <param name="workbook">工作簿</param>
+        public static IEnumerable<ValidateResult> Validate(this IWorkbook workbook)
+        {
+            var list = new List<ValidateResult>();
+            foreach (var sheet in workbook.Sheets)
+            {
+                list.AddRange(sheet.GetBody().Where(x => !x.Valid).Select(row => new ValidateResult()
+                    {RowIndex = row.RowIndex, ErrorMsg = row.ErrorMsg, SheetName = sheet.Name}));
+            }
             return list;
         }
     }

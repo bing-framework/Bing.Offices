@@ -94,7 +94,30 @@ namespace Bing.Offices.Tests
             Output.WriteLine(result.Count().ToString());
             Output.WriteLine(result.ToJson());
         }
-        
+
+        /// <summary>
+        /// 测试 - 服务导入
+        /// </summary>
+        [Fact]
+        public async Task Test_Import_Validate_1()
+        {
+            var workbook = await _excelImportService.ImportAsync<Barcode>(new ImportOptions()
+            {
+                FileUrl = "D:\\导入国标码_导入格式.xlsx",
+            });
+            var validateResult = workbook.Validate();
+            if (validateResult.Any())
+            {
+                Output.WriteLine(validateResult.ToJson());
+                return;
+            }
+
+            var result = workbook.GetResult<Barcode>();
+            Output.WriteLine(result.Count().ToString());
+            Output.WriteLine(result.ToJson());
+        }
+
+
         /// <summary>
         /// 测试 - 导出
         /// </summary>
@@ -124,6 +147,7 @@ namespace Bing.Offices.Tests
         public string Id { get; set; }
 
         [ColumnName("国标码")]
+        [Required]
         public string Code { get; set; }
 
         [ColumnName("创建时间")]
