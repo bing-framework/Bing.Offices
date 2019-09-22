@@ -28,6 +28,11 @@ namespace Bing.Offices.Npoi.Imports
         private static readonly Hashtable Table = Hashtable.Synchronized(new Hashtable(1024));
 
         /// <summary>
+        /// 哈希表动态单元格
+        /// </summary>
+        private static readonly Hashtable TableDynamicCell = Hashtable.Synchronized(new Hashtable(1024));
+
+        /// <summary>
         /// 转换
         /// </summary>
         /// <typeparam name="TTemplate">导入模板类型</typeparam>
@@ -149,8 +154,10 @@ namespace Bing.Offices.Npoi.Imports
                 if (string.IsNullOrWhiteSpace(columnName))
                     continue;
                 var key = $"{type.FullName}_{i}";
+                
                 if (Table[key] == null)
                 {
+                    var isDynamic = false;
                     // 优先匹配列名特性值
                     var matchProperty = props.FirstOrDefault(x =>
                         x.GetCustomAttribute<ColumnNameAttribute>()?.Name == columnName);
@@ -158,8 +165,16 @@ namespace Bing.Offices.Npoi.Imports
                     if (matchProperty == null)
                         matchProperty = props.FirstOrDefault(x =>
                             x.Name.Equals(columnName, StringComparison.CurrentCultureIgnoreCase));
+                    // 次之匹配动态列
+                    if (matchProperty == null)
+                    {
+                        matchProperty = props.FirstOrDefault(x => x.GetCustomAttribute<DynamicColumnAttribute>() != null);
+                        if (matchProperty != null)
+                            isDynamic = true;
+                    }
                     var propertyName = matchProperty?.Name;
                     Table[key] = propertyName;
+                    TableDynamicCell[key] = isDynamic;
                 }
 
                 var value = row.GetCell(i) == null ? string.Empty : row.GetCell(i).GetStringValue();
@@ -168,6 +183,7 @@ namespace Bing.Offices.Npoi.Imports
                     ColumnIndex = i,
                     Name = columnName,
                     PropertyName = Table[key]?.ToString(),
+                    IsDynamic = Bing.Utils.Helpers.Conv.ToBool(TableDynamicCell[key])
                 };
                 cells.Add(cell);
             }

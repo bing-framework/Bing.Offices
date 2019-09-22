@@ -5,6 +5,8 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using Bing.Offices.Abstractions.Metadata.Excels;
+using Bing.Offices.Attributes;
+using Bing.Utils.Extensions;
 using Convert = System.Convert;
 using Enum = System.Enum;
 
@@ -43,31 +45,22 @@ namespace Bing.Offices.Helpers
             var firstOrDefaultMethod = typeof(Enumerable).GetMethods()
                 .Single(m => m.Name == "FirstOrDefault" && m.GetParameters().Length == 2)
                 .MakeGenericMethod(new[] {typeof(ICell)});
+
             var cellsParam = Expression.Parameter(typeof(IList<ICell>), "Cells");
             foreach (var prop in props)
             {
                 // lambda表达式：PropertyName = prop.Name
                 Expression<Func<ICell, bool>> propertyEqualExpr = c => c.PropertyName == prop.Name;
-                // 调用ChangeType方法
-                var changeTypeMethod = typeof(ExpressionMapper).GetMethods()
-                    .First(m => m.Name == nameof(ChangeType));
-                // FirstOrDefault方法
-                var firstOrDefaultMethodExpr = Expression.Call(firstOrDefaultMethod, cellsParam, propertyEqualExpr);
-                // 当前属性类型常量
-                var propTypeConst = Expression.Constant(prop.PropertyType);
-                // 获取单元格值表达，Cells.SingleOrDefault(c=>c.PropertyName == prop.Name).Value
-                //var cellValueExpr = Expression.Property(firstOrDefaultMethodExpr, typeof(ICell), "Value");
-                var cellValueExpr =
-                    Expression.Condition(Expression.Equal(firstOrDefaultMethodExpr, Expression.Constant(null)),
-                        Expression.Constant(null),
-                        Expression.Property(firstOrDefaultMethodExpr, typeof(ICell), "Value"));
-                // 变更类型
-                var changeTypeExpr = Expression.Call(changeTypeMethod,
-                    Expression.Condition(Expression.Equal(cellValueExpr, Expression.Constant(null)),
-                        Expression.Constant(string.Empty), Expression.Convert(cellValueExpr, typeof(string))),
-                    propTypeConst);
-                Expression expr = Expression.Convert(changeTypeExpr, prop.PropertyType);
-                memberBindingList.Add(Expression.Bind(prop, expr));
+
+                // 字典需要额外处理
+                if (prop.PropertyType == typeof(IDictionary<string, object>) &&
+                    prop.GetCustomAttribute<DynamicColumnAttribute>() != null)
+                {
+                    memberBindingList.Add(GetDictionaryBinding(prop, cellsParam));
+                    continue;
+                }
+
+                memberBindingList.Add(GetMapperBinding(prop, firstOrDefaultMethod, cellsParam, propertyEqualExpr));
             }
 
             var memberInitExpression = Expression.MemberInit(Expression.New(typeof(T)), memberBindingList.ToArray());
@@ -76,6 +69,52 @@ namespace Bing.Offices.Helpers
             var func = lambda.Compile();
             Table[key] = func;
             return func;
+        }
+
+        /// <summary>
+        /// 获取字典绑定表达式
+        /// </summary>
+        /// <param name="prop">属性信息</param>
+        /// <param name="cellsParam">单元格列表参数</param>
+        /// <returns></returns>
+        private static MemberBinding GetDictionaryBinding(PropertyInfo prop, ParameterExpression cellsParam)
+        {
+            // 调用ConvertToDictionary方法
+            var convertToDictionaryMethod =
+                typeof(ExpressionMapper).GetMethods().First(m => m.Name == nameof(ConvertToDictionary));
+            var convertToDictionaryExpr = Expression.Call(convertToDictionaryMethod, cellsParam);
+            return Expression.Bind(prop, convertToDictionaryExpr);
+        }
+
+        /// <summary>
+        /// 获取映射绑定表达好似
+        /// </summary>
+        /// <param name="prop">属性信息</param>
+        /// <param name="firstOrDefaultMethod">FirstOrDefault方法</param>
+        /// <param name="cellsParam">单元格列表参数</param>
+        /// <param name="propertyEqualExpr">属性相等表达式</param>
+        /// <returns></returns>
+        private static MemberBinding GetMapperBinding(PropertyInfo prop,MethodInfo firstOrDefaultMethod,ParameterExpression cellsParam, Expression<Func<ICell, bool>> propertyEqualExpr)
+        {
+            // 调用ChangeType方法
+            var changeTypeMethod = typeof(ExpressionMapper).GetMethods()
+                .First(m => m.Name == nameof(ChangeType));
+            // FirstOrDefault方法
+            var firstOrDefaultMethodExpr = Expression.Call(firstOrDefaultMethod, cellsParam, propertyEqualExpr);
+            // 获取单元格值表达，Cells.SingleOrDefault(c => c.PropertyName == prop.Name).Value
+            var cellValueExpr =
+                Expression.Condition(Expression.Equal(firstOrDefaultMethodExpr, Expression.Constant(null)),
+                    Expression.Constant(null),
+                    Expression.Property(firstOrDefaultMethodExpr, typeof(ICell), "Value"));
+            // 当前属性类型常量
+            var propTypeConst = Expression.Constant(prop.PropertyType);
+            // 变更类型
+            var changeTypeExpr = Expression.Call(changeTypeMethod,
+                Expression.Condition(Expression.Equal(cellValueExpr, Expression.Constant(null)),
+                    Expression.Constant(string.Empty), Expression.Convert(cellValueExpr, typeof(string))),
+                propTypeConst);
+            Expression expr = Expression.Convert(changeTypeExpr, prop.PropertyType);
+            return Expression.Bind(prop, expr);
         }
 
         /// <summary>
@@ -108,6 +147,18 @@ namespace Bing.Offices.Helpers
             {
                 return default;
             }
+        }
+
+        /// <summary>
+        /// 转换为字典
+        /// </summary>
+        /// <param name="cells">单元格集合</param>
+        public static IDictionary<string, object> ConvertToDictionary(IEnumerable<ICell> cells)
+        {
+            var dynamicCells = cells.Where(x => x.IsDynamic);
+            var dictionary = new Dictionary<string, object>();
+            dynamicCells.ForEach(cell => { dictionary[cell.Name] = cell.Value; });
+            return dictionary;
         }
     }
 }

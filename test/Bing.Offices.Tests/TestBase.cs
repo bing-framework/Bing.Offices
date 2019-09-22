@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -81,6 +82,27 @@ namespace Bing.Offices.Tests
         }
 
         /// <summary>
+        /// 测试 - 导入 动态标题
+        /// </summary>
+        [Fact]
+        public void Test_Import_DynamicTitle_1()
+        {
+            var result = _excelImportProvider.Convert<Barcode>("D:\\导入国标码_导入格式_动态标题.xlsx");
+            foreach (var sheet in result.Sheets)
+            {
+                foreach (var header in sheet.GetHeader())
+                {
+                    Output.WriteLine(header.Cells.Select(x => x.Value.ToString()).Join());
+                }
+
+                foreach (var body in sheet.GetBody())
+                {
+                    Output.WriteLine(body.Cells.Select(x => x.Value.ToString()).Join());
+                }
+            }
+        }
+
+        /// <summary>
         /// 测试 - 服务导入
         /// </summary>
         [Fact]
@@ -93,6 +115,43 @@ namespace Bing.Offices.Tests
             var result = workbook.GetResult<Barcode>();
             Output.WriteLine(result.Count().ToString());
             Output.WriteLine(result.ToJson());
+        }
+
+        /// <summary>
+        /// 测试 - 导入 动态标题
+        /// </summary>
+        [Fact]
+        public async Task Test_Import_DynamicTitle_2()
+        {
+            var workbook = await _excelImportService.ImportAsync<Barcode>(new ImportOptions()
+            {
+                FileUrl = "D:\\导入国标码_导入格式_动态标题.xlsx",
+            });
+            var result = workbook.GetResult<Barcode>();
+            Output.WriteLine(result.Count().ToString());
+            Output.WriteLine(result.ToJson());
+        }
+
+        /// <summary>
+        /// 测试 - 导入 动态标题
+        /// </summary>
+        [Fact]
+        public async Task Test_Import_DynamicTitle_More_1()
+        {
+            var workbook1 = await _excelImportService.ImportAsync<Barcode>(new ImportOptions()
+            {
+                FileUrl = "D:\\导入国标码_导入格式_动态标题.xlsx",
+            });
+            var result1 = workbook1.GetResult<Barcode>();
+            Output.WriteLine(result1.Count().ToString());
+            Output.WriteLine(result1.ToJson());
+            var workbook2 = await _excelImportService.ImportAsync<Barcode>(new ImportOptions()
+            {
+                FileUrl = "D:\\导入国标码_导入格式_动态标题1.xlsx",
+            });
+            var result2 = workbook2.GetResult<Barcode>();
+            Output.WriteLine(result2.Count().ToString());
+            Output.WriteLine(result2.ToJson());
         }
 
         /// <summary>
@@ -152,5 +211,11 @@ namespace Bing.Offices.Tests
 
         [ColumnName("创建时间")]
         public DateTime? CreateDate { get; set; }
+
+        /// <summary>
+        /// 扩展
+        /// </summary>
+        [DynamicColumn]
+        public IDictionary<string,object> Extend { get; set; }
     }
 }

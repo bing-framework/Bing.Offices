@@ -61,6 +61,11 @@
         string PropertyName { get; set; }
 
         /// <summary>
+        /// 是否动态单元格
+        /// </summary>
+        bool IsDynamic { get; set; }
+
+        /// <summary>
         /// 是否为空单元格
         /// </summary>
         bool IsNull();

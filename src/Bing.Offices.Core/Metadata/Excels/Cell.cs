@@ -104,6 +104,11 @@ namespace Bing.Offices.Metadata.Excels
         /// </summary>
         public string PropertyName { get; set; }
 
+        /// <summary>
+        /// 是否动态单元格
+        /// </summary>
+        public bool IsDynamic { get; set; }
+
         #endregion
 
         #region 构造函数
