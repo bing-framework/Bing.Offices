@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using Bing.Offices.Abstractions.Decorators;
 using Bing.Offices.Abstractions.Exports;
+using Bing.Offices.Abstractions.Metadata.Excels;
 using Bing.Offices.Attributes;
+using Bing.Offices.Extensions;
 using Bing.Offices.Npoi.Extensions;
 using Bing.Offices.Npoi.Factories;
 using Bing.Offices.Npoi.Resolvers;
@@ -194,8 +196,21 @@ namespace Bing.Offices.Npoi.Exports
         {
             if (context == null)
                 throw new ArgumentNullException(nameof(context));
+            var attribute = context.TypeDecoratorInfo.GetDecoratorAttribute<WrapTextAttribute>();
+            if (attribute == null)
+                return workbookBytes;
+            var workbook = workbookBytes.ToWorkbook();
+            var sheet = workbook.GetSheet(options.SheetName);
+            if (sheet.PhysicalNumberOfRows <= 0)
+                return workbookBytes;
 
-            throw new System.NotImplementedException();
+            for (var i = 0; i < sheet.PhysicalNumberOfRows; i++)
+            {
+                var row = sheet.GetRow(i);
+                for (var colIndex = 0; colIndex < row.PhysicalNumberOfCells; colIndex++)
+                    row.GetCell(colIndex).CellStyle.WrapText = true;
+            }
+            return workbook.SaveToBuffer();
         }
 
         
