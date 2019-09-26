@@ -117,31 +117,69 @@ namespace Bing.Offices.Helpers
             return Expression.Bind(prop, expr);
         }
 
+        ///// <summary>
+        ///// 变更类型
+        ///// </summary>
+        ///// <param name="value">值</param>
+        ///// <param name="type">类型</param>
+        //public static object ChangeType(string value, Type type)
+        //{
+        //    object obj = null;
+        //    var nullableType = Nullable.GetUnderlyingType(type);
+        //    try
+        //    {
+        //        if (nullableType != null)
+        //        {
+        //            if (value == null)
+        //                obj = null;
+        //            else
+        //                obj = OtherChangeType(value, type);
+        //        }
+        //        else if (typeof(Enum).IsAssignableFrom(type))
+        //        {
+        //            obj = Enum.Parse(type, value);
+        //        }
+        //        else
+        //        {
+        //            obj = Convert.ChangeType(value, type);
+        //        }
+        //        return obj;
+        //    }
+        //    catch
+        //    {
+        //        return default;
+        //    }
+        //}
+
         /// <summary>
         /// 变更类型
         /// </summary>
         /// <param name="value">值</param>
         /// <param name="type">类型</param>
-        public static object ChangeType(string value, Type type)
+        public static object ChangeType(object value, Type type)
         {
-            object obj = null;
-            var nullableType = Nullable.GetUnderlyingType(type);
             try
             {
-                if (nullableType != null)
+                if (value == null && type.IsGenericType) return Activator.CreateInstance(type);
+                if (value == null) return null;
+                if (type == value.GetType()) return value;
+                if (type.IsEnum)
                 {
-                    if (value == null)
-                        obj = null;
+                    if (value is string)
+                        return Enum.Parse(type, value as string);
+                    else
+                        return Enum.ToObject(type, value);
                 }
-                else if (typeof(Enum).IsAssignableFrom(type))
+                if (!type.IsInterface && type.IsGenericType)
                 {
-                    obj = Enum.Parse(type, value);
+                    Type innerType = type.GetGenericArguments()[0];
+                    object innerValue = ChangeType(value, innerType);
+                    return Activator.CreateInstance(type, new object[] { innerValue });
                 }
-                else
-                {
-                    obj = Convert.ChangeType(value, type);
-                }
-                return obj;
+                if (value is string && type == typeof(Guid)) return new Guid(value as string);
+                if (value is string && type == typeof(Version)) return new Version(value as string);
+                if (!(value is IConvertible)) return value;
+                return Convert.ChangeType(value, type);
             }
             catch
             {

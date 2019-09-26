@@ -11,6 +11,7 @@ using Bing.Offices.Extensions;
 using Bing.Offices.Imports;
 using Bing.Offices.Npoi.Exports;
 using Bing.Offices.Npoi.Imports;
+using Bing.Offices.Tests.Models;
 using Bing.Utils.Extensions;
 using Bing.Utils.Json;
 using Xunit;
@@ -175,6 +176,29 @@ namespace Bing.Offices.Tests
             Output.WriteLine(result.Count().ToString());
             Output.WriteLine(result.ToJson());
         }
+        
+        /// <summary>
+        /// 测试 - 导入 可空值
+        /// </summary>
+        /// <returns></returns>
+        [Fact]
+        public async Task Test_Import_NullableValue_1()
+        {
+            var workbook = await _excelImportService.ImportAsync<Barcode>(new ImportOptions()
+            {
+                FileUrl = "D:\\导入国标码_导入格式.xlsx",
+            });
+            var validateResult = workbook.Validate();
+            if (validateResult.Any())
+            {
+                Output.WriteLine(validateResult.ToJson());
+                return;
+            }
+
+            var result = workbook.GetResult<Barcode>();
+            Output.WriteLine(result.Count().ToString());
+            Output.WriteLine(result.ToJson());
+        }
 
 
         /// <summary>
@@ -212,10 +236,11 @@ namespace Bing.Offices.Tests
             var bytes = await _excelExportService.ExportAsync(new ExportOptions<Barcode>()
             {
                 Data = result.ToList(),
-                DynamicColumns = new List<string>() { "创建人","更新时间","更新人","备注"}
+                DynamicColumns = new List<string>() { "创建人", "更新时间", "更新人", "备注" }
             });
             await File.WriteAllBytesAsync($"D:\\测试导出_{DateTime.Now:yyyyMMddHHmmss}.xlsx", bytes);
         }
+
     }
 
     /// <summary>
@@ -223,20 +248,35 @@ namespace Bing.Offices.Tests
     /// </summary>
     public class Barcode
     {
+        /// <summary>
+        /// 系统
+        /// </summary>
         [ColumnName("系统编号")]
         public string Id { get; set; }
 
+        /// <summary>
+        /// 国标码
+        /// </summary>
         [ColumnName("国标码")]
         [Required]
         public string Code { get; set; }
 
+        /// <summary>
+        /// 创建时间
+        /// </summary>
         [ColumnName("创建时间")]
         public string CreateDate { get; set; }
+
+        /// <summary>
+        /// 年龄
+        /// </summary>
+        [ColumnName("年龄")]
+        public int? Age { get; set; }
 
         /// <summary>
         /// 扩展
         /// </summary>
         [DynamicColumn]
-        public IDictionary<string,object> Extend { get; set; }
+        public IDictionary<string, object> Extend { get; set; }
     }
 }
