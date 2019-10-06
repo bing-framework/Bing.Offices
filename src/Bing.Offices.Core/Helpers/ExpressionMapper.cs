@@ -39,12 +39,12 @@ namespace Bing.Offices.Helpers
         public static Func<IList<ICell>, T> GetFunc<T>(string key, IEnumerable<PropertyInfo> props)
         {
             if (Table.ContainsKey(key))
-                return (Func<IList<ICell>, T>) Table[key];
+                return (Func<IList<ICell>, T>)Table[key];
             var memberBindingList = new List<MemberBinding>();
             // 获取FirstOrDefault方法
             var firstOrDefaultMethod = typeof(Enumerable).GetMethods()
                 .Single(m => m.Name == "FirstOrDefault" && m.GetParameters().Length == 2)
-                .MakeGenericMethod(new[] {typeof(ICell)});
+                .MakeGenericMethod(new[] { typeof(ICell) });
 
             var cellsParam = Expression.Parameter(typeof(IList<ICell>), "Cells");
             foreach (var prop in props)
@@ -65,7 +65,7 @@ namespace Bing.Offices.Helpers
 
             var memberInitExpression = Expression.MemberInit(Expression.New(typeof(T)), memberBindingList.ToArray());
             var blockExpr = Expression.Block(memberInitExpression);
-            var lambda = Expression.Lambda<Func<IList<ICell>, T>>(blockExpr, new[] {cellsParam});
+            var lambda = Expression.Lambda<Func<IList<ICell>, T>>(blockExpr, new[] { cellsParam });
             var func = lambda.Compile();
             Table[key] = func;
             return func;
@@ -94,7 +94,7 @@ namespace Bing.Offices.Helpers
         /// <param name="cellsParam">单元格列表参数</param>
         /// <param name="propertyEqualExpr">属性相等表达式</param>
         /// <returns></returns>
-        private static MemberBinding GetMapperBinding(PropertyInfo prop,MethodInfo firstOrDefaultMethod,ParameterExpression cellsParam, Expression<Func<ICell, bool>> propertyEqualExpr)
+        private static MemberBinding GetMapperBinding(PropertyInfo prop, MethodInfo firstOrDefaultMethod, ParameterExpression cellsParam, Expression<Func<ICell, bool>> propertyEqualExpr)
         {
             // 调用ChangeType方法
             var changeTypeMethod = typeof(ExpressionMapper).GetMethods()
@@ -109,10 +109,11 @@ namespace Bing.Offices.Helpers
             // 当前属性类型常量
             var propTypeConst = Expression.Constant(prop.PropertyType);
             // 变更类型
-            var changeTypeExpr = Expression.Call(changeTypeMethod,
-                Expression.Condition(Expression.Equal(cellValueExpr, Expression.Constant(null)),
-                    Expression.Constant(string.Empty), Expression.Convert(cellValueExpr, typeof(string))),
-                propTypeConst);
+            //var changeTypeExpr = Expression.Call(changeTypeMethod,
+            //    Expression.Condition(Expression.Equal(cellValueExpr, Expression.Constant(null)),
+            //        Expression.Constant(string.Empty), Expression.Convert(cellValueExpr, typeof(string))),
+            //    propTypeConst); //转换为字符串进行转换
+            var changeTypeExpr = Expression.Call(changeTypeMethod, cellValueExpr, propTypeConst);
             Expression expr = Expression.Convert(changeTypeExpr, prop.PropertyType);
             return Expression.Bind(prop, expr);
         }
@@ -160,9 +161,12 @@ namespace Bing.Offices.Helpers
         {
             try
             {
-                if (value == null && type.IsGenericType) return Activator.CreateInstance(type);
-                if (value == null) return null;
-                if (type == value.GetType()) return value;
+                if (value == null && type.IsGenericType)
+                    return Activator.CreateInstance(type);
+                if (value == null || string.IsNullOrWhiteSpace(value.ToString()))
+                    return null;
+                if (type == value.GetType())
+                    return value;
                 if (type.IsEnum)
                 {
                     if (value is string)
@@ -176,9 +180,12 @@ namespace Bing.Offices.Helpers
                     object innerValue = ChangeType(value, innerType);
                     return Activator.CreateInstance(type, new object[] { innerValue });
                 }
-                if (value is string && type == typeof(Guid)) return new Guid(value as string);
-                if (value is string && type == typeof(Version)) return new Version(value as string);
-                if (!(value is IConvertible)) return value;
+                if (value is string && type == typeof(Guid))
+                    return new Guid(value as string);
+                if (value is string && type == typeof(Version))
+                    return new Version(value as string);
+                if (!(value is IConvertible))
+                    return value;
                 return Convert.ChangeType(value, type);
             }
             catch
