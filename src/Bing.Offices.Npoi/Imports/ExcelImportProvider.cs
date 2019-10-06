@@ -10,6 +10,8 @@ using Bing.Offices.Attributes;
 using Bing.Offices.Metadata.Excels;
 using Bing.Offices.Npoi.Extensions;
 using Bing.Offices.Npoi.Metadata.Excels;
+using Bing.Utils.Extensions;
+using Bing.Utils.Helpers;
 using NPOI.SS.UserModel;
 using IWorkbook = Bing.Offices.Abstractions.Metadata.Excels.IWorkbook;
 using IRow = Bing.Offices.Abstractions.Metadata.Excels.IRow;
@@ -112,7 +114,7 @@ namespace Bing.Offices.Npoi.Imports
             for (var i = 0; i < innerRow.PhysicalNumberOfCells; i++)
             {
                 var innerCell = innerRow.GetCell(i);
-                cells.Add(new Cell(innerCell.GetStringValue()) {ColumnIndex = i, Name = innerCell.GetStringValue()});
+                cells.Add(new Cell(innerCell.GetStringValue()) { ColumnIndex = i, Name = innerCell.GetStringValue() });
             }
             sheet.AddHeadRow(cells.ToArray());
         }
@@ -146,6 +148,9 @@ namespace Bing.Offices.Npoi.Imports
             var type = typeof(TTemplate);
             var props = type.GetProperties().ToList();
             var cells = new List<ICell>();
+            var hash = string.Empty;
+            if (type.GetCustomAttribute<HasDynamicColumnAttribute>() != null)
+                hash = $"_{Encrypt.Md5By32(header.Cells.Select(x => x.Name).Join())}";
 
             string columnName;
             for (int i = 0; i < header.Cells.Count; i++)
@@ -153,8 +158,8 @@ namespace Bing.Offices.Npoi.Imports
                 columnName = header?.Cells?.SingleOrDefault(x => x.ColumnIndex == i)?.Name;
                 if (string.IsNullOrWhiteSpace(columnName))
                     continue;
-                var key = $"{type.FullName}_{i}";
-                
+                var key = $"{type.FullName}_{hash}_{i}";
+
                 if (Table[key] == null)
                 {
                     var isDynamic = false;
@@ -190,6 +195,5 @@ namespace Bing.Offices.Npoi.Imports
 
             return cells;
         }
-
     }
 }
