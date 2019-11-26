@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace Bing.Offices.Styles
+﻿namespace Bing.Offices.Styles
 {
     /// <summary>
     /// 颜色
