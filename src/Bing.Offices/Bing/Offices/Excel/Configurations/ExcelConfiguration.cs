@@ -62,7 +62,6 @@ namespace Bing.Offices.Excel.Configurations
             FreezeSettings = new List<FreezeSetting>();
         }
 
-
         /// <summary>
         /// 设置属性
         /// </summary>
@@ -70,7 +69,15 @@ namespace Bing.Offices.Excel.Configurations
         /// <param name="propertyExpression">属性表达式</param>
         public IPropertyConfiguration<TEntity, TProperty> Property<TProperty>(Expression<Func<TEntity, TProperty>> propertyExpression)
         {
-            throw new NotImplementedException();
+            var memberInfo = Bing.Utils.Helpers.Lambda.GetMember(propertyExpression);
+            var property = memberInfo as PropertyInfo;
+            if (property == null)
+            {
+                property = _entityType.GetProperty(memberInfo.Name);
+                if (null == property)
+                    throw new InvalidOperationException($"属性[{memberInfo.Name}]不存在");
+            }
+            return (IPropertyConfiguration<TEntity, TProperty>) PropertyConfigurationDictionary[property];
         }
 
         /// <summary>
@@ -78,10 +85,7 @@ namespace Bing.Offices.Excel.Configurations
         /// </summary>
         /// <param name="sheetIndex">工作表索引</param>
         /// <param name="sheetName">工作表名称</param>
-        public IExcelConfiguration HasSheetConfiguration(int sheetIndex, string sheetName)
-        {
-            throw new NotImplementedException();
-        }
+        public IExcelConfiguration HasSheetConfiguration(int sheetIndex, string sheetName) => HasSheetConfiguration(sheetIndex, sheetName, 1);
 
         /// <summary>
         /// 设置工作表配置
@@ -89,10 +93,7 @@ namespace Bing.Offices.Excel.Configurations
         /// <param name="sheetIndex">工作表索引</param>
         /// <param name="sheetName">工作表名称</param>
         /// <param name="enableAutoColumnWidth">启用自动列宽</param>
-        public IExcelConfiguration HasSheetConfiguration(int sheetIndex, string sheetName, bool enableAutoColumnWidth)
-        {
-            throw new NotImplementedException();
-        }
+        public IExcelConfiguration HasSheetConfiguration(int sheetIndex, string sheetName, bool enableAutoColumnWidth) => HasSheetConfiguration(sheetIndex, sheetName, 1, enableAutoColumnWidth);
 
         /// <summary>
         /// 设置工作表配置
@@ -100,10 +101,7 @@ namespace Bing.Offices.Excel.Configurations
         /// <param name="sheetIndex">工作表索引</param>
         /// <param name="sheetName">工作表名称</param>
         /// <param name="startRowIndex">起始行索引</param>
-        public IExcelConfiguration HasSheetConfiguration(int sheetIndex, string sheetName, int startRowIndex)
-        {
-            throw new NotImplementedException();
-        }
+        public IExcelConfiguration HasSheetConfiguration(int sheetIndex, string sheetName, int startRowIndex) => HasSheetConfiguration(sheetIndex, sheetName, startRowIndex, false);
 
         /// <summary>
         /// 设置工作表配置
@@ -115,7 +113,26 @@ namespace Bing.Offices.Excel.Configurations
         public IExcelConfiguration HasSheetConfiguration(int sheetIndex, string sheetName, int startRowIndex,
             bool enableAutoColumnWidth)
         {
-            throw new NotImplementedException();
+            if (sheetIndex >= 0)
+            {
+                if (SheetSettings.TryGetValue(sheetIndex, out var sheetSetting))
+                {
+                    sheetSetting.SheetName = sheetName;
+                    sheetSetting.StartRowIndex = startRowIndex;
+                    sheetSetting.AutoColumnWidthEnabled = enableAutoColumnWidth;
+                }
+                else
+                {
+                    SheetSettings[sheetIndex]=new SheetSetting()
+                    {
+                        SheetIndex = sheetIndex,
+                        SheetName = sheetName,
+                        StartRowIndex = startRowIndex,
+                        AutoColumnWidthEnabled = enableAutoColumnWidth
+                    };
+                }
+            }
+            return this;
         }
 
         /// <summary>
