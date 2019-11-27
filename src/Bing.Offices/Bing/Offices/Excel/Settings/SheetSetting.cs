@@ -68,5 +68,10 @@
         /// 启用自动列宽
         /// </summary>
         public bool AutoColumnWidthEnabled { get; set; }
+
+        /// <summary>
+        /// 启用动态列
+        /// </summary>
+        public bool DynamicColumnEnabled { get; set; }
     }
 }

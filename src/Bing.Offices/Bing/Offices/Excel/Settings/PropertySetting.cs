@@ -31,6 +31,16 @@ namespace Bing.Offices.Excel.Settings
         /// 是否忽略该属性
         /// </summary>
         public bool IsIgnored { get; set; }
+
+        /// <summary>
+        /// 是否动态列
+        /// </summary>
+        public bool IsDynamicColumn { get; set; }
+
+        /// <summary>
+        /// 默认值
+        /// </summary>
+        public object DefaultValue { get; set; }
     }
 
     /// <summary>
