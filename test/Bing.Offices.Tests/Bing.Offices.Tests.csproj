@@ -18,7 +18,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Resources\" />
+    <Folder Include="Resources\Bugs\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Resources\Bugs\issue1.xlsx">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>

@@ -6,6 +6,7 @@ using System.Linq.Expressions;
 using System.Reflection;
 using Bing.Offices.Abstractions.Metadata.Excels;
 using Bing.Offices.Attributes;
+using Bing.Offices.Exceptions;
 using Bing.Utils.Extensions;
 using Convert = System.Convert;
 using Enum = System.Enum;
@@ -188,9 +189,9 @@ namespace Bing.Offices.Helpers
                     return value;
                 return Convert.ChangeType(value, type);
             }
-            catch
+            catch(Exception ex)
             {
-                return default;
+                throw new OfficeException($"值转换失败。输入值为: {value}, 目标类型为: {type.FullName}", ex);
             }
         }
 
