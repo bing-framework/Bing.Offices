@@ -240,7 +240,6 @@ namespace Bing.Offices.Tests
             });
             await File.WriteAllBytesAsync($"D:\\²âÊÔµ¼³ö_{DateTime.Now:yyyyMMddHHmmss}.xlsx", bytes);
         }
-
     }
 
     /// <summary>

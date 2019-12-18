@@ -42,5 +42,10 @@ namespace Bing.Offices.Abstractions.Exports
         /// 自定义导出提供程序
         /// </summary>
         IExcelExportProvider CustomExportProvider { get; set; }
+
+        /// <summary>
+        /// 查询总数
+        /// </summary>
+        int QueryCount { get; set; }
     }
 }
