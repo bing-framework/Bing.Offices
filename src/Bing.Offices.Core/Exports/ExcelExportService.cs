@@ -20,10 +20,7 @@ namespace Bing.Offices.Exports
         /// 初始化一个<see cref="ExcelExportService"/>类型的实例
         /// </summary>
         /// <param name="excelExportProvider">Excel导出提供程序</param>
-        public ExcelExportService(IExcelExportProvider excelExportProvider)
-        {
-            _excelExportProvider = excelExportProvider;
-        }
+        public ExcelExportService(IExcelExportProvider excelExportProvider) => _excelExportProvider = excelExportProvider;
 
         /// <summary>
         /// 导出

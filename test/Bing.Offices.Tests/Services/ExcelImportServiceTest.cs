@@ -1,5 +1,6 @@
-﻿using System;
-using Bing.Offices.Abstractions.Imports;
+﻿using Bing.Offices.Abstractions.Imports;
+using Bing.Offices.Imports;
+using Bing.Offices.Npoi.Imports;
 using Xunit.Abstractions;
 
 namespace Bing.Offices.Tests.Services
@@ -7,26 +8,31 @@ namespace Bing.Offices.Tests.Services
     /// <summary>
     /// Excel导入服务测试
     /// </summary>
-    public class ExcelImportServiceTest : TestBase, IDisposable
+    public class ExcelImportServiceTest
     {
         /// <summary>
-        /// Excel导入服务
+        /// 输出
         /// </summary>
-        private readonly IExcelImportService _excelImportService;
+        protected ITestOutputHelper Output { get; }
+
+        /// <summary>
+        /// 导入提供程序
+        /// </summary>
+        protected IExcelImportProvider ImportProvider { get; }
+
+        /// <summary>
+        /// 导入服务
+        /// </summary>
+        protected IExcelImportService ImportService { get; }
 
         /// <summary>
         /// 初始化一个<see cref="TestBase"/>类型的实例
         /// </summary>
-        public ExcelImportServiceTest(ITestOutputHelper output) : base(output)
+        public ExcelImportServiceTest(ITestOutputHelper output)
         {
-            _excelImportService = _excelImportService.Resolve();
-        }
-
-        /// <summary>
-        /// 释放资源
-        /// </summary>
-        public void Dispose()
-        {
+            Output = output;
+            ImportProvider = new ExcelImportProvider();
+            ImportService = new ExcelImportService(ImportProvider);
         }
     }
 }
