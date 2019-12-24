@@ -241,6 +241,32 @@ namespace Bing.Offices.Tests
             await File.WriteAllBytesAsync($"D:\\测试导出_{DateTime.Now:yyyyMMddHHmmss}.xlsx", bytes);
         }
 
+
+        /// <summary>
+        /// 测试 - 导出 忽略属性
+        /// </summary>
+        [Fact]
+        public async Task Test_Export_IgnoreProperty()
+        {
+            var data = new List<ExportOrder>();
+            for (int i = 0; i < 10000; i++)
+            {
+                data.Add(new ExportOrder()
+                {
+                    Id = $"A{i}",
+                    Name = $"测试名称+++++{i}",
+                    Index = i+1,
+                    IgnoreProperty = $"忽略属性+++++{i}",
+                    NotMappedProperty = $"忽略映射属性+++++{i}"
+                });
+            }
+
+            var bytes = await _excelExportService.ExportAsync(new ExportOptions<ExportOrder>()
+            {
+                Data = data,
+            });
+            await File.WriteAllBytesAsync($"D:\\测试导出_{DateTime.Now:yyyyMMddHHmmss}.xlsx", bytes);
+        }
     }
 
     /// <summary>
