@@ -267,6 +267,34 @@ namespace Bing.Offices.Tests
             });
             await File.WriteAllBytesAsync($"D:\\测试导出_{DateTime.Now:yyyyMMddHHmmss}.xlsx", bytes);
         }
+
+        /// <summary>
+        /// 测试 - 导出 格式化属性
+        /// </summary>
+        [Fact]
+        public async Task Test_Export_FormatProperty()
+        {
+            var data = new List<Bing.Offices.Tests.Models.ExportFormat>();
+            for (int i = 0; i < 10000; i++)
+            {
+                data.Add(new Bing.Offices.Tests.Models.ExportFormat()
+                {
+                    Id = $"A{i}",
+                    Name = $"测试名称+++++{i}",
+                    Index = i + 1,
+                    IgnoreProperty = $"忽略属性+++++{i}",
+                    NotMappedProperty = $"忽略映射属性+++++{i}",
+                    Money = i*1000,
+                    CreateTime = DateTime.Now.AddMinutes(i)
+                });
+            }
+
+            var bytes = await _excelExportService.ExportAsync(new ExportOptions<Bing.Offices.Tests.Models.ExportFormat>()
+            {
+                Data = data,
+            });
+            await File.WriteAllBytesAsync($"D:\\测试导出_{DateTime.Now:yyyyMMddHHmmss}.xlsx", bytes);
+        }
     }
 
     /// <summary>

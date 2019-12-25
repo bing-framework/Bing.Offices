@@ -37,15 +37,11 @@ namespace Bing.Offices.Exports
         /// <summary>
         /// 获取导出设置
         /// </summary>
-        /// <returns></returns>
         private IExcelConfiguration GetSetting()
         {
             var config = InternalContext.GetExportSetting<TEntity>();
             if (config == null)
-            {
                 throw new ArgumentException($"请设置【{nameof(TEntity)}】导出配置");
-            }
-
             return config;
         }
     }

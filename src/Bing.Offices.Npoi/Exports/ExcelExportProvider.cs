@@ -3,12 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using Bing.Offices.Abstractions.Decorators;
 using Bing.Offices.Abstractions.Exports;
-using Bing.Offices.Abstractions.Metadata.Excels;
 using Bing.Offices.Attributes;
 using Bing.Offices.Extensions;
+using Bing.Offices.Factories;
 using Bing.Offices.Npoi.Extensions;
-using Bing.Offices.Npoi.Factories;
 using Bing.Offices.Npoi.Resolvers;
+using Bing.Offices.Settings;
 using Bing.Utils.Extensions;
 using NPOI.SS.UserModel;
 using NPOI.SS.Util;
@@ -58,14 +58,12 @@ namespace Bing.Offices.Npoi.Exports
         /// </summary>
         /// <param name="headerDict">表头映射字典</param>
         /// <param name="dynamicColumns">动态列</param>
-        private void BuildDynamicHeader(IDictionary<string, string> headerDict, IList<string> dynamicColumns)
+        private void BuildDynamicHeader(IDictionary<string, PropertySetting> headerDict, IList<string> dynamicColumns)
         {
             if (!dynamicColumns.Any())
                 return;
-            var dynamicKey = headerDict.Keys.FirstOrDefault(x => x.StartsWith("Dynamic:"));
-            if (string.IsNullOrWhiteSpace(dynamicKey))
-                return;
-            headerDict[dynamicKey] = dynamicColumns.Join(',');
+            var propertySetting = headerDict.Values.FirstOrDefault(x => x.IsDynamicColumn);
+            propertySetting?.SetDynamicColumn(dynamicColumns);
         }
 
         /// <summary>
@@ -75,23 +73,24 @@ namespace Bing.Offices.Npoi.Exports
         /// <param name="sheet">NPOI工作表</param>
         /// <param name="headerRowIndex">表头行索引</param>
         /// <param name="headerDict">表头映射字典</param>
-        private void HandleHeader(NPOI.SS.UserModel.ISheet sheet, int headerRowIndex, IDictionary<string, string> headerDict)
+        private void HandleHeader(NPOI.SS.UserModel.ISheet sheet, int headerRowIndex, IDictionary<string, PropertySetting> headerDict)
         {
             var row = sheet.CreateRow(headerRowIndex);
             var columnIndex = 0;
             foreach (var kvp in headerDict)
             {
-                if (kvp.Key.StartsWith("Dynamic:"))
+                if(kvp.Value.Ignored)
+                    continue;
+                if (kvp.Value.IsDynamicColumn)
                 {
-                    var dynamicColumns = kvp.Value.Split(',');
-                    foreach (var column in dynamicColumns)
+                    foreach (var column in kvp.Value.DynamicColumns)
                     {
                         row.CreateCell(columnIndex).SetCellValue(column);
                         columnIndex++;
                     }
                     continue;
                 }
-                row.CreateCell(columnIndex).SetCellValue(kvp.Value);
+                row.CreateCell(columnIndex).SetCellValue(kvp.Value.Title);
                 columnIndex++;
             }
         }
@@ -105,7 +104,7 @@ namespace Bing.Offices.Npoi.Exports
         /// <param name="data">数据集</param>
         /// <param name="headerDict">表头映射字典</param>
         private void HandleBody<T>(NPOI.SS.UserModel.ISheet sheet, int dataRowStartIndex, IList<T> data,
-            IDictionary<string, string> headerDict) where T : class, new()
+            IDictionary<string, PropertySetting> headerDict) where T : class, new()
         {
             if (data.Count <= 0)
                 return;
@@ -116,23 +115,21 @@ namespace Bing.Offices.Npoi.Exports
                 var dto = data[i];
                 foreach (var kvp in headerDict)
                 {
-                    if (kvp.Key.StartsWith("Dynamic:"))
+                    if (kvp.Value.Ignored)
+                        continue;
+                    if (kvp.Value.IsDynamicColumn)
                     {
-                        var extendPropertyName = kvp.Key.Split(':')[1];
-                        var dynamicColumns = kvp.Value.Split(',');
-                        var dictionary = dto.GetExtendDictionary(extendPropertyName);
-                        foreach (var column in dynamicColumns)
+                        var dictionary = dto.GetExtendDictionary(kvp.Key);
+                        foreach (var column in kvp.Value.DynamicColumns)
                         {
-                            if (column.IsEmpty())
-                            {
+                            if(column.IsEmpty())
                                 continue;
-                            }
                             row.CreateCell(columnIndex).SetCellValue(dictionary[column]?.ToString());
                             columnIndex++;
                         }
                         continue;
                     }
-                    row.CreateCell(columnIndex).SetCellValue(dto.GetStringValue(kvp.Key));
+                    row.CreateCell(columnIndex).SetCellValue(dto.GetStringValue(kvp.Key, kvp.Value.Formatter));
                     columnIndex++;
                 }
             }
