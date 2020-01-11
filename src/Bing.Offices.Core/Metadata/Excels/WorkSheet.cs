@@ -39,7 +39,8 @@ namespace Bing.Offices.Metadata.Excels
         /// <summary>
         /// 标题
         /// </summary>
-        public string Title {
+        public string Title
+        {
             get
             {
                 if (_header.RowCount == 0)
@@ -47,7 +48,8 @@ namespace Bing.Offices.Metadata.Excels
                 if (_header[0].Cells.Count > 1)
                     return string.Empty;
                 return _header[0][0].Value.SafeString();
-            } }
+            }
+        }
 
         /// <summary>
         /// 名称
@@ -86,10 +88,18 @@ namespace Bing.Offices.Metadata.Excels
         /// <summary>
         /// 初始化一个<see cref="WorkSheet"/>类型的实例
         /// </summary>
-        public WorkSheet()
+        public WorkSheet() : this(0)
+        {
+        }
+
+        /// <summary>
+        /// 初始化一个<see cref="WorkSheet"/>类型的实例
+        /// </summary>
+        /// <param name="rowIndex">起始行索引</param>
+        public WorkSheet(int rowIndex)
         {
             _header = new Range();
-            _rowIndex = 0;
+            _rowIndex = rowIndex;
         }
 
         #endregion

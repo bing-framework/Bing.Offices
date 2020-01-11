@@ -33,6 +33,11 @@ namespace Bing.Offices.Abstractions.Imports
         int DataRowIndex { get; set; }
 
         /// <summary>
+        /// 最大列长度
+        /// </summary>
+        int MaxColumnLength { get; set; }
+
+        /// <summary>
         /// 映射字典
         /// </summary>
         IDictionary<string,string> MappingDictionary { get; set; }

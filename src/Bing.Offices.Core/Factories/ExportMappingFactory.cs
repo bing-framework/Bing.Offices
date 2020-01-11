@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Reflection;
 using Bing.Offices.Attributes;
+using Bing.Offices.Extensions;
 using Bing.Offices.Settings;
 
 namespace Bing.Offices.Factories
@@ -37,7 +38,7 @@ namespace Bing.Offices.Factories
             foreach (var propertyInfo in type.GetProperties())
             {
                 var setting = new PropertySetting();
-                if (HasIgnore(propertyInfo))
+                if (propertyInfo.HasIgnore())
                     setting.Ignored = true;
                 if (HasDynamicColumn(propertyInfo))
                     setting.IsDynamicColumn = true;
@@ -47,19 +48,6 @@ namespace Bing.Offices.Factories
             }
             MappingDict[type] = dict;
             return dict;
-        }
-
-        /// <summary>
-        /// 是否有忽略属性
-        /// </summary>
-        /// <param name="propertyInfo">属性信息</param>
-        private static bool HasIgnore(PropertyInfo propertyInfo)
-        {
-            if (propertyInfo.IsDefined(typeof(NotMappedAttribute)))
-                return true;
-            if (propertyInfo.IsDefined(typeof(ExcelIgnoreAttribute)))
-                return true;
-            return false;
         }
 
         /// <summary>

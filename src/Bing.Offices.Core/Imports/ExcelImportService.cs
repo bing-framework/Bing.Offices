@@ -22,10 +22,7 @@ namespace Bing.Offices.Imports
         /// 初始一个<see cref="ExcelImportService"/>类型的实例
         /// </summary>
         /// <param name="excelImportProvider">Excel导入提供程序</param>
-        public ExcelImportService(IExcelImportProvider excelImportProvider)
-        {
-            _excelImportProvider = excelImportProvider;
-        }
+        public ExcelImportService(IExcelImportProvider excelImportProvider) => _excelImportProvider = excelImportProvider;
 
         /// <summary>
         /// 导入
@@ -58,9 +55,9 @@ namespace Bing.Offices.Imports
         {
             return options.CustomImportProvider == null
                 ? _excelImportProvider.Convert<T>(options.FileUrl, options.SheetIndex, options.HeaderRowIndex,
-                    options.DataRowIndex, options.MultiSheet)
+                    options.DataRowIndex, options.MultiSheet, options.MaxColumnLength)
                 : options.CustomImportProvider.Convert<T>(options.FileUrl, options.SheetIndex, options.HeaderRowIndex,
-                    options.DataRowIndex, options.MultiSheet);
+                    options.DataRowIndex, options.MultiSheet, options.MaxColumnLength);
         }
 
         /// <summary>

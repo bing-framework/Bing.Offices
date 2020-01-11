@@ -34,6 +34,11 @@ namespace Bing.Offices.Imports
         public int DataRowIndex { get; set; } = 1;
 
         /// <summary>
+        /// 最大列长度
+        /// </summary>
+        public int MaxColumnLength { get; set; } = 100;
+
+        /// <summary>
         /// 映射字典
         /// </summary>
         public IDictionary<string, string> MappingDictionary { get; set; }

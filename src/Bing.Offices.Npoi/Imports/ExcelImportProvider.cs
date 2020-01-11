@@ -7,6 +7,7 @@ using System.Reflection;
 using Bing.Offices.Abstractions.Imports;
 using Bing.Offices.Abstractions.Metadata.Excels;
 using Bing.Offices.Attributes;
+using Bing.Offices.Exceptions;
 using Bing.Offices.Metadata.Excels;
 using Bing.Offices.Npoi.Extensions;
 using Bing.Offices.Npoi.Metadata.Excels;
@@ -43,19 +44,21 @@ namespace Bing.Offices.Npoi.Imports
         /// <param name="headerRowIndex">标题行索引</param>
         /// <param name="dataRowStartIndex">数据行起始索引</param>
         /// <param name="multiSheet">是否支持多工作表模式</param>
-        public IWorkbook Convert<TTemplate>(string fileUrl, int sheetIndex = 0, int headerRowIndex = 0, int dataRowStartIndex = 1, bool multiSheet = false) where TTemplate : class, new()
+        /// <param name="maxColumnLength">最大列长度</param>
+        public IWorkbook Convert<TTemplate>(string fileUrl, int sheetIndex = 0, int headerRowIndex = 0, int dataRowStartIndex = 1, bool multiSheet = false, int maxColumnLength = 100) where TTemplate : class, new()
         {
             var workbook = new NpoiWorkbook();
             var innerWorkbook = GetWorkbook(fileUrl);
             if (multiSheet == false)
             {
-                BuildSheet<TTemplate>(workbook, innerWorkbook, sheetIndex, headerRowIndex, dataRowStartIndex);
+                BuildSheet<TTemplate>(workbook, innerWorkbook, sheetIndex, headerRowIndex, dataRowStartIndex,
+                    maxColumnLength);
                 return workbook;
             }
 
             for (var i = 0; i < innerWorkbook.NumberOfSheets; i++)
             {
-                BuildSheet<TTemplate>(workbook, innerWorkbook, i, headerRowIndex, dataRowStartIndex);
+                BuildSheet<TTemplate>(workbook, innerWorkbook, i, headerRowIndex, dataRowStartIndex, maxColumnLength);
             }
 
             return workbook;
@@ -70,10 +73,13 @@ namespace Bing.Offices.Npoi.Imports
         /// <param name="sheetIndex">工作表索引</param>
         /// <param name="headerRowIndex">表头行索引</param>
         /// <param name="dataRowStartIndex">数据行起始索引</param>
-        private void BuildSheet<TTemplate>(Bing.Offices.Abstractions.Metadata.Excels.IWorkbook workbook, NPOI.SS.UserModel.IWorkbook innerWorkbook, int sheetIndex, int headerRowIndex, int dataRowStartIndex)
+        /// <param name="maxColumnLength">最大列长度</param>
+        private void BuildSheet<TTemplate>(Bing.Offices.Abstractions.Metadata.Excels.IWorkbook workbook, NPOI.SS.UserModel.IWorkbook innerWorkbook, int sheetIndex, int headerRowIndex, int dataRowStartIndex, int maxColumnLength)
         {
             var innerSheet = GetSheet(innerWorkbook, sheetIndex);
-            var sheet = workbook.CreateSheet(innerSheet.SheetName);
+            if (innerSheet.GetRow(0).PhysicalNumberOfCells > maxColumnLength * 10)
+                throw new OfficeException($"导入数据初始化过多的无效列: {maxColumnLength}");
+            var sheet = workbook.CreateSheet(innerSheet.SheetName, headerRowIndex);
             HandleHeader(sheet, innerSheet, headerRowIndex);
             HandleBody<TTemplate>(sheet, innerSheet, dataRowStartIndex);
         }

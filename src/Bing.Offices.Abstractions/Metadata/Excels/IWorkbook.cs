@@ -42,6 +42,13 @@ namespace Bing.Offices.Abstractions.Metadata.Excels
         IWorkSheet CreateSheet(string sheetName);
 
         /// <summary>
+        /// 创建工作表
+        /// </summary>
+        /// <param name="sheetName">工作表名称</param>
+        /// <param name="startRowIndex">起始行索引</param>
+        IWorkSheet CreateSheet(string sheetName, int startRowIndex);
+
+        /// <summary>
         /// 添加工作表
         /// </summary>
         /// <param name="sheet">工作表</param>

@@ -97,14 +97,21 @@ namespace Bing.Offices.Npoi.Metadata.Excels
                 sheetName = $"Sheet{index}";
                 index++;
             }
-            return CreateSheet(sheetName);
+            return CreateSheet(sheetName, 0);
         }
 
         /// <summary>
         /// 创建工作表
         /// </summary>
         /// <param name="sheetName">工作表名称</param>
-        public IWorkSheet CreateSheet(string sheetName)
+        public IWorkSheet CreateSheet(string sheetName) => CreateSheet(sheetName, 0);
+
+        /// <summary>
+        /// 创建工作表
+        /// </summary>
+        /// <param name="sheetName">工作表名称</param>
+        /// <param name="startRowIndex">起始行索引</param>
+        public IWorkSheet CreateSheet(string sheetName, int startRowIndex)
         {
             if (string.IsNullOrWhiteSpace(sheetName))
                 throw new ArgumentNullException(nameof(sheetName));
@@ -113,7 +120,7 @@ namespace Bing.Offices.Npoi.Metadata.Excels
             if (sheetName.Length > 31)
                 sheetName = sheetName.Substring(0, MaxSensitveSheetNameLength);
             ValidateSheetName(sheetName);
-            IWorkSheet sheet = new WorkSheet();
+            IWorkSheet sheet = new WorkSheet(startRowIndex);
             sheet.Name = sheetName;
             Sheets.Add(sheet);
             return sheet;

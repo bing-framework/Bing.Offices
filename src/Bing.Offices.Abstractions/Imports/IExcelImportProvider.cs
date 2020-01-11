@@ -16,7 +16,8 @@ namespace Bing.Offices.Abstractions.Imports
         /// <param name="headerRowIndex">标题行索引</param>
         /// <param name="dataRowStartIndex">数据行起始索引</param>
         /// <param name="multiSheet">是否支持多工作表模式</param>
+        /// <param name="maxColumnLength">最大列长度</param>
         IWorkbook Convert<TTemplate>(string fileUrl, int sheetIndex = 0, int headerRowIndex = 0,
-            int dataRowStartIndex = 1, bool multiSheet = false) where TTemplate : class, new();
+            int dataRowStartIndex = 1, bool multiSheet = false, int maxColumnLength = 100) where TTemplate : class, new();
     }
 }
