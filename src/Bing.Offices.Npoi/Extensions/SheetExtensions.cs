@@ -40,7 +40,7 @@ namespace Bing.Offices.Npoi.Extensions
             for (var i = mergedRegions - 1; i >= 0; i--)
             {
                 var cellRangeAddress = sheet.GetMergedRegion(i);
-                if (cellRangeAddress.FirstRow >= deleteRowStartIndex + count 
+                if (cellRangeAddress.FirstRow >= deleteRowStartIndex + count
                     || cellRangeAddress.LastRow <= deleteRowStartIndex)
                 {
                     // 只有一行的合并单元格 FirstRow==LastRow
@@ -62,6 +62,20 @@ namespace Bing.Offices.Npoi.Extensions
                 }
             }
             sheet.ShiftRows(deleteRowStartIndex + count, sheet.LastRowNum, -count, true, false);
+        }
+
+        /// <summary>
+        /// 获取有数据（非空行）的最后一行的行数。如果sheet中一行数据都没有则返回-1，只有第一行有数据则返回0，最后有数据的行是第n行则返回n-1。
+        /// </summary>
+        /// <param name="sheet">工作表</param>
+        public static int GetHasDataRowNum(this ISheet sheet)
+        {
+            for (var i = sheet.LastRowNum; i >= 0; i--)
+            {
+                if (!sheet.GetRow(i).IsEmptyRow())
+                    return i;
+            }
+            return -1;
         }
     }
 }

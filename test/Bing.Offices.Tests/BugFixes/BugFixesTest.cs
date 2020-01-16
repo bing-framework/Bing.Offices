@@ -203,5 +203,23 @@ namespace Bing.Offices.Tests.BugFixes
             var result = workbook.GetResult<Issue6>();
             Output.WriteLine(result.ToJson());
         }
+
+        /// <summary>
+        /// Issue7 - 导入空行
+        /// </summary>
+        [Fact]
+        public async Task Issue7_Import_EmptyLine()
+        {
+            var fileUrl = Path.Combine(CurrentDir, "Resources/Bugs", "issue7.xlsx");
+            var workbook = await ImportService.ImportAsync<Issue7>(new ImportOptions()
+            {
+                FileUrl = fileUrl,
+                SheetIndex = 1,
+                DataRowIndex = 3,
+                HeaderRowIndex = 2,
+            });
+            var result = workbook.GetResult<Issue7>();
+            Output.WriteLine(result.ToJson());
+        }
     }
 }

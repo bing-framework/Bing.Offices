@@ -39,6 +39,11 @@ namespace Bing.Offices.Imports
         public int MaxColumnLength { get; set; } = 100;
 
         /// <summary>
+        /// 启用空行模式。启用时，行内遇到空行将抛出异常错误信息
+        /// </summary>
+        public bool EnabledEmptyLine { get; set; }
+
+        /// <summary>
         /// 映射字典
         /// </summary>
         public IDictionary<string, string> MappingDictionary { get; set; }

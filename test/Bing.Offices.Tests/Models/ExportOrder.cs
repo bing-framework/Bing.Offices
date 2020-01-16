@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations.Schema;
 using Bing.Offices.Attributes;
+using System;
 
 namespace Bing.Offices.Tests.Models
 {
@@ -25,6 +26,12 @@ namespace Bing.Offices.Tests.Models
         /// </summary>
         [ColumnName("索引值")]
         public int Index { get; set; }
+
+        /// <summary>
+        /// 创建时间
+        /// </summary>
+        [ColumnName("创建时间")]
+        public DateTime? CreateTime { get; set; }
 
         /// <summary>
         /// 忽略属性

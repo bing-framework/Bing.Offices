@@ -2,7 +2,7 @@
 
 namespace Bing.Offices.Tests.Models.Bugs
 {
-    public class Issue6
+    public class Issue7
     {
         /// <summary>
         /// 商品条码

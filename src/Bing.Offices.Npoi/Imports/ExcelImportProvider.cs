@@ -55,12 +55,8 @@ namespace Bing.Offices.Npoi.Imports
                     maxColumnLength);
                 return workbook;
             }
-
             for (var i = 0; i < innerWorkbook.NumberOfSheets; i++)
-            {
                 BuildSheet<TTemplate>(workbook, innerWorkbook, i, headerRowIndex, dataRowStartIndex, maxColumnLength);
-            }
-
             return workbook;
         }
 
@@ -77,7 +73,7 @@ namespace Bing.Offices.Npoi.Imports
         private void BuildSheet<TTemplate>(Bing.Offices.Abstractions.Metadata.Excels.IWorkbook workbook, NPOI.SS.UserModel.IWorkbook innerWorkbook, int sheetIndex, int headerRowIndex, int dataRowStartIndex, int maxColumnLength)
         {
             var innerSheet = GetSheet(innerWorkbook, sheetIndex);
-            if (innerSheet.GetRow(0).PhysicalNumberOfCells > maxColumnLength * 10)
+            if (innerSheet.GetRow(0).PhysicalNumberOfCells > maxColumnLength)
                 throw new OfficeException($"导入数据初始化过多的无效列: {maxColumnLength}");
             var sheet = workbook.CreateSheet(innerSheet.SheetName, headerRowIndex);
             HandleHeader(sheet, innerSheet, headerRowIndex);
@@ -134,11 +130,13 @@ namespace Bing.Offices.Npoi.Imports
         private void HandleBody<TTemplate>(IWorkSheet sheet, ISheet innerSheet, int dataRowStartIndex)
         {
             var header = sheet.GetHeader().LastOrDefault();
-            for (var i = dataRowStartIndex; i < innerSheet.PhysicalNumberOfRows; i++)
+            // LastRowNum: 获取最后一行的行数，如果sheet中一行数据都没有则返回-1，只有第一行有数据则返回0，最后有数据的行是第n行则返回n-1
+            // PhysicalNumberOfRows: 获取有记录的行数，即：最后有数据的行是第n行，前面有m行是空行没数据，则返回n-m
+            for (var i = dataRowStartIndex; i < innerSheet.GetHasDataRowNum() + 1; i++)
             {
                 var innerRow = innerSheet.GetRow(i);
-                if (innerRow == null || innerRow.Cells.All(x => string.IsNullOrWhiteSpace(x?.GetStringValue())))
-                    continue;
+                if (innerRow.IsEmptyRow())
+                    throw new OfficeException($"导入数据存在空行");
                 sheet.AddBodyRow(Convert<TTemplate>(innerRow, header));
             }
         }

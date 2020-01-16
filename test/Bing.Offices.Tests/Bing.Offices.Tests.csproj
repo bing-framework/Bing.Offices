@@ -36,6 +36,9 @@
     <None Update="Resources\Bugs\issue6.xlsx">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+    <None Update="Resources\Bugs\issue7.xlsx">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
     <None Update="Resources\CarImport.xlsx">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>

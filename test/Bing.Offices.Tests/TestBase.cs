@@ -251,11 +251,15 @@ namespace Bing.Offices.Tests
             var data = new List<ExportOrder>();
             for (int i = 0; i < 10000; i++)
             {
+                DateTime? currentTime = null;
+                if (i % 2 == 0)
+                    currentTime = DateTime.Now;
                 data.Add(new ExportOrder()
                 {
                     Id = $"A{i}",
                     Name = $"²âÊÔÃû³Æ+++++{i}",
-                    Index = i+1,
+                    Index = i + 1,
+                    CreateTime = currentTime,
                     IgnoreProperty = $"ºöÂÔÊôÐÔ+++++{i}",
                     NotMappedProperty = $"ºöÂÔÓ³ÉäÊôÐÔ+++++{i}"
                 });
