@@ -267,5 +267,23 @@ namespace Bing.Offices.Tests.BugFixes
             });
             Output.WriteLine(result.ToJson());
         }
+
+        /// <summary>
+        /// Issue9 - 导入-清空左右两侧空格
+        /// </summary>
+        [Fact]
+        public async Task Issue9_Import_Trim()
+        {
+            var fileUrl = Path.Combine(CurrentDir, "Resources/Bugs", "issue9.xlsx");
+            var workbook = await ImportService.ImportAsync<Issue9>(new ImportOptions()
+            {
+                FileUrl = fileUrl,
+                SheetIndex = 0,
+                DataRowIndex = 1,
+                HeaderRowIndex = 0,
+            });
+            var result = workbook.GetResult<Issue9>();
+            Output.WriteLine(result.ToJson());
+        }
     }
 }

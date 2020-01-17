@@ -20,31 +20,39 @@ namespace Bing.Offices.Npoi.Extensions
         /// <param name="cell">单元格</param>
         public static string GetStringValue(this ICell cell)
         {
+            var result = string.Empty;
             if (cell == null)
-                return string.Empty;
+                return result;
             try
             {
                 switch (cell.CellType)
                 {
                     case CellType.String:
-                        return cell.StringCellValue;
+                        result = cell.StringCellValue;
+                        break;
                     case CellType.Boolean:
-                        return cell.BooleanCellValue.ToString();
+                        result = cell.BooleanCellValue.ToString();
+                        break;
                     case CellType.Error:
-                        return cell.ErrorCellValue.ToString();
+                        result = cell.ErrorCellValue.ToString();
+                        break;
                     case CellType.Formula:
-                        return cell.CellFormula;
+                        result = cell.CellFormula;
+                        break;
                     case CellType.Numeric:
-                        return DateUtil.IsCellDateFormatted(cell)
+                        result = DateUtil.IsCellDateFormatted(cell)
                             ? cell.DateCellValue.ToString("yyyy-MM-dd HH:mm:ss.sss", CultureInfo.InvariantCulture)
                             : cell.NumericCellValue.ToString(CultureInfo.InvariantCulture);
+                        break;
                     default:
-                        return cell.ToString();
+                        result = cell.ToString();
+                        break;
                 }
+                return result.Trim();
             }
             catch
             {
-                return string.Empty;
+                return result;
             }
         }
 
