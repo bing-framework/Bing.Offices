@@ -34,7 +34,7 @@ namespace Bing.Offices.Imports
             var workbook = GetWorkbook<T>(options);
             if (options.MappingDictionary != null)
                 MappingHeaderDictionary(workbook, options.MappingDictionary);
-            var andFilter = new AndFilter()
+            var andFilter = new AndFilter
             {
                 Filters = FilterFactory.CreateInstances<T>()
             };
@@ -55,9 +55,9 @@ namespace Bing.Offices.Imports
         {
             return options.CustomImportProvider == null
                 ? _excelImportProvider.Convert<T>(options.FileUrl, options.SheetIndex, options.HeaderRowIndex,
-                    options.DataRowIndex, options.MultiSheet, options.MaxColumnLength)
+                    options.DataRowIndex, options.MultiSheet, options.MaxColumnLength, options.EnabledEmptyLine)
                 : options.CustomImportProvider.Convert<T>(options.FileUrl, options.SheetIndex, options.HeaderRowIndex,
-                    options.DataRowIndex, options.MultiSheet, options.MaxColumnLength);
+                    options.DataRowIndex, options.MultiSheet, options.MaxColumnLength, options.EnabledEmptyLine);
         }
 
         /// <summary>

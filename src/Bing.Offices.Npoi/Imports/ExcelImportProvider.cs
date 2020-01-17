@@ -45,18 +45,21 @@ namespace Bing.Offices.Npoi.Imports
         /// <param name="dataRowStartIndex">数据行起始索引</param>
         /// <param name="multiSheet">是否支持多工作表模式</param>
         /// <param name="maxColumnLength">最大列长度</param>
-        public IWorkbook Convert<TTemplate>(string fileUrl, int sheetIndex = 0, int headerRowIndex = 0, int dataRowStartIndex = 1, bool multiSheet = false, int maxColumnLength = 100) where TTemplate : class, new()
+        /// <param name="enabledEmptyLine">启用空行模式。启用时，行内遇到空行将抛出异常错误信息</param>
+        public IWorkbook Convert<TTemplate>(string fileUrl, int sheetIndex = 0, int headerRowIndex = 0, int dataRowStartIndex = 1, bool multiSheet = false, int maxColumnLength = 100, bool enabledEmptyLine = false) where TTemplate : class, new()
         {
             var workbook = new NpoiWorkbook();
             var innerWorkbook = GetWorkbook(fileUrl);
             if (multiSheet == false)
             {
                 BuildSheet<TTemplate>(workbook, innerWorkbook, sheetIndex, headerRowIndex, dataRowStartIndex,
-                    maxColumnLength);
+                    maxColumnLength, enabledEmptyLine);
                 return workbook;
             }
+
             for (var i = 0; i < innerWorkbook.NumberOfSheets; i++)
-                BuildSheet<TTemplate>(workbook, innerWorkbook, i, headerRowIndex, dataRowStartIndex, maxColumnLength);
+                BuildSheet<TTemplate>(workbook, innerWorkbook, i, headerRowIndex, dataRowStartIndex, maxColumnLength,
+                    enabledEmptyLine);
             return workbook;
         }
 
@@ -70,14 +73,15 @@ namespace Bing.Offices.Npoi.Imports
         /// <param name="headerRowIndex">表头行索引</param>
         /// <param name="dataRowStartIndex">数据行起始索引</param>
         /// <param name="maxColumnLength">最大列长度</param>
-        private void BuildSheet<TTemplate>(Bing.Offices.Abstractions.Metadata.Excels.IWorkbook workbook, NPOI.SS.UserModel.IWorkbook innerWorkbook, int sheetIndex, int headerRowIndex, int dataRowStartIndex, int maxColumnLength)
+        /// <param name="enabledEmptyLine">启用空行模式。启用时，行内遇到空行将抛出异常错误信息</param>
+        private void BuildSheet<TTemplate>(Bing.Offices.Abstractions.Metadata.Excels.IWorkbook workbook, NPOI.SS.UserModel.IWorkbook innerWorkbook, int sheetIndex, int headerRowIndex, int dataRowStartIndex, int maxColumnLength, bool enabledEmptyLine)
         {
             var innerSheet = GetSheet(innerWorkbook, sheetIndex);
             if (innerSheet.GetRow(0).PhysicalNumberOfCells > maxColumnLength)
                 throw new OfficeException($"导入数据初始化过多的无效列: {maxColumnLength}");
             var sheet = workbook.CreateSheet(innerSheet.SheetName, headerRowIndex);
             HandleHeader(sheet, innerSheet, headerRowIndex);
-            HandleBody<TTemplate>(sheet, innerSheet, dataRowStartIndex);
+            HandleBody<TTemplate>(sheet, innerSheet, dataRowStartIndex, enabledEmptyLine);
         }
 
         /// <summary>
@@ -127,7 +131,8 @@ namespace Bing.Offices.Npoi.Imports
         /// <param name="sheet">工作表</param>
         /// <param name="innerSheet">NPOI工作表</param>
         /// <param name="dataRowStartIndex">数据行起始索引</param>
-        private void HandleBody<TTemplate>(IWorkSheet sheet, ISheet innerSheet, int dataRowStartIndex)
+        /// <param name="enabledEmptyLine">启用空行模式。启用时，行内遇到空行将抛出异常错误信息</param>
+        private void HandleBody<TTemplate>(IWorkSheet sheet, ISheet innerSheet, int dataRowStartIndex, bool enabledEmptyLine)
         {
             var header = sheet.GetHeader().LastOrDefault();
             // LastRowNum: 获取最后一行的行数，如果sheet中一行数据都没有则返回-1，只有第一行有数据则返回0，最后有数据的行是第n行则返回n-1
@@ -135,10 +140,22 @@ namespace Bing.Offices.Npoi.Imports
             for (var i = dataRowStartIndex; i < innerSheet.GetHasDataRowNum() + 1; i++)
             {
                 var innerRow = innerSheet.GetRow(i);
-                if (innerRow.IsEmptyRow())
-                    throw new OfficeException($"导入数据存在空行");
+                if(CheckEmptyLine(innerRow.IsEmptyRow(), enabledEmptyLine))
+                    continue;
                 sheet.AddBodyRow(Convert<TTemplate>(innerRow, header));
             }
+        }
+
+        /// <summary>
+        /// 检查空行
+        /// </summary>
+        /// <param name="isEmptyRow">是否空行</param>
+        /// <param name="enabledEmptyLine">启用空行模式。启用时，行内遇到空行将抛出异常错误信息</param>
+        private bool CheckEmptyLine(bool isEmptyRow, bool enabledEmptyLine)
+        {
+            if (isEmptyRow && enabledEmptyLine)
+                throw new OfficeEmptyLineException($"导入数据存在空行");
+            return isEmptyRow;
         }
 
         /// <summary>

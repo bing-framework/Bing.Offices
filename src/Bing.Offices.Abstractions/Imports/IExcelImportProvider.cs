@@ -17,7 +17,8 @@ namespace Bing.Offices.Abstractions.Imports
         /// <param name="dataRowStartIndex">数据行起始索引</param>
         /// <param name="multiSheet">是否支持多工作表模式</param>
         /// <param name="maxColumnLength">最大列长度</param>
+        /// <param name="enabledEmptyLine">启用空行模式。启用时，行内遇到空行将抛出异常错误信息</param>
         IWorkbook Convert<TTemplate>(string fileUrl, int sheetIndex = 0, int headerRowIndex = 0,
-            int dataRowStartIndex = 1, bool multiSheet = false, int maxColumnLength = 100) where TTemplate : class, new();
+            int dataRowStartIndex = 1, bool multiSheet = false, int maxColumnLength = 100, bool enabledEmptyLine = false) where TTemplate : class, new();
     }
 }

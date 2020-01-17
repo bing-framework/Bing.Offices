@@ -38,6 +38,11 @@ namespace Bing.Offices.Abstractions.Imports
         int MaxColumnLength { get; set; }
 
         /// <summary>
+        /// 启用空行模式。启用时，行内遇到空行将抛出异常错误信息
+        /// </summary>
+        bool EnabledEmptyLine { get; set; }
+
+        /// <summary>
         /// 映射字典
         /// </summary>
         IDictionary<string,string> MappingDictionary { get; set; }
