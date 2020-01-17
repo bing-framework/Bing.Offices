@@ -11,6 +11,7 @@ using Bing.Offices.Imports;
 using Bing.Offices.Npoi.Exports;
 using Bing.Offices.Npoi.Imports;
 using Bing.Offices.Tests.Models.Bugs;
+using Bing.Utils.Extensions;
 using Bing.Utils.Json;
 using Xunit;
 using Xunit.Abstractions;
@@ -242,6 +243,28 @@ namespace Bing.Offices.Tests.BugFixes
                 EnabledEmptyLine = false
             });
             var result = workbook.GetResult<Issue7>();
+            Output.WriteLine(result.ToJson());
+        }
+
+        /// <summary>
+        /// Issue8 - 导入-时间转换
+        /// </summary>
+        [Fact]
+        public async Task Issue8_Import_DateTimeParser()
+        {
+            var fileUrl = Path.Combine(CurrentDir, "Resources/Bugs", "issue8.xlsx");
+            var workbook = await ImportService.ImportAsync<Issue8>(new ImportOptions()
+            {
+                FileUrl = fileUrl,
+                SheetIndex = 0,
+                DataRowIndex = 1,
+                HeaderRowIndex = 0,
+            });
+            var result = workbook.GetResult<Issue8>();
+            result.ForEach(x =>
+            {
+                Output.WriteLine(DateTime.Parse(x.CreateTime).ToString());
+            });
             Output.WriteLine(result.ToJson());
         }
     }

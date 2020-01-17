@@ -36,7 +36,7 @@ namespace Bing.Offices.Npoi.Extensions
                         return cell.CellFormula;
                     case CellType.Numeric:
                         return DateUtil.IsCellDateFormatted(cell)
-                            ? cell.DateCellValue.ToString(CultureInfo.InvariantCulture)
+                            ? cell.DateCellValue.ToString("yyyy-MM-dd HH:mm:ss.sss", CultureInfo.InvariantCulture)
                             : cell.NumericCellValue.ToString(CultureInfo.InvariantCulture);
                     default:
                         return cell.ToString();
@@ -129,7 +129,7 @@ namespace Bing.Offices.Npoi.Extensions
                     return new Tuple<int, int>(rowSpan, columnSpan);
                 }
             }
-            return new Tuple<int, int>(1,1);
+            return new Tuple<int, int>(1, 1);
         }
 
         #endregion
