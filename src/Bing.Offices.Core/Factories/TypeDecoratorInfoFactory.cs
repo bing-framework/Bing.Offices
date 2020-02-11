@@ -6,7 +6,7 @@ using System.Reflection;
 using Bing.Offices.Abstractions.Attributes;
 using Bing.Offices.Abstractions.Decorators;
 using Bing.Offices.Attributes;
-using Bing.Utils.Extensions;
+using Bing.Extensions;
 
 namespace Bing.Offices.Factories
 {

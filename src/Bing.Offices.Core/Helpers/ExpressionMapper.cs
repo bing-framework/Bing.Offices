@@ -7,7 +7,7 @@ using System.Reflection;
 using Bing.Offices.Abstractions.Metadata.Excels;
 using Bing.Offices.Attributes;
 using Bing.Offices.Exceptions;
-using Bing.Utils.Extensions;
+using Bing.Extensions;
 using Convert = System.Convert;
 using Enum = System.Enum;
 

@@ -69,7 +69,7 @@ namespace Bing.Offices.Excel.Configurations
         /// <param name="propertyExpression">属性表达式</param>
         public IPropertyConfiguration<TEntity, TProperty> Property<TProperty>(Expression<Func<TEntity, TProperty>> propertyExpression)
         {
-            var memberInfo = Bing.Utils.Helpers.Lambda.GetMember(propertyExpression);
+            var memberInfo = Bing.Helpers.Lambda.GetMember(propertyExpression);
             var property = memberInfo as PropertyInfo;
             if (property == null)
             {

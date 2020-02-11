@@ -9,7 +9,7 @@ using Bing.Offices.Factories;
 using Bing.Offices.Npoi.Extensions;
 using Bing.Offices.Npoi.Resolvers;
 using Bing.Offices.Settings;
-using Bing.Utils.Extensions;
+using Bing.Extensions;
 using NPOI.SS.UserModel;
 using NPOI.SS.Util;
 

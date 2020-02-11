@@ -4,7 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Bing.Offices.Abstractions.Exports;
 using Bing.Offices.Exceptions;
-using Bing.Utils.Helpers;
+using Bing.Helpers;
 using Bing.Utils.IO;
 
 namespace Bing.Offices.Exports

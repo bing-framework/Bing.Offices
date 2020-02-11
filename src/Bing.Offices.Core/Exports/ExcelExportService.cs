@@ -2,7 +2,7 @@
 using Bing.Offices.Abstractions.Exports;
 using Bing.Offices.Decorators;
 using Bing.Offices.Factories;
-using Bing.Utils.Extensions;
+using Bing.Extensions;
 
 namespace Bing.Offices.Exports
 {

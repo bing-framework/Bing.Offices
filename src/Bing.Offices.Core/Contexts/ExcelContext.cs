@@ -16,7 +16,7 @@ namespace Bing.Offices.Contexts
         /// </summary>
         public void Init()
         {
-            var list = Bing.Utils.Helpers.Reflection.GetInstancesByInterface<IExcelExportMap>(
+            var list = Bing.Helpers.Reflection.GetInstancesByInterface<IExcelExportMap>(
                 Assembly.GetAssembly(typeof(IExcelExportMap)));
             foreach (var item in list)
             {

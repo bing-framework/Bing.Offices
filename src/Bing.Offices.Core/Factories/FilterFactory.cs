@@ -7,7 +7,7 @@ using Bing.Offices.Abstractions.Attributes;
 using Bing.Offices.Abstractions.Filters;
 using Bing.Offices.Attributes;
 using Bing.Offices.Filters;
-using Bing.Utils.Extensions;
+using Bing.Extensions;
 
 namespace Bing.Offices.Factories
 {

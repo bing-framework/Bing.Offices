@@ -11,7 +11,7 @@ using Bing.Offices.Imports;
 using Bing.Offices.Npoi.Exports;
 using Bing.Offices.Npoi.Imports;
 using Bing.Offices.Tests.Models.Bugs;
-using Bing.Utils.Extensions;
+using Bing.Extensions;
 using Bing.Utils.Json;
 using Xunit;
 using Xunit.Abstractions;

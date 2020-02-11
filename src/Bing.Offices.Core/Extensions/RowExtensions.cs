@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Bing.Offices.Abstractions.Metadata.Excels;
 using Bing.Offices.Helpers;
-using Bing.Utils.Extensions;
+using Bing.Extensions;
 
 namespace Bing.Offices.Extensions
 {

@@ -11,8 +11,8 @@ using Bing.Offices.Exceptions;
 using Bing.Offices.Metadata.Excels;
 using Bing.Offices.Npoi.Extensions;
 using Bing.Offices.Npoi.Metadata.Excels;
-using Bing.Utils.Extensions;
-using Bing.Utils.Helpers;
+using Bing.Extensions;
+using Bing.Helpers;
 using NPOI.SS.UserModel;
 using IWorkbook = Bing.Offices.Abstractions.Metadata.Excels.IWorkbook;
 using IRow = Bing.Offices.Abstractions.Metadata.Excels.IRow;
@@ -209,7 +209,7 @@ namespace Bing.Offices.Npoi.Imports
                     ColumnIndex = i,
                     Name = columnName,
                     PropertyName = Table[key]?.ToString(),
-                    IsDynamic = Bing.Utils.Helpers.Conv.ToBool(TableDynamicCell[key])
+                    IsDynamic = Bing.Helpers.Conv.ToBool(TableDynamicCell[key])
                 };
                 cells.Add(cell);
             }
