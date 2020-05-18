@@ -53,11 +53,15 @@ namespace Bing.Offices.Imports
         /// <param name="options">导入选项配置</param>
         private IWorkbook GetWorkbook<T>(IImportOptions options) where T : class, new()
         {
+            //return options.CustomImportProvider == null
+            //    ? _excelImportProvider.Convert<T>(options.FileUrl, options.SheetIndex, options.HeaderRowIndex,
+            //        options.DataRowIndex, options.MultiSheet, options.MaxColumnLength, options.EnabledEmptyLine)
+            //    : options.CustomImportProvider.Convert<T>(options.FileUrl, options.SheetIndex, options.HeaderRowIndex,
+            //        options.DataRowIndex, options.MultiSheet, options.MaxColumnLength, options.EnabledEmptyLine);
+
             return options.CustomImportProvider == null
-                ? _excelImportProvider.Convert<T>(options.FileUrl, options.SheetIndex, options.HeaderRowIndex,
-                    options.DataRowIndex, options.MultiSheet, options.MaxColumnLength, options.EnabledEmptyLine)
-                : options.CustomImportProvider.Convert<T>(options.FileUrl, options.SheetIndex, options.HeaderRowIndex,
-                    options.DataRowIndex, options.MultiSheet, options.MaxColumnLength, options.EnabledEmptyLine);
+                ? _excelImportProvider.Convert<T>(options)
+                : options.CustomImportProvider.Convert<T>(options); 
         }
 
         /// <summary>
