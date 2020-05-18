@@ -43,6 +43,13 @@ namespace Bing.Offices.Abstractions.Imports
         bool EnabledEmptyLine { get; set; }
 
         /// <summary>
+        /// 表头匹配：
+        /// true 验证完全匹配，
+        /// false 不验证匹配，
+        /// </summary>
+        bool HeaderMatch { get; set; } 
+
+        /// <summary>
         /// 映射字典
         /// </summary>
         IDictionary<string,string> MappingDictionary { get; set; }

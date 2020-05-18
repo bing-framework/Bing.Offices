@@ -20,5 +20,15 @@ namespace Bing.Offices.Abstractions.Imports
         /// <param name="enabledEmptyLine">启用空行模式。启用时，行内遇到空行将抛出异常错误信息</param>
         IWorkbook Convert<TTemplate>(string fileUrl, int sheetIndex = 0, int headerRowIndex = 0,
             int dataRowStartIndex = 1, bool multiSheet = false, int maxColumnLength = 100, bool enabledEmptyLine = false) where TTemplate : class, new();
+
+        /// <summary>
+        /// 转换
+        /// </summary>
+        /// <typeparam name="TTemplate">导入模板类型</typeparam>
+        /// <param name="options">导入选项配置</param>
+        /// <returns></returns>
+        IWorkbook Convert<TTemplate>(IImportOptions options) where TTemplate : class, new();
+       
+
     }
 }

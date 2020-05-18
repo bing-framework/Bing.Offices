@@ -101,6 +101,7 @@ namespace Bing.Offices.Tests.BugFixes
         public async Task Issue2_InitCelSoMuch()
         {
             var fileUrl = Path.Combine(CurrentDir, "Resources/Bugs", "issue2.xlsx");
+
             await Assert.ThrowsAsync<OfficeException>(async () =>
             {
                 var workbook = await ImportService.ImportAsync<Issue2>(new ImportOptions()
