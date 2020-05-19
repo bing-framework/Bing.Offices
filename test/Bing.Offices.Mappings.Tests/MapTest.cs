@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Reflection;
+using Bing.Helpers;
 using Bing.Offices.Excel;
 using Bing.Offices.Excel.Mappings;
 using Bing.Utils.Helpers;

@@ -1,7 +1,5 @@
 ﻿using Bing.Extensions;
 using Bing.Helpers;
-using Bing.Offices.Abstractions.Imports;
-using Bing.Offices.Abstractions.Metadata.Excels;
 using Bing.Offices.Attributes;
 using Bing.Offices.Exceptions;
 using Bing.Offices.Imports;
@@ -15,9 +13,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using ICell = Bing.Offices.Abstractions.Metadata.Excels.ICell;
-using IRow = Bing.Offices.Abstractions.Metadata.Excels.IRow;
-using IWorkbook = Bing.Offices.Abstractions.Metadata.Excels.IWorkbook;
+using ICell = Bing.Offices.Metadata.Excels.ICell;
+using IRow = Bing.Offices.Metadata.Excels.IRow;
+using IWorkbook = Bing.Offices.Metadata.Excels.IWorkbook;
 
 namespace Bing.Offices.Npoi.Imports
 {
@@ -90,7 +88,7 @@ namespace Bing.Offices.Npoi.Imports
         /// <param name="workbook">工作簿</param>
         /// <param name="innerWorkbook">内部工作簿</param>
         /// <param name="options">导入选项配置</param>
-        private void BuildSheet<TTemplate>(Bing.Offices.Abstractions.Metadata.Excels.IWorkbook workbook, NPOI.SS.UserModel.IWorkbook innerWorkbook, IImportOptions options)
+        private void BuildSheet<TTemplate>(IWorkbook workbook, NPOI.SS.UserModel.IWorkbook innerWorkbook, IImportOptions options)
         {
             var innerSheet = GetSheet(innerWorkbook, options.SheetIndex);
             //if (innerSheet.GetRow(0).PhysicalNumberOfCells > maxColumnLength)

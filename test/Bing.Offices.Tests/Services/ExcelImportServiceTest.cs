@@ -1,5 +1,4 @@
-﻿using Bing.Offices.Abstractions.Imports;
-using Bing.Offices.Imports;
+﻿using Bing.Offices.Imports;
 using Bing.Offices.Npoi.Imports;
 using Xunit.Abstractions;
 

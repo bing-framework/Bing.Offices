@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using Bing.Offices.Abstractions.Decorators;
-using Bing.Offices.Abstractions.Exports;
 using Bing.Offices.Attributes;
 using Bing.Offices.Extensions;
 using Bing.Offices.Factories;
@@ -10,6 +8,8 @@ using Bing.Offices.Npoi.Extensions;
 using Bing.Offices.Npoi.Resolvers;
 using Bing.Offices.Settings;
 using Bing.Extensions;
+using Bing.Offices.Decorators;
+using Bing.Offices.Exports;
 using NPOI.SS.UserModel;
 using NPOI.SS.Util;
 
