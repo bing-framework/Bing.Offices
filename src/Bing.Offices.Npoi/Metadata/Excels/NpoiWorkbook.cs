@@ -39,10 +39,7 @@ namespace Bing.Offices.Npoi.Metadata.Excels
         /// <summary>
         /// 初始化一个<see cref="NpoiWorkbook"/>类型的实例
         /// </summary>
-        public NpoiWorkbook()
-        {
-            Sheets = new List<IWorkSheet>();
-        }
+        public NpoiWorkbook() => Sheets = new List<IWorkSheet>();
 
         #endregion
 

@@ -99,5 +99,73 @@ namespace Bing.Offices.Npoi.Extensions
         }
 
         #endregion
+
+        #region AddSheet(添加工作表)
+
+        /// <summary>
+        /// 添加工作表
+        /// </summary>
+        /// <param name="workbook">工作簿</param>
+        /// <param name="name">工作表名称</param>
+        /// <param name="heads">表头</param>
+        public static ISheet AddSheet(this IWorkbook workbook,string name,List<string> heads)
+        {
+            var sheet = workbook.CreateSheet(name);
+            var style = workbook.DefaultHeadStyle();
+            var row = sheet.CreateRow(0);
+            row.Height = 20 * 20;
+            heads.ForEach(item => row.Value(heads.IndexOf(item), item, style));
+            return sheet;
+        }
+
+        #endregion
+
+        #region DefaultHeadStyle(默认表头样式)
+
+        /// <summary>
+        /// 默认表头样式
+        /// </summary>
+        /// <param name="workbook">工作簿</param>
+        public static ICellStyle DefaultHeadStyle(this IWorkbook workbook)
+        {
+            var style = workbook.CreateCellStyle();
+            var font = workbook.CreateFont();
+            font.Boldweight = short.MaxValue;// 加粗
+
+            style.FillForegroundColor = 13;// 13为黄色
+            style.FillPattern = FillPattern.SolidForeground;
+            style.BorderTop = BorderStyle.Thin;
+            style.BorderBottom = BorderStyle.Thin;
+            style.BorderLeft = BorderStyle.Thin;
+            style.BorderRight = BorderStyle.Thin;
+            style.Alignment = HorizontalAlignment.Center;
+            style.VerticalAlignment = VerticalAlignment.Center;
+            style.SetFont(font.DefaultFont());
+            return style;
+        }
+
+        #endregion
+
+        #region DefaultBodyStyle(默认正文样式)
+
+        /// <summary>
+        /// 默认正文样式
+        /// </summary>
+        /// <param name="workbook">工作簿</param>
+        public static ICellStyle DefaultBodyStyle(this IWorkbook workbook)
+        {
+            var style = workbook.CreateCellStyle();
+            var font = workbook.CreateFont();
+            style.Alignment = HorizontalAlignment.Center;
+            style.VerticalAlignment = VerticalAlignment.Center;
+            style.BorderTop = BorderStyle.Thin;
+            style.BorderBottom = BorderStyle.Thin;
+            style.BorderLeft = BorderStyle.Thin;
+            style.BorderRight = BorderStyle.Thin;
+            style.SetFont(font.DefaultFont());
+            return style;
+        }
+
+        #endregion
     }
 }

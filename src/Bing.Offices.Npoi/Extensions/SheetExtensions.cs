@@ -1,4 +1,6 @@
-﻿using NPOI.SS.UserModel;
+﻿using System;
+using System.Collections.Generic;
+using NPOI.SS.UserModel;
 
 namespace Bing.Offices.Npoi.Extensions
 {
@@ -76,6 +78,25 @@ namespace Bing.Offices.Npoi.Extensions
                     return i;
             }
             return -1;
+        }
+
+        /// <summary>
+        /// 添加行
+        /// </summary>
+        /// <typeparam name="T">实体类型</typeparam>
+        /// <param name="sheet">工作表</param>
+        /// <param name="data">数据</param>
+        /// <param name="action">操作</param>
+        public static void AddRow<T>(this ISheet sheet, IEnumerable<T> data, Action<IRow, T> action)
+        {
+            var index = 1;
+            foreach (var item in data)
+            {
+                var row = sheet.CreateRow(index);
+                row.Height = 20 * 20;
+                action(row, item);
+                index++;
+            }
         }
     }
 }

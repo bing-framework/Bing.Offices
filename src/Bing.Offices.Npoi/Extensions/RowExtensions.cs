@@ -45,5 +45,21 @@ namespace Bing.Offices.Npoi.Extensions
         /// </summary>
         /// <param name="row">行</param>
         public static bool IsEmptyRow(this IRow row) => row == null || row.Cells.All(x => string.IsNullOrWhiteSpace(x?.GetStringValue()));
+
+        /// <summary>
+        /// 设置单元格值
+        /// </summary>
+        /// <typeparam name="T">数据类型</typeparam>
+        /// <param name="row">行</param>
+        /// <param name="column">单元格索引</param>
+        /// <param name="value">值</param>
+        /// <param name="style">行样式</param>
+        public static void Value<T>(this IRow row, int column, T value, ICellStyle style = null)
+        {
+            var cell = row.CreateCell(column);
+            cell.SetValue(value);
+            if (style != null)
+                cell.CellStyle = style;
+        }
     }
 }
