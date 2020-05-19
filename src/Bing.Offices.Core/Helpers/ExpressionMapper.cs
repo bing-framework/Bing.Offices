@@ -6,7 +6,8 @@ using System.Linq.Expressions;
 using System.Reflection;
 using Bing.Offices.Abstractions.Metadata.Excels;
 using Bing.Offices.Attributes;
-using Bing.Utils.Extensions;
+using Bing.Offices.Exceptions;
+using Bing.Extensions;
 using Convert = System.Convert;
 using Enum = System.Enum;
 
@@ -76,7 +77,6 @@ namespace Bing.Offices.Helpers
         /// </summary>
         /// <param name="prop">属性信息</param>
         /// <param name="cellsParam">单元格列表参数</param>
-        /// <returns></returns>
         private static MemberBinding GetDictionaryBinding(PropertyInfo prop, ParameterExpression cellsParam)
         {
             // 调用ConvertToDictionary方法
@@ -93,7 +93,6 @@ namespace Bing.Offices.Helpers
         /// <param name="firstOrDefaultMethod">FirstOrDefault方法</param>
         /// <param name="cellsParam">单元格列表参数</param>
         /// <param name="propertyEqualExpr">属性相等表达式</param>
-        /// <returns></returns>
         private static MemberBinding GetMapperBinding(PropertyInfo prop, MethodInfo firstOrDefaultMethod, ParameterExpression cellsParam, Expression<Func<ICell, bool>> propertyEqualExpr)
         {
             // 调用ChangeType方法
@@ -109,11 +108,8 @@ namespace Bing.Offices.Helpers
             // 当前属性类型常量
             var propTypeConst = Expression.Constant(prop.PropertyType);
             // 变更类型
-            //var changeTypeExpr = Expression.Call(changeTypeMethod,
-            //    Expression.Condition(Expression.Equal(cellValueExpr, Expression.Constant(null)),
-            //        Expression.Constant(string.Empty), Expression.Convert(cellValueExpr, typeof(string))),
-            //    propTypeConst); //转换为字符串进行转换
-            var changeTypeExpr = Expression.Call(changeTypeMethod, cellValueExpr, propTypeConst);
+            var changeTypeExpr =
+                Expression.Call(changeTypeMethod, cellValueExpr, propTypeConst, firstOrDefaultMethodExpr);
             Expression expr = Expression.Convert(changeTypeExpr, prop.PropertyType);
             return Expression.Bind(prop, expr);
         }
@@ -157,7 +153,8 @@ namespace Bing.Offices.Helpers
         /// </summary>
         /// <param name="value">值</param>
         /// <param name="type">类型</param>
-        public static object ChangeType(object value, Type type)
+        /// <param name="cell">单元格</param>
+        public static object ChangeType(object value, Type type, ICell cell)
         {
             try
             {
@@ -177,7 +174,7 @@ namespace Bing.Offices.Helpers
                 if (!type.IsInterface && type.IsGenericType)
                 {
                     Type innerType = type.GetGenericArguments()[0];
-                    object innerValue = ChangeType(value, innerType);
+                    object innerValue = ChangeType(value, innerType, cell);
                     return Activator.CreateInstance(type, new object[] { innerValue });
                 }
                 if (value is string && type == typeof(Guid))
@@ -188,9 +185,17 @@ namespace Bing.Offices.Helpers
                     return value;
                 return Convert.ChangeType(value, type);
             }
-            catch
+            catch (Exception ex)
             {
-                return default;
+                throw new OfficeDataConvertException($"值转换失败。输入值为: {value}, 目标类型为: {type.FullName}", ex)
+                {
+                    PrimitiveType = value.GetType(),
+                    TargetType = type,
+                    Value = value,
+                    RowIndex = cell.RowIndex + 1,
+                    ColumnIndex = cell.ColumnIndex + 1,
+                    Name = cell.Name,
+                };
             }
         }
 

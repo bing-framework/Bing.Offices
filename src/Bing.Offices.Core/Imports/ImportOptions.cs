@@ -29,9 +29,26 @@ namespace Bing.Offices.Imports
         public int HeaderRowIndex { get; set; } = 0;
 
         /// <summary>
+        /// 表头匹配：默认验证
+        /// true 验证完全匹配，
+        /// false 不验证匹配，
+        /// </summary>
+        public bool HeaderMatch { get; set; } = true;
+        
+        /// <summary>
         /// 数据行索引
         /// </summary>
         public int DataRowIndex { get; set; } = 1;
+
+        /// <summary>
+        /// 最大列长度
+        /// </summary>
+        public int MaxColumnLength { get; set; } = 100;
+
+        /// <summary>
+        /// 启用空行模式。启用时，行内遇到空行将抛出异常错误信息
+        /// </summary>
+        public bool EnabledEmptyLine { get; set; }
 
         /// <summary>
         /// 映射字典

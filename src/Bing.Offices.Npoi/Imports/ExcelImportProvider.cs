@@ -1,21 +1,23 @@
-﻿using System;
+﻿using Bing.Extensions;
+using Bing.Helpers;
+using Bing.Offices.Abstractions.Imports;
+using Bing.Offices.Abstractions.Metadata.Excels;
+using Bing.Offices.Attributes;
+using Bing.Offices.Exceptions;
+using Bing.Offices.Imports;
+using Bing.Offices.Metadata.Excels;
+using Bing.Offices.Npoi.Extensions;
+using Bing.Offices.Npoi.Metadata.Excels;
+using NPOI.SS.UserModel;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using Bing.Offices.Abstractions.Imports;
-using Bing.Offices.Abstractions.Metadata.Excels;
-using Bing.Offices.Attributes;
-using Bing.Offices.Metadata.Excels;
-using Bing.Offices.Npoi.Extensions;
-using Bing.Offices.Npoi.Metadata.Excels;
-using Bing.Utils.Extensions;
-using Bing.Utils.Helpers;
-using NPOI.SS.UserModel;
-using IWorkbook = Bing.Offices.Abstractions.Metadata.Excels.IWorkbook;
-using IRow = Bing.Offices.Abstractions.Metadata.Excels.IRow;
 using ICell = Bing.Offices.Abstractions.Metadata.Excels.ICell;
+using IRow = Bing.Offices.Abstractions.Metadata.Excels.IRow;
+using IWorkbook = Bing.Offices.Abstractions.Metadata.Excels.IWorkbook;
 
 namespace Bing.Offices.Npoi.Imports
 {
@@ -43,21 +45,41 @@ namespace Bing.Offices.Npoi.Imports
         /// <param name="headerRowIndex">标题行索引</param>
         /// <param name="dataRowStartIndex">数据行起始索引</param>
         /// <param name="multiSheet">是否支持多工作表模式</param>
-        public IWorkbook Convert<TTemplate>(string fileUrl, int sheetIndex = 0, int headerRowIndex = 0, int dataRowStartIndex = 1, bool multiSheet = false) where TTemplate : class, new()
+        /// <param name="maxColumnLength">最大列长度</param>
+        /// <param name="enabledEmptyLine">启用空行模式。启用时，行内遇到空行将抛出异常错误信息</param>
+        public IWorkbook Convert<TTemplate>(string fileUrl, int sheetIndex = 0, int headerRowIndex = 0, int dataRowStartIndex = 1, bool multiSheet = false, int maxColumnLength = 100, bool enabledEmptyLine = false) where TTemplate : class, new()
+        {
+            IImportOptions options = new ImportOptions()
+            {
+                FileUrl = fileUrl,
+                SheetIndex = sheetIndex,
+                HeaderRowIndex = headerRowIndex,
+                DataRowIndex = dataRowStartIndex,
+                MultiSheet = multiSheet,
+                MaxColumnLength = maxColumnLength,
+                EnabledEmptyLine = enabledEmptyLine
+            };
+            return Convert<TTemplate>(options);
+        }
+
+        /// <summary>
+        /// 转换
+        /// </summary>
+        /// <typeparam name="TTemplate">导入模板类型</typeparam>
+        /// <param name="options">导入选项配置</param>
+        /// <returns></returns>
+        public IWorkbook Convert<TTemplate>(IImportOptions options) where TTemplate : class, new()
         {
             var workbook = new NpoiWorkbook();
-            var innerWorkbook = GetWorkbook(fileUrl);
-            if (multiSheet == false)
+            var innerWorkbook = GetWorkbook(options.FileUrl);
+            if (options.MultiSheet == false)
             {
-                BuildSheet<TTemplate>(workbook, innerWorkbook, sheetIndex, headerRowIndex, dataRowStartIndex);
+                BuildSheet<TTemplate>(workbook, innerWorkbook, options);
                 return workbook;
             }
 
             for (var i = 0; i < innerWorkbook.NumberOfSheets; i++)
-            {
-                BuildSheet<TTemplate>(workbook, innerWorkbook, i, headerRowIndex, dataRowStartIndex);
-            }
-
+                BuildSheet<TTemplate>(workbook, innerWorkbook, options);
             return workbook;
         }
 
@@ -67,15 +89,16 @@ namespace Bing.Offices.Npoi.Imports
         /// <typeparam name="TTemplate">导入模板类型</typeparam>
         /// <param name="workbook">工作簿</param>
         /// <param name="innerWorkbook">内部工作簿</param>
-        /// <param name="sheetIndex">工作表索引</param>
-        /// <param name="headerRowIndex">表头行索引</param>
-        /// <param name="dataRowStartIndex">数据行起始索引</param>
-        private void BuildSheet<TTemplate>(Bing.Offices.Abstractions.Metadata.Excels.IWorkbook workbook, NPOI.SS.UserModel.IWorkbook innerWorkbook, int sheetIndex, int headerRowIndex, int dataRowStartIndex)
+        /// <param name="options">导入选项配置</param>
+        private void BuildSheet<TTemplate>(Bing.Offices.Abstractions.Metadata.Excels.IWorkbook workbook, NPOI.SS.UserModel.IWorkbook innerWorkbook, IImportOptions options)
         {
-            var innerSheet = GetSheet(innerWorkbook, sheetIndex);
-            var sheet = workbook.CreateSheet(innerSheet.SheetName);
-            HandleHeader(sheet, innerSheet, headerRowIndex);
-            HandleBody<TTemplate>(sheet, innerSheet, dataRowStartIndex);
+            var innerSheet = GetSheet(innerWorkbook, options.SheetIndex);
+            //if (innerSheet.GetRow(0).PhysicalNumberOfCells > maxColumnLength)
+            //    throw new OfficeException($"导入数据初始化过多的无效列: {maxColumnLength}");
+            var sheet = workbook.CreateSheet(innerSheet.SheetName, options.HeaderRowIndex);
+            HandleHeader(sheet, innerSheet, options.HeaderRowIndex);
+            VerifyHeader<TTemplate>(sheet, options);
+            HandleBody<TTemplate>(sheet, innerSheet, options.DataRowIndex, options.EnabledEmptyLine);
         }
 
         /// <summary>
@@ -111,12 +134,51 @@ namespace Bing.Offices.Npoi.Imports
         {
             var innerRow = innerSheet.GetRow(headerRowIndex);
             var cells = new List<ICell>();
-            for (var i = 0; i < innerRow.PhysicalNumberOfCells; i++)
+            foreach (var cell in innerRow.Cells.Where(x => !string.IsNullOrEmpty(x.GetStringValue())))
             {
-                var innerCell = innerRow.GetCell(i);
-                cells.Add(new Cell(innerCell.GetStringValue()) { ColumnIndex = i, Name = innerCell.GetStringValue() });
+                cells.Add(new Cell(cell.GetStringValue()) { ColumnIndex = cell.ColumnIndex, Name = cell.GetStringValue() });
             }
             sheet.AddHeadRow(cells.ToArray());
+        }
+
+        /// <summary>
+        /// 验证表头
+        /// </summary>
+        /// <param name="sheet">工作表</param>
+        /// <param name="options">导入选项配置</param>
+        private void VerifyHeader<TTemplate>(IWorkSheet sheet, IImportOptions options)
+        {
+            if (!options.HeaderMatch) return;
+            var header = sheet.GetHeader().LastOrDefault();
+            if (header == null)
+            {
+                throw new OfficeException($"导入的模板不正确，未匹配表头");
+            }
+            List<PropertyInfo> properties = typeof(TTemplate).GetProperties().ToList();
+            var props = properties
+                .Where(x => x.GetCustomAttribute<DynamicColumnAttribute>() == null)
+                .Select(p => new
+                {
+                    Name = p.GetCustomAttribute<ColumnNameAttribute>()?.Name,
+                    Code = p.Name
+                }).ToList();
+
+            var cellName = header.Cells.Select(x => x.Name);
+            var list = props.Where(p => !cellName.Contains(p.Name)).ToList();
+            if (list.Any())
+            {
+                list = list.Where(p =>!(string.IsNullOrWhiteSpace(p.Name) && cellName.Contains(p.Code))).ToList();
+                if (list.Any())
+                    throw new OfficeHeaderException($"导入的表格不存在列：{ list.Select(x => string.IsNullOrWhiteSpace(x.Name) ? x.Code : x.Name).ExpandAndToString()}");
+            }
+            else if (options.MappingDictionary.Count > 0)
+            {
+                var dic = options.MappingDictionary.ToList().Where(x => !cellName.Contains(x.Value)).ToList();
+                if (dic.Count > 0)
+                {
+                    throw new OfficeHeaderException($"导入的表格不存在列：{dic.Select(x => x.Value).ExpandAndToString()}");
+                }
+            }
         }
 
         /// <summary>
@@ -125,16 +187,31 @@ namespace Bing.Offices.Npoi.Imports
         /// <param name="sheet">工作表</param>
         /// <param name="innerSheet">NPOI工作表</param>
         /// <param name="dataRowStartIndex">数据行起始索引</param>
-        private void HandleBody<TTemplate>(IWorkSheet sheet, ISheet innerSheet, int dataRowStartIndex)
+        /// <param name="enabledEmptyLine">启用空行模式。启用时，行内遇到空行将抛出异常错误信息</param>
+        private void HandleBody<TTemplate>(IWorkSheet sheet, ISheet innerSheet, int dataRowStartIndex, bool enabledEmptyLine)
         {
             var header = sheet.GetHeader().LastOrDefault();
-            for (var i = dataRowStartIndex; i < innerSheet.PhysicalNumberOfRows; i++)
+            // LastRowNum: 获取最后一行的行数，如果sheet中一行数据都没有则返回-1，只有第一行有数据则返回0，最后有数据的行是第n行则返回n-1
+            // PhysicalNumberOfRows: 获取有记录的行数，即：最后有数据的行是第n行，前面有m行是空行没数据，则返回n-m
+            for (var i = dataRowStartIndex; i < innerSheet.GetHasDataRowNum() + 1; i++)
             {
                 var innerRow = innerSheet.GetRow(i);
-                if (innerRow == null || innerRow.Cells.All(x => string.IsNullOrWhiteSpace(x?.GetStringValue())))
+                if (CheckEmptyLine(innerRow.IsEmptyRow(), enabledEmptyLine))
                     continue;
                 sheet.AddBodyRow(Convert<TTemplate>(innerRow, header));
             }
+        }
+
+        /// <summary>
+        /// 检查空行
+        /// </summary>
+        /// <param name="isEmptyRow">是否空行</param>
+        /// <param name="enabledEmptyLine">启用空行模式。启用时，行内遇到空行将抛出异常错误信息</param>
+        private bool CheckEmptyLine(bool isEmptyRow, bool enabledEmptyLine)
+        {
+            if (isEmptyRow && enabledEmptyLine)
+                throw new OfficeEmptyLineException($"导入数据存在空行");
+            return isEmptyRow;
         }
 
         /// <summary>
@@ -153,12 +230,12 @@ namespace Bing.Offices.Npoi.Imports
                 hash = $"_{Encrypt.Md5By32(header.Cells.Select(x => x.Name).Join())}";
 
             string columnName;
-            for (int i = 0; i < header.Cells.Count; i++)
+            foreach (var cell in header.Cells)
             {
-                columnName = header?.Cells?.SingleOrDefault(x => x.ColumnIndex == i)?.Name;
+                columnName = cell?.Name;
                 if (string.IsNullOrWhiteSpace(columnName))
                     continue;
-                var key = $"{type.FullName}_{hash}_{i}";
+                var key = $"{type.FullName}_{hash}_{cell.ColumnIndex}";
 
                 if (Table[key] == null)
                 {
@@ -182,17 +259,15 @@ namespace Bing.Offices.Npoi.Imports
                     TableDynamicCell[key] = isDynamic;
                 }
 
-                var value = row.GetCell(i) == null ? string.Empty : row.GetCell(i).GetStringValue();
-                var cell = new Cell(value)
+                var value = row.GetCell(cell.ColumnIndex) == null ? string.Empty : row.GetCell(cell.ColumnIndex).GetStringValue();
+                cells.Add(new Cell(value)
                 {
-                    ColumnIndex = i,
+                    ColumnIndex = cell.ColumnIndex,
                     Name = columnName,
                     PropertyName = Table[key]?.ToString(),
-                    IsDynamic = Bing.Utils.Helpers.Conv.ToBool(TableDynamicCell[key])
-                };
-                cells.Add(cell);
+                    IsDynamic = Bing.Helpers.Conv.ToBool(TableDynamicCell[key])
+                });
             }
-
             return cells;
         }
     }

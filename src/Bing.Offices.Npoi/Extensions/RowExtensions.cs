@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using NPOI.SS.UserModel;
 
 namespace Bing.Offices.Npoi.Extensions
@@ -13,10 +14,7 @@ namespace Bing.Offices.Npoi.Extensions
         /// </summary>
         /// <param name="row">行</param>
         /// <param name="cellIndex">单元格索引</param>
-        public static ICell GetOrCreateCell(this IRow row, int cellIndex)
-        {
-            return row.GetCell(cellIndex) ?? row.CreateCell(cellIndex);
-        }
+        public static ICell GetOrCreateCell(this IRow row, int cellIndex) => row.GetCell(cellIndex) ?? row.CreateCell(cellIndex);
 
         /// <summary>
         /// 创建单元格并进行操作
@@ -40,6 +38,17 @@ namespace Bing.Offices.Npoi.Extensions
             foreach (var cell in row.Cells)
                 cell.SetCellValue(string.Empty);
             return row;
+        }
+
+        /// <summary>
+        /// 是否空行
+        /// </summary>
+        /// <param name="row">行</param>
+        public static bool IsEmptyRow(this IRow row)
+        {
+            if (row == null)
+                return true;
+            return row.Cells.All(x => string.IsNullOrWhiteSpace(x?.GetStringValue()));
         }
     }
 }

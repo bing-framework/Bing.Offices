@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Bing.Offices.Abstractions.Metadata.Excels;
 using Bing.Offices.Helpers;
-using Bing.Utils.Extensions;
+using Bing.Extensions;
 
 namespace Bing.Offices.Extensions
 {
@@ -31,10 +31,7 @@ namespace Bing.Offices.Extensions
         /// </summary>
         /// <typeparam name="T">对象类型</typeparam>
         /// <param name="rows">单元行集合</param>
-        public static IEnumerable<T> Convert<T>(this IEnumerable<IRow> rows)
-        {
-            return rows?.ConvertByExpressTree<T>();
-        }
+        public static IEnumerable<T> Convert<T>(this IEnumerable<IRow> rows) => rows?.ConvertByExpressTree<T>();
 
         /// <summary>
         /// 通过表达式树，将单元行集合快速转换为指定类型集合
@@ -65,7 +62,7 @@ namespace Bing.Offices.Extensions
             var propertyNames = string.Empty;
             row.Cells.ForEach(cell => propertyNames += cell.PropertyName + "_");
             var key = typeof(T).FullName + "_" + propertyNames.Trim('_');
-            var props = typeof(T).GetProperties().Where(x => x.CanWrite && x.CanRead);
+            var props = typeof(T).GetProperties().Where(x => x.CanWrite && x.CanRead && !x.HasIgnore());
             var func = ExpressionMapper.GetFunc<T>(key, props);
             return func;
         }

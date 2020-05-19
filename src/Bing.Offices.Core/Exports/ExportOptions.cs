@@ -43,5 +43,10 @@ namespace Bing.Offices.Exports
         /// 自定义导出提供程序
         /// </summary>
         public IExcelExportProvider CustomExportProvider { get; set; }
+
+        /// <summary>
+        /// 查询总数
+        /// </summary>
+        public int QueryCount { get; set; } = DefaultSettings.DefaultExcelSetting.MaxExportNum;
     }
 }

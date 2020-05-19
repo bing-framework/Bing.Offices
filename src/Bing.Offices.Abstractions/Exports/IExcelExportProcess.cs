@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace Bing.Offices.Abstractions.Exports
 {
@@ -12,7 +13,7 @@ namespace Bing.Offices.Abstractions.Exports
         /// </summary>
         /// <param name="baseDir">基础路径</param>
         /// <param name="fileName">文件名</param>
-        string Run(string baseDir, string fileName);
+        Task<ExportResult> RunAsync(string baseDir, string fileName);
 
         /// <summary>
         /// 执行方法
@@ -20,7 +21,7 @@ namespace Bing.Offices.Abstractions.Exports
         /// <param name="baseDir">基础路径</param>
         /// <param name="fileName">文件名</param>
         /// <param name="exportFields">导出字段。以","分割</param>
-        string Run(string baseDir, string fileName, string exportFields);
+        Task<ExportResult> RunAsync(string baseDir, string fileName, string exportFields);
     }
 
     /// <summary>
@@ -29,5 +30,5 @@ namespace Bing.Offices.Abstractions.Exports
     /// <typeparam name="T">实体类型</typeparam>
     /// <param name="condition">查询条件</param>
     /// <param name="count">数量</param>
-    public delegate IEnumerable<T> GetExportDataEvent<T>(object condition, int count);
+    public delegate Task<IEnumerable<T>> GetExportDataEventAsync<T>(object condition, int count);
 }

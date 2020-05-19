@@ -1,5 +1,5 @@
 ﻿using Bing.Offices.Abstractions.Metadata.Excels;
-using Bing.Utils.Extensions;
+using Bing.Extensions;
 
 namespace Bing.Offices.Metadata.Excels
 {

@@ -22,10 +22,7 @@ namespace Bing.Offices.Imports
         /// 初始一个<see cref="ExcelImportService"/>类型的实例
         /// </summary>
         /// <param name="excelImportProvider">Excel导入提供程序</param>
-        public ExcelImportService(IExcelImportProvider excelImportProvider)
-        {
-            _excelImportProvider = excelImportProvider;
-        }
+        public ExcelImportService(IExcelImportProvider excelImportProvider) => _excelImportProvider = excelImportProvider;
 
         /// <summary>
         /// 导入
@@ -37,7 +34,7 @@ namespace Bing.Offices.Imports
             var workbook = GetWorkbook<T>(options);
             if (options.MappingDictionary != null)
                 MappingHeaderDictionary(workbook, options.MappingDictionary);
-            var andFilter = new AndFilter()
+            var andFilter = new AndFilter
             {
                 Filters = FilterFactory.CreateInstances<T>()
             };
@@ -56,11 +53,15 @@ namespace Bing.Offices.Imports
         /// <param name="options">导入选项配置</param>
         private IWorkbook GetWorkbook<T>(IImportOptions options) where T : class, new()
         {
+            //return options.CustomImportProvider == null
+            //    ? _excelImportProvider.Convert<T>(options.FileUrl, options.SheetIndex, options.HeaderRowIndex,
+            //        options.DataRowIndex, options.MultiSheet, options.MaxColumnLength, options.EnabledEmptyLine)
+            //    : options.CustomImportProvider.Convert<T>(options.FileUrl, options.SheetIndex, options.HeaderRowIndex,
+            //        options.DataRowIndex, options.MultiSheet, options.MaxColumnLength, options.EnabledEmptyLine);
+
             return options.CustomImportProvider == null
-                ? _excelImportProvider.Convert<T>(options.FileUrl, options.SheetIndex, options.HeaderRowIndex,
-                    options.DataRowIndex, options.MultiSheet)
-                : options.CustomImportProvider.Convert<T>(options.FileUrl, options.SheetIndex, options.HeaderRowIndex,
-                    options.DataRowIndex, options.MultiSheet);
+                ? _excelImportProvider.Convert<T>(options)
+                : options.CustomImportProvider.Convert<T>(options); 
         }
 
         /// <summary>

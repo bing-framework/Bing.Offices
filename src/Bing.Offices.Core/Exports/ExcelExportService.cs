@@ -2,7 +2,7 @@
 using Bing.Offices.Abstractions.Exports;
 using Bing.Offices.Decorators;
 using Bing.Offices.Factories;
-using Bing.Utils.Extensions;
+using Bing.Extensions;
 
 namespace Bing.Offices.Exports
 {
@@ -20,10 +20,7 @@ namespace Bing.Offices.Exports
         /// 初始化一个<see cref="ExcelExportService"/>类型的实例
         /// </summary>
         /// <param name="excelExportProvider">Excel导出提供程序</param>
-        public ExcelExportService(IExcelExportProvider excelExportProvider)
-        {
-            _excelExportProvider = excelExportProvider;
-        }
+        public ExcelExportService(IExcelExportProvider excelExportProvider) => _excelExportProvider = excelExportProvider;
 
         /// <summary>
         /// 导出

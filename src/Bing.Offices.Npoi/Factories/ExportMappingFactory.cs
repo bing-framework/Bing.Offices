@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.Reflection;
 using Bing.Offices.Attributes;
-using Bing.Utils.Extensions;
 
 namespace Bing.Offices.Npoi.Factories
 {
@@ -27,17 +27,32 @@ namespace Bing.Offices.Npoi.Factories
             if (MappingDict.ContainsKey(type))
                 return MappingDict[type];
             var dict = new Dictionary<string, string>();
-            type.GetProperties().ForEach(p =>
+            foreach (var property in type.GetProperties())
             {
-                if (p.IsDefined(typeof(ColumnNameAttribute)))
-                    dict.Add(p.Name, p.GetCustomAttribute<ColumnNameAttribute>().Name);
-                else if (p.IsDefined(typeof(DynamicColumnAttribute)))
-                    dict.Add($"Dynamic:{p.Name}", string.Empty);
+                if (HasIgnore(property))
+                    continue;
+                if (property.IsDefined(typeof(ColumnNameAttribute)))
+                    dict.Add(property.Name, property.GetCustomAttribute<ColumnNameAttribute>().Name);
+                else if (property.IsDefined(typeof(DynamicColumnAttribute)))
+                    dict.Add($"Dynamic:{property.Name}", string.Empty);
                 else
-                    dict.Add(p.Name, p.Name);
-            });
+                    dict.Add(property.Name, property.Name);
+            }
             MappingDict[type] = dict;
             return dict;
+        }
+
+        /// <summary>
+        /// 是否有忽略属性
+        /// </summary>
+        /// <param name="propertyInfo">属性信息</param>
+        private static bool HasIgnore(PropertyInfo propertyInfo)
+        {
+            if (propertyInfo.IsDefined(typeof(NotMappedAttribute)))
+                return true;
+            if (propertyInfo.IsDefined(typeof(ExcelIgnoreAttribute)))
+                return true;
+            return false;
         }
     }
 }

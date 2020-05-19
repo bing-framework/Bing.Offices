@@ -3,7 +3,7 @@ using Bing.Offices.Abstractions.Imports;
 using Bing.Offices.Abstractions.Metadata.Excels;
 using Bing.Offices.Attributes;
 using Bing.Offices.Extensions;
-using Bing.Utils.Extensions;
+using Bing.Extensions;
 
 namespace Bing.Offices.Filters
 {
