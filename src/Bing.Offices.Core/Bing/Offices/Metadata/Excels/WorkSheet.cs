@@ -221,6 +221,20 @@ namespace Bing.Offices.Metadata.Excels
         }
 
         /// <summary>
+        /// 添加正文
+        /// </summary>
+        /// <param name="cells">单元格集合</param>
+        /// <param name="physicalRowIndex">物理行索引</param>
+        public void AddBodyRow(IEnumerable<ICell> cells, int physicalRowIndex)
+        {
+            if (cells == null)
+                return;
+            GetBodyRange().AddRow(_rowIndex, physicalRowIndex, cells);
+            _rowIndex++;
+            ResetFirstColumnSpan();
+        }
+
+        /// <summary>
         /// 获取正文单元范围
         /// </summary>
         private IRange GetBodyRange()

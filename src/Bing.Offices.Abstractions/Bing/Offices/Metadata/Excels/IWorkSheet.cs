@@ -82,6 +82,13 @@ namespace Bing.Offices.Metadata.Excels
         void AddBodyRow(IEnumerable<ICell> cells);
 
         /// <summary>
+        /// 添加正文
+        /// </summary>
+        /// <param name="cells">单元格集合</param>
+        /// <param name="physicalRowIndex">物理行索引</param>
+        void AddBodyRow(IEnumerable<ICell> cells, int physicalRowIndex);
+
+        /// <summary>
         /// 添加页脚
         /// </summary>
         /// <param name="cellValues">值</param>

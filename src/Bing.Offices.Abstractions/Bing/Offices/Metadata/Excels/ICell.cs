@@ -36,6 +36,11 @@
         int RowIndex { get; }
 
         /// <summary>
+        /// 物理行索引
+        /// </summary>
+        int PhysicalRowIndex { get; }
+
+        /// <summary>
         /// 结束列索引
         /// </summary>
         int EndColumnIndex { get; }

@@ -44,9 +44,7 @@ namespace Bing.Offices.Extensions
             var list = new List<ValidateResult>();
             foreach (var sheet in workbook.Sheets)
             {
-                // 由于需要真实行数，因此需要增加1
-                list.AddRange(sheet.GetBody().Where(x => !x.Valid).Select(row => new ValidateResult()
-                    {RowIndex = row.RowIndex + 1, ErrorMsg = row.ErrorMsg, SheetName = sheet.Name}));
+                list.AddRange(sheet.GetBody().Where(x => !x.Valid).Select(row => new ValidateResult {RowIndex = row.PhysicalRowIndex + 1, ErrorMsg = row.ErrorMsg, SheetName = sheet.Name}));
             }
             return list;
         }

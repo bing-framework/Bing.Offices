@@ -42,6 +42,14 @@ namespace Bing.Offices.Metadata.Excels
         void AddRow(int rowIndex, IEnumerable<ICell> cells);
 
         /// <summary>
+        /// 添加单元行
+        /// </summary>
+        /// <param name="rowIndex">行索引</param>
+        /// <param name="physicalRowIndex">物理行索引</param>
+        /// <param name="cells">单元格列表</param>
+        void AddRow(int rowIndex, int physicalRowIndex, IEnumerable<ICell> cells);
+
+        /// <summary>
         /// 清空单元行
         /// </summary>
         void Clear();

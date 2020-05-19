@@ -173,7 +173,7 @@ namespace Bing.Offices.Tests.BugFixes
         public async Task Issue5_ValidateFail_ReturnRealLocation_With_HeaderRowIndex()
         {
             var fileUrl = Path.Combine(CurrentDir, "Resources/Bugs", "issue5.xlsx");
-            var workbook = await ImportService.ImportAsync<Issue5>(new ImportOptions()
+            var workbook = await ImportService.ImportAsync<Issue5>(new ImportOptions
             {
                 FileUrl = fileUrl,
                 SheetIndex = 0,
@@ -182,7 +182,7 @@ namespace Bing.Offices.Tests.BugFixes
             });
             var validateResult = workbook.Validate().ToList();
             Assert.True(validateResult.Any());
-            Assert.Equal(3, validateResult[0].RowIndex);
+            Assert.Equal(4, validateResult[0].RowIndex);
             Output.WriteLine(validateResult.ToJson());
         }
 
@@ -213,16 +213,25 @@ namespace Bing.Offices.Tests.BugFixes
             var fileUrl = Path.Combine(CurrentDir, "Resources/Bugs", "issue7.xlsx");
             await Assert.ThrowsAsync<OfficeEmptyLineException>(async() =>
             {
-                var workbook = await ImportService.ImportAsync<Issue7>(new ImportOptions()
+                try
                 {
-                    FileUrl = fileUrl,
-                    SheetIndex = 1,
-                    DataRowIndex = 3,
-                    HeaderRowIndex = 2,
-                    EnabledEmptyLine = true
-                });
-                var result = workbook.GetResult<Issue7>();
-                Output.WriteLine(result.ToJson());
+                    var workbook = await ImportService.ImportAsync<Issue7>(new ImportOptions()
+                    {
+                        FileUrl = fileUrl,
+                        SheetIndex = 1,
+                        DataRowIndex = 3,
+                        HeaderRowIndex = 2,
+                        EnabledEmptyLine = true
+                    });
+                    var result = workbook.GetResult<Issue7>();
+                    Output.WriteLine(result.ToJson());
+                }
+                catch (OfficeEmptyLineException e)
+                {
+                    Output.WriteLine(e.ToJson());
+                    throw;
+                }
+                
             });
         }
 

@@ -114,40 +114,6 @@ namespace Bing.Offices.Helpers
             return Expression.Bind(prop, expr);
         }
 
-        ///// <summary>
-        ///// 变更类型
-        ///// </summary>
-        ///// <param name="value">值</param>
-        ///// <param name="type">类型</param>
-        //public static object ChangeType(string value, Type type)
-        //{
-        //    object obj = null;
-        //    var nullableType = Nullable.GetUnderlyingType(type);
-        //    try
-        //    {
-        //        if (nullableType != null)
-        //        {
-        //            if (value == null)
-        //                obj = null;
-        //            else
-        //                obj = OtherChangeType(value, type);
-        //        }
-        //        else if (typeof(Enum).IsAssignableFrom(type))
-        //        {
-        //            obj = Enum.Parse(type, value);
-        //        }
-        //        else
-        //        {
-        //            obj = Convert.ChangeType(value, type);
-        //        }
-        //        return obj;
-        //    }
-        //    catch
-        //    {
-        //        return default;
-        //    }
-        //}
-
         /// <summary>
         /// 变更类型
         /// </summary>

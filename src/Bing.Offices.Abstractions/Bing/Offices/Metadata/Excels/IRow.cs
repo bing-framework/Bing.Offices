@@ -13,6 +13,11 @@ namespace Bing.Offices.Metadata.Excels
         int RowIndex { get; set; }
 
         /// <summary>
+        /// 物理行索引
+        /// </summary>
+        int PhysicalRowIndex { get; set; }
+
+        /// <summary>
         /// 是否有效
         /// </summary>
         bool Valid { get; }

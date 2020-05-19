@@ -44,11 +44,6 @@ namespace Bing.Offices.Npoi.Extensions
         /// 是否空行
         /// </summary>
         /// <param name="row">行</param>
-        public static bool IsEmptyRow(this IRow row)
-        {
-            if (row == null)
-                return true;
-            return row.Cells.All(x => string.IsNullOrWhiteSpace(x?.GetStringValue()));
-        }
+        public static bool IsEmptyRow(this IRow row) => row == null || row.Cells.All(x => string.IsNullOrWhiteSpace(x?.GetStringValue()));
     }
 }

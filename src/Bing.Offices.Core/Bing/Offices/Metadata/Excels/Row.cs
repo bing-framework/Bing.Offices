@@ -26,6 +26,11 @@ namespace Bing.Offices.Metadata.Excels
         public int RowIndex { get; set; }
 
         /// <summary>
+        /// 物理行索引
+        /// </summary>
+        public int PhysicalRowIndex { get; set; }
+
+        /// <summary>
         /// 是否有效
         /// </summary>
         public bool Valid => string.IsNullOrWhiteSpace(ErrorMsg);

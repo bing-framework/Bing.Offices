@@ -149,12 +149,11 @@ namespace Bing.Offices.Npoi.Imports
             if (!options.HeaderMatch) return;
             var header = sheet.GetHeader().LastOrDefault();
             if (header == null)
-            {
                 throw new OfficeException($"导入的模板不正确，未匹配表头");
-            }
             List<PropertyInfo> properties = typeof(TTemplate).GetProperties().ToList();
             var props = properties
                 .Where(x => x.GetCustomAttribute<DynamicColumnAttribute>() == null)
+                .Where(x => x.GetCustomAttribute<ExcelIgnoreAttribute>() == null)
                 .Select(p => new
                 {
                     Name = p.GetCustomAttribute<ColumnNameAttribute>()?.Name,
@@ -165,17 +164,15 @@ namespace Bing.Offices.Npoi.Imports
             var list = props.Where(p => !cellName.Contains(p.Name)).ToList();
             if (list.Any())
             {
-                list = list.Where(p =>!(string.IsNullOrWhiteSpace(p.Name) && cellName.Contains(p.Code))).ToList();
+                list = list.Where(p => !(string.IsNullOrWhiteSpace(p.Name) && cellName.Contains(p.Code))).ToList();
                 if (list.Any())
                     throw new OfficeHeaderException($"导入的表格不存在列：{ list.Select(x => string.IsNullOrWhiteSpace(x.Name) ? x.Code : x.Name).ExpandAndToString()}");
             }
-            else if (options.MappingDictionary.Count > 0)
+            else if (options.MappingDictionary != null && options.MappingDictionary.Any())
             {
                 var dic = options.MappingDictionary.ToList().Where(x => !cellName.Contains(x.Value)).ToList();
                 if (dic.Count > 0)
-                {
                     throw new OfficeHeaderException($"导入的表格不存在列：{dic.Select(x => x.Value).ExpandAndToString()}");
-                }
             }
         }
 
@@ -196,7 +193,7 @@ namespace Bing.Offices.Npoi.Imports
                 var innerRow = innerSheet.GetRow(i);
                 if (CheckEmptyLine(innerRow.IsEmptyRow(), enabledEmptyLine))
                     continue;
-                sheet.AddBodyRow(Convert<TTemplate>(innerRow, header));
+                sheet.AddBodyRow(Convert<TTemplate>(innerRow, header), innerRow.RowNum);
             }
         }
 
@@ -207,9 +204,11 @@ namespace Bing.Offices.Npoi.Imports
         /// <param name="enabledEmptyLine">启用空行模式。启用时，行内遇到空行将抛出异常错误信息</param>
         private bool CheckEmptyLine(bool isEmptyRow, bool enabledEmptyLine)
         {
-            if (isEmptyRow && enabledEmptyLine)
+            if (!enabledEmptyLine) 
+                return isEmptyRow;
+            if(isEmptyRow)
                 throw new OfficeEmptyLineException($"导入数据存在空行");
-            return isEmptyRow;
+            return false;
         }
 
         /// <summary>

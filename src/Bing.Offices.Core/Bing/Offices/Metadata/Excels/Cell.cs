@@ -79,6 +79,17 @@ namespace Bing.Offices.Metadata.Excels
         }
 
         /// <summary>
+        /// 物理行索引
+        /// </summary>
+        public int PhysicalRowIndex {
+            get
+            {
+                Row.CheckNull(nameof(Row));
+                return Row.PhysicalRowIndex;
+            }
+        }
+
+        /// <summary>
         /// 结束列索引
         /// </summary>
         public int EndColumnIndex => ColumnIndex + ColumnSpan - 1;
