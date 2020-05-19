@@ -46,6 +46,6 @@ namespace Bing.Offices.Exports
         /// <summary>
         /// 查询总数
         /// </summary>
-        public int QueryCount { get; set; } = DefaultSettings.DefaultExcelSetting.MaxExportNum;
+        public int QueryCount { get; set; } = 10000;
     }
 }

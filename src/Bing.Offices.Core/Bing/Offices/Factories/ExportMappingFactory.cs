@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations.Schema;
 using System.Reflection;
 using Bing.Offices.Attributes;
 using Bing.Offices.Extensions;
@@ -17,7 +16,7 @@ namespace Bing.Offices.Factories
         /// <summary>
         /// 映射字典
         /// </summary>
-        private static readonly IDictionary<Type, IDictionary<string,PropertySetting>> MappingDict =
+        private static readonly IDictionary<Type, IDictionary<string, PropertySetting>> MappingDict =
             new ConcurrentDictionary<Type, IDictionary<string, PropertySetting>>();
 
         /// <summary>

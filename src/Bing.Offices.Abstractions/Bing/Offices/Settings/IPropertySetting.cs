@@ -1,4 +1,4 @@
-﻿namespace Bing.Offices.Abstractions.Settings
+﻿namespace Bing.Offices.Settings
 {
     /// <summary>
     /// 属性设置

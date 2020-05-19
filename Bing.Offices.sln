@@ -1,10 +1,8 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
-VisualStudioVersion = 15.0.28307.902
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.29911.84
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Bing.Offices", "src\Bing.Offices\Bing.Offices.csproj", "{08D30AD4-FEAC-45A9-8821-3CB338E93EA6}"
-EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Bing.Offices.Abstractions", "src\Bing.Offices.Abstractions\Bing.Offices.Abstractions.csproj", "{069807D2-8CC8-4CA8-8B89-D95D6E93BE51}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Bing.Offices.Core", "src\Bing.Offices.Core\Bing.Offices.Core.csproj", "{A73AA5CA-12D4-4588-B4A0-39FD047DE8DB}"
@@ -26,18 +24,12 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "01-src", "01-src", "{C162F1
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "02-tests", "02-tests", "{280D49AD-7FE4-4CF5-A554-B856318CAD08}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Bing.Offices.Mappings.Tests", "test\Bing.Offices.Mappings.Tests\Bing.Offices.Mappings.Tests.csproj", "{1EC4DA8D-841B-4B67-83B2-80D265F9620A}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{08D30AD4-FEAC-45A9-8821-3CB338E93EA6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{08D30AD4-FEAC-45A9-8821-3CB338E93EA6}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{08D30AD4-FEAC-45A9-8821-3CB338E93EA6}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{08D30AD4-FEAC-45A9-8821-3CB338E93EA6}.Release|Any CPU.Build.0 = Release|Any CPU
 		{069807D2-8CC8-4CA8-8B89-D95D6E93BE51}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{069807D2-8CC8-4CA8-8B89-D95D6E93BE51}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{069807D2-8CC8-4CA8-8B89-D95D6E93BE51}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -54,21 +46,15 @@ Global
 		{B10A4F99-C06F-41B5-AC4B-B3E14F88EEB3}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B10A4F99-C06F-41B5-AC4B-B3E14F88EEB3}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B10A4F99-C06F-41B5-AC4B-B3E14F88EEB3}.Release|Any CPU.Build.0 = Release|Any CPU
-		{1EC4DA8D-841B-4B67-83B2-80D265F9620A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{1EC4DA8D-841B-4B67-83B2-80D265F9620A}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{1EC4DA8D-841B-4B67-83B2-80D265F9620A}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{1EC4DA8D-841B-4B67-83B2-80D265F9620A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
-		{08D30AD4-FEAC-45A9-8821-3CB338E93EA6} = {C162F186-29D0-486F-92AA-F2FCB3605CDB}
 		{069807D2-8CC8-4CA8-8B89-D95D6E93BE51} = {C162F186-29D0-486F-92AA-F2FCB3605CDB}
 		{A73AA5CA-12D4-4588-B4A0-39FD047DE8DB} = {C162F186-29D0-486F-92AA-F2FCB3605CDB}
 		{82D3D474-FB96-4FA7-B0EF-FBE1667B1237} = {C162F186-29D0-486F-92AA-F2FCB3605CDB}
 		{B10A4F99-C06F-41B5-AC4B-B3E14F88EEB3} = {280D49AD-7FE4-4CF5-A554-B856318CAD08}
-		{1EC4DA8D-841B-4B67-83B2-80D265F9620A} = {280D49AD-7FE4-4CF5-A554-B856318CAD08}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {A893205E-C0E7-49FA-8F8C-E493BDDF365B}

@@ -1,6 +1,5 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
-using Bing.Offices.Abstractions.Settings;
 
 namespace Bing.Offices.Settings
 {
@@ -50,7 +49,7 @@ namespace Bing.Offices.Settings
         /// <param name="dynamicColumns">动态列</param>
         public void SetDynamicColumn(IList<string> dynamicColumns)
         {
-            if(!dynamicColumns.Any())
+            if (!dynamicColumns.Any())
                 return;
             DynamicColumns = dynamicColumns;
         }
