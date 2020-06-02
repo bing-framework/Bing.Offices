@@ -3,12 +3,12 @@
   <PropertyGroup>
     <VersionMajor>0</VersionMajor>
     <VersionMinor>0</VersionMinor>
-    <VersionPatch>1</VersionPatch>
+    <VersionPatch>2</VersionPatch>
     <!--<VersionQuality></VersionQuality>-->
-    <VersionQuality>20200211-1</VersionQuality>
+    <VersionQuality>20200602-1</VersionQuality>
     <VersionPrefix>$(VersionMajor).$(VersionMinor).$(VersionPatch)</VersionPrefix>
     <!--<VersionSuffix></VersionSuffix>-->
-    <!--<VersionSuffix>preview-$(VersionQuality)</VersionSuffix>-->
+    <VersionSuffix>preview-$(VersionQuality)</VersionSuffix>
   </PropertyGroup>
 
   <PropertyGroup>
