@@ -26,9 +26,6 @@ namespace Bing.Offices.Imports
         /// </summary>
         /// <typeparam name="TTemplate">导入模板类型</typeparam>
         /// <param name="options">导入选项配置</param>
-        /// <returns></returns>
         IWorkbook Convert<TTemplate>(IImportOptions options) where TTemplate : class, new();
-       
-
     }
 }
