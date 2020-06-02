@@ -27,12 +27,12 @@ namespace Bing.Offices.Npoi.Imports
         /// <summary>
         /// 哈希表
         /// </summary>
-        private static readonly Hashtable Table = Hashtable.Synchronized(new Hashtable(1024));
+        private static Hashtable Table = Hashtable.Synchronized(new Hashtable(1024));
 
         /// <summary>
         /// 哈希表动态单元格
         /// </summary>
-        private static readonly Hashtable TableDynamicCell = Hashtable.Synchronized(new Hashtable(1024));
+        private static Hashtable TableDynamicCell = Hashtable.Synchronized(new Hashtable(1024));
 
         /// <summary>
         /// 转换
@@ -68,6 +68,7 @@ namespace Bing.Offices.Npoi.Imports
         /// <returns></returns>
         public IWorkbook Convert<TTemplate>(IImportOptions options) where TTemplate : class, new()
         {
+            CleanHeaderRowCache(options);
             var workbook = new NpoiWorkbook();
             var innerWorkbook = GetWorkbook(options.FileUrl);
             if (options.MultiSheet == false)
@@ -79,6 +80,19 @@ namespace Bing.Offices.Npoi.Imports
             for (var i = 0; i < innerWorkbook.NumberOfSheets; i++)
                 BuildSheet<TTemplate>(workbook, innerWorkbook, options);
             return workbook;
+        }
+
+        /// <summary>
+        /// 清理缓存
+        /// </summary>
+        /// <param name="options">导入选项配置</param>
+        private void CleanHeaderRowCache(IImportOptions options)
+        {
+            if (!options.EnabledHeaderRowCache)
+            {
+                Table = Hashtable.Synchronized(new Hashtable(1024));
+                TableDynamicCell = Hashtable.Synchronized(new Hashtable(1024));
+            }
         }
 
         /// <summary>
@@ -96,9 +110,9 @@ namespace Bing.Offices.Npoi.Imports
             var sheet = workbook.CreateSheet(innerSheet.SheetName, options.HeaderRowIndex);
             HandleHeader(sheet, innerSheet, options.HeaderRowIndex);
             VerifyHeader<TTemplate>(sheet, options);
-            HandleBody<TTemplate>(sheet, innerSheet, options.DataRowIndex, options.EnabledEmptyLine);
+            HandleBody<TTemplate>(sheet, innerSheet, options);
         }
-
+        
         /// <summary>
         /// 获取工作簿
         /// </summary>
@@ -146,10 +160,17 @@ namespace Bing.Offices.Npoi.Imports
         /// <param name="options">导入选项配置</param>
         private void VerifyHeader<TTemplate>(IWorkSheet sheet, IImportOptions options)
         {
-            if (!options.HeaderMatch) return;
             var header = sheet.GetHeader().LastOrDefault();
             if (header == null)
-                throw new OfficeException($"导入的模板不正确，未匹配表头");
+                throw new OfficeHeaderException($"导入的模板不正确，未匹配表头", options.HeaderRowIndex);
+
+            var cellNames = header.Cells.GroupBy(x => x.Name).Select(x => new {Name = x.Key, Count = x.Count()}).ToList();
+            if (options.HeaderColumnOnly && cellNames.Any(x => x.Count > 1))
+            {
+                throw new OfficeHeaderException($"导入的表格存在重复列:{cellNames.Where(x => x.Count > 1).Select(x => x.Name).ExpandAndToString()}", options.HeaderRowIndex);
+            }
+
+            if (!options.HeaderMatch) return;
             List<PropertyInfo> properties = typeof(TTemplate).GetProperties().ToList();
             var props = properties
                 .Where(x => x.GetCustomAttribute<DynamicColumnAttribute>() == null)
@@ -160,19 +181,19 @@ namespace Bing.Offices.Npoi.Imports
                     Code = p.Name
                 }).ToList();
 
-            var cellName = header.Cells.Select(x => x.Name);
+            var cellName = cellNames.Select(x => x.Name);
             var list = props.Where(p => !cellName.Contains(p.Name)).ToList();
             if (list.Any())
             {
                 list = list.Where(p => !(string.IsNullOrWhiteSpace(p.Name) && cellName.Contains(p.Code))).ToList();
                 if (list.Any())
-                    throw new OfficeHeaderException($"导入的表格不存在列：{ list.Select(x => string.IsNullOrWhiteSpace(x.Name) ? x.Code : x.Name).ExpandAndToString()}");
+                    throw new OfficeHeaderException($"导入的表格不存在列：{list.Select(x => string.IsNullOrWhiteSpace(x.Name) ? x.Code : x.Name).ExpandAndToString()}", options.HeaderRowIndex);
             }
             else if (options.MappingDictionary != null && options.MappingDictionary.Any())
             {
                 var dic = options.MappingDictionary.ToList().Where(x => !cellName.Contains(x.Value)).ToList();
                 if (dic.Count > 0)
-                    throw new OfficeHeaderException($"导入的表格不存在列：{dic.Select(x => x.Value).ExpandAndToString()}");
+                    throw new OfficeHeaderException($"导入的表格不存在列：{dic.Select(x => x.Value).ExpandAndToString()}", options.HeaderRowIndex);
             }
         }
 
@@ -181,33 +202,40 @@ namespace Bing.Offices.Npoi.Imports
         /// </summary>
         /// <param name="sheet">工作表</param>
         /// <param name="innerSheet">NPOI工作表</param>
-        /// <param name="dataRowStartIndex">数据行起始索引</param>
-        /// <param name="enabledEmptyLine">启用空行模式。启用时，行内遇到空行将抛出异常错误信息</param>
-        private void HandleBody<TTemplate>(IWorkSheet sheet, ISheet innerSheet, int dataRowStartIndex, bool enabledEmptyLine)
+        /// <param name="options">导入选项配置</param>
+        private void HandleBody<TTemplate>(IWorkSheet sheet, ISheet innerSheet, IImportOptions options)
         {
             var header = sheet.GetHeader().LastOrDefault();
             // LastRowNum: 获取最后一行的行数，如果sheet中一行数据都没有则返回-1，只有第一行有数据则返回0，最后有数据的行是第n行则返回n-1
             // PhysicalNumberOfRows: 获取有记录的行数，即：最后有数据的行是第n行，前面有m行是空行没数据，则返回n-m
-            for (var i = dataRowStartIndex; i < innerSheet.GetHasDataRowNum() + 1; i++)
+            for (var i = options.DataRowIndex; i < innerSheet.GetHasDataRowNum() + 1; i++)
             {
                 var innerRow = innerSheet.GetRow(i);
-                if (CheckEmptyLine(innerRow.IsEmptyRow(), enabledEmptyLine))
-                    continue;
+                if (CheckIgnoreEmptyLine(options, innerRow.IsEmptyRow())) break;
+                if (CheckEmptyLine(innerRow.IsEmptyRow(), options.EnabledEmptyLine, i)) continue;
                 sheet.AddBodyRow(Convert<TTemplate>(innerRow, header), innerRow.RowNum);
             }
         }
+
+        /// <summary>
+        /// 忽略空行后数据
+        /// </summary>
+        /// <param name="options">导入选项配置</param>
+        /// <param name="isEmptyRow">是否空行</param>
+        private bool CheckIgnoreEmptyLine(IImportOptions options, bool isEmptyRow) => options.IgnoreEmptyLineAfterData && isEmptyRow;
 
         /// <summary>
         /// 检查空行
         /// </summary>
         /// <param name="isEmptyRow">是否空行</param>
         /// <param name="enabledEmptyLine">启用空行模式。启用时，行内遇到空行将抛出异常错误信息</param>
-        private bool CheckEmptyLine(bool isEmptyRow, bool enabledEmptyLine)
+        /// <param name="rowIndex">行号</param>
+        private bool CheckEmptyLine(bool isEmptyRow, bool enabledEmptyLine,int rowIndex)
         {
-            if (!enabledEmptyLine) 
+            if (!enabledEmptyLine)
                 return isEmptyRow;
-            if(isEmptyRow)
-                throw new OfficeEmptyLineException($"导入数据存在空行");
+            if (isEmptyRow)
+                throw new OfficeEmptyLineException($"导入数据存在空行", rowIndex);
             return false;
         }
 

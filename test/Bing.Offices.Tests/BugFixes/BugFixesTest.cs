@@ -10,6 +10,7 @@ using Bing.Offices.Npoi.Exports;
 using Bing.Offices.Npoi.Imports;
 using Bing.Offices.Tests.Models.Bugs;
 using Bing.Extensions;
+using Bing.Offices.Tests.Models.Purchase;
 using Bing.Utils.Json;
 using Xunit;
 using Xunit.Abstractions;
@@ -100,7 +101,7 @@ namespace Bing.Offices.Tests.BugFixes
         {
             var fileUrl = Path.Combine(CurrentDir, "Resources/Bugs", "issue2.xlsx");
 
-            await Assert.ThrowsAsync<OfficeException>(async () =>
+            await Assert.ThrowsAsync<OfficeHeaderException>(async () =>
             {
                 var workbook = await ImportService.ImportAsync<Issue2>(new ImportOptions()
                 {
@@ -293,5 +294,98 @@ namespace Bing.Offices.Tests.BugFixes
             var result = workbook.GetResult<Issue9>();
             Output.WriteLine(result.ToJson());
         }
+
+
+        #region Purchase 
+
+        /// <summary>
+        /// 采购订单导入模板_不含税单价  
+        /// </summary>
+        /// <returns></returns>
+        [Fact]
+        public async Task Purchase_Import_ExIncludeTax()
+        {
+            //预计到货日期 日期格式 有问题
+            var fileUrl3= Path.Combine(CurrentDir, "Resources/Purchase", "采购订单导入模板_不含税单价3.xlsx");
+            var workbook3 = await ImportService.ImportAsync<ImportPurchaseOrderExIncludeTax>(new ImportOptions()
+            {
+                FileUrl = fileUrl3,
+                SheetIndex = 0,
+                DataRowIndex = 1,
+                HeaderRowIndex = 0,
+                EnabledEmptyLine = false,
+                IgnoreEmptyLineAfterData = true,
+            });
+            var result3 = workbook3.GetResult<ImportPurchaseOrderExIncludeTax>();
+            Output.WriteLine(result3.ToJson());
+
+            //重复列名
+            var fileUrl2 = Path.Combine(CurrentDir, "Resources/Purchase", "采购订单导入模板_不含税单价2.xlsx");
+            var workbook2 = await ImportService.ImportAsync<ImportPurchaseOrderExIncludeTax>(new ImportOptions()
+            {
+                FileUrl = fileUrl2,
+                SheetIndex = 0,
+                DataRowIndex = 1,
+                HeaderRowIndex = 0,
+                EnabledEmptyLine = false,
+                IgnoreEmptyLineAfterData = true,
+                HeaderColumnOnly = false,//重复列名报错
+            });
+            var result2 = workbook2.GetResult<ImportPurchaseOrderExIncludeTax>();
+            Output.WriteLine(result2.ToJson());
+
+            //不启用表头缓存
+            var fileUrl = Path.Combine(CurrentDir, "Resources/Purchase", "采购订单导入模板_不含税单价.xlsx");
+            var workbook = await ImportService.ImportAsync<ImportPurchaseOrderExIncludeTax>(new ImportOptions()
+            {
+                FileUrl = fileUrl,
+                SheetIndex = 0,
+                DataRowIndex = 1,
+                HeaderRowIndex = 0,
+                EnabledEmptyLine = false,
+                IgnoreEmptyLineAfterData = true,
+                EnabledHeaderRowCache= false,
+            });
+            var result = workbook.GetResult<ImportPurchaseOrderExIncludeTax>();
+            Output.WriteLine(result.ToJson());
+
+            
+        }
+
+        /// <summary>
+        /// 采购订单导入模板_含税单价  
+        /// </summary>
+        /// <returns></returns>
+        [Fact]
+        public async Task Purchase_Import_IncludeTax()
+        {
+            //预计到货日期 日期格式 有问题
+            var fileUrl2 = Path.Combine(CurrentDir, "Resources/Purchase", "采购订单导入模板_含税单价2.xlsx");
+            var workbook2 = await ImportService.ImportAsync<ImportPurchaseOrderIncludeTax>(new ImportOptions()
+            {
+                FileUrl = fileUrl2,
+                SheetIndex = 0,
+                DataRowIndex = 1,
+                HeaderRowIndex = 0,
+                EnabledEmptyLine = false,
+                IgnoreEmptyLineAfterData = true,
+            });
+            var result2 = workbook2.GetResult<ImportPurchaseOrderIncludeTax>();
+            Output.WriteLine(result2.ToJson());
+
+            var fileUrl = Path.Combine(CurrentDir, "Resources/Purchase", "采购订单导入模板_含税单价.xlsx");
+            var workbook = await ImportService.ImportAsync<ImportPurchaseOrderIncludeTax>(new ImportOptions()
+            {
+                FileUrl = fileUrl,
+                SheetIndex = 0,
+                DataRowIndex = 1,
+                HeaderRowIndex = 0,
+                EnabledEmptyLine=false,
+                IgnoreEmptyLineAfterData=true,
+            });
+            var result = workbook.GetResult<ImportPurchaseOrderIncludeTax>();
+            Output.WriteLine(result.ToJson());
+        }
+        #endregion
     }
 }

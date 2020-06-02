@@ -28,6 +28,18 @@ namespace Bing.Offices.Imports
         public int HeaderRowIndex { get; set; } = 0;
 
         /// <summary>
+        /// 启用表头行缓存
+        /// true 启用，
+        /// false 不启用，
+        /// </summary>
+        public bool EnabledHeaderRowCache { get; set; } = true;
+
+        /// <summary>
+        /// 表头列唯一
+        /// </summary>
+        public bool HeaderColumnOnly { get; set; }
+
+        /// <summary>
         /// 表头匹配：默认验证
         /// true 验证完全匹配，
         /// false 不验证匹配，
@@ -49,6 +61,11 @@ namespace Bing.Offices.Imports
         /// </summary>
         public bool EnabledEmptyLine { get; set; }
 
+        /// <summary>
+        /// 忽略空行后数据。启用时，行内遇到空行将不在读取数据
+        /// </summary>
+        public bool IgnoreEmptyLineAfterData { get; set; }
+        
         /// <summary>
         /// 映射字典
         /// </summary>

@@ -4,11 +4,11 @@ namespace Bing.Offices.Tests.Models.Bugs
 {
     public class Issue2
     {
-        /// <summary>
-        /// 不确定字段
-        /// </summary>
-        [DynamicColumn]
-        public System.Collections.Generic.IDictionary<string, object> Extend { set; get; }
+        ///// <summary>
+        ///// 不确定字段
+        ///// </summary>
+        //[DynamicColumn]
+        //public System.Collections.Generic.IDictionary<string, object> Extend { set; get; }
 
         /// <summary>
         /// 商品条码

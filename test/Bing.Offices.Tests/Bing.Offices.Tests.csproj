@@ -18,6 +18,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Resource Include="Resources\Purchase\采购订单导入模板_不含税单价.xlsx" />
+    <Resource Include="Resources\Purchase\采购订单导入模板_含税单价.xlsx" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Update="Resources\Bugs\issue1.xlsx">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
@@ -46,6 +51,21 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
     <None Update="Resources\CarImport.xlsx">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Purchase\采购订单导入模板_不含税单价2.xlsx">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Purchase\采购订单导入模板_不含税单价.xlsx">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Purchase\采购订单导入模板_不含税单价3.xlsx">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Purchase\采购订单导入模板_含税单价.xlsx">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Purchase\采购订单导入模板_含税单价2.xlsx">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
   </ItemGroup>
