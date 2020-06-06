@@ -1,17 +1,17 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
+﻿using Bing.Extensions;
 using Bing.Offices.Attributes;
+using Bing.Offices.Decorators;
+using Bing.Offices.Exports;
 using Bing.Offices.Extensions;
 using Bing.Offices.Factories;
 using Bing.Offices.Npoi.Extensions;
 using Bing.Offices.Npoi.Resolvers;
 using Bing.Offices.Settings;
-using Bing.Extensions;
-using Bing.Offices.Decorators;
-using Bing.Offices.Exports;
 using NPOI.SS.UserModel;
 using NPOI.SS.Util;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace Bing.Offices.Npoi.Exports
 {
@@ -31,9 +31,10 @@ namespace Bing.Offices.Npoi.Exports
             var sheet = workbook.CreateSheet(options.SheetName);
             var headerDict = ExportMappingFactory.CreateInstance(typeof(T));
             BuildDynamicHeader(headerDict, options.DynamicColumns);
-            HandleHeader(sheet, options.HeaderRowIndex, headerDict);
+            HandleHeader(sheet, options, headerDict);
             if (options.Data != null && options.Data.Count > 0)
                 HandleBody(sheet, options.DataRowStartIndex, options.Data, headerDict);
+            CustomHeaderRow(sheet, options);
             return workbook?.SaveToBuffer();
         }
 
@@ -47,6 +48,7 @@ namespace Bing.Offices.Npoi.Exports
             {
                 case ExportFormat.Xls:
                     return new NPOI.HSSF.UserModel.HSSFWorkbook();
+
                 case ExportFormat.Xlsx:
                     return new NPOI.XSSF.UserModel.XSSFWorkbook();
             }
@@ -67,19 +69,64 @@ namespace Bing.Offices.Npoi.Exports
         }
 
         /// <summary>
+        /// 自定义表头行
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="sheet"></param>
+        /// <param name="options"></param>
+        private void CustomHeaderRow<T>(NPOI.SS.UserModel.ISheet sheet, IExportOptions<T> options) where T : class, new()
+        {
+            if (options.HeaderRow?.Any()==true)
+            {
+                CellRangeAddress(sheet, options);
+
+                options.HeaderRow.ForEach(x =>
+                {
+                    var hRow = sheet.GetRow(x.RowIndex)?? sheet.CreateRow(x.RowIndex);
+                    x.Cells.OrderBy(m => m.ColumnIndex).ForEach(m =>
+                    {
+                        var col = hRow.GetCell(m.ColumnIndex) ?? hRow.CreateCell(m.ColumnIndex);
+                        col.SetCellValue(m.Value.ToString());
+                    });
+                });
+            }
+        }
+
+        /// <summary>
+        /// 合并单元格
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="sheet"></param>
+        /// <param name="options"></param>
+        private void CellRangeAddress<T>(NPOI.SS.UserModel.ISheet sheet, IExportOptions<T> options) where T : class, new()
+        {
+            if (options.HeaderRow.All(x => x.Cells.All(m => m.ColumnSpan == 1)))
+                return;
+            var rows = options.HeaderRow.Where(x => x.Cells.Any(m => m.ColumnSpan > 1)).ToList();
+            rows.OrderBy(x => x.RowIndex).ForEach(row =>
+            {
+                row.Cells.OrderBy(x => x.ColumnIndex).ForEach(x =>
+                {
+                    CellRangeAddress region = new CellRangeAddress(x.RowIndex, x.EndRowIndex, x.ColumnIndex, x.EndColumnIndex);
+                    sheet.AddMergedRegion(region);
+                });
+            });
+        }
+
+        /// <summary>
         /// 处理表头
         /// </summary>
         /// <typeparam name="T">实体类型</typeparam>
         /// <param name="sheet">NPOI工作表</param>
-        /// <param name="headerRowIndex">表头行索引</param>
+        /// <param name="options">导出选项配置</param>
         /// <param name="headerDict">表头映射字典</param>
-        private void HandleHeader(NPOI.SS.UserModel.ISheet sheet, int headerRowIndex, IDictionary<string, PropertySetting> headerDict)
+        private void HandleHeader<T>(NPOI.SS.UserModel.ISheet sheet, IExportOptions<T> options, IDictionary<string, PropertySetting> headerDict) where T : class, new()
         {
-            var row = sheet.CreateRow(headerRowIndex);
+            var row = sheet.CreateRow(options.HeaderRowIndex);
             var columnIndex = 0;
             foreach (var kvp in headerDict)
             {
-                if(kvp.Value.Ignored)
+                if (kvp.Value.Ignored)
                     continue;
                 if (kvp.Value.IsDynamicColumn)
                 {
@@ -122,7 +169,7 @@ namespace Bing.Offices.Npoi.Exports
                         var dictionary = dto.GetExtendDictionary(kvp.Key);
                         foreach (var column in kvp.Value.DynamicColumns)
                         {
-                            if(column.IsEmpty())
+                            if (column.IsEmpty())
                                 continue;
                             row.CreateCell(columnIndex).SetCellValue(dictionary[column]?.ToString());
                             columnIndex++;
@@ -151,7 +198,7 @@ namespace Bing.Offices.Npoi.Exports
                     as HeaderAttribute;
             if (attribute == null)
                 return workbookBytes;
-            var workbook = workbookBytes.ToWorkbook();
+            var workbook = workbookBytes.ToWorkbook(); 
             var headerRow = workbook?.GetSheet(options.SheetName)?.GetRow(options.HeaderRowIndex);
             if (headerRow == null)
                 return workbookBytes;

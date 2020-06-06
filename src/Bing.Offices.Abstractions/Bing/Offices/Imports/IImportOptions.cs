@@ -43,11 +43,28 @@ namespace Bing.Offices.Imports
         bool EnabledEmptyLine { get; set; }
 
         /// <summary>
+        /// 忽略空行后数据。启用时，行内遇到空行将不在读取数据
+        /// </summary>
+        bool IgnoreEmptyLineAfterData { get; set; }
+
+        /// <summary>
+        /// 启用表头行缓存
+        /// true 启用，
+        /// false 不启用，
+        /// </summary>
+        bool EnabledHeaderRowCache { get; set; }
+
+        /// <summary>
         /// 表头匹配：
         /// true 验证完全匹配，
         /// false 不验证匹配，
         /// </summary>
-        bool HeaderMatch { get; set; } 
+        bool HeaderMatch { get; set; }
+
+        /// <summary>
+        /// 表头列唯一
+        /// </summary>
+        bool HeaderColumnOnly { get; set; }
 
         /// <summary>
         /// 映射字典

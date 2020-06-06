@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using Bing.Offices.Metadata.Excels;
+using System.Collections.Generic;
 
 namespace Bing.Offices.Exports
 {
@@ -8,6 +9,11 @@ namespace Bing.Offices.Exports
     /// <typeparam name="T">实体类型</typeparam>
     public interface IExportOptions<T> where T : class, new()
     {
+        /// <summary>
+        /// 行头
+        /// </summary>
+        IList<IRow> HeaderRow { get; set; }
+
         /// <summary>
         /// 数据集合
         /// </summary>

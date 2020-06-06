@@ -11,7 +11,9 @@ using Bing.Offices.Npoi.Exports;
 using Bing.Offices.Npoi.Imports;
 using Bing.Offices.Tests.Models;
 using Bing.Extensions;
+using Bing.Offices.Metadata.Excels;
 using Bing.Utils.Json;
+using NPOI.SS.Formula.Functions;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -293,6 +295,44 @@ namespace Bing.Offices.Tests
 
             var bytes = await _excelExportService.ExportAsync(new ExportOptions<Bing.Offices.Tests.Models.ExportFormat>()
             {
+                Data = data,
+            });
+            await File.WriteAllBytesAsync($"D:\\测试导出_{DateTime.Now:yyyyMMddHHmmss}.xlsx", bytes);
+        }
+
+
+        /// <summary>
+        /// 测试 - 导出 额外表头
+        /// </summary>
+        [Fact]
+        public async Task Test_Export_HeaderRow()
+        {
+            var data = new List<Bing.Offices.Tests.Models.ExportFormat>();
+            for (int i = 0; i < 10000; i++)
+            {
+                data.Add(new Bing.Offices.Tests.Models.ExportFormat()
+                {
+                    Id = $"A{i}",
+                    Name = $"测试名称+++++{i}",
+                    Index = i + 1,
+                    IgnoreProperty = $"忽略属性+++++{i}",
+                    NotMappedProperty = $"忽略映射属性+++++{i}",
+                    Money = i * 1000,
+                    CreateTime = DateTime.Now.AddMinutes(i)
+                });
+            }
+
+            var rows = new List<Bing.Offices.Metadata.Excels.Row>();
+            var row = new Bing.Offices.Metadata.Excels.Row(0);
+            row.Add(new Cell("开心",2,2,1));
+            row.Add(new Cell("懂得", 4,2, 1));
+            rows.Add(row); 
+
+            var bytes = await _excelExportService.ExportAsync(new ExportOptions<Bing.Offices.Tests.Models.ExportFormat>()
+            {
+                HeaderRow=rows.ToList<IRow>(),
+                HeaderRowIndex = 1,
+                DataRowStartIndex = 2,
                 Data = data,
             });
             await File.WriteAllBytesAsync($"D:\\测试导出_{DateTime.Now:yyyyMMddHHmmss}.xlsx", bytes);

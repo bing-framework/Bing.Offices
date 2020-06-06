@@ -136,6 +136,20 @@ namespace Bing.Offices.Metadata.Excels
             RowSpan = rowSpan;
         }
 
+        /// <summary>
+        /// 初始化一个<see cref="Cell"/>类型的实例
+        /// </summary>
+        /// <param name="value">值</param>
+        /// <param name="columnIndex">列索引</param>
+        /// <param name="columnSpan">列跨度</param>
+        /// <param name="rowSpan">行跨度</param>
+        public Cell(object value, int columnIndex, int columnSpan = 1, int rowSpan = 1)
+        {
+            Value = value;
+            ColumnIndex = columnIndex;
+            ColumnSpan = columnSpan;
+            RowSpan = rowSpan;
+        }
         #endregion
 
         #region IsNull(是否为空单元格)
