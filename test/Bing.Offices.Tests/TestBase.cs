@@ -176,7 +176,7 @@ namespace Bing.Offices.Tests
             Output.WriteLine(result.Count().ToString());
             Output.WriteLine(result.ToJson());
         }
-        
+
         /// <summary>
         /// 测试 - 导入 可空值
         /// </summary>
@@ -288,7 +288,7 @@ namespace Bing.Offices.Tests
                     Index = i + 1,
                     IgnoreProperty = $"忽略属性+++++{i}",
                     NotMappedProperty = $"忽略映射属性+++++{i}",
-                    Money = i*1000,
+                    Money = i * 1000,
                     CreateTime = DateTime.Now.AddMinutes(i)
                 });
             }
@@ -324,13 +324,13 @@ namespace Bing.Offices.Tests
 
             var rows = new List<Bing.Offices.Metadata.Excels.Row>();
             var row = new Bing.Offices.Metadata.Excels.Row(0);
-            row.Add(new Cell("开心",2,2,1));
-            row.Add(new Cell("懂得", 4,2, 1));
-            rows.Add(row); 
+            row.Add(new Cell("开心", 2, 2, 1));
+            row.Add(new Cell("懂得", 4, 2, 1));
+            rows.Add(row);
 
             var bytes = await _excelExportService.ExportAsync(new ExportOptions<Bing.Offices.Tests.Models.ExportFormat>()
             {
-                HeaderRow=rows.ToList<IRow>(),
+                HeaderRow = rows.ToList<IRow>(),
                 HeaderRowIndex = 1,
                 DataRowStartIndex = 2,
                 Data = data,
