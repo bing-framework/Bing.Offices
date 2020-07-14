@@ -78,20 +78,19 @@ namespace Bing.Offices.Npoi.Exports
         /// <param name="options"></param>
         private void CustomHeaderRow<T>(NPOI.SS.UserModel.ISheet sheet, IExportOptions<T> options) where T : class, new()
         {
-            if (options.HeaderRow?.Any()==true)
-            {
-                CellRangeAddress(sheet, options);
+            if (options.HeaderRow == null || !options.HeaderRow.Any())
+                return;
+            CellRangeAddress(sheet, options);
 
-                options.HeaderRow.ForEach(x =>
+            options.HeaderRow.ForEach(x =>
+            {
+                var hRow = sheet.GetRow(x.RowIndex) ?? sheet.CreateRow(x.RowIndex);
+                x.Cells.OrderBy(m => m.ColumnIndex).ForEach(m =>
                 {
-                    var hRow = sheet.GetRow(x.RowIndex)?? sheet.CreateRow(x.RowIndex);
-                    x.Cells.OrderBy(m => m.ColumnIndex).ForEach(m =>
-                    {
-                        var col = hRow.GetCell(m.ColumnIndex) ?? hRow.CreateCell(m.ColumnIndex);
-                        col.SetCellValue(m.Value.ToString());
-                    });
+                    var col = hRow.GetCell(m.ColumnIndex) ?? hRow.CreateCell(m.ColumnIndex);
+                    col.SetCellValue(m.Value.ToString());
                 });
-            }
+            });
         }
 
         /// <summary>
@@ -237,10 +236,9 @@ namespace Bing.Offices.Npoi.Exports
             font.FontName = attribute.FontName;
             font.Color = ColorResolver.Resolve(attribute.Color);
             font.FontHeightInPoints = attribute.FontSize;
-            if (attribute.Bold)
-                font.Boldweight = short.MaxValue;
+            font.IsBold = attribute.Bold;
             style.SetFont(font);
-            for (int i = 0; i < headerRow.PhysicalNumberOfCells; i++)
+            for (var i = 0; i < headerRow.PhysicalNumberOfCells; i++)
                 headerRow.GetCell(i).CellStyle = style;
             return workbook.SaveToBuffer();
         }

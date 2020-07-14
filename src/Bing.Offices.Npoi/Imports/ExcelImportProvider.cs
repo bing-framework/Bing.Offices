@@ -13,6 +13,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using Bing.Offices.Conversions;
+using Bing.Offices.Npoi.Conversions;
 using ICell = Bing.Offices.Metadata.Excels.ICell;
 using IRow = Bing.Offices.Metadata.Excels.IRow;
 using IWorkbook = Bing.Offices.Metadata.Excels.IWorkbook;
@@ -35,6 +37,17 @@ namespace Bing.Offices.Npoi.Imports
         private static Hashtable TableDynamicCell = Hashtable.Synchronized(new Hashtable(1024));
 
         /// <summary>
+        /// 单元格值转换器
+        /// </summary>
+        private readonly ICellValueConverter _converter;
+
+        /// <summary>
+        /// 初始化一个<see cref="ExcelImportProvider"/>类型的实例
+        /// </summary>
+        /// <param name="converter">单元格值转换器</param>
+        public ExcelImportProvider(ICellValueConverter converter = null) => _converter = converter ?? new CellValueConverter();
+
+        /// <summary>
         /// 转换
         /// </summary>
         /// <typeparam name="TTemplate">导入模板类型</typeparam>
@@ -45,7 +58,7 @@ namespace Bing.Offices.Npoi.Imports
         /// <param name="multiSheet">是否支持多工作表模式</param>
         /// <param name="maxColumnLength">最大列长度</param>
         /// <param name="enabledEmptyLine">启用空行模式。启用时，行内遇到空行将抛出异常错误信息</param>
-        public IWorkbook Convert<TTemplate>(string fileUrl, int sheetIndex = 0, int headerRowIndex = 0, int dataRowStartIndex = 1, bool multiSheet = false, int maxColumnLength = 100, bool enabledEmptyLine = false) where TTemplate : class, new()
+        public virtual IWorkbook Convert<TTemplate>(string fileUrl, int sheetIndex = 0, int headerRowIndex = 0, int dataRowStartIndex = 1, bool multiSheet = false, int maxColumnLength = 100, bool enabledEmptyLine = false) where TTemplate : class, new()
         {
             IImportOptions options = new ImportOptions()
             {
@@ -65,8 +78,7 @@ namespace Bing.Offices.Npoi.Imports
         /// </summary>
         /// <typeparam name="TTemplate">导入模板类型</typeparam>
         /// <param name="options">导入选项配置</param>
-        /// <returns></returns>
-        public IWorkbook Convert<TTemplate>(IImportOptions options) where TTemplate : class, new()
+        public virtual IWorkbook Convert<TTemplate>(IImportOptions options) where TTemplate : class, new()
         {
             CleanHeaderRowCache(options);
             var workbook = new NpoiWorkbook();
@@ -146,10 +158,8 @@ namespace Bing.Offices.Npoi.Imports
         {
             var innerRow = innerSheet.GetRow(headerRowIndex);
             var cells = new List<ICell>();
-            foreach (var cell in innerRow.Cells.Where(x => !string.IsNullOrEmpty(x.GetStringValue())))
-            {
-                cells.Add(new Cell(cell.GetStringValue()) { ColumnIndex = cell.ColumnIndex, Name = cell.GetStringValue() });
-            }
+            foreach (var cell in innerRow.Cells.Where(x => !string.IsNullOrEmpty(GetStringValue(x))))
+                cells.Add(new Cell(GetStringValue(cell)) {ColumnIndex = cell.ColumnIndex, Name = GetStringValue(cell) });
             sheet.AddHeadRow(cells.ToArray());
         }
 
@@ -284,7 +294,9 @@ namespace Bing.Offices.Npoi.Imports
                     TableDynamicCell[key] = isDynamic;
                 }
 
-                var value = row.GetCell(cell.ColumnIndex) == null ? string.Empty : row.GetCell(cell.ColumnIndex).GetStringValue();
+                var value = row.GetCell(cell.ColumnIndex) == null
+                    ? string.Empty
+                    : GetStringValue(row.GetCell(cell.ColumnIndex));
                 cells.Add(new Cell(value)
                 {
                     ColumnIndex = cell.ColumnIndex,
@@ -295,5 +307,11 @@ namespace Bing.Offices.Npoi.Imports
             }
             return cells;
         }
+
+        /// <summary>
+        /// 获取单元格值字符串
+        /// </summary>
+        /// <param name="cell">单元格</param>
+        protected virtual string GetStringValue(NPOI.SS.UserModel.ICell cell) => _converter.GetStringValue(cell);
     }
 }
