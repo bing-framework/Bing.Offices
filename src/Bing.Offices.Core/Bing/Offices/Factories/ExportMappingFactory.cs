@@ -42,6 +42,7 @@ namespace Bing.Offices.Factories
                 if (HasDynamicColumn(propertyInfo))
                     setting.IsDynamicColumn = true;
                 SetColumnName(propertyInfo, setting);
+                SetColumnType(propertyInfo, setting);
                 SetFormatter(propertyInfo, setting);
                 dict[propertyInfo.Name] = setting;
             }
@@ -76,6 +77,16 @@ namespace Bing.Offices.Factories
             return false;
         }
 
+        /// <summary>
+        /// 设置列属性
+        /// </summary>
+        /// <param name="propertyInfo">属性信息</param>
+        /// <param name="setting">属性设置</param>
+        private static void SetColumnType(PropertyInfo propertyInfo, PropertySetting setting)
+        {
+            var dtlType = propertyInfo.PropertyType.Name;
+            setting.PropertyType = dtlType;
+        }
         /// <summary>
         /// 设置格式化字符串
         /// </summary>

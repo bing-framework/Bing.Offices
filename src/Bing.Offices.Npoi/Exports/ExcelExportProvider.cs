@@ -12,6 +12,8 @@ using NPOI.SS.Util;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using NPOI.HSSF.UserModel;
+using NPOI.XSSF.UserModel;
 
 namespace Bing.Offices.Npoi.Exports
 {
@@ -176,12 +178,40 @@ namespace Bing.Offices.Npoi.Exports
                         }
                         continue;
                     }
-                    row.CreateCell(columnIndex).SetCellValue(dto.GetStringValue(kvp.Key, kvp.Value.Formatter));
+                    var cell = row.CreateCell(columnIndex);
+                    var val= dto.GetStringValue(kvp.Key, kvp.Value.Formatter);
+                    CellSetValue(cell, val, kvp.Value.PropertyType);
                     columnIndex++;
                 }
             }
         }
-
+        /// <summary>
+        /// 值格式
+        /// </summary>
+        /// <param name="cell"></param>
+        /// <param name="val"></param>
+        /// <param name="propertyType"></param>
+        private static void CellSetValue(ICell cell, string val, string propertyType)
+        {           
+            switch (propertyType)
+            {  
+                case "Int16"://整型   
+                case "Int32":
+                case "Int64":
+                case "Byte":
+                    int.TryParse(val, out var intV);
+                cell.SetCellValue(intV);
+                break;
+                case "Decimal"://浮点型   
+                case "Double":
+                    double.TryParse(val, out var doubV);
+                cell.SetCellValue(doubV);
+                break;
+                default:
+                    cell.SetCellValue(val);
+                    break;
+            }
+        }
         /// <summary>
         /// 处理表头
         /// </summary>

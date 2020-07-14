@@ -279,7 +279,7 @@ namespace Bing.Offices.Tests
         public async Task Test_Export_FormatProperty()
         {
             var data = new List<Bing.Offices.Tests.Models.ExportFormat>();
-            for (int i = 0; i < 10000; i++)
+            for (int i = 0; i < 10; i++)
             {
                 data.Add(new Bing.Offices.Tests.Models.ExportFormat()
                 {
@@ -288,7 +288,9 @@ namespace Bing.Offices.Tests
                     Index = i + 1,
                     IgnoreProperty = $"ºöÂÔÊôÐÔ+++++{i}",
                     NotMappedProperty = $"ºöÂÔÓ³ÉäÊôÐÔ+++++{i}",
-                    Money = i*1000,
+                    Quantity = i,
+                    Price = i * 0.42m,
+                    Money = i * (i * 0.42m),
                     CreateTime = DateTime.Now.AddMinutes(i)
                 });
             }
