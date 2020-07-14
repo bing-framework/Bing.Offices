@@ -28,7 +28,7 @@ Bing是一个.net core平台下的应用框架，旨在于提升小型团队的�
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Bing.Utils" Version="1.2.0-preview-20200510-1" />
+    <PackageReference Include="Bing.Utils" Version="1.2.0" />
   </ItemGroup>
 
 </Project>

@@ -290,7 +290,7 @@ namespace Bing.Offices.Tests
                     NotMappedProperty = $"忽略映射属性+++++{i}",
                     Quantity = i,
                     Price = i * 0.42m,
-                    Money = i * (i * 0.42m),
+                    Money = i * (i * 0.42444m),
                     CreateTime = DateTime.Now.AddMinutes(i)
                 });
             }

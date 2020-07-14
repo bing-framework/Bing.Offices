@@ -4,7 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Bing.Offices.Exceptions;
 using Bing.Helpers;
-using Bing.Utils.IO;
+using Bing.IO;
 
 namespace Bing.Offices.Exports
 {
@@ -99,7 +99,7 @@ namespace Bing.Offices.Exports
             string absFilePath = Common.GetPhysicalPath(baseDir);
             DirectoryHelper.CreateIfNotExists(absFilePath);
 
-            var newFileName = $"{fileName}_{DateTime.Now.ToString("yyyyMMddHHmmss_fff")}.xlsx";
+            var newFileName = $"{fileName}_{DateTime.Now:yyyyMMddHHmmss_fff}.xlsx";
 
             var filePath = Path.Combine(baseDir, newFileName);
             absFilePath = Path.Combine(absFilePath, newFileName);

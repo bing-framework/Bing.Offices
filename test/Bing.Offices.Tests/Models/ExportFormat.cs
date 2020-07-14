@@ -50,14 +50,14 @@ namespace Bing.Offices.Tests.Models
         /// <summary>
         /// 单价
         /// </summary>
-        [DataFormat("0.00")]
+        //[DataFormat("0.00")]
         [ColumnName("单价")]
         public decimal Price { get; set; }
 
         /// <summary>
         /// 金钱
         /// </summary>
-        [DataFormat("0.00")]
+        //[DataFormat("0.00")]
         [ColumnName("金钱")]
         public decimal Money { get; set; }
 
