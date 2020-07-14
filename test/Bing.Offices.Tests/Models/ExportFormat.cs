@@ -42,6 +42,19 @@ namespace Bing.Offices.Tests.Models
         public string NotMappedProperty { get; set; }
 
         /// <summary>
+        /// 数量
+        /// </summary> 
+        [ColumnName("数量")]
+        public int Quantity { get; set; }
+
+        /// <summary>
+        /// 单价
+        /// </summary>
+        [DataFormat("0.00")]
+        [ColumnName("单价")]
+        public decimal Price { get; set; }
+
+        /// <summary>
         /// 金钱
         /// </summary>
         [DataFormat("0.00")]

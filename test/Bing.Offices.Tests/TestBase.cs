@@ -20,37 +20,37 @@ using Xunit.Abstractions;
 namespace Bing.Offices.Tests
 {
     /// <summary>
-    /// ²âÊÔ»ùÀà
+    /// æµ‹è¯•åŸºç±»
     /// </summary>
     public class TestBase
     {
         /// <summary>
-        /// Êä³ö
+        /// è¾“å‡º
         /// </summary>
         protected ITestOutputHelper Output;
 
         /// <summary>
-        /// Excelµ¼ÈëÌá¹©³ÌĞò
+        /// Excelå¯¼å…¥æä¾›ç¨‹åº
         /// </summary>
         private readonly IExcelImportProvider _excelImportProvider;
 
         /// <summary>
-        /// Excelµ¼Èë·şÎñ
+        /// Excelå¯¼å…¥æœåŠ¡
         /// </summary>
         private readonly IExcelImportService _excelImportService;
 
         /// <summary>
-        /// Excelµ¼³öÌá¹©³ÌĞò
+        /// Excelå¯¼å‡ºæä¾›ç¨‹åº
         /// </summary>
         private readonly IExcelExportProvider _excelExportProvider;
 
         /// <summary>
-        /// Excelµ¼³ö·şÎñ
+        /// Excelå¯¼å‡ºæœåŠ¡
         /// </summary>
         private readonly IExcelExportService _excelExportService;
 
         /// <summary>
-        /// ³õÊ¼»¯Ò»¸ö<see cref="TestBase"/>ÀàĞÍµÄÊµÀı
+        /// åˆå§‹åŒ–ä¸€ä¸ª<see cref="TestBase"/>ç±»å‹çš„å®ä¾‹
         /// </summary>
         public TestBase(ITestOutputHelper output)
         {
@@ -62,12 +62,12 @@ namespace Bing.Offices.Tests
         }
 
         /// <summary>
-        /// ²âÊÔ - µ¼Èë
+        /// æµ‹è¯• - å¯¼å…¥
         /// </summary>
         [Fact]
         public void Test_Import()
         {
-            var result = _excelImportProvider.Convert<Barcode>("D:\\µ¼Èë¹ú±êÂë_µ¼Èë¸ñÊ½.xlsx");
+            var result = _excelImportProvider.Convert<Barcode>("D:\\å¯¼å…¥å›½æ ‡ç _å¯¼å…¥æ ¼å¼.xlsx");
             foreach (var sheet in result.Sheets)
             {
                 foreach (var header in sheet.GetHeader())
@@ -83,12 +83,12 @@ namespace Bing.Offices.Tests
         }
 
         /// <summary>
-        /// ²âÊÔ - µ¼Èë ¶¯Ì¬±êÌâ
+        /// æµ‹è¯• - å¯¼å…¥ åŠ¨æ€æ ‡é¢˜
         /// </summary>
         [Fact]
         public void Test_Import_DynamicTitle_1()
         {
-            var result = _excelImportProvider.Convert<Barcode>("D:\\µ¼Èë¹ú±êÂë_µ¼Èë¸ñÊ½_¶¯Ì¬±êÌâ.xlsx");
+            var result = _excelImportProvider.Convert<Barcode>("D:\\å¯¼å…¥å›½æ ‡ç _å¯¼å…¥æ ¼å¼_åŠ¨æ€æ ‡é¢˜.xlsx");
             foreach (var sheet in result.Sheets)
             {
                 foreach (var header in sheet.GetHeader())
@@ -104,14 +104,14 @@ namespace Bing.Offices.Tests
         }
 
         /// <summary>
-        /// ²âÊÔ - ·şÎñµ¼Èë
+        /// æµ‹è¯• - æœåŠ¡å¯¼å…¥
         /// </summary>
         [Fact]
         public async Task Test_Import_1()
         {
             var workbook = await _excelImportService.ImportAsync<Barcode>(new ImportOptions()
             {
-                FileUrl = "D:\\µ¼Èë¹ú±êÂë_µ¼Èë¸ñÊ½.xlsx",
+                FileUrl = "D:\\å¯¼å…¥å›½æ ‡ç _å¯¼å…¥æ ¼å¼.xlsx",
             });
             var result = workbook.GetResult<Barcode>();
             Output.WriteLine(result.Count().ToString());
@@ -119,14 +119,14 @@ namespace Bing.Offices.Tests
         }
 
         /// <summary>
-        /// ²âÊÔ - µ¼Èë ¶¯Ì¬±êÌâ
+        /// æµ‹è¯• - å¯¼å…¥ åŠ¨æ€æ ‡é¢˜
         /// </summary>
         [Fact]
         public async Task Test_Import_DynamicTitle_2()
         {
             var workbook = await _excelImportService.ImportAsync<Barcode>(new ImportOptions()
             {
-                FileUrl = "D:\\µ¼Èë¹ú±êÂë_µ¼Èë¸ñÊ½_¶¯Ì¬±êÌâ.xlsx",
+                FileUrl = "D:\\å¯¼å…¥å›½æ ‡ç _å¯¼å…¥æ ¼å¼_åŠ¨æ€æ ‡é¢˜.xlsx",
             });
             var result = workbook.GetResult<Barcode>();
             Output.WriteLine(result.Count().ToString());
@@ -134,21 +134,21 @@ namespace Bing.Offices.Tests
         }
 
         /// <summary>
-        /// ²âÊÔ - µ¼Èë ¶¯Ì¬±êÌâ
+        /// æµ‹è¯• - å¯¼å…¥ åŠ¨æ€æ ‡é¢˜
         /// </summary>
         [Fact]
         public async Task Test_Import_DynamicTitle_More_1()
         {
             var workbook1 = await _excelImportService.ImportAsync<Barcode>(new ImportOptions()
             {
-                FileUrl = "D:\\µ¼Èë¹ú±êÂë_µ¼Èë¸ñÊ½_¶¯Ì¬±êÌâ.xlsx",
+                FileUrl = "D:\\å¯¼å…¥å›½æ ‡ç _å¯¼å…¥æ ¼å¼_åŠ¨æ€æ ‡é¢˜.xlsx",
             });
             var result1 = workbook1.GetResult<Barcode>();
             Output.WriteLine(result1.Count().ToString());
             Output.WriteLine(result1.ToJson());
             var workbook2 = await _excelImportService.ImportAsync<Barcode>(new ImportOptions()
             {
-                FileUrl = "D:\\µ¼Èë¹ú±êÂë_µ¼Èë¸ñÊ½_¶¯Ì¬±êÌâ1.xlsx",
+                FileUrl = "D:\\å¯¼å…¥å›½æ ‡ç _å¯¼å…¥æ ¼å¼_åŠ¨æ€æ ‡é¢˜1.xlsx",
             });
             var result2 = workbook2.GetResult<Barcode>();
             Output.WriteLine(result2.Count().ToString());
@@ -156,14 +156,14 @@ namespace Bing.Offices.Tests
         }
 
         /// <summary>
-        /// ²âÊÔ - ·şÎñµ¼Èë
+        /// æµ‹è¯• - æœåŠ¡å¯¼å…¥
         /// </summary>
         [Fact]
         public async Task Test_Import_Validate_1()
         {
             var workbook = await _excelImportService.ImportAsync<Barcode>(new ImportOptions()
             {
-                FileUrl = "D:\\µ¼Èë¹ú±êÂë_µ¼Èë¸ñÊ½.xlsx",
+                FileUrl = "D:\\å¯¼å…¥å›½æ ‡ç _å¯¼å…¥æ ¼å¼.xlsx",
             });
             var validateResult = workbook.Validate();
             if (validateResult.Any())
@@ -178,7 +178,7 @@ namespace Bing.Offices.Tests
         }
 
         /// <summary>
-        /// ²âÊÔ - µ¼Èë ¿É¿ÕÖµ
+        /// æµ‹è¯• - å¯¼å…¥ å¯ç©ºå€¼
         /// </summary>
         /// <returns></returns>
         [Fact]
@@ -186,7 +186,7 @@ namespace Bing.Offices.Tests
         {
             var workbook = await _excelImportService.ImportAsync<Barcode>(new ImportOptions()
             {
-                FileUrl = "D:\\µ¼Èë¹ú±êÂë_µ¼Èë¸ñÊ½.xlsx",
+                FileUrl = "D:\\å¯¼å…¥å›½æ ‡ç _å¯¼å…¥æ ¼å¼.xlsx",
             });
             var validateResult = workbook.Validate();
             if (validateResult.Any())
@@ -202,14 +202,14 @@ namespace Bing.Offices.Tests
 
 
         /// <summary>
-        /// ²âÊÔ - µ¼³ö
+        /// æµ‹è¯• - å¯¼å‡º
         /// </summary>
         [Fact]
         public async Task Test_Export()
         {
             var workbook = await _excelImportService.ImportAsync<Barcode>(new ImportOptions()
             {
-                FileUrl = "D:\\µ¼Èë¹ú±êÂë_µ¼Èë¸ñÊ½.xlsx",
+                FileUrl = "D:\\å¯¼å…¥å›½æ ‡ç _å¯¼å…¥æ ¼å¼.xlsx",
             });
             var result = workbook.GetResult<Barcode>();
 
@@ -217,11 +217,11 @@ namespace Bing.Offices.Tests
             {
                 Data = result.ToList()
             });
-            await File.WriteAllBytesAsync($"D:\\²âÊÔµ¼³ö_{DateTime.Now:yyyyMMddHHmmss}.xlsx", bytes);
+            await File.WriteAllBytesAsync($"D:\\æµ‹è¯•å¯¼å‡º_{DateTime.Now:yyyyMMddHHmmss}.xlsx", bytes);
         }
 
         /// <summary>
-        /// ²âÊÔ - µ¼³ö ¶¯Ì¬±êÌâ
+        /// æµ‹è¯• - å¯¼å‡º åŠ¨æ€æ ‡é¢˜
         /// </summary>
         /// <returns></returns>
         [Fact]
@@ -229,21 +229,21 @@ namespace Bing.Offices.Tests
         {
             var workbook = await _excelImportService.ImportAsync<Barcode>(new ImportOptions()
             {
-                FileUrl = "D:\\µ¼Èë¹ú±êÂë_µ¼Èë¸ñÊ½_¶¯Ì¬±êÌâ1.xlsx",
+                FileUrl = "D:\\å¯¼å…¥å›½æ ‡ç _å¯¼å…¥æ ¼å¼_åŠ¨æ€æ ‡é¢˜1.xlsx",
             });
             var result = workbook.GetResult<Barcode>();
 
             var bytes = await _excelExportService.ExportAsync(new ExportOptions<Barcode>()
             {
                 Data = result.ToList(),
-                DynamicColumns = new List<string>() { "´´½¨ÈË", "¸üĞÂÊ±¼ä", "¸üĞÂÈË", "±¸×¢" }
+                DynamicColumns = new List<string>() { "åˆ›å»ºäºº", "æ›´æ–°æ—¶é—´", "æ›´æ–°äºº", "å¤‡æ³¨" }
             });
-            await File.WriteAllBytesAsync($"D:\\²âÊÔµ¼³ö_{DateTime.Now:yyyyMMddHHmmss}.xlsx", bytes);
+            await File.WriteAllBytesAsync($"D:\\æµ‹è¯•å¯¼å‡º_{DateTime.Now:yyyyMMddHHmmss}.xlsx", bytes);
         }
 
 
         /// <summary>
-        /// ²âÊÔ - µ¼³ö ºöÂÔÊôĞÔ
+        /// æµ‹è¯• - å¯¼å‡º å¿½ç•¥å±æ€§
         /// </summary>
         [Fact]
         public async Task Test_Export_IgnoreProperty()
@@ -257,11 +257,11 @@ namespace Bing.Offices.Tests
                 data.Add(new ExportOrder()
                 {
                     Id = $"A{i}",
-                    Name = $"²âÊÔÃû³Æ+++++{i}",
+                    Name = $"æµ‹è¯•åç§°+++++{i}",
                     Index = i + 1,
                     CreateTime = currentTime,
-                    IgnoreProperty = $"ºöÂÔÊôĞÔ+++++{i}",
-                    NotMappedProperty = $"ºöÂÔÓ³ÉäÊôĞÔ+++++{i}"
+                    IgnoreProperty = $"å¿½ç•¥å±æ€§+++++{i}",
+                    NotMappedProperty = $"å¿½ç•¥æ˜ å°„å±æ€§+++++{i}"
                 });
             }
 
@@ -269,26 +269,28 @@ namespace Bing.Offices.Tests
             {
                 Data = data,
             });
-            await File.WriteAllBytesAsync($"D:\\²âÊÔµ¼³ö_{DateTime.Now:yyyyMMddHHmmss}.xlsx", bytes);
+            await File.WriteAllBytesAsync($"D:\\æµ‹è¯•å¯¼å‡º_{DateTime.Now:yyyyMMddHHmmss}.xlsx", bytes);
         }
 
         /// <summary>
-        /// ²âÊÔ - µ¼³ö ¸ñÊ½»¯ÊôĞÔ
+        /// æµ‹è¯• - å¯¼å‡º æ ¼å¼åŒ–å±æ€§
         /// </summary>
         [Fact]
         public async Task Test_Export_FormatProperty()
         {
             var data = new List<Bing.Offices.Tests.Models.ExportFormat>();
-            for (int i = 0; i < 10000; i++)
+            for (int i = 0; i < 10; i++)
             {
                 data.Add(new Bing.Offices.Tests.Models.ExportFormat()
                 {
                     Id = $"A{i}",
-                    Name = $"²âÊÔÃû³Æ+++++{i}",
+                    Name = $"æµ‹è¯•åç§°+++++{i}",
                     Index = i + 1,
-                    IgnoreProperty = $"ºöÂÔÊôĞÔ+++++{i}",
-                    NotMappedProperty = $"ºöÂÔÓ³ÉäÊôĞÔ+++++{i}",
-                    Money = i * 1000,
+                    IgnoreProperty = $"å¿½ç•¥å±æ€§+++++{i}",
+                    NotMappedProperty = $"å¿½ç•¥æ˜ å°„å±æ€§+++++{i}",
+                    Quantity = i,
+                    Price = i * 0.42m,
+                    Money = i * (i * 0.42m),
                     CreateTime = DateTime.Now.AddMinutes(i)
                 });
             }
@@ -297,12 +299,12 @@ namespace Bing.Offices.Tests
             {
                 Data = data,
             });
-            await File.WriteAllBytesAsync($"D:\\²âÊÔµ¼³ö_{DateTime.Now:yyyyMMddHHmmss}.xlsx", bytes);
+            await File.WriteAllBytesAsync($"D:\\æµ‹è¯•å¯¼å‡º_{DateTime.Now:yyyyMMddHHmmss}.xlsx", bytes);
         }
 
 
         /// <summary>
-        /// ²âÊÔ - µ¼³ö ¶îÍâ±íÍ·
+        /// æµ‹è¯• - å¯¼å‡º é¢å¤–è¡¨å¤´
         /// </summary>
         [Fact]
         public async Task Test_Export_HeaderRow()
@@ -313,10 +315,10 @@ namespace Bing.Offices.Tests
                 data.Add(new Bing.Offices.Tests.Models.ExportFormat()
                 {
                     Id = $"A{i}",
-                    Name = $"²âÊÔÃû³Æ+++++{i}",
+                    Name = $"æµ‹è¯•åç§°+++++{i}",
                     Index = i + 1,
-                    IgnoreProperty = $"ºöÂÔÊôĞÔ+++++{i}",
-                    NotMappedProperty = $"ºöÂÔÓ³ÉäÊôĞÔ+++++{i}",
+                    IgnoreProperty = $"å¿½ç•¥å±æ€§+++++{i}",
+                    NotMappedProperty = $"å¿½ç•¥æ˜ å°„å±æ€§+++++{i}",
                     Money = i * 1000,
                     CreateTime = DateTime.Now.AddMinutes(i)
                 });
@@ -324,8 +326,8 @@ namespace Bing.Offices.Tests
 
             var rows = new List<Bing.Offices.Metadata.Excels.Row>();
             var row = new Bing.Offices.Metadata.Excels.Row(0);
-            row.Add(new Cell("¿ªĞÄ", 2, 2, 1));
-            row.Add(new Cell("¶®µÃ", 4, 2, 1));
+            row.Add(new Cell("å¼€å¿ƒ", 2, 2, 1));
+            row.Add(new Cell("æ‡‚å¾—", 4, 2, 1));
             rows.Add(row);
 
             var bytes = await _excelExportService.ExportAsync(new ExportOptions<Bing.Offices.Tests.Models.ExportFormat>()
@@ -335,42 +337,42 @@ namespace Bing.Offices.Tests
                 DataRowStartIndex = 2,
                 Data = data,
             });
-            await File.WriteAllBytesAsync($"D:\\²âÊÔµ¼³ö_{DateTime.Now:yyyyMMddHHmmss}.xlsx", bytes);
+            await File.WriteAllBytesAsync($"D:\\æµ‹è¯•å¯¼å‡º_{DateTime.Now:yyyyMMddHHmmss}.xlsx", bytes);
         }
     }
 
     /// <summary>
-    /// ÌõĞÎÂë
+    /// æ¡å½¢ç 
     /// </summary>
     public class Barcode
     {
         /// <summary>
-        /// ÏµÍ³
+        /// ç³»ç»Ÿ
         /// </summary>
-        [ColumnName("ÏµÍ³±àºÅ")]
+        [ColumnName("ç³»ç»Ÿç¼–å·")]
         public string Id { get; set; }
 
         /// <summary>
-        /// ¹ú±êÂë
+        /// å›½æ ‡ç 
         /// </summary>
-        [ColumnName("¹ú±êÂë")]
+        [ColumnName("å›½æ ‡ç ")]
         [Required]
         public string Code { get; set; }
 
         /// <summary>
-        /// ´´½¨Ê±¼ä
+        /// åˆ›å»ºæ—¶é—´
         /// </summary>
-        [ColumnName("´´½¨Ê±¼ä")]
+        [ColumnName("åˆ›å»ºæ—¶é—´")]
         public string CreateDate { get; set; }
 
         /// <summary>
-        /// ÄêÁä
+        /// å¹´é¾„
         /// </summary>
-        [ColumnName("ÄêÁä")]
+        [ColumnName("å¹´é¾„")]
         public int? Age { get; set; }
 
         /// <summary>
-        /// À©Õ¹
+        /// æ‰©å±•
         /// </summary>
         [DynamicColumn]
         public IDictionary<string, object> Extend { get; set; }

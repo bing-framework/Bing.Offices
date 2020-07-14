@@ -19,6 +19,11 @@ namespace Bing.Offices.Settings
         public string Title { get; internal set; }
 
         /// <summary>
+        /// 列值类型
+        /// </summary>
+        public string PropertyType { get; internal set; }
+
+        /// <summary>
         /// 列格式化程序
         /// </summary>
         public string Formatter { get; internal set; }
