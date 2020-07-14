@@ -11,7 +11,9 @@ using Bing.Offices.Npoi.Exports;
 using Bing.Offices.Npoi.Imports;
 using Bing.Offices.Tests.Models;
 using Bing.Extensions;
+using Bing.Helpers;
 using Bing.Offices.Metadata.Excels;
+using Bing.Utils.IdGenerators.Ids;
 using Bing.Utils.Json;
 using NPOI.SS.Formula.Functions;
 using Xunit;
@@ -336,6 +338,44 @@ namespace Bing.Offices.Tests
                 HeaderRowIndex = 1,
                 DataRowStartIndex = 2,
                 Data = data,
+            });
+            await File.WriteAllBytesAsync($"D:\\测试导出_{DateTime.Now:yyyyMMddHHmmss}.xlsx", bytes);
+        }
+
+        /// <summary>
+        /// 测试 - 导出 自定义小数位数
+        /// </summary>
+        [Fact]
+        public async Task Test_Export_Custom_Scale()
+        {
+            var data = new List<ExportScale>();
+            for (var i = 0; i < 100; i++)
+            {
+                data.Add(new ExportScale
+                {
+                    Id = SnowflakeId.CurrentTimeFunc().ToString(),
+                    Byte = Conv.ToByte(i),
+                    NullableByte = i % 2 == 0 ? null : Conv.ToByteOrNull(i),
+                    Short = Conv.ToShort(i),
+                    NullableShort = i % 2 == 0 ? null : Conv.ToShortOrNull(i),
+                    Int = i,
+                    NullableInt = i % 2 == 0 ? null : Conv.ToIntOrNull(i),
+                    Long = i,
+                    NullableLong = i % 2 == 0 ? null : Conv.ToLongOrNull(i),
+                    Float = i * 0.4222222f,
+                    NullableFloat = i % 2 == 0 ? null : Conv.ToFloatOrNull(i) * 0.4222222f,
+                    Double = i * 0.4222222,
+                    NullableDouble = i % 2 == 0 ? null : Conv.ToDoubleOrNull(i) * 0.4222222,
+                    Decimal = i * 0.4222222m,
+                    NullableDecimal = i % 2 == 0 ? null : Conv.ToDecimalOrNull(i) * 0.4222222m,
+                });
+            }
+
+            var bytes = await _excelExportService.ExportAsync(new ExportOptions<ExportScale>()
+            {
+                Data = data,
+                HeaderRowIndex = 0,
+                DataRowStartIndex = 1,
             });
             await File.WriteAllBytesAsync($"D:\\测试导出_{DateTime.Now:yyyyMMddHHmmss}.xlsx", bytes);
         }

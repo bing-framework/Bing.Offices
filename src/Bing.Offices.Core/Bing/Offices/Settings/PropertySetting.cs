@@ -19,11 +19,6 @@ namespace Bing.Offices.Settings
         public string Title { get; internal set; }
 
         /// <summary>
-        /// 列值类型
-        /// </summary>
-        public string PropertyType { get; internal set; }
-
-        /// <summary>
         /// 列格式化程序
         /// </summary>
         public string Formatter { get; internal set; }
@@ -47,6 +42,11 @@ namespace Bing.Offices.Settings
         /// 动态列
         /// </summary>
         public IList<string> DynamicColumns { get; internal set; }
+
+        /// <summary>
+        /// 保留小数位数
+        /// </summary>
+        public byte? DecimalScale { get; internal set; }
 
         /// <summary>
         /// 设置动态列

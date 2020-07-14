@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using Bing.Helpers;
 using NPOI.SS.UserModel;
 using NPOI.SS.Util;
 
@@ -65,7 +66,8 @@ namespace Bing.Offices.Npoi.Extensions
         /// </summary>
         /// <param name="cell">单元格</param>
         /// <param name="value">值</param>
-        public static void SetValue(this ICell cell, object value)
+        /// <param name="scale">保留小数位数</param>
+        public static void SetValue(this ICell cell, object value,byte? scale = null)
         {
             if (cell == null)
                 return;
@@ -110,7 +112,7 @@ namespace Bing.Offices.Npoi.Extensions
                 case TypeCode.UInt16:
                 case TypeCode.UInt32:
                 case TypeCode.UInt64:
-                    cell.SetCellValue(Convert.ToDouble(value));
+                    cell.SetCellValue(Conv.ToDouble(value, scale));
                     break;
                 default:
                     cell.SetCellValue(string.Empty);

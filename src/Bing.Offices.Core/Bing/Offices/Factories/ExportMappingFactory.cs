@@ -5,6 +5,7 @@ using System.Reflection;
 using Bing.Offices.Attributes;
 using Bing.Offices.Extensions;
 using Bing.Offices.Settings;
+using Bing.Reflection;
 
 namespace Bing.Offices.Factories
 {
@@ -42,8 +43,8 @@ namespace Bing.Offices.Factories
                 if (HasDynamicColumn(propertyInfo))
                     setting.IsDynamicColumn = true;
                 SetColumnName(propertyInfo, setting);
-                SetColumnType(propertyInfo, setting);
                 SetFormatter(propertyInfo, setting);
+                SetScale(propertyInfo, setting);
                 dict[propertyInfo.Name] = setting;
             }
             MappingDict[type] = dict;
@@ -78,16 +79,6 @@ namespace Bing.Offices.Factories
         }
 
         /// <summary>
-        /// 设置列属性
-        /// </summary>
-        /// <param name="propertyInfo">属性信息</param>
-        /// <param name="setting">属性设置</param>
-        private static void SetColumnType(PropertyInfo propertyInfo, PropertySetting setting)
-        {
-            var dtlType = propertyInfo.PropertyType.Name;
-            setting.PropertyType = dtlType;
-        }
-        /// <summary>
         /// 设置格式化字符串
         /// </summary>
         /// <param name="propertyInfo">属性信息</param>
@@ -97,6 +88,20 @@ namespace Bing.Offices.Factories
             var attribute = propertyInfo.GetCustomAttribute<DataFormatAttribute>();
             if (attribute != null)
                 setting.Formatter = attribute.CustomFormat;
+        }
+
+        /// <summary>
+        /// 设置保留小数位数
+        /// </summary>
+        /// <param name="propertyInfo">属性信息</param>
+        /// <param name="setting">属性设置</param>
+        private static void SetScale(PropertyInfo propertyInfo, PropertySetting setting)
+        {
+            if(!Types.IsNumericType(Reflections.GetUnderlyingType(propertyInfo.PropertyType)))
+                return;
+            var attribute = propertyInfo.GetCustomAttribute<DecimalScaleAttribute>();
+            if (attribute != null)
+                setting.DecimalScale = attribute.Scale;
         }
     }
 }

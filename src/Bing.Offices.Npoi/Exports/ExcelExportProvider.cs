@@ -12,8 +12,6 @@ using NPOI.SS.Util;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using NPOI.HSSF.UserModel;
-using NPOI.XSSF.UserModel;
 
 namespace Bing.Offices.Npoi.Exports
 {
@@ -156,7 +154,7 @@ namespace Bing.Offices.Npoi.Exports
         {
             if (data.Count <= 0)
                 return;
-            for (int i = 0; i < data.Count; i++)
+            for (var i = 0; i < data.Count; i++)
             {
                 var columnIndex = 0;
                 var row = sheet.CreateRow(dataRowStartIndex + i);
@@ -181,7 +179,7 @@ namespace Bing.Offices.Npoi.Exports
                     if (!string.IsNullOrWhiteSpace(kvp.Value.Formatter))
                         cell.SetCellValue(dto.GetStringValue(kvp.Key, kvp.Value.Formatter));
                     else
-                        cell.SetValue(dto.GetValue(kvp.Key));
+                        cell.SetValue(dto.GetValue(kvp.Key), kvp.Value.DecimalScale);
                     columnIndex++;
                 }
             }
