@@ -19,5 +19,17 @@
         /// 是否自动宽度
         /// </summary>
         bool IsAutoWidth { get; set; }
+
+        /// <summary>
+        /// 设置宽度
+        /// </summary>
+        /// <param name="width">宽度</param>
+        IColumnStyleMetadata SetWidth(int width);
+
+        /// <summary>
+        /// 设置高度
+        /// </summary>
+        /// <param name="height">高度</param>
+        IColumnStyleMetadata SetHeight(int height);
     }
 }
