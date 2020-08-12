@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using Bing.Date;
 using Bing.Helpers;
 using NPOI.SS.UserModel;
 using NPOI.SS.Util;
@@ -13,6 +14,33 @@ namespace Bing.Offices.Npoi.Extensions
     /// </summary>
     public static class CellExtensions
     {
+        #region GetValue(获取单元格的值)
+
+        /// <summary>
+        /// 获取单元格的值
+        /// </summary>
+        /// <param name="cell">单元格</param>
+        public static object GetValue(this ICell cell)
+        {
+            if (cell == null || cell.CellType == CellType.Blank || cell.CellType == CellType.Error)
+                return null;
+            switch (cell.CellType)
+            {
+                case CellType.Numeric:
+                    if (DateUtil.IsCellDateFormatted(cell))
+                        return cell.DateCellValue;
+                    return cell.NumericCellValue;
+                case CellType.String:
+                    return cell.StringCellValue;
+                case CellType.Boolean:
+                    return cell.BooleanCellValue;
+                default:
+                    return cell.ToString();
+            }
+        }
+
+        #endregion
+
         #region GetStringValue(获取单元格的字符串值)
 
         /// <summary>
@@ -59,6 +87,72 @@ namespace Bing.Offices.Npoi.Extensions
 
         #endregion
 
+        #region GetCellValue(获取单元格的值)
+
+
+        #endregion
+
+        #region SetCellValue(设置单元格的值)
+
+        /// <summary>
+        /// 设置单元格的值
+        /// </summary>
+        /// <param name="cell">单元格</param>
+        /// <param name="value">值</param>
+        public static void SetCellValue(this ICell cell, object value) => cell.SetCellValue(value, null);
+
+        /// <summary>
+        /// 设置单元格的值
+        /// </summary>
+        /// <param name="cell">单元格</param>
+        /// <param name="value">值</param>
+        /// <param name="formatter">格式化</param>
+        public static void SetCellValue(this ICell cell, object value, string formatter)
+        {
+            if (cell == null)
+                return;
+            if (null == value || DBNull.Value == value)
+            {
+                cell.SetCellType(CellType.Blank);
+                return;
+            }
+
+            if (value is DateTime time)
+            {
+                cell.SetCellValue(string.IsNullOrWhiteSpace(formatter)
+                    ? (time.Date == time ? time.ToDateString() : time.ToDateTimeString())
+                    : time.ToString(formatter));
+                cell.SetCellType(CellType.String);
+            }
+            else
+            {
+                var type = value.GetType();
+                if (type == typeof(double)
+                    || type == typeof(int)
+                    || type == typeof(long)
+                    || type == typeof(float)
+                    || type == typeof(decimal))
+                {
+                    cell.SetCellValue(Convert.ToDouble(value));
+                    cell.SetCellValue(CellType.Numeric);
+                }
+                else if (type == typeof(bool))
+                {
+                    cell.SetCellValue(Convert.ToBoolean(value));
+                    cell.SetCellType(CellType.Boolean);
+                }
+                else
+                {
+                    cell.SetCellValue(value is IFormattable val && !string.IsNullOrWhiteSpace(formatter)
+                        ? val.ToString(formatter, CultureInfo.CurrentCulture)
+                        : value.ToString());
+                    cell.SetCellType(CellType.String);
+                }
+            }
+        }
+
+        #endregion
+
         #region SetValue(设置单元格值)
 
         /// <summary>
@@ -67,7 +161,7 @@ namespace Bing.Offices.Npoi.Extensions
         /// <param name="cell">单元格</param>
         /// <param name="value">值</param>
         /// <param name="scale">保留小数位数</param>
-        public static void SetValue(this ICell cell, object value,byte? scale = null)
+        public static void SetValue(this ICell cell, object value, byte? scale = null)
         {
             if (cell == null)
                 return;

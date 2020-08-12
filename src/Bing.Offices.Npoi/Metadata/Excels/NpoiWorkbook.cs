@@ -2,13 +2,15 @@
 using System.Collections.Generic;
 using System.Linq;
 using Bing.Offices.Metadata.Excels;
+using Bing.Offices.Npoi.Extensions;
+using NModel = NPOI.SS.UserModel;
 
 namespace Bing.Offices.Npoi.Metadata.Excels
 {
     /// <summary>
     /// Npoi工作簿
     /// </summary>
-    public class NpoiWorkbook : IWorkbook
+    internal class NpoiWorkbook : IWorkbook
     {
         #region 字段
 
@@ -17,20 +19,30 @@ namespace Bing.Offices.Npoi.Metadata.Excels
         /// </summary>
         private const int MaxSensitveSheetNameLength = 31;
 
+        /// <summary>
+        /// 工作簿
+        /// </summary>
+        private readonly NModel.IWorkbook _workbook;
+
         #endregion
 
         #region 属性
 
         /// <summary>
+        /// 工作表数量
+        /// </summary>
+        public int SheetCount => _workbook.NumberOfSheets;
+
+        /// <summary>
         /// 工作表列表
         /// </summary>
-        public IList<IWorkSheet> Sheets { get; }
+        public IList<ISheet> Sheets { get; }
 
         /// <summary>
         /// 工作表
         /// </summary>
         /// <param name="sheetIndex">工作表索引</param>
-        public IWorkSheet this[int sheetIndex] => Sheets[sheetIndex];
+        public ISheet this[int sheetIndex] => Sheets[sheetIndex];
 
         #endregion
 
@@ -39,7 +51,13 @@ namespace Bing.Offices.Npoi.Metadata.Excels
         /// <summary>
         /// 初始化一个<see cref="NpoiWorkbook"/>类型的实例
         /// </summary>
-        public NpoiWorkbook() => Sheets = new List<IWorkSheet>();
+        public NpoiWorkbook() => Sheets = new List<ISheet>();
+
+        /// <summary>
+        /// 初始化一个<see cref="NpoiWorkbook"/>类型的实例
+        /// </summary>
+        /// <param name="workbook">工作簿</param>
+        public NpoiWorkbook(NModel.IWorkbook workbook) => _workbook = workbook ?? throw new ArgumentNullException(nameof(workbook));
 
         #endregion
 
@@ -49,7 +67,7 @@ namespace Bing.Offices.Npoi.Metadata.Excels
         /// 获取工作表
         /// </summary>
         /// <param name="sheetName">工作表名称</param>
-        public IWorkSheet GetSheet(string sheetName) => Sheets.FirstOrDefault(sheet =>
+        public ISheet GetSheet(string sheetName) => Sheets.FirstOrDefault(sheet =>
             sheetName.Equals(sheet.Name, StringComparison.InvariantCultureIgnoreCase));
 
         #endregion
@@ -60,7 +78,7 @@ namespace Bing.Offices.Npoi.Metadata.Excels
         /// 获取工作表
         /// </summary>
         /// <param name="sheetIndex">工作表索引</param>
-        public IWorkSheet GetSheetAt(int sheetIndex)
+        public ISheet GetSheetAt(int sheetIndex)
         {
             ValidateSheetIndex(sheetIndex);
             return Sheets[sheetIndex];
@@ -79,12 +97,17 @@ namespace Bing.Offices.Npoi.Metadata.Excels
 
         #endregion
 
+        /// <summary>
+        /// 转换为字节数组
+        /// </summary>
+        public byte[] ToBytes() => _workbook.SaveToBuffer();
+
         #region CreateSheet(创建工作表)
 
         /// <summary>
         /// 创建工作表
         /// </summary>
-        public IWorkSheet CreateSheet()
+        public ISheet CreateSheet()
         {
             var sheetName = $"Sheet{Sheets.Count}";
             var index = 0;
@@ -97,17 +120,24 @@ namespace Bing.Offices.Npoi.Metadata.Excels
         }
 
         /// <summary>
+        /// 获取工作表
+        /// </summary>
+        /// <param name="sheetIndex">工作表索引</param>
+        public ISheet GetSheet(int sheetIndex) => new NpoiSheet(_workbook.GetSheetAt(sheetIndex));
+
+        /// <summary>
         /// 创建工作表
         /// </summary>
         /// <param name="sheetName">工作表名称</param>
-        public IWorkSheet CreateSheet(string sheetName) => CreateSheet(sheetName, 0);
+        //public ISheet CreateSheet(string sheetName) => CreateSheet(sheetName, 0);
+        public ISheet CreateSheet(string sheetName) => new NpoiSheet(_workbook.CreateSheet(sheetName));
 
         /// <summary>
         /// 创建工作表
         /// </summary>
         /// <param name="sheetName">工作表名称</param>
         /// <param name="startRowIndex">起始行索引</param>
-        public IWorkSheet CreateSheet(string sheetName, int startRowIndex)
+        public ISheet CreateSheet(string sheetName, int startRowIndex)
         {
             if (string.IsNullOrWhiteSpace(sheetName))
                 throw new ArgumentNullException(nameof(sheetName));
@@ -116,7 +146,7 @@ namespace Bing.Offices.Npoi.Metadata.Excels
             if (sheetName.Length > 31)
                 sheetName = sheetName.Substring(0, MaxSensitveSheetNameLength);
             ValidateSheetName(sheetName);
-            IWorkSheet sheet = new WorkSheet(startRowIndex);
+            ISheet sheet = new WorkSheet(startRowIndex);
             sheet.Name = sheetName;
             Sheets.Add(sheet);
             return sheet;
@@ -183,7 +213,7 @@ namespace Bing.Offices.Npoi.Metadata.Excels
         /// 添加工作表
         /// </summary>
         /// <param name="sheet">工作表</param>
-        public void AddSheet(IWorkSheet sheet)
+        public void AddSheet(ISheet sheet)
         {
             if (sheet == null)
                 return;

@@ -24,6 +24,11 @@ namespace Bing.Offices.Metadata.Excels
         #region 属性
 
         /// <summary>
+        /// 单元格类型
+        /// </summary>
+        public CellType CellType { get; set; }
+
+        /// <summary>
         /// 值
         /// </summary>
         public object Value { get; set; }

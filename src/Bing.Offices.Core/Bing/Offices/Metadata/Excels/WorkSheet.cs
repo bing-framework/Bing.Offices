@@ -7,7 +7,7 @@ namespace Bing.Offices.Metadata.Excels
     /// <summary>
     /// 工作表
     /// </summary>
-    public class WorkSheet : IWorkSheet
+    public class WorkSheet : ISheet
     {
         #region 字段
 
@@ -34,6 +34,107 @@ namespace Bing.Offices.Metadata.Excels
         #endregion
 
         #region 属性
+
+        /// <summary>
+        /// 首行行号。从1开始，如果没有行，则为0
+        /// </summary>
+        public int FirstRowNum { get; }
+
+        /// <summary>
+        /// 尾行行号。从1开始，如果没有行，则为0
+        /// </summary>
+        public int LastRowNum { get; }
+
+        /// <summary>
+        /// 获取单元行
+        /// </summary>
+        /// <param name="rowIndex">行索引</param>
+        public IRow GetRow(int rowIndex)
+        {
+            throw new System.NotImplementedException();
+        }
+
+        /// <summary>
+        /// 创建单元行
+        /// </summary>
+        /// <param name="rowIndex">行索引</param>
+        public IRow CreateRow(int rowIndex)
+        {
+            throw new System.NotImplementedException();
+        }
+
+        /// <summary>
+        /// 设置列宽
+        /// </summary>
+        /// <param name="columnIndex">列索引</param>
+        /// <param name="width">宽度</param>
+        public void SetColumnWidth(int columnIndex, int width)
+        {
+            throw new System.NotImplementedException();
+        }
+
+        /// <summary>
+        /// 设置自动列宽
+        /// </summary>
+        /// <param name="columnIndex">列索引</param>
+        public void AutoSizeColumn(int columnIndex)
+        {
+            throw new System.NotImplementedException();
+        }
+
+        /// <summary>
+        /// 创建冻结窗格
+        /// </summary>
+        /// <param name="colSplit">垂直分割位置</param>
+        /// <param name="rowSplit">水平分割位置</param>
+        /// <param name="leftMostCol">可见列数</param>
+        /// <param name="topRow">可见行数</param>
+        public void CreateFreezePane(int colSplit, int rowSplit, int leftMostCol, int topRow)
+        {
+            throw new System.NotImplementedException();
+        }
+
+        /// <summary>
+        /// 设置自动筛选
+        /// </summary>
+        /// <param name="firstRowIndex">首行索引</param>
+        /// <param name="lastRowIndex">尾行索引</param>
+        /// <param name="firstColumnIndex">首列索引</param>
+        /// <param name="lastColumnIndex">尾列索引</param>
+        public void SetAutoFilter(int firstRowIndex, int lastRowIndex, int firstColumnIndex, int lastColumnIndex)
+        {
+            throw new System.NotImplementedException();
+        }
+
+        /// <summary>
+        /// 移动行
+        /// </summary>
+        /// <param name="startRow">起始行索引</param>
+        /// <param name="endRow">结束行索引</param>
+        /// <param name="n">行数。正数: 下移, 负数: 上移</param>
+        public void ShiftRows(int startRow, int endRow, int n)
+        {
+            throw new System.NotImplementedException();
+        }
+
+        /// <summary>
+        /// 复制行
+        /// </summary>
+        /// <param name="sourceIndex">源索引</param>
+        /// <param name="targetIndex">目标索引</param>
+        public IRow CopyRow(int sourceIndex, int targetIndex)
+        {
+            throw new System.NotImplementedException();
+        }
+
+        /// <summary>
+        /// 移除行
+        /// </summary>
+        /// <param name="row">单元行</param>
+        public void RemoveRow(IRow row)
+        {
+            throw new System.NotImplementedException();
+        }
 
         /// <summary>
         /// 标题

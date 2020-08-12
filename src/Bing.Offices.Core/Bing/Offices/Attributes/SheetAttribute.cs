@@ -51,6 +51,15 @@ namespace Bing.Offices.Attributes
         public int HeaderRowIndex => SheetMetadata.HeaderRowIndex;
 
         /// <summary>
+        /// 启用自动列宽
+        /// </summary>
+        public bool AutoColumnWidthEnabled
+        {
+            get => SheetMetadata.AutoColumnWidthEnabled;
+            set => SheetMetadata.AutoColumnWidthEnabled = value;
+        }
+
+        /// <summary>
         /// 工作表元数据
         /// </summary>
         internal SheetMetadata SheetMetadata { get; }

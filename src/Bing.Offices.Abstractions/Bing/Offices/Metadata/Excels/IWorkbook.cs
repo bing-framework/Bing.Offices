@@ -8,50 +8,66 @@ namespace Bing.Offices.Metadata.Excels
     public interface IWorkbook
     {
         /// <summary>
+        /// 工作表数量
+        /// </summary>
+        int SheetCount { get; }
+
+        /// <summary>
+        /// 获取工作表
+        /// </summary>
+        /// <param name="sheetIndex">工作表索引</param>
+        ISheet GetSheet(int sheetIndex);
+
+        /// <summary>
+        /// 创建工作表
+        /// </summary>
+        /// <param name="sheetName">工作表名称</param>
+        ISheet CreateSheet(string sheetName);
+
+        /// <summary>
+        /// 转换为字节数组
+        /// </summary>
+        byte[] ToBytes();
+
+        /// <summary>
         /// 工作表列表
         /// </summary>
-        IList<IWorkSheet> Sheets { get; }
+        IList<ISheet> Sheets { get; }
 
         /// <summary>
         /// 工作表
         /// </summary>
         /// <param name="sheetIndex">工作表索引</param>
-        IWorkSheet this[int sheetIndex] { get; }
+        ISheet this[int sheetIndex] { get; }
 
         /// <summary>
         /// 获取工作表
         /// </summary>
         /// <param name="sheetName">工作表名称</param>
-        IWorkSheet GetSheet(string sheetName);
+        ISheet GetSheet(string sheetName);
 
         /// <summary>
         /// 获取工作表
         /// </summary>
         /// <param name="sheetIndex">工作表索引</param>
-        IWorkSheet GetSheetAt(int sheetIndex);
+        ISheet GetSheetAt(int sheetIndex);
 
         /// <summary>
         /// 创建工作表
         /// </summary>
-        IWorkSheet CreateSheet();
-
-        /// <summary>
-        /// 创建工作表
-        /// </summary>
-        /// <param name="sheetName">工作表名称</param>
-        IWorkSheet CreateSheet(string sheetName);
+        ISheet CreateSheet();
 
         /// <summary>
         /// 创建工作表
         /// </summary>
         /// <param name="sheetName">工作表名称</param>
         /// <param name="startRowIndex">起始行索引</param>
-        IWorkSheet CreateSheet(string sheetName, int startRowIndex);
+        ISheet CreateSheet(string sheetName, int startRowIndex);
 
         /// <summary>
         /// 添加工作表
         /// </summary>
         /// <param name="sheet">工作表</param>
-        void AddSheet(IWorkSheet sheet);
+        void AddSheet(ISheet sheet);
     }
 }

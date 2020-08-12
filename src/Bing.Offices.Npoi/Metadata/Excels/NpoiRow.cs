@@ -1,24 +1,19 @@
-﻿using System.Collections.Generic;
-using System.Linq;
-using Bing.Offices.Metadata.Excels.Internal;
+﻿using System;
+using System.Collections.Generic;
+using Bing.Offices.Metadata.Excels;
+using NModel = NPOI.SS.UserModel;
 
-namespace Bing.Offices.Metadata.Excels
+namespace Bing.Offices.Npoi.Metadata.Excels
 {
     /// <summary>
-    /// 单元行
+    /// Npoi单元行
     /// </summary>
-    public class Row : IRow
+    internal class NpoiRow : IRow
     {
-        #region 字段
-
         /// <summary>
-        /// 索引管理器
+        /// 单元行
         /// </summary>
-        private readonly IndexManager _indexManager;
-
-        #endregion
-
-        #region 属性
+        private readonly NModel.IRow _row;
 
         /// <summary>
         /// 单元格数量。
@@ -27,22 +22,28 @@ namespace Bing.Offices.Metadata.Excels
         /// 也就是说，如果仅列0、4、5具有值，则将为3
         /// </para>
         /// </summary>
-        public int CellsCount { get; }
+        public int CellsCount => _row.PhysicalNumberOfCells;
 
         /// <summary>
         /// 首列列号。从1开始
         /// </summary>
-        public int FirstCellNum { get; }
+        public int FirstCellNum => _row.FirstCellNum + 1;
 
         /// <summary>
         /// 尾列列号。从1开始
         /// </summary>
-        public int LastCellNum { get; }
+        public int LastCellNum => _row.LastCellNum;
 
         /// <summary>
         /// 底层对象值
         /// </summary>
-        public object UnderlyingValue { get; }
+        public object UnderlyingValue => _row;
+
+        /// <summary>
+        /// 初始化一个<see cref="NpoiRow"/>类型的实例
+        /// </summary>
+        /// <param name="row">单元行</param>
+        public NpoiRow(NModel.IRow row) => _row = row ?? throw new ArgumentNullException(nameof(row));
 
         /// <summary>
         /// 获取单元格
@@ -50,7 +51,8 @@ namespace Bing.Offices.Metadata.Excels
         /// <param name="cellIndex">单元格索引</param>
         public ICell GetCell(int cellIndex)
         {
-            throw new System.NotImplementedException();
+            var nCell = _row.GetCell(cellIndex);
+            return null == nCell ? null : new NpoiCell(nCell);
         }
 
         /// <summary>
@@ -62,10 +64,7 @@ namespace Bing.Offices.Metadata.Excels
         /// 最大值：(255 for *.xls, 1048576 for *.xlsx)
         /// </para>
         /// </param>
-        public ICell CreateCell(int cellIndex)
-        {
-            throw new System.NotImplementedException();
-        }
+        public ICell CreateCell(int cellIndex) => new NpoiCell(_row.CreateCell(cellIndex));
 
         /// <summary>
         /// 行索引
@@ -80,7 +79,7 @@ namespace Bing.Offices.Metadata.Excels
         /// <summary>
         /// 是否有效
         /// </summary>
-        public bool Valid => string.IsNullOrWhiteSpace(ErrorMsg);
+        public bool Valid { get; }
 
         /// <summary>
         /// 错误消息
@@ -96,31 +95,12 @@ namespace Bing.Offices.Metadata.Excels
         /// 单元格
         /// </summary>
         /// <param name="columnIndex">列索引</param>
-        public ICell this[int columnIndex] => Cells[columnIndex];
+        public ICell this[int columnIndex] => throw new NotImplementedException();
 
         /// <summary>
         /// 列数
         /// </summary>
-        public int ColumnCount => Cells.Sum(t => t.ColumnSpan);
-
-        #endregion
-
-        #region 构造函数
-
-        /// <summary>
-        /// 初始化一个<see cref="Row"/>类型的实例
-        /// </summary>
-        /// <param name="rowIndex">行索引</param>
-        public Row(int rowIndex)
-        {
-            Cells = new List<ICell>();
-            RowIndex = rowIndex;
-            _indexManager = new IndexManager();
-        }
-
-        #endregion
-
-        #region Add(添加单元格)
+        public int ColumnCount { get; }
 
         /// <summary>
         /// 添加单元格
@@ -128,7 +108,10 @@ namespace Bing.Offices.Metadata.Excels
         /// <param name="value">值</param>
         /// <param name="columnSpan">列跨度</param>
         /// <param name="rowSpan">行跨度</param>
-        public void Add(object value, int columnSpan = 1, int rowSpan = 1) => Add(new Cell(value, columnSpan, rowSpan));
+        public void Add(object value, int columnSpan = 1, int rowSpan = 1)
+        {
+            throw new NotImplementedException();
+        }
 
         /// <summary>
         /// 添加单元格
@@ -136,28 +119,7 @@ namespace Bing.Offices.Metadata.Excels
         /// <param name="cell">单元格</param>
         public void Add(ICell cell)
         {
-            if (cell == null)
-                return;
-            cell.Row = this;
-            SetColumnIndex(cell);
-            Cells.Add(cell);
+            throw new NotImplementedException();
         }
-
-        /// <summary>
-        /// 设置列索引
-        /// </summary>
-        /// <param name="cell">单元格</param>
-        private void SetColumnIndex(ICell cell)
-        {
-            if (cell.ColumnIndex > 0)
-            {
-                _indexManager.AddIndex(cell.ColumnIndex, cell.ColumnSpan);
-                return;
-            }
-            cell.ColumnIndex = _indexManager.GetIndex(cell.ColumnSpan);
-        }
-
-        #endregion
-
     }
 }

@@ -146,7 +146,7 @@ namespace Bing.Offices.Npoi.Imports
         /// </summary>
         /// <param name="workbook">工作簿</param>
         /// <param name="sheetIndex">工作表索引</param>
-        private ISheet GetSheet(NPOI.SS.UserModel.IWorkbook workbook, int sheetIndex = 0) => workbook.GetSheetAt(sheetIndex);
+        private NPOI.SS.UserModel.ISheet GetSheet(NPOI.SS.UserModel.IWorkbook workbook, int sheetIndex = 0) => workbook.GetSheetAt(sheetIndex);
 
         /// <summary>
         /// 处理表头
@@ -154,7 +154,7 @@ namespace Bing.Offices.Npoi.Imports
         /// <param name="sheet">工作表</param>
         /// <param name="innerSheet">NPOI工作表</param>
         /// <param name="headerRowIndex">标题行索引</param>
-        private void HandleHeader(IWorkSheet sheet, ISheet innerSheet, int headerRowIndex)
+        private void HandleHeader(Offices.Metadata.Excels.ISheet sheet, NPOI.SS.UserModel.ISheet innerSheet, int headerRowIndex)
         {
             var innerRow = innerSheet.GetRow(headerRowIndex);
             var cells = new List<ICell>();
@@ -168,7 +168,7 @@ namespace Bing.Offices.Npoi.Imports
         /// </summary>
         /// <param name="sheet">工作表</param>
         /// <param name="options">导入选项配置</param>
-        private void VerifyHeader<TTemplate>(IWorkSheet sheet, IImportOptions options)
+        private void VerifyHeader<TTemplate>(Offices.Metadata.Excels.ISheet sheet, IImportOptions options)
         {
             var header = sheet.GetHeader().LastOrDefault();
             if (header == null)
@@ -213,7 +213,7 @@ namespace Bing.Offices.Npoi.Imports
         /// <param name="sheet">工作表</param>
         /// <param name="innerSheet">NPOI工作表</param>
         /// <param name="options">导入选项配置</param>
-        private void HandleBody<TTemplate>(IWorkSheet sheet, ISheet innerSheet, IImportOptions options)
+        private void HandleBody<TTemplate>(Offices.Metadata.Excels.ISheet sheet, NPOI.SS.UserModel.ISheet innerSheet, IImportOptions options)
         {
             var header = sheet.GetHeader().LastOrDefault();
             // LastRowNum: 获取最后一行的行数，如果sheet中一行数据都没有则返回-1，只有第一行有数据则返回0，最后有数据的行是第n行则返回n-1

@@ -6,6 +6,11 @@
     public interface ICell
     {
         /// <summary>
+        /// 单元格类型
+        /// </summary>
+        CellType CellType { get; set; }
+
+        /// <summary>
         /// 值
         /// </summary>
         object Value { get; set; }

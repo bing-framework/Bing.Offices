@@ -21,11 +21,9 @@ namespace Bing.Offices.Npoi.Extensions
         /// <param name="workbook">工作簿</param>
         public static byte[] SaveToBuffer(this IWorkbook workbook)
         {
-            using (var ms = new MemoryStream())
-            {
-                workbook.Write(ms);
-                return ms.ToArray();
-            }
+            using var ms = new MemoryStream();
+            workbook.Write(ms);
+            return ms.ToArray();
         }
 
         #endregion
@@ -38,8 +36,8 @@ namespace Bing.Offices.Npoi.Extensions
         /// <param name="workbookBytes">工作簿字节数组</param>
         public static IWorkbook ToWorkbook(this byte[] workbookBytes)
         {
-            using (var stream = new MemoryStream(workbookBytes))
-                return WorkbookFactory.Create(stream);
+            using var stream = new MemoryStream(workbookBytes);
+            return WorkbookFactory.Create(stream);
         }
 
         #endregion
