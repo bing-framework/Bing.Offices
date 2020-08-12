@@ -3,7 +3,7 @@
     /// <summary>
     /// 数据列元数据
     /// </summary>
-    internal class ColumnMetadata : IColumnMetadata
+    internal class ColumnMetadata
     {
         /// <summary>
         /// 标题
@@ -38,11 +38,11 @@
         /// <summary>
         /// 范围
         /// </summary>
-        public CellRange Range { get; set; }
+        public CellRange Range { get; set; } = new CellRange();
 
         /// <summary>
         /// 样式
         /// </summary>
-        public IColumnStyleMetadata Style { get; set; }
+        public ColumnStyleMetadata Style { get; set; } = new ColumnStyleMetadata();
     }
 }

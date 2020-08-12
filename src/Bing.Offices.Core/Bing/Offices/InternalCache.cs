@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Reflection;
+using Bing.Offices.FluentApi;
 using Bing.Offices.Metadata;
 
 namespace Bing.Offices
@@ -16,9 +17,9 @@ namespace Bing.Offices
         public static readonly ConcurrentDictionary<Type, PropertyInfo[]> TypePropertyCache = new ConcurrentDictionary<Type, PropertyInfo[]>();
 
         /// <summary>
-        /// 类型 - 类元数据 缓存
+        /// 类型 - Excel设置 缓存
         /// </summary>
-        public static readonly ConcurrentDictionary<Type, IClassMetadata> TypeClassMetadataCache = new ConcurrentDictionary<Type, IClassMetadata>();
+        public static readonly ConcurrentDictionary<Type, IExcelFluent> TypeFluentCache = new ConcurrentDictionary<Type, IExcelFluent>();
 
         /// <summary>
         /// 属性信息 - 委托 输出格式化函数 缓存

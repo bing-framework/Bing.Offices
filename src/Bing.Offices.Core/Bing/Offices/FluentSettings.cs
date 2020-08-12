@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using Bing.Offices.Metadata;
+﻿using Bing.Offices.FluentApi;
 
 namespace Bing.Offices
 {
@@ -10,6 +7,10 @@ namespace Bing.Offices
     /// </summary>
     public class FluentSettings
     {
-        public static IClassMetadata<TEntity> For<TEntity>()
+        /// <summary>
+        /// Fluent设置
+        /// </summary>
+        /// <typeparam name="TEntity">实体类型</typeparam>
+        public static IExcelFluent<TEntity> For<TEntity>() => InternalHelper.GetExcelFluentMapping<TEntity>();
     }
 }

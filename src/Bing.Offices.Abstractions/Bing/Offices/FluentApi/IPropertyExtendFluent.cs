@@ -1,37 +1,37 @@
 ﻿using System.Collections.Generic;
 
-namespace Bing.Offices.Metadata
+namespace Bing.Offices.FluentApi
 {
     /// <summary>
-    /// 属性扩展元数据
+    /// 属性扩展设置
     /// </summary>
-    public interface IPropertyExtendMetadata
+    public interface IPropertyExtendFluent
     {
     }
 
     /// <summary>
-    /// 属性扩展元数据
+    /// 属性扩展设置
     /// </summary>
     /// <typeparam name="TEntity">实体类型</typeparam>
     /// <typeparam name="TProperty">属性类型</typeparam>
-    public interface IPropertyExtendMetadata<out TEntity, TProperty> : IPropertyExtendMetadata
+    public interface IPropertyExtendFluent<out TEntity, TProperty> : IPropertyExtendFluent
     {
         /// <summary>
         /// 设置保留小数位数
         /// </summary>
         /// <param name="scale">保留小数位数</param>
-        IPropertyExtendMetadata<TEntity, TProperty> HasDecimalScale(byte scale = 2);
+        IPropertyExtendFluent<TEntity, TProperty> HasDecimalScale(byte scale = 2);
 
         /// <summary>
         /// 设置默认值
         /// </summary>
         /// <param name="defaultValue">默认值</param>
-        IPropertyExtendMetadata<TEntity, TProperty> HasDefaultValue(object defaultValue);
+        IPropertyExtendFluent<TEntity, TProperty> HasDefaultValue(object defaultValue);
 
         /// <summary>
         /// 设置动态列
         /// </summary>
         /// <param name="columns">动态列</param>
-        IPropertyExtendMetadata<TEntity, TProperty> HasDynamicColumn(IEnumerable<string> columns);
+        IPropertyExtendFluent<TEntity, TProperty> HasDynamicColumn(IEnumerable<string> columns);
     }
 }

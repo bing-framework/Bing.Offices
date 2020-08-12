@@ -3,7 +3,7 @@
     /// <summary>
     /// 数据列样式元数据
     /// </summary>
-    internal class ColumnStyleMetadata : IColumnStyleMetadata
+    internal sealed class ColumnStyleMetadata
     {
         /// <summary>
         /// 宽度
@@ -24,7 +24,7 @@
         /// 设置宽度
         /// </summary>
         /// <param name="width">宽度</param>
-        public IColumnStyleMetadata SetWidth(int width)
+        public ColumnStyleMetadata SetWidth(int width)
         {
             if (width > 0)
             {
@@ -43,7 +43,7 @@
         /// 设置高度
         /// </summary>
         /// <param name="height">高度</param>
-        public IColumnStyleMetadata SetHeight(int height)
+        public ColumnStyleMetadata SetHeight(int height)
         {
             if (height > 0)
                 Height = height;

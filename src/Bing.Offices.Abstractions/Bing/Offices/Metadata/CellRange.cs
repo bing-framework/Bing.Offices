@@ -38,6 +38,6 @@
         /// <summary>
         /// 是否合并单元格
         /// </summary>
-        public bool IsMerged => ColumnSpan == 1 && RowSpan == 1;
+        public bool IsMerged => ColumnSpan != 1 && RowSpan != 1;
     }
 }

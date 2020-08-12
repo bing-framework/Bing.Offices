@@ -3,7 +3,7 @@
     /// <summary>
     /// 工作表元数据
     /// </summary>
-    internal sealed class SheetMetadata : ISheetMetadata
+    internal sealed class SheetMetadata
     {
         /// <summary>
         /// 起始行索引
@@ -82,21 +82,21 @@
         /// <summary>
         /// 标题样式
         /// </summary>
-        public ICellStyleMetadata TitleStyle { get; set; }
+        public ColumnStyleMetadata TitleStyle { get; set; }
 
         /// <summary>
         /// 表头样式
         /// </summary>
-        public ICellStyleMetadata HeaderStyle { get; set; }
+        public ColumnStyleMetadata HeaderStyle { get; set; }
 
         /// <summary>
         /// 正文样式
         /// </summary>
-        public ICellStyleMetadata BodyStyle { get; set; }
+        public ColumnStyleMetadata BodyStyle { get; set; }
 
         /// <summary>
         /// 页脚样式
         /// </summary>
-        public ICellStyleMetadata FooterStyle { get; set; }
+        public ColumnStyleMetadata FooterStyle { get; set; }
     }
 }
