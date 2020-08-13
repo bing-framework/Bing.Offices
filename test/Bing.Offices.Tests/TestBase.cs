@@ -379,6 +379,82 @@ namespace Bing.Offices.Tests
             });
             await File.WriteAllBytesAsync($"D:\\测试导出_{DateTime.Now:yyyyMMddHHmmss}.xlsx", bytes);
         }
+
+        /// <summary>
+        /// 测试 - 导出 报表
+        /// </summary>
+        /// <returns></returns>
+        [Fact]
+        public async Task Test_Export_Report()
+        {
+            var list = new List<Report>();
+            list.Add(new Report
+            {
+                WayName = "自配送",
+                Extend = new Dictionary<string, object>
+                {
+                    {"8/1", 17},
+                    {"8/2", 28},
+                    {"8/3", 15},
+                    {"8/4", 22},
+                    {"8/5", 32},
+                    {"8/6", 26},
+                    {"8/7", 25},
+                    {"8/8", 18},
+                    {"8/9", 18},
+                    {"8/10", 23},
+                    {"8/11", 21},
+                    {"8/12", 24},
+                    {"小计", 269},
+                }
+            });
+            list.Add(new Report
+            {
+                WayName = "第三方（美团等）",
+                Extend = new Dictionary<string, object>
+                {
+                    {"8/1", 5},
+                    {"8/2", 0},
+                    {"8/3", 2},
+                    {"8/4", 6},
+                    {"8/5", 4},
+                    {"8/6", 1},
+                    {"8/7", 3},
+                    {"8/8", 6},
+                    {"8/9", 5},
+                    {"8/10", 2},
+                    {"8/11", 2},
+                    {"8/12", 1},
+                    {"小计", 37},
+                }
+            });
+            list.Add(new Report
+            {
+                WayName = "日配送单量",
+                Extend = new Dictionary<string, object>
+                {
+                    {"8/1", 22},
+                    {"8/2", 28},
+                    {"8/3", 17},
+                    {"8/4", 28},
+                    {"8/5", 36},
+                    {"8/6", 27},
+                    {"8/7", 28},
+                    {"8/8", 24},
+                    {"8/9", 23},
+                    {"8/10", 25},
+                    {"8/11", 23},
+                    {"8/12", 25},
+                    {"小计", 306},
+                }
+            });
+            var bytes = await _excelExportService.ExportAsync(new ExportOptions<Report>()
+            {
+                Data = list,
+                DynamicColumns = new List<string>() { "8/1", "8/2", "8/3", "8/4", "8/5", "8/6", "8/7", "8/8", "8/9", "8/10", "8/11", "8/12", "小计" }
+            });
+            await File.WriteAllBytesAsync($"D:\\测试导出_{DateTime.Now:yyyyMMddHHmmss}.xlsx", bytes);
+        }
     }
 
     /// <summary>
@@ -410,6 +486,24 @@ namespace Bing.Offices.Tests
         /// </summary>
         [ColumnName("年龄")]
         public int? Age { get; set; }
+
+        /// <summary>
+        /// 扩展
+        /// </summary>
+        [DynamicColumn]
+        public IDictionary<string, object> Extend { get; set; }
+    }
+
+    /// <summary>
+    /// 报表
+    /// </summary>
+    public class Report
+    {
+        /// <summary>
+        /// 配送方式
+        /// </summary>
+        [ColumnName("配送方式")]
+        public string WayName { get; set; }
 
         /// <summary>
         /// 扩展
