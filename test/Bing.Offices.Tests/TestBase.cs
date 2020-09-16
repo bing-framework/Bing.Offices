@@ -455,6 +455,48 @@ namespace Bing.Offices.Tests
             });
             await File.WriteAllBytesAsync($"D:\\测试导出_{DateTime.Now:yyyyMMddHHmmss}.xlsx", bytes);
         }
+
+        /// <summary>
+        /// 测试 - 导出 额外表头 合并单元格多种情况
+        /// </summary>
+        [Fact]
+        public async Task Test_Export_HeaderRow_OneColumnSpan_MultiRowSpan()
+        {
+            var data = new List<Bing.Offices.Tests.Models.ExportFormat>();
+            for (int i = 0; i < 100; i++)
+            {
+                data.Add(new Bing.Offices.Tests.Models.ExportFormat()
+                {
+                    Id = $"A{i}",
+                    Name = $"测试名称+++++{i}",
+                    Index = i + 1,
+                    IgnoreProperty = $"忽略属性+++++{i}",
+                    NotMappedProperty = $"忽略映射属性+++++{i}",
+                    Money = i * 1000,
+                    CreateTime = DateTime.Now.AddMinutes(i)
+                });
+            }
+
+            var rows = new List<Bing.Offices.Metadata.Excels.Row>();
+            var row = new Bing.Offices.Metadata.Excels.Row(2);
+            row.Add(new Cell("单列多行", 2, 1, 2));
+            row.Add(new Cell("单列单行", 4, 1, 1));
+            rows.Add(row);
+
+            var row2 = new Bing.Offices.Metadata.Excels.Row(5);
+            row2.Add(new Cell("多列单行", 2, 2, 1));
+            row2.Add(new Cell("多列多行", 4, 2, 2));
+            rows.Add(row2);
+
+            var bytes = await _excelExportService.ExportAsync(new ExportOptions<Bing.Offices.Tests.Models.ExportFormat>()
+            {
+                HeaderRow = rows.ToList<IRow>(),
+                HeaderRowIndex = 1,
+                DataRowStartIndex = 2,
+                Data = data,
+            });
+            await File.WriteAllBytesAsync($"D:\\测试导出_{DateTime.Now:yyyyMMddHHmmss}.xlsx", bytes);
+        }
     }
 
     /// <summary>
