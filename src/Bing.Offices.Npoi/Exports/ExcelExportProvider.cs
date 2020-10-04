@@ -99,17 +99,24 @@ namespace Bing.Offices.Npoi.Exports
         /// <param name="options"></param>
         private void CellRangeAddress<T>(NPOI.SS.UserModel.ISheet sheet, IExportOptions<T> options) where T : class, new()
         {
-            if (options.HeaderRow.All(x => x.Cells.All(m => m.ColumnSpan == 1)))
-                return;
-            var rows = options.HeaderRow.Where(x => x.Cells.Any(m => m.ColumnSpan > 1)).ToList();
-            rows.OrderBy(x => x.RowIndex).ForEach(row =>
+            //if (options.HeaderRow.All(x => x.Cells.All(m => m.ColumnSpan == 1)))
+            //    return;
+            //var rows = options.HeaderRow.Where(x => x.Cells.Any(m => m.ColumnSpan > 1)).ToList();
+            var rows = options.HeaderRow.Where(x => x.Cells.Any(t => t.RowSpan > 1 || t.ColumnSpan > 1)).ToList();
+            if (rows.Any())
             {
-                row.Cells.OrderBy(x => x.ColumnIndex).ForEach(x =>
+                rows.OrderBy(x => x.RowIndex).ForEach(row =>
                 {
-                    CellRangeAddress region = new CellRangeAddress(x.RowIndex, x.EndRowIndex, x.ColumnIndex, x.EndColumnIndex);
-                    sheet.AddMergedRegion(region);
+                    row.Cells.OrderBy(x => x.ColumnIndex).ForEach(x =>
+                    {
+                        if (x.RowSpan <= 1 && x.ColumnSpan <= 1)
+                            return;
+                        var region =
+                            new CellRangeAddress(x.RowIndex, x.EndRowIndex, x.ColumnIndex, x.EndColumnIndex);
+                        sheet.AddMergedRegion(region);
+                    });
                 });
-            });
+            }
         }
 
         /// <summary>
