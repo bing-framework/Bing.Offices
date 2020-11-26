@@ -296,7 +296,7 @@ namespace Bing.Offices.Tests.BugFixes
         }
 
 
-        #region Purchase 
+        #region Purchase  采购订单导入
 
         /// <summary>
         /// 采购订单导入模板_不含税单价  
