@@ -41,8 +41,15 @@ namespace Bing.Offices.Npoi.Extensions
                         result = cell.CellFormula;
                         break;
                     case CellType.Numeric:
+                        //result = DateUtil.IsCellDateFormatted(cell)
+                        //    ? cell.DateCellValue.ToString("yyyy-MM-dd HH:mm:ss.sss", CultureInfo.InvariantCulture)
+                        //    : cell.NumericCellValue.ToString(CultureInfo.InvariantCulture);
+                        //日期是按1900/1/0作为0起点，相差的天数就是整数部分，小数部分是这样来的：24h*3600s/h=86400s，那么一天有86400秒，用1/86400*现在经过的秒数，就是小数部分
                         result = DateUtil.IsCellDateFormatted(cell)
-                            ? cell.DateCellValue.ToString("yyyy-MM-dd HH:mm:ss.sss", CultureInfo.InvariantCulture)
+                            ? DateTime.Parse("1900/1/1").AddDays(-2)
+                                .AddDays((int)cell.NumericCellValue)
+                                .AddMilliseconds(Math.Ceiling((cell.NumericCellValue - (int)cell.NumericCellValue) * 1000 * 86400))
+                                .ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)
                             : cell.NumericCellValue.ToString(CultureInfo.InvariantCulture);
                         break;
                     default:
