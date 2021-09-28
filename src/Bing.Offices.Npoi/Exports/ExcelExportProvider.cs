@@ -208,7 +208,7 @@ namespace Bing.Offices.Npoi.Exports
                     as HeaderAttribute;
             if (attribute == null)
                 return workbookBytes;
-            var workbook = workbookBytes.ToWorkbook(); 
+            var workbook = workbookBytes.ToWorkbook();
             var headerRow = workbook?.GetSheet(options.SheetName)?.GetRow(options.HeaderRowIndex);
             if (headerRow == null)
                 return workbookBytes;
@@ -279,8 +279,11 @@ namespace Bing.Offices.Npoi.Exports
                 if (currentCellValue.Trim() != startCellValue.Trim())
                 {
                     mergeRangeAddress = new CellRangeAddress(startRowIndex, rowIndex - 1, columnIndex, columnIndex);
-                    sheet.AddMergedRegion(mergeRangeAddress);
-                    startRow.GetCell(columnIndex).CellStyle.VerticalAlignment = VerticalAlignment.Center;
+                    if (mergeRangeAddress.NumberOfCells > 1)
+                    {
+                        sheet.AddMergedRegion(mergeRangeAddress);
+                        startRow.GetCell(columnIndex).CellStyle.VerticalAlignment = VerticalAlignment.Center;
+                    }
 
                     startRowIndex = rowIndex;
                     startCellValue = currentCellValue;

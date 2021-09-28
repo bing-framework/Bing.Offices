@@ -61,11 +61,13 @@ namespace Bing.Offices.Factories
             var decorators = new List<IDecorator>();
             var decoratorAttributes = new List<DecoratorAttributeBase>();
             var typeDecoratorInfo = TypeDecoratorInfoFactory.CreateInstance(type);
+
             decoratorAttributes.AddRange(typeDecoratorInfo.TypeDecorators);
             typeDecoratorInfo.PropertyDecoratorInfos.ForEach(x => decoratorAttributes.AddRange(x.Decorators));
+
             decoratorAttributes.Distinct(new DecoratorAttributeComparer()).ToList().ForEach(x =>
             {
-                var decorator = CreateInstance(type);
+                var decorator = CreateInstance(x.GetType());
                 if (decorator != null)
                     decorators.Add(decorator);
             });

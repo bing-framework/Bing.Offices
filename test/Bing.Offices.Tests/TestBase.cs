@@ -497,6 +497,35 @@ namespace Bing.Offices.Tests
             });
             await File.WriteAllBytesAsync($"D:\\测试导出_{DateTime.Now:yyyyMMddHHmmss}.xlsx", bytes);
         }
+
+        /// <summary>
+        /// 测试 - 导出 合并单元格
+        /// </summary>
+        [Fact]
+        public async Task Test_Export_MergeRow()
+        {
+            var orders = new List<ExportOrderWithMerged>();
+            for (var i = 0; i < 1000; i++)
+            {
+                var index = new Random(i).Next(i + 10, i + 13);
+                var orderNumber = $"订单{index}";
+                orders.Add(new ExportOrderWithMerged
+                {
+                    Buyer = $"下单人{index}",
+                    Price = Math.Round(new Random(i).NextDouble(), 2),
+                    BuyQty = new Random(i).Next(1, 10),
+                    ProductName = $"商品{i}",
+                    OrderNumber = orderNumber,
+                    Index= orderNumber,
+                });
+            }
+
+            var bytes = await _excelExportService.ExportAsync(new ExportOptions<ExportOrderWithMerged>
+            {
+                Data = orders,
+            });
+            await File.WriteAllBytesAsync($"D:\\测试导出_{DateTime.Now:yyyyMMddHHmmss}.xlsx", bytes);
+        }
     }
 
     /// <summary>
