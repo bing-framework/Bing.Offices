@@ -9,7 +9,7 @@ using NPOI.XSSF.UserModel;
 namespace Bing.Offices.Npoi.Extensions
 {
     /// <summary>
-    /// 工作簿<see cref="IWorkbook"/> 扩展
+    /// NPOI工作簿(<see cref="NPOI.SS.UserModel.IWorkbook"/>) 扩展
     /// </summary>
     public static class WorkbookExtensions
     {
@@ -21,11 +21,9 @@ namespace Bing.Offices.Npoi.Extensions
         /// <param name="workbook">工作簿</param>
         public static byte[] SaveToBuffer(this IWorkbook workbook)
         {
-            using (var ms = new MemoryStream())
-            {
-                workbook.Write(ms);
-                return ms.ToArray();
-            }
+            using var ms = new MemoryStream();
+            workbook.Write(ms);
+            return ms.ToArray();
         }
 
         #endregion
@@ -38,8 +36,8 @@ namespace Bing.Offices.Npoi.Extensions
         /// <param name="workbookBytes">工作簿字节数组</param>
         public static IWorkbook ToWorkbook(this byte[] workbookBytes)
         {
-            using (var stream = new MemoryStream(workbookBytes))
-                return WorkbookFactory.Create(stream);
+            using var stream = new MemoryStream(workbookBytes);
+            return WorkbookFactory.Create(stream);
         }
 
         #endregion
@@ -130,7 +128,7 @@ namespace Bing.Offices.Npoi.Extensions
         {
             var style = workbook.CreateCellStyle();
             var font = workbook.CreateFont();
-            font.Boldweight = short.MaxValue;// 加粗
+            font.IsBold = true;// 加粗
 
             style.FillForegroundColor = 13;// 13为黄色
             style.FillPattern = FillPattern.SolidForeground;

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using NPOI.SS.UserModel;
 
 namespace Bing.Offices.Npoi.Extensions
@@ -7,7 +8,7 @@ namespace Bing.Offices.Npoi.Extensions
     /// <summary>
     /// 工作表(<see cref="ISheet"/> ) 扩展
     /// </summary>
-    public static class SheetExtensions
+    public static partial class SheetExtensions
     {
         /// <summary>
         /// 获取所有合并单元格区域。格式：(x1,y1,x2,y2)
@@ -97,6 +98,99 @@ namespace Bing.Offices.Npoi.Extensions
                 action(row, item);
                 index++;
             }
+        }
+
+        /// <summary>
+        /// 插入行
+        /// </summary>
+        /// <param name="sheet">NPOI工作表</param>
+        /// <param name="rowIndex">行索引</param>
+        /// <returns>NPOI单元行</returns>
+        public static NPOI.SS.UserModel.IRow InsertRow(this NPOI.SS.UserModel.ISheet sheet, int rowIndex) => sheet.InsertRows(rowIndex, 1).FirstOrDefault();
+
+        /// <summary>
+        /// 批量插入行
+        /// </summary>
+        /// <param name="sheet">NPOI工作表</param>
+        /// <param name="rowIndex">行索引</param>
+        /// <param name="rowsCount">插入行数量</param>
+        /// <returns>NPOI单元行数组</returns>
+        public static NPOI.SS.UserModel.IRow[] InsertRows(this NPOI.SS.UserModel.ISheet sheet, int rowIndex,
+            int rowsCount)
+        {
+            if (rowIndex <= sheet.LastRowNum)
+                sheet.ShiftRows(rowIndex, sheet.LastRowNum, rowsCount, true, false);
+            var rows = new List<NPOI.SS.UserModel.IRow>();
+            for (var i = 0; i < rowsCount; i++)
+            {
+                var row = sheet.CreateRow(rowIndex + i);
+                rows.Add(row);
+            }
+            return rows.ToArray();
+        }
+
+        /// <summary>
+        /// 移除行
+        /// </summary>
+        /// <param name="sheet">NPOI工作表</param>
+        /// <param name="rowIndex">行索引</param>
+        public static int RemoveRow(this NPOI.SS.UserModel.ISheet sheet, int rowIndex) => sheet.RemoveRows(rowIndex, rowIndex);
+
+        /// <summary>
+        /// 移除行
+        /// </summary>
+        /// <param name="sheet">NPOI工作表</param>
+        /// <param name="startRowIndex">起始行索引</param>
+        /// <param name="endRowIndex">结束行索引</param>
+        public static int RemoveRows(this NPOI.SS.UserModel.ISheet sheet, int startRowIndex, int endRowIndex)
+        {
+            var span = endRowIndex - startRowIndex + 1;
+            sheet.RemoveMergedRegions(startRowIndex, endRowIndex, null, null);
+            sheet.RemovePictures(startRowIndex, endRowIndex, null, null);
+            for (var i = endRowIndex; i >= startRowIndex; i--)
+            {
+                var row = sheet.GetRow(i);
+                sheet.RemoveRow(row);
+            }
+            if (endRowIndex + 1 <= sheet.LastRowNum)
+            {
+                sheet.ShiftRows(endRowIndex + 1, sheet.LastRowNum, -span, true, false);
+                sheet.MovePictures(endRowIndex + 1, null, null, null, moveRowCount: -span);
+            }
+            return span;
+        }
+
+        /// <summary>
+        /// 判断指定区域是否在内部或交叉
+        /// </summary>
+        /// <param name="rangeMinRow">区域最小行索引</param>
+        /// <param name="rangeMaxRow">区域最大行索引</param>
+        /// <param name="rangeMinCol">区域最小列索引</param>
+        /// <param name="rangeMaxCol">区域最大列索引</param>
+        /// <param name="targetMinRow">目标最小行索引</param>
+        /// <param name="targetMaxRow">目标最大行索引</param>
+        /// <param name="targetMinCol">目标最小列索引</param>
+        /// <param name="targetMaxCol">目标最大列索引</param>
+        /// <param name="onlyInternal">仅在内部</param>
+        private static bool IsInternalOrIntersect(int? rangeMinRow, int? rangeMaxRow, int? rangeMinCol,
+            int? rangeMaxCol, int targetMinRow, int targetMaxRow, int targetMinCol, int targetMaxCol, bool onlyInternal)
+        {
+            var tempMinRow = rangeMinRow ?? targetMinRow;
+            var tempMaxRow = rangeMaxRow ?? targetMaxRow;
+            var tempMinCol = rangeMinCol ?? targetMinCol;
+            var tempMaxCol = rangeMaxCol ?? targetMaxCol;
+            if (onlyInternal)
+            {
+                return tempMinRow <= targetMinRow &&
+                       tempMaxRow >= targetMaxRow &&
+                       tempMinCol <= targetMinCol &&
+                       tempMaxCol >= targetMaxCol;
+            }
+
+            return Math.Abs(tempMaxRow - tempMinRow) + Math.Abs(targetMaxRow - targetMinRow) >=
+                   Math.Abs(tempMaxRow + tempMinRow - targetMaxRow - targetMinRow) &&
+                   Math.Abs(tempMaxCol - tempMinCol) + Math.Abs(targetMaxCol - targetMinCol) >=
+                   Math.Abs(tempMaxCol + tempMinCol - targetMaxCol - targetMinCol);
         }
     }
 }

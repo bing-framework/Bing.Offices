@@ -1,17 +1,14 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using Bing.Helpers;
 using NPOI.SS.UserModel;
-using NPOI.SS.Util;
 
 namespace Bing.Offices.Npoi.Extensions
 {
     /// <summary>
-    /// 单元格(<see cref="ICell"/>) 扩展
+    /// NPOI单元格(<see cref="NPOI.SS.UserModel.ICell"/>) 扩展
     /// </summary>
-    public static class CellExtensions
+    public static partial class CellExtensions
     {
         #region GetStringValue(获取单元格的字符串值)
 
@@ -56,7 +53,7 @@ namespace Bing.Offices.Npoi.Extensions
                         result = cell.ToString();
                         break;
                 }
-                return result.Trim();
+                return result?.Trim();
             }
             catch
             {
@@ -74,10 +71,10 @@ namespace Bing.Offices.Npoi.Extensions
         /// <param name="cell">单元格</param>
         /// <param name="value">值</param>
         /// <param name="scale">保留小数位数</param>
-        public static void SetValue(this ICell cell, object value,byte? scale = null)
+        public static void SetValue(this ICell cell, object value, byte? scale = null)
         {
-            if (cell == null)
-                return;
+            if (cell is null)
+                throw new ArgumentNullException(nameof(cell));
             if (value == null)
             {
                 cell.SetCellValue(string.Empty);
@@ -149,61 +146,65 @@ namespace Bing.Offices.Npoi.Extensions
             return new Tuple<int, int>(1, 1);
         }
 
-        #endregion
-
-        #region AddConditionalFormattingRules(添加条件格式规则)
-
         /// <summary>
-        /// 添加条件格式规则
+        /// 设置单元格值
         /// </summary>
         /// <param name="cell">单元格</param>
-        /// <param name="cfrs">条件格式规则</param>
-        public static void AddConditionalFormattingRules(this ICell cell, IConditionalFormattingRule[] cfrs)
-        {
-            var regions = new[]
-            {
-                new CellRangeAddress(cell.RowIndex, cell.RowIndex, cell.ColumnIndex, cell.ColumnIndex),
-            };
-            cell.Sheet.SheetConditionalFormatting.AddConditionalFormatting(regions, cfrs);
-        }
-
-        #endregion
-
-        #region GetConditionalFormattingRules(获取条件格式规则)
+        /// <param name="value">值</param>
+        public static void SetCellValue(this ICell cell, object value) => cell.SetCellValue(value, null);
 
         /// <summary>
-        /// 获取条件格式规则
+        /// 设置单元格值
         /// </summary>
         /// <param name="cell">单元格</param>
-        public static IConditionalFormattingRule[] GetConditionalFormattingRules(this ICell cell)
+        /// <param name="value">值</param>
+        /// <param name="formatter">格式化字符串</param>
+        public static void SetCellValue(this ICell cell, object value, string formatter)
         {
-            var cfrs = new List<IConditionalFormattingRule>();
-            var scf = cell.Sheet.SheetConditionalFormatting;
-            for (var i = 0; i < scf.NumConditionalFormattings; i++)
+            if (cell is null)
+                throw new ArgumentNullException(nameof(cell));
+            if (value is null || DBNull.Value == value)
             {
-                var cf = scf.GetConditionalFormattingAt(i);
-                if (cell.ExistConditionalFormatting(cf))
-                {
-                    for (var j = 0; j < cf.NumberOfRules; j++)
-                    {
-                        cfrs.Add(cf.GetRule(j));
-                    }
-                }
+                cell.SetCellType(CellType.Blank);
+                return;
             }
 
-            return cfrs.ToArray();
-        }
-
-        /// <summary>
-        /// 判断单元格是否存在条件格式
-        /// </summary>
-        /// <param name="cell">单元格</param>
-        /// <param name="cf">条件格式</param>
-        private static bool ExistConditionalFormatting(this ICell cell, IConditionalFormatting cf)
-        {
-            return cf.GetFormattingRanges().Any(cra =>
-                cell.RowIndex >= cra.FirstRow && cell.RowIndex <= cra.LastRow && cell.ColumnIndex >= cra.FirstColumn &&
-                cell.ColumnIndex <= cra.LastColumn);
+            if (value is DateTime time)
+            {
+                cell.SetCellValue(string.IsNullOrWhiteSpace(formatter)
+                    ? time.Date == time ? time.ToString("yyyy-MM-dd") : time.ToString("yyyy-MM-dd HH:mm:ss")
+                    : time.ToString(formatter));
+                cell.SetCellType(CellType.String);
+            }
+            else
+            {
+                var type = value.GetType();
+                if (type == typeof(double) || 
+                    type == typeof(int) || 
+                    type == typeof(long) || 
+                    type == typeof(float) ||
+                    type == typeof(decimal))
+                {
+                    cell.SetCellValue(Convert.ToDouble(value));
+                    cell.SetCellType(CellType.Numeric);
+                }
+                else if (type == typeof(bool))
+                {
+                    cell.SetCellValue((bool)value);
+                    cell.SetCellType(CellType.Boolean);
+                }
+                else if (type == typeof(byte[]) && value is byte[] bytes)
+                {
+                    cell.Sheet.TryAddPicture(cell.RowIndex, cell.ColumnIndex, bytes);
+                }
+                else
+                {
+                    cell.SetCellValue(value is IFormattable val && !string.IsNullOrWhiteSpace(formatter)
+                        ? val.ToString(formatter, CultureInfo.CurrentCulture)
+                        : value.ToString());
+                    cell.SetCellType(CellType.String);
+                }
+            }
         }
 
         #endregion

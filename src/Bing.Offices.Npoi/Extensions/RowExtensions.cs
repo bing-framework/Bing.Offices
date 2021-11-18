@@ -32,7 +32,7 @@ namespace Bing.Offices.Npoi.Extensions
         /// <summary>
         /// 清空内容
         /// </summary>
-        /// <param name="row">行</param>
+        /// <param name="row">NPOI单元行</param>
         public static IRow ClearContent(this IRow row)
         {
             foreach (var cell in row.Cells)
