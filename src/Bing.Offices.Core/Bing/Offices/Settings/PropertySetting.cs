@@ -34,6 +34,16 @@ namespace Bing.Offices.Settings
         public object DefaultValue { get; internal set; }
 
         /// <summary>
+        /// 保留小数位数
+        /// </summary>
+        public byte? DecimalScale { get; internal set; }
+
+        /// <summary>
+        /// 映射值 字典
+        /// </summary>
+        public Dictionary<string, object> MappingValues { get; internal set; }
+
+        /// <summary>
         /// 是否动态列
         /// </summary>
         public bool IsDynamicColumn { get; internal set; }
@@ -42,11 +52,6 @@ namespace Bing.Offices.Settings
         /// 动态列
         /// </summary>
         public IList<string> DynamicColumns { get; internal set; }
-
-        /// <summary>
-        /// 保留小数位数
-        /// </summary>
-        public byte? DecimalScale { get; internal set; }
 
         /// <summary>
         /// 设置动态列

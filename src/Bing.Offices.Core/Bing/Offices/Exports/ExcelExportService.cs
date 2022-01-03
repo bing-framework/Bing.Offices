@@ -54,7 +54,7 @@ namespace Bing.Offices.Exports
         private byte[] HandleDecorate<T>(byte[] workbookBytes, IExportOptions<T> options) where T : class, new()
         {
             var provider = GetExportProvider(options);
-            var context = new DecoratorContext()
+            var context = new DecoratorContext
             {
                 TypeDecoratorInfo = TypeDecoratorInfoFactory.CreateInstance(typeof(T))
             };

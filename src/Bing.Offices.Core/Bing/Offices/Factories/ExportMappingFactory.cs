@@ -1,8 +1,13 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.ComponentModel;
+using System.IO.Pipes;
+using System.Linq;
 using System.Reflection;
+using Bing.Extensions;
 using Bing.Offices.Attributes;
+using Bing.Offices.Exceptions;
 using Bing.Offices.Extensions;
 using Bing.Offices.Settings;
 using Bing.Reflection;
@@ -45,6 +50,7 @@ namespace Bing.Offices.Factories
                 SetColumnName(propertyInfo, setting);
                 SetFormatter(propertyInfo, setting);
                 SetScale(propertyInfo, setting);
+                SetValueMapping(propertyInfo, setting);
                 dict[propertyInfo.Name] = setting;
             }
             MappingDict[type] = dict;
@@ -102,6 +108,59 @@ namespace Bing.Offices.Factories
             var attribute = propertyInfo.GetCustomAttribute<DecimalScaleAttribute>();
             if (attribute != null)
                 setting.DecimalScale = attribute.Scale;
+        }
+
+        /// <summary>
+        /// 设置值映射
+        /// </summary>
+        /// <param name="propertyInfo">属性信息</param>
+        /// <param name="setting">属性设置</param>
+        private static void SetValueMapping(PropertyInfo propertyInfo, PropertySetting setting)
+        {
+            if (setting.IsDynamicColumn)
+                throw new OfficeException($"【{propertyInfo.Name}】该属性已设置动态列，无法再设置值映射");
+            var dictionary = new Dictionary<string, object>();
+            var mappings = propertyInfo.GetCustomAttributes<ValueMappingAttribute>().ToList();
+            foreach (var mappingAttribute in mappings.Where(mappingAttribute => !dictionary.ContainsKey(mappingAttribute.Text)))
+                dictionary.Add(mappingAttribute.Text, mappingAttribute.Value);
+            // 如果存在自定义映射，则不会生成默认映射
+            if(mappings.Any())
+            {
+                setting.MappingValues = dictionary;
+                return;
+            }
+            // 为bool类型生成默认映射
+            switch (propertyInfo.PropertyType.GetCSharpTypeName())
+            {
+                case "Boolean":
+                case "Nullable<Boolean>":
+                {
+                    if(!dictionary.ContainsKey(Resources.Yes))
+                        dictionary.Add(Resources.Yes,true);
+                    if (!dictionary.ContainsKey(Resources.No))
+                        dictionary.Add(Resources.No, false);
+                    setting.MappingValues = dictionary;
+                    break;
+                }
+            }
+
+            var type = propertyInfo.PropertyType;
+            var isNullable = Nullable.GetUnderlyingType(type) != null;
+            if (isNullable)
+                type = Nullable.GetUnderlyingType(type);
+            // 为枚举类型生成默认映射
+            if (type.IsEnum)
+            {
+                var values = type.GetEnumTextAndValues();
+                foreach (var value in values) 
+                    dictionary.Add(value.Key, value.Value);
+
+                if(isNullable)
+                    if (!dictionary.ContainsKey(string.Empty))
+                        dictionary.Add(string.Empty, null);
+            }
+
+            setting.MappingValues = dictionary;
         }
     }
 }

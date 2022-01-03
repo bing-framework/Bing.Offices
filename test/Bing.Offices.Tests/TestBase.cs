@@ -15,7 +15,6 @@ using Bing.Helpers;
 using Bing.Offices.Metadata.Excels;
 using Bing.Utils.IdGenerators.Ids;
 using Bing.Utils.Json;
-using NPOI.SS.Formula.Functions;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -523,6 +522,31 @@ namespace Bing.Offices.Tests
             var bytes = await _excelExportService.ExportAsync(new ExportOptions<ExportOrderWithMerged>
             {
                 Data = orders,
+            });
+            await File.WriteAllBytesAsync($"D:\\测试导出_{DateTime.Now:yyyyMMddHHmmss}.xlsx", bytes);
+        }
+
+        /// <summary>
+        /// 测试 - 导出 值映射
+        /// </summary>
+        [Fact]
+        public async Task Test_Export_ValueMapping()
+        {
+            var codes = new[] {"100", "200", "300", "400"};
+            var entities = new List<ExportValueMapping>();
+            for (int i = 0; i < 1000; i++)
+            {
+                var index = new Random().Next(0, 4);
+                var code = codes[index];
+                entities.Add(new ExportValueMapping
+                {
+                    Index = i,
+                    Code = code
+                });
+            }
+            var bytes = await _excelExportService.ExportAsync(new ExportOptions<ExportValueMapping>
+            {
+                Data = entities,
             });
             await File.WriteAllBytesAsync($"D:\\测试导出_{DateTime.Now:yyyyMMddHHmmss}.xlsx", bytes);
         }

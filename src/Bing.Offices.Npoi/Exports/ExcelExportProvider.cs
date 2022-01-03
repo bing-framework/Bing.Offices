@@ -185,6 +185,15 @@ namespace Bing.Offices.Npoi.Exports
                     var cell = row.CreateCell(columnIndex);
                     if (!string.IsNullOrWhiteSpace(kvp.Value.Formatter))
                         cell.SetCellValue(dto.GetStringValue(kvp.Key, kvp.Value.Formatter));
+                    else if (kvp.Value.MappingValues.Any() && kvp.Value.MappingValues.Count > 0)
+                    {
+                        var value = dto.GetValue(kvp.Key);
+                        if (kvp.Value.MappingValues.ContainsValue(value))
+                        {
+                            var mapValue = kvp.Value.MappingValues.FirstOrDefault(f => f.Value.Equals(value));
+                            cell.SetCellValue(mapValue.Key);
+                        }
+                    }
                     else
                         cell.SetValue(dto.GetValue(kvp.Key), kvp.Value.DecimalScale);
                     columnIndex++;
