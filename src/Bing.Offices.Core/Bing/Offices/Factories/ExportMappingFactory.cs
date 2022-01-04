@@ -1,11 +1,9 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.IO.Pipes;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Reflection;
-using Bing.Extensions;
 using Bing.Offices.Attributes;
 using Bing.Offices.Exceptions;
 using Bing.Offices.Extensions;
@@ -94,6 +92,9 @@ namespace Bing.Offices.Factories
             var attribute = propertyInfo.GetCustomAttribute<DataFormatAttribute>();
             if (attribute != null)
                 setting.Formatter = attribute.CustomFormat;
+            var formatAttribute = propertyInfo.GetCustomAttribute<DisplayFormatAttribute>();
+            if (formatAttribute != null)
+                setting.Formatter = formatAttribute.DataFormatString;
         }
 
         /// <summary>
@@ -103,7 +104,7 @@ namespace Bing.Offices.Factories
         /// <param name="setting">属性设置</param>
         private static void SetScale(PropertyInfo propertyInfo, PropertySetting setting)
         {
-            if(!Types.IsNumericType(Reflections.GetUnderlyingType(propertyInfo.PropertyType)))
+            if (!Types.IsNumericType(Reflections.GetUnderlyingType(propertyInfo.PropertyType)))
                 return;
             var attribute = propertyInfo.GetCustomAttribute<DecimalScaleAttribute>();
             if (attribute != null)
@@ -124,7 +125,7 @@ namespace Bing.Offices.Factories
             foreach (var mappingAttribute in mappings.Where(mappingAttribute => !dictionary.ContainsKey(mappingAttribute.Text)))
                 dictionary.Add(mappingAttribute.Text, mappingAttribute.Value);
             // 如果存在自定义映射，则不会生成默认映射
-            if(mappings.Any())
+            if (mappings.Any())
             {
                 setting.MappingValues = dictionary;
                 return;
@@ -134,14 +135,14 @@ namespace Bing.Offices.Factories
             {
                 case "Boolean":
                 case "Nullable<Boolean>":
-                {
-                    if(!dictionary.ContainsKey(Resources.Yes))
-                        dictionary.Add(Resources.Yes,true);
-                    if (!dictionary.ContainsKey(Resources.No))
-                        dictionary.Add(Resources.No, false);
-                    setting.MappingValues = dictionary;
-                    break;
-                }
+                    {
+                        if (!dictionary.ContainsKey(Resources.Yes))
+                            dictionary.Add(Resources.Yes, true);
+                        if (!dictionary.ContainsKey(Resources.No))
+                            dictionary.Add(Resources.No, false);
+                        setting.MappingValues = dictionary;
+                        break;
+                    }
             }
 
             var type = propertyInfo.PropertyType;
@@ -152,10 +153,10 @@ namespace Bing.Offices.Factories
             if (type.IsEnum)
             {
                 var values = type.GetEnumTextAndValues();
-                foreach (var value in values) 
+                foreach (var value in values)
                     dictionary.Add(value.Key, value.Value);
 
-                if(isNullable)
+                if (isNullable)
                     if (!dictionary.ContainsKey(string.Empty))
                         dictionary.Add(string.Empty, null);
             }

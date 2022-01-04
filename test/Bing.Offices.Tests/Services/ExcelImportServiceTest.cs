@@ -25,7 +25,7 @@ namespace Bing.Offices.Tests.Services
         protected IExcelImportService ImportService { get; }
 
         /// <summary>
-        /// 初始化一个<see cref="TestBase"/>类型的实例
+        /// 初始化一个<see cref="ExcelIETest"/>类型的实例
         /// </summary>
         public ExcelImportServiceTest(ITestOutputHelper output)
         {
