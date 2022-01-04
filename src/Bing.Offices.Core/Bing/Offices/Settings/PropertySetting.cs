@@ -6,7 +6,7 @@ namespace Bing.Offices.Settings
     /// <summary>
     /// 属性设置
     /// </summary>
-    public sealed class PropertySetting : IPropertySetting
+    public sealed class PropertySetting
     {
         /// <summary>
         /// 列索引
