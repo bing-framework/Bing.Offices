@@ -19,5 +19,10 @@
         /// 应用名称
         /// </summary>
         internal const string ApplicationName = "Bing.Offices";
+
+        /// <summary>
+        /// 重复列标记
+        /// </summary>
+        public const string DuplicateColumnMark = "__dup_mark__";
     }
 }
