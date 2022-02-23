@@ -41,7 +41,7 @@ namespace Bing.Offices.Settings
         /// <summary>
         /// 映射值 字典
         /// </summary>
-        public Dictionary<string, object> MappingValues { get; internal set; }
+        public Dictionary<string, object> MappingValues { get; internal set; } = new Dictionary<string, object>();
 
         /// <summary>
         /// 是否动态列

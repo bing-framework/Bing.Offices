@@ -118,10 +118,12 @@ namespace Bing.Offices.Factories
         /// <param name="setting">属性设置</param>
         private static void SetValueMapping(PropertyInfo propertyInfo, PropertySetting setting)
         {
+            var mappings = propertyInfo.GetCustomAttributes<ValueMappingAttribute>().ToList();
+            if (!mappings.Any())
+                return;
             if (setting.IsDynamicColumn)
                 throw new OfficeException($"【{propertyInfo.Name}】该属性已设置动态列，无法再设置值映射");
             var dictionary = new Dictionary<string, object>();
-            var mappings = propertyInfo.GetCustomAttributes<ValueMappingAttribute>().ToList();
             foreach (var mappingAttribute in mappings.Where(mappingAttribute => !dictionary.ContainsKey(mappingAttribute.Text)))
                 dictionary.Add(mappingAttribute.Text, mappingAttribute.Value);
             // 如果存在自定义映射，则不会生成默认映射
