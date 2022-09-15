@@ -1,7 +1,7 @@
 ﻿using System.Threading.Tasks;
+using Bing.Collections;
 using Bing.Offices.Decorators;
 using Bing.Offices.Factories;
-using Bing.Extensions;
 
 namespace Bing.Offices.Exports
 {

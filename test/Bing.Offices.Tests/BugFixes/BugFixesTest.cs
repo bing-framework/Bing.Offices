@@ -2,6 +2,7 @@
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Bing.Collections;
 using Bing.Offices.Exceptions;
 using Bing.Offices.Exports;
 using Bing.Offices.Extensions;
@@ -9,7 +10,6 @@ using Bing.Offices.Imports;
 using Bing.Offices.Npoi.Exports;
 using Bing.Offices.Npoi.Imports;
 using Bing.Offices.Tests.Models.Bugs;
-using Bing.Extensions;
 using Bing.Offices.Tests.Models.Purchase;
 using Bing.Utils.Json;
 using Xunit;

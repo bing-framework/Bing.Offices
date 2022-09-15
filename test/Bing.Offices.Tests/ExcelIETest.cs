@@ -13,7 +13,7 @@ using Bing.Offices.Tests.Models;
 using Bing.Extensions;
 using Bing.Helpers;
 using Bing.Offices.Metadata.Excels;
-using Bing.Utils.IdGenerators.Ids;
+using Bing.Utils.IdGenerators.Core;
 using Bing.Utils.Json;
 using Xunit;
 using Xunit.Abstractions;
@@ -352,7 +352,7 @@ namespace Bing.Offices.Tests
             {
                 data.Add(new ExportScale
                 {
-                    Id = SnowflakeId.CurrentTimeFunc().ToString(),
+                    Id = SnowflakeIdGenerator.Current.Create().ToString(),
                     Byte = Conv.ToByte(i),
                     NullableByte = i % 2 == 0 ? null : Conv.ToByteOrNull(i),
                     Short = Conv.ToShort(i),

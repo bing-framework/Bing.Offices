@@ -1,7 +1,7 @@
 ﻿using System.Text.RegularExpressions;
+using Bing.Collections;
 using Bing.Offices.Attributes;
 using Bing.Offices.Extensions;
-using Bing.Extensions;
 using Bing.Offices.Imports;
 using Bing.Offices.Metadata.Excels;
 

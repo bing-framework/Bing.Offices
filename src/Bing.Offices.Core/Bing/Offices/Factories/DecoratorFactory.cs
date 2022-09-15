@@ -3,7 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using Bing.Extensions;
+using Bing.Collections;
 using Bing.Offices.Attributes;
 using Bing.Offices.Decorators;
 

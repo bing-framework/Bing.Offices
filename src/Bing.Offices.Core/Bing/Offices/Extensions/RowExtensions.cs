@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using Bing.Collections;
 using Bing.Offices.Helpers;
-using Bing.Extensions;
 using Bing.Offices.Metadata.Excels;
 
 namespace Bing.Offices.Extensions
