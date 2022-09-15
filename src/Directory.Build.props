@@ -3,11 +3,11 @@
   <PropertyGroup>
     <VersionMajor>0</VersionMajor>
     <VersionMinor>0</VersionMinor>
-    <VersionPatch>5</VersionPatch>
+    <VersionPatch>6</VersionPatch>
     <!--<VersionQuality></VersionQuality>-->
     <VersionQuality>20220104-1</VersionQuality>
     <VersionPrefix>$(VersionMajor).$(VersionMinor).$(VersionPatch)</VersionPrefix>
-    <VersionSuffix></VersionSuffix>
+    <!--<VersionSuffix></VersionSuffix>-->
     <!--<VersionSuffix>preview-$(VersionQuality)</VersionSuffix>-->
   </PropertyGroup>
 
