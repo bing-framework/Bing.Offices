@@ -30,4 +30,8 @@ Bing是一个.net core平台下的应用框架，旨在于提升小型团队的�
     <ProjectReference Include="..\Bing.Offices.Core\Bing.Offices.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Helpers\" />
+  </ItemGroup>
+
 </Project>

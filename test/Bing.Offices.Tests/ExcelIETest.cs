@@ -255,7 +255,7 @@ namespace Bing.Offices.Tests
                 DateTime? currentTime = null;
                 if (i % 2 == 0)
                     currentTime = DateTime.Now;
-                data.Add(new ExportOrder()
+                data.Add(new ExportOrder
                 {
                     Id = $"A{i}",
                     Name = $"测试名称+++++{i}",

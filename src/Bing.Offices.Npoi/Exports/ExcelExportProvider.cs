@@ -28,7 +28,7 @@ namespace Bing.Offices.Npoi.Exports
         /// <param name="options">导出选项配置</param>
         public byte[] Export<T>(IExportOptions<T> options) where T : class, new()
         {
-            var workbook = CreateWorkbook(options.ExportFormat);
+            var workbook = ExcelHelper.PrepareWorkbook(options.ExportFormat);
             var sheet = workbook.CreateSheet(options.SheetName);
             var headerDict = ExportMappingFactory.CreateInstance(typeof(T));
             BuildDynamicHeader(headerDict, options.DynamicColumns);
@@ -37,23 +37,6 @@ namespace Bing.Offices.Npoi.Exports
                 HandleBody(sheet, options.DataRowStartIndex, options.Data, headerDict);
             CustomHeaderRow(sheet, options);
             return workbook?.SaveToBuffer();
-        }
-
-        /// <summary>
-        /// 创建工作簿
-        /// </summary>
-        /// <param name="format">导出格式</param>
-        private NPOI.SS.UserModel.IWorkbook CreateWorkbook(ExportFormat format)
-        {
-            switch (format)
-            {
-                case ExportFormat.Xls:
-                    return new NPOI.HSSF.UserModel.HSSFWorkbook();
-
-                case ExportFormat.Xlsx:
-                    return new NPOI.XSSF.UserModel.XSSFWorkbook();
-            }
-            throw new NotImplementedException();
         }
 
         /// <summary>

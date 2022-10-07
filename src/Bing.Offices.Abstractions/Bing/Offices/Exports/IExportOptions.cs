@@ -22,7 +22,7 @@ namespace Bing.Offices.Exports
         /// <summary>
         /// 导出格式
         /// </summary>
-        ExportFormat ExportFormat { get; set; }
+        ExcelFormat ExportFormat { get; set; }
 
         /// <summary>
         /// 工作表名称
