@@ -1,13 +1,12 @@
-﻿namespace Bing.Offices.Decorators
+﻿namespace Bing.Offices.Decorators;
+
+/// <summary>
+/// 装饰器上下文
+/// </summary>
+public interface IDecoratorContext
 {
     /// <summary>
-    /// 装饰器上下文
+    /// 类型装饰器信息
     /// </summary>
-    public interface IDecoratorContext
-    {
-        /// <summary>
-        /// 类型装饰器信息
-        /// </summary>
-        TypeDecoratorInfo TypeDecoratorInfo { get; set; }
-    }
+    TypeDecoratorInfo TypeDecoratorInfo { get; set; }
 }

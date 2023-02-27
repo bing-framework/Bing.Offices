@@ -2,24 +2,23 @@
 using System.Reflection;
 using Bing.Offices.Attributes;
 
-namespace Bing.Offices.Extensions
+namespace Bing.Offices.Extensions;
+
+/// <summary>
+/// 属性信息(<see cref="PropertyInfo"/>) 扩展
+/// </summary>
+public static class PropertyInfoExtensions
 {
     /// <summary>
-    /// 属性信息(<see cref="PropertyInfo"/>) 扩展
+    /// 是否有忽略属性
     /// </summary>
-    public static class PropertyInfoExtensions
+    /// <param name="propertyInfo">属性信息</param>
+    internal static bool HasIgnore(this PropertyInfo propertyInfo)
     {
-        /// <summary>
-        /// 是否有忽略属性
-        /// </summary>
-        /// <param name="propertyInfo">属性信息</param>
-        internal static bool HasIgnore(this PropertyInfo propertyInfo)
-        {
-            if (propertyInfo.IsDefined(typeof(NotMappedAttribute)))
-                return true;
-            if (propertyInfo.IsDefined(typeof(ExcelIgnoreAttribute)))
-                return true;
-            return false;
-        }
+        if (propertyInfo.IsDefined(typeof(NotMappedAttribute)))
+            return true;
+        if (propertyInfo.IsDefined(typeof(ExcelIgnoreAttribute)))
+            return true;
+        return false;
     }
 }
