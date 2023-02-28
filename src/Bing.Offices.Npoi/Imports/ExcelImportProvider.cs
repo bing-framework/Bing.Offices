@@ -60,7 +60,7 @@ public class ExcelImportProvider : IExcelImportProvider
     /// <param name="enabledEmptyLine">启用空行模式。启用时，行内遇到空行将抛出异常错误信息</param>
     public virtual IWorkbook Convert<TTemplate>(string fileUrl, int sheetIndex = 0, int headerRowIndex = 0, int dataRowStartIndex = 1, bool multiSheet = false, int maxColumnLength = 100, bool enabledEmptyLine = false) where TTemplate : class, new()
     {
-        IImportOptions options = new ImportOptions()
+        IImportOptions options = new ImportOptions
         {
             FileUrl = fileUrl,
             SheetIndex = sheetIndex,

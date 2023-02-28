@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Bing.Offices.Imports;
+namespace Bing.Offices.Attributes;
 
 /// <summary>
 /// 导入头 特性

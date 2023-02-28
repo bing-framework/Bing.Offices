@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Bing.Offices.Exports;
+namespace Bing.Offices.Attributes;
 
 /// <summary>
 /// 导出头 特性
