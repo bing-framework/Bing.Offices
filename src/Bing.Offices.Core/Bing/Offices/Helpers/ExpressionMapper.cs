@@ -44,7 +44,8 @@ internal static class ExpressionMapper
             return (Func<IList<ICell>, T>)_table[key];
         var memberBindingList = new List<MemberBinding>();
         // 获取 FirstOrDefault 方法 TResult FirstOrDefault[TSource,TResult](System.Collections.Generic.IEnumerable`1[TSource], System.Func`2[TSource,bool])
-        // 参考地址：https://stackoverflow.com/questions/74310069/makegenericmethod-for-max-is-not-working-in-net-6
+        // 参考地址1：https://stackoverflow.com/questions/74310069/makegenericmethod-for-max-is-not-working-in-net-6
+        // 参考地址2：https://tjhilton.hashnode.dev/fixing-c-reflection-which-was-broken-by-upgrade-to-net-6
         var firstOrDefaultMethod = typeof(Enumerable).GetMethods()
             .Single(m => m.Name == nameof(Enumerable.FirstOrDefault)
                          && m.GetParameters().Length == 2
