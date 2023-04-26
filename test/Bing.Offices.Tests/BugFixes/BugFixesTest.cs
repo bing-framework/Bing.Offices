@@ -20,13 +20,8 @@ namespace Bing.Offices.Tests.BugFixes;
 /// <summary>
 /// Bug修复测试
 /// </summary>
-public class BugFixesTest
+public class BugFixesTest : TestBase
 {
-    /// <summary>
-    /// 输出
-    /// </summary>
-    protected ITestOutputHelper Output { get; }
-
     /// <summary>
     /// 导入提供程序
     /// </summary>
@@ -55,9 +50,8 @@ public class BugFixesTest
     /// <summary>
     /// 初始化一个<see cref="BugFixesTest"/>类型的实例
     /// </summary>
-    public BugFixesTest(ITestOutputHelper output)
+    public BugFixesTest(ITestOutputHelper output) : base(output)
     {
-        Output = output;
         ImportProvider = new ExcelImportProvider();
         ImportService = new ExcelImportService(ImportProvider);
         ExportProvider = new ExcelExportProvider();
@@ -71,7 +65,7 @@ public class BugFixesTest
     [Fact]
     public async Task Issue1_DecimalConvException()
     {
-        var fileUrl = Path.Combine(CurrentDir, "Resources/Bugs", "issue1.xlsx");
+        var fileUrl = GetTestFilePath("Resources/Bugs", "issue1.xlsx");
         var workbook = await ImportService.ImportAsync<Issue1>(new ImportOptions()
         {
             FileUrl = fileUrl,
@@ -84,9 +78,9 @@ public class BugFixesTest
             }
             catch (OfficeDataConvertException e)
             {
-                Assert.Equal(5,e.RowIndex);
+                Assert.Equal(5, e.RowIndex);
                 Assert.Equal(1, e.ColumnIndex);
-                Assert.Equal("值",e.Name);
+                Assert.Equal("值", e.Name);
                 Output.WriteLine(e.ToJson());
                 throw;
             }
@@ -99,7 +93,7 @@ public class BugFixesTest
     [Fact]
     public async Task Issue2_InitCelSoMuch()
     {
-        var fileUrl = Path.Combine(CurrentDir, "Resources/Bugs", "issue2.xlsx");
+        var fileUrl = GetTestFilePath("Resources/Bugs", "issue2.xlsx");
 
         await Assert.ThrowsAsync<OfficeHeaderException>(async () =>
         {
@@ -122,7 +116,7 @@ public class BugFixesTest
     [Fact]
     public async Task Issue3_ExceptionConvertError()
     {
-        var fileUrl = Path.Combine(CurrentDir, "Resources/Bugs", "issue3.xlsx");
+        var fileUrl = GetTestFilePath("Resources/Bugs", "issue3.xlsx");
         var workbook = await ImportService.ImportAsync<Issue3>(new ImportOptions()
         {
             FileUrl = fileUrl,
@@ -153,7 +147,7 @@ public class BugFixesTest
     [Fact]
     public async Task Issue4_ValidateFail_ReturnRealLocation()
     {
-        var fileUrl = Path.Combine(CurrentDir, "Resources/Bugs", "issue4.xlsx");
+        var fileUrl = GetTestFilePath("Resources/Bugs", "issue4.xlsx");
         var workbook = await ImportService.ImportAsync<Issue4>(new ImportOptions()
         {
             FileUrl = fileUrl,
@@ -173,7 +167,7 @@ public class BugFixesTest
     [Fact]
     public async Task Issue5_ValidateFail_ReturnRealLocation_With_HeaderRowIndex()
     {
-        var fileUrl = Path.Combine(CurrentDir, "Resources/Bugs", "issue5.xlsx");
+        var fileUrl = GetTestFilePath("Resources/Bugs", "issue5.xlsx");
         var workbook = await ImportService.ImportAsync<Issue5>(new ImportOptions
         {
             FileUrl = fileUrl,
@@ -193,7 +187,7 @@ public class BugFixesTest
     [Fact]
     public async Task Issue6_Import_IgnoreProperty()
     {
-        var fileUrl = Path.Combine(CurrentDir, "Resources/Bugs", "issue6.xlsx");
+        var fileUrl = GetTestFilePath("Resources/Bugs", "issue6.xlsx");
         var workbook = await ImportService.ImportAsync<Issue6>(new ImportOptions()
         {
             FileUrl = fileUrl,
@@ -211,8 +205,8 @@ public class BugFixesTest
     [Fact]
     public async Task Issue7_Import_EmptyLine()
     {
-        var fileUrl = Path.Combine(CurrentDir, "Resources/Bugs", "issue7.xlsx");
-        await Assert.ThrowsAsync<OfficeEmptyLineException>(async() =>
+        var fileUrl = GetTestFilePath("Resources/Bugs", "issue7.xlsx");
+        await Assert.ThrowsAsync<OfficeEmptyLineException>(async () =>
         {
             try
             {
@@ -232,7 +226,7 @@ public class BugFixesTest
                 Output.WriteLine(e.ToJson());
                 throw;
             }
-                
+
         });
     }
 
@@ -242,7 +236,7 @@ public class BugFixesTest
     [Fact]
     public async Task Issue7_Import_EmptyLine_Skip()
     {
-        var fileUrl = Path.Combine(CurrentDir, "Resources/Bugs", "issue7.xlsx");
+        var fileUrl = GetTestFilePath("Resources/Bugs", "issue7.xlsx");
         var workbook = await ImportService.ImportAsync<Issue7>(new ImportOptions()
         {
             FileUrl = fileUrl,
@@ -261,7 +255,7 @@ public class BugFixesTest
     [Fact]
     public async Task Issue8_Import_DateTimeParser()
     {
-        var fileUrl = Path.Combine(CurrentDir, "Resources/Bugs", "issue8.xlsx");
+        var fileUrl = GetTestFilePath("Resources/Bugs", "issue8.xlsx");
         var workbook = await ImportService.ImportAsync<Issue8>(new ImportOptions()
         {
             FileUrl = fileUrl,
@@ -283,7 +277,7 @@ public class BugFixesTest
     [Fact]
     public async Task Issue9_Import_Trim()
     {
-        var fileUrl = Path.Combine(CurrentDir, "Resources/Bugs", "issue9.xlsx");
+        var fileUrl = GetTestFilePath("Resources/Bugs", "issue9.xlsx");
         var workbook = await ImportService.ImportAsync<Issue9>(new ImportOptions()
         {
             FileUrl = fileUrl,
@@ -306,7 +300,7 @@ public class BugFixesTest
     public async Task Purchase_Import_ExIncludeTax()
     {
         //预计到货日期 日期格式 有问题
-        var fileUrl3= Path.Combine(CurrentDir, "Resources/Purchase", "采购订单导入模板_不含税单价3.xlsx");
+        var fileUrl3 = GetTestFilePath("Resources/Purchase", "采购订单导入模板_不含税单价3.xlsx");
         var workbook3 = await ImportService.ImportAsync<ImportPurchaseOrderExIncludeTax>(new ImportOptions()
         {
             FileUrl = fileUrl3,
@@ -320,7 +314,7 @@ public class BugFixesTest
         Output.WriteLine(result3.ToJson());
 
         //重复列名
-        var fileUrl2 = Path.Combine(CurrentDir, "Resources/Purchase", "采购订单导入模板_不含税单价2.xlsx");
+        var fileUrl2 = GetTestFilePath("Resources/Purchase", "采购订单导入模板_不含税单价2.xlsx");
         var workbook2 = await ImportService.ImportAsync<ImportPurchaseOrderExIncludeTax>(new ImportOptions()
         {
             FileUrl = fileUrl2,
@@ -335,7 +329,7 @@ public class BugFixesTest
         Output.WriteLine(result2.ToJson());
 
         //不启用表头缓存
-        var fileUrl = Path.Combine(CurrentDir, "Resources/Purchase", "采购订单导入模板_不含税单价.xlsx");
+        var fileUrl = GetTestFilePath("Resources/Purchase", "采购订单导入模板_不含税单价.xlsx");
         var workbook = await ImportService.ImportAsync<ImportPurchaseOrderExIncludeTax>(new ImportOptions()
         {
             FileUrl = fileUrl,
@@ -344,12 +338,10 @@ public class BugFixesTest
             HeaderRowIndex = 0,
             EnabledEmptyLine = false,
             IgnoreEmptyLineAfterData = true,
-            EnabledHeaderRowCache= false,
+            EnabledHeaderRowCache = false,
         });
         var result = workbook.GetResult<ImportPurchaseOrderExIncludeTax>();
         Output.WriteLine(result.ToJson());
-
-            
     }
 
     /// <summary>
@@ -360,7 +352,7 @@ public class BugFixesTest
     public async Task Purchase_Import_IncludeTax()
     {
         //预计到货日期 日期格式 有问题
-        var fileUrl2 = Path.Combine(CurrentDir, "Resources/Purchase", "采购订单导入模板_含税单价2.xlsx");
+        var fileUrl2 = GetTestFilePath("Resources/Purchase", "采购订单导入模板_含税单价2.xlsx");
         var workbook2 = await ImportService.ImportAsync<ImportPurchaseOrderIncludeTax>(new ImportOptions()
         {
             FileUrl = fileUrl2,
@@ -373,15 +365,15 @@ public class BugFixesTest
         var result2 = workbook2.GetResult<ImportPurchaseOrderIncludeTax>();
         Output.WriteLine(result2.ToJson());
 
-        var fileUrl = Path.Combine(CurrentDir, "Resources/Purchase", "采购订单导入模板_含税单价.xlsx");
+        var fileUrl = GetTestFilePath("Resources/Purchase", "采购订单导入模板_含税单价.xlsx");
         var workbook = await ImportService.ImportAsync<ImportPurchaseOrderIncludeTax>(new ImportOptions()
         {
             FileUrl = fileUrl,
             SheetIndex = 0,
             DataRowIndex = 1,
             HeaderRowIndex = 0,
-            EnabledEmptyLine=false,
-            IgnoreEmptyLineAfterData=true,
+            EnabledEmptyLine = false,
+            IgnoreEmptyLineAfterData = true,
         });
         var result = workbook.GetResult<ImportPurchaseOrderIncludeTax>();
         Output.WriteLine(result.ToJson());

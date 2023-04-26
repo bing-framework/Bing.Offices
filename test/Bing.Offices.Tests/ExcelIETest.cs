@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -23,13 +23,9 @@ namespace Bing.Offices.Tests;
 /// <summary>
 /// 测试基类
 /// </summary>
-public class ExcelIETest
+// ReSharper disable once InconsistentNaming
+public class ExcelIETest : TestBase
 {
-    /// <summary>
-    /// 输出
-    /// </summary>
-    protected ITestOutputHelper Output;
-
     /// <summary>
     /// Excel导入提供程序
     /// </summary>
@@ -53,9 +49,8 @@ public class ExcelIETest
     /// <summary>
     /// 初始化一个<see cref="ExcelIETest"/>类型的实例
     /// </summary>
-    public ExcelIETest(ITestOutputHelper output)
+    public ExcelIETest(ITestOutputHelper output) : base(output)
     {
-        Output = output;
         _excelImportProvider = new ExcelImportProvider();
         _excelImportService = new ExcelImportService(_excelImportProvider);
         _excelExportProvider = new ExcelExportProvider();
@@ -68,7 +63,7 @@ public class ExcelIETest
     [Fact]
     public void Test_Import()
     {
-        var result = _excelImportProvider.Convert<Barcode>("D:\\导入国标码_导入格式.xlsx");
+        var result = _excelImportProvider.Convert<Barcode>(GetTestFilePath("Resources", "导入国标码_导入格式.xlsx"));
         foreach (var sheet in result.Sheets)
         {
             foreach (var header in sheet.GetHeader())
@@ -89,7 +84,7 @@ public class ExcelIETest
     [Fact]
     public void Test_Import_DynamicTitle_1()
     {
-        var result = _excelImportProvider.Convert<Barcode>("D:\\导入国标码_导入格式_动态标题.xlsx");
+        var result = _excelImportProvider.Convert<Barcode>(GetTestFilePath("Resources", "导入国标码_导入格式_动态标题.xlsx"));
         foreach (var sheet in result.Sheets)
         {
             foreach (var header in sheet.GetHeader())
@@ -110,13 +105,14 @@ public class ExcelIETest
     [Fact]
     public async Task Test_Import_1()
     {
-        var workbook = await _excelImportService.ImportAsync<Barcode>(new ImportOptions()
+        var workbook = await _excelImportService.ImportAsync<Barcode>(new ImportOptions
         {
-            FileUrl = "D:\\导入国标码_导入格式.xlsx",
+            FileUrl = GetTestFilePath("Resources", "导入国标码_导入格式.xlsx"),
         });
-        var result = workbook.GetResult<Barcode>();
-        Output.WriteLine(result.Count().ToString());
+        var result = workbook.GetResult<Barcode>().ToList();
+        Output.WriteLine(result.Count.ToString());
         Output.WriteLine(result.ToJson());
+        Assert.Equal(3, result.Count);
     }
 
     /// <summary>
@@ -125,9 +121,9 @@ public class ExcelIETest
     [Fact]
     public async Task Test_Import_DynamicTitle_2()
     {
-        var workbook = await _excelImportService.ImportAsync<Barcode>(new ImportOptions()
+        var workbook = await _excelImportService.ImportAsync<Barcode>(new ImportOptions
         {
-            FileUrl = "D:\\导入国标码_导入格式_动态标题.xlsx",
+            FileUrl = GetTestFilePath("Resources", "导入国标码_导入格式_动态标题.xlsx")
         });
         var result = workbook.GetResult<Barcode>();
         Output.WriteLine(result.Count().ToString());
@@ -140,16 +136,16 @@ public class ExcelIETest
     [Fact]
     public async Task Test_Import_DynamicTitle_More_1()
     {
-        var workbook1 = await _excelImportService.ImportAsync<Barcode>(new ImportOptions()
+        var workbook1 = await _excelImportService.ImportAsync<Barcode>(new ImportOptions
         {
-            FileUrl = "D:\\导入国标码_导入格式_动态标题.xlsx",
+            FileUrl = GetTestFilePath("Resources", "导入国标码_导入格式_动态标题.xlsx")
         });
         var result1 = workbook1.GetResult<Barcode>();
         Output.WriteLine(result1.Count().ToString());
         Output.WriteLine(result1.ToJson());
-        var workbook2 = await _excelImportService.ImportAsync<Barcode>(new ImportOptions()
+        var workbook2 = await _excelImportService.ImportAsync<Barcode>(new ImportOptions
         {
-            FileUrl = "D:\\导入国标码_导入格式_动态标题1.xlsx",
+            FileUrl = GetTestFilePath("Resources", "导入国标码_导入格式_动态标题1.xlsx")
         });
         var result2 = workbook2.GetResult<Barcode>();
         Output.WriteLine(result2.Count().ToString());
@@ -162,9 +158,9 @@ public class ExcelIETest
     [Fact]
     public async Task Test_Import_Validate_1()
     {
-        var workbook = await _excelImportService.ImportAsync<Barcode>(new ImportOptions()
+        var workbook = await _excelImportService.ImportAsync<Barcode>(new ImportOptions
         {
-            FileUrl = "D:\\导入国标码_导入格式.xlsx",
+            FileUrl = GetTestFilePath("Resources", "导入国标码_导入格式.xlsx"),
         });
         var validateResult = workbook.Validate();
         if (validateResult.Any())
@@ -185,9 +181,9 @@ public class ExcelIETest
     [Fact]
     public async Task Test_Import_NullableValue_1()
     {
-        var workbook = await _excelImportService.ImportAsync<Barcode>(new ImportOptions()
+        var workbook = await _excelImportService.ImportAsync<Barcode>(new ImportOptions
         {
-            FileUrl = "D:\\导入国标码_导入格式.xlsx",
+            FileUrl = GetTestFilePath("Resources", "导入国标码_导入格式.xlsx"),
         });
         var validateResult = workbook.Validate();
         if (validateResult.Any())
@@ -208,13 +204,13 @@ public class ExcelIETest
     [Fact]
     public async Task Test_Export()
     {
-        var workbook = await _excelImportService.ImportAsync<Barcode>(new ImportOptions()
+        var workbook = await _excelImportService.ImportAsync<Barcode>(new ImportOptions
         {
-            FileUrl = "D:\\导入国标码_导入格式.xlsx",
+            FileUrl = GetTestFilePath("Resources", "导入国标码_导入格式.xlsx"),
         });
         var result = workbook.GetResult<Barcode>();
 
-        var bytes = await _excelExportService.ExportAsync(new ExportOptions<Barcode>()
+        var bytes = await _excelExportService.ExportAsync(new ExportOptions<Barcode>
         {
             Data = result.ToList()
         });
@@ -224,24 +220,54 @@ public class ExcelIETest
     /// <summary>
     /// 测试 - 导出 动态标题
     /// </summary>
-    /// <returns></returns>
     [Fact]
     public async Task Test_Export_DynamicTitle_1()
     {
-        var workbook = await _excelImportService.ImportAsync<Barcode>(new ImportOptions()
+        var workbook = await _excelImportService.ImportAsync<Barcode>(new ImportOptions
         {
-            FileUrl = "D:\\导入国标码_导入格式_动态标题1.xlsx",
+            FileUrl = GetTestFilePath("Resources", "导入国标码_导入格式_动态标题1.xlsx")
         });
         var result = workbook.GetResult<Barcode>();
 
-        var bytes = await _excelExportService.ExportAsync(new ExportOptions<Barcode>()
+        var bytes = await _excelExportService.ExportAsync(new ExportOptions<Barcode>
         {
             Data = result.ToList(),
-            DynamicColumns = new List<string>() { "创建人", "更新时间", "更新人", "备注" }
+            DynamicColumns = new List<string> { "创建人", "更新时间", "更新人", "备注" }
         });
         await File.WriteAllBytesAsync($"D:\\测试导出_{DateTime.Now:yyyyMMddHHmmss}.xlsx", bytes);
     }
 
+    /// <summary>
+    /// 测试 - 导出 多个
+    /// </summary>
+    [Fact]
+    public async Task Test_Export_Multiple()
+    {
+        var workbook = await _excelImportService.ImportAsync<Barcode>(new ImportOptions
+        {
+            FileUrl = GetTestFilePath("Resources", "导入国标码_导入格式_动态标题1.xlsx")
+        });
+        var result = workbook.GetResult<Barcode>();
+
+        var bytes = await _excelExportService.ExportAsync(new ExportOptions<Barcode>
+        {
+            Data = result.ToList(),
+            DynamicColumns = new List<string> { "创建人", "更新时间", "更新人", "备注" }
+        });
+        await File.WriteAllBytesAsync($"D:\\测试导出_动态标题_{DateTime.Now:yyyyMMddHHmmss}.xlsx", bytes);
+
+        var workbook1 = await _excelImportService.ImportAsync<Barcode>(new ImportOptions
+        {
+            FileUrl = GetTestFilePath("Resources", "导入国标码_导入格式.xlsx"),
+        });
+        var result1 = workbook1.GetResult<Barcode>();
+
+        var bytes1 = await _excelExportService.ExportAsync(new ExportOptions<Barcode>
+        {
+            Data = result1.ToList()
+        });
+        await File.WriteAllBytesAsync($"D:\\测试导出_{DateTime.Now:yyyyMMddHHmmss}.xlsx", bytes1);
+    }
 
     /// <summary>
     /// 测试 - 导出 忽略属性
@@ -280,7 +306,7 @@ public class ExcelIETest
     public async Task Test_Export_FormatProperty()
     {
         var data = new List<Bing.Offices.Tests.Models.ExportFormat>();
-        for (int i = 0; i < 10; i++)
+        for (var i = 0; i < 10; i++)
         {
             data.Add(new Bing.Offices.Tests.Models.ExportFormat()
             {
@@ -382,7 +408,6 @@ public class ExcelIETest
     /// <summary>
     /// 测试 - 导出 报表
     /// </summary>
-    /// <returns></returns>
     [Fact]
     public async Task Test_Export_Report()
     {
@@ -515,7 +540,7 @@ public class ExcelIETest
                 BuyQty = new Random(i).Next(1, 10),
                 ProductName = $"商品{i}",
                 OrderNumber = orderNumber,
-                Index= orderNumber,
+                Index = orderNumber,
             });
         }
 
@@ -532,7 +557,7 @@ public class ExcelIETest
     [Fact]
     public async Task Test_Export_ValueMapping()
     {
-        var codes = new[] {"100", "200", "300", "400"};
+        var codes = new[] { "100", "200", "300", "400" };
         var entities = new List<ExportValueMapping>();
         for (int i = 0; i < 1000; i++)
         {

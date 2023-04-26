@@ -51,7 +51,7 @@ public sealed class PropertySetting
     /// <summary>
     /// 动态列
     /// </summary>
-    public IList<string> DynamicColumns { get; internal set; }
+    public IList<string> DynamicColumns { get; internal set; } = new List<string>();
 
     /// <summary>
     /// 设置动态列

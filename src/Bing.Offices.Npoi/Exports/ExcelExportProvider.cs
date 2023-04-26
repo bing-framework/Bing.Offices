@@ -9,9 +9,6 @@ using Bing.Offices.Npoi.Resolvers;
 using Bing.Offices.Settings;
 using NPOI.SS.UserModel;
 using NPOI.SS.Util;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using Bing.Collections;
 
 namespace Bing.Offices.Npoi.Exports;
@@ -160,6 +157,8 @@ public class ExcelExportProvider : IExcelExportProvider
                     foreach (var column in kvp.Value.DynamicColumns)
                     {
                         if (column.IsEmpty())
+                            continue;
+                        if(!dictionary.ContainsKey(column))
                             continue;
                         row.CreateCell(columnIndex).SetCellValue(dictionary[column]?.ToString());
                         columnIndex++;
