@@ -8,6 +8,7 @@ using Bing.Collections;
 using Bing.Offices.Attributes;
 using Bing.Offices.Exceptions;
 using Bing.Offices.Metadata.Excels;
+using static System.Collections.Hashtable;
 using Convert = System.Convert;
 using Enum = System.Enum;
 
@@ -21,7 +22,7 @@ internal static class ExpressionMapper
     /// <summary>
     /// 哈希表
     /// </summary>
-    private static Hashtable Table = Hashtable.Synchronized(new Hashtable(1024));
+    private static readonly Hashtable _table = Synchronized(new Hashtable(1024));
 
     /// <summary>
     /// 将单元行快速转换为指定类型
@@ -39,12 +40,15 @@ internal static class ExpressionMapper
     /// <param name="props">属性信息集合</param>
     public static Func<IList<ICell>, T> GetFunc<T>(string key, IEnumerable<PropertyInfo> props)
     {
-        if (Table.ContainsKey(key))
-            return (Func<IList<ICell>, T>)Table[key];
+        if (_table.ContainsKey(key))
+            return (Func<IList<ICell>, T>)_table[key];
         var memberBindingList = new List<MemberBinding>();
-        // 获取FirstOrDefault方法
+        // 获取 FirstOrDefault 方法 TResult FirstOrDefault[TSource,TResult](System.Collections.Generic.IEnumerable`1[TSource], System.Func`2[TSource,bool])
+        // 参考地址：https://stackoverflow.com/questions/74310069/makegenericmethod-for-max-is-not-working-in-net-6
         var firstOrDefaultMethod = typeof(Enumerable).GetMethods()
-            .Single(m => m.Name == "FirstOrDefault" && m.GetParameters().Length == 2)
+            .Single(m => m.Name == nameof(Enumerable.FirstOrDefault)
+                         && m.GetParameters().Length == 2
+                         && m.GetParameters()[1].ParameterType == typeof(Func<,>).MakeGenericType(m.GetGenericArguments()[0], typeof(bool)))
             .MakeGenericMethod(new[] { typeof(ICell) });
 
         var cellsParam = Expression.Parameter(typeof(IList<ICell>), "Cells");
@@ -68,7 +72,7 @@ internal static class ExpressionMapper
         var blockExpr = Expression.Block(memberInitExpression);
         var lambda = Expression.Lambda<Func<IList<ICell>, T>>(blockExpr, new[] { cellsParam });
         var func = lambda.Compile();
-        Table[key] = func;
+        _table[key] = func;
         return func;
     }
 

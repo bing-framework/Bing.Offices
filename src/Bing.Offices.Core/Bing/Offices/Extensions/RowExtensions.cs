@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using Bing.Collections;
+﻿using Bing.Collections;
 using Bing.Offices.Helpers;
 using Bing.Offices.Metadata.Excels;
 
@@ -42,7 +39,7 @@ public static class RowExtensions
     {
         if (rows == null || !rows.Any())
             return null;
-        Func<IList<ICell>, T> func = GetFunc<T>(rows.ToList()[0]);
+        var func = GetFunc<T>(rows.ToList()[0]);
         var list = new List<T>();
         rows.ToList().ForEach(row =>
         {

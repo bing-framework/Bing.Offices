@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 16
-VisualStudioVersion = 16.0.29911.84
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.33530.505
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Bing.Offices.Abstractions", "src\Bing.Offices.Abstractions\Bing.Offices.Abstractions.csproj", "{069807D2-8CC8-4CA8-8B89-D95D6E93BE51}"
 EndProject
@@ -11,18 +11,49 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Bing.Offices.Npoi", "src\Bi
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Bing.Offices.Tests", "test\Bing.Offices.Tests\Bing.Offices.Tests.csproj", "{B10A4F99-C06F-41B5-AC4B-B3E14F88EEB3}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "00-document", "00-document", "{FCEF6ED0-AB07-4639-B494-23FB8DCB5F3A}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "01-src", "01-src", "{C162F186-29D0-486F-92AA-F2FCB3605CDB}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "02-tests", "02-tests", "{280D49AD-7FE4-4CF5-A554-B856318CAD08}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "_SolutionItems", "_SolutionItems", "{61498996-38A3-4CA7-B286-443D06FA6391}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "asset", "asset", "{3E3B8094-3362-4A26-AAA9-AB2F2346ED11}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "images", "images", "{8C8AF0EE-2AED-49A9-B404-5CB50B18083C}"
 	ProjectSection(SolutionItems) = preProject
-		build\pack.bat = build\pack.bat
+		asset\images\icon.png = asset\images\icon.png
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "props", "props", "{59130FC6-A114-46FD-8AC1-2102CC893669}"
+	ProjectSection(SolutionItems) = preProject
+		asset\props\misc.props = asset\props\misc.props
+		asset\props\package.props = asset\props\package.props
+		asset\props\sourcelink.env.props = asset\props\sourcelink.env.props
+		asset\props\target.feature.props = asset\props\target.feature.props
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{36C83169-C1F3-4599-9434-7C1DA90759FC}"
+	ProjectSection(SolutionItems) = preProject
 		README.md = README.md
 	EndProjectSection
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "01-src", "01-src", "{C162F186-29D0-486F-92AA-F2FCB3605CDB}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "scripts", "scripts", "{2F46F3B2-7154-45E9-8FE3-F34437B3E297}"
 	ProjectSection(SolutionItems) = preProject
-		src\Directory.Build.props = src\Directory.Build.props
+		Publish.bat = Publish.bat
 	EndProjectSection
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "02-tests", "02-tests", "{280D49AD-7FE4-4CF5-A554-B856318CAD08}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "solution", "solution", "{8A5604F2-E3B1-47A9-A322-493F2D3F56B0}"
+	ProjectSection(SolutionItems) = preProject
+		.editorconfig = .editorconfig
+		.gitattributes = .gitattributes
+		.gitignore = .gitignore
+		common.props = common.props
+		common.tests.props = common.tests.props
+		framework.props = framework.props
+		LICENSE = LICENSE
+		version.dev.props = version.dev.props
+		version.props = version.props
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -55,6 +86,12 @@ Global
 		{A73AA5CA-12D4-4588-B4A0-39FD047DE8DB} = {C162F186-29D0-486F-92AA-F2FCB3605CDB}
 		{82D3D474-FB96-4FA7-B0EF-FBE1667B1237} = {C162F186-29D0-486F-92AA-F2FCB3605CDB}
 		{B10A4F99-C06F-41B5-AC4B-B3E14F88EEB3} = {280D49AD-7FE4-4CF5-A554-B856318CAD08}
+		{3E3B8094-3362-4A26-AAA9-AB2F2346ED11} = {61498996-38A3-4CA7-B286-443D06FA6391}
+		{8C8AF0EE-2AED-49A9-B404-5CB50B18083C} = {3E3B8094-3362-4A26-AAA9-AB2F2346ED11}
+		{59130FC6-A114-46FD-8AC1-2102CC893669} = {3E3B8094-3362-4A26-AAA9-AB2F2346ED11}
+		{36C83169-C1F3-4599-9434-7C1DA90759FC} = {61498996-38A3-4CA7-B286-443D06FA6391}
+		{2F46F3B2-7154-45E9-8FE3-F34437B3E297} = {61498996-38A3-4CA7-B286-443D06FA6391}
+		{8A5604F2-E3B1-47A9-A322-493F2D3F56B0} = {61498996-38A3-4CA7-B286-443D06FA6391}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {A893205E-C0E7-49FA-8F8C-E493BDDF365B}

@@ -1,0 +1,10 @@
+<Project>
+  <PropertyGroup>
+    <!-- All Microsoft packages -->
+    <MicrosoftPackageVersion>6.0.*</MicrosoftPackageVersion>
+    <!-- Bing packages -->
+    <BingUtilsPackageVersion>1.5.0-preview-20230421-1</BingUtilsPackageVersion>
+    <!-- Npoi packages -->
+    <NpoiPackageVersion>2.6.0</NpoiPackageVersion>
+  </PropertyGroup>
+</Project>

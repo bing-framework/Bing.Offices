@@ -1,37 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
-    <TargetFrameworks>net5.0;netcoreapp3.1;netstandard2.0;netstandard2.1;</TargetFrameworks>
+    <AssemblyName>Bing.Offices.Npoi</AssemblyName>
+    <PackageId>Bing.Offices.Npoi</PackageId>
     <Description>Bing.Offices.Npoi是Bing应用框架的Npoi相关操作核心类库。
 Bing是一个.net core平台下的应用框架，旨在于提升小型团队的开发能力，由常用公共操作类、架构基类、第三方组件封装、第三方业务接口封装等组成。</Description>
   </PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="NPOI" Version="2.5.5" />
-  </ItemGroup>
+  <Import Project="..\..\framework.props" />
 
-  <ItemGroup Condition=" '$(TargetFramework)' == 'netstandard2.0' ">
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="2.2.0" />
-  </ItemGroup>
+  <Import Project="dependency.props" />
 
-  <ItemGroup Condition=" '$(TargetFramework)' == 'netstandard2.1' ">
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="3.1.10" />
-  </ItemGroup>
-
-  <ItemGroup Condition=" '$(TargetFramework)' == 'netcoreapp3.1' ">
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="3.1.10" />
-  </ItemGroup>
-
-  <ItemGroup Condition=" '$(TargetFramework)' == 'net5.0' ">
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="5.0.0" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\Bing.Offices.Core\Bing.Offices.Core.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Helpers\" />
-  </ItemGroup>
-
+  <Import Project="references.props" />
 </Project>

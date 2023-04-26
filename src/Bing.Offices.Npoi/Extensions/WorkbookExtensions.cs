@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using Bing.Offices.Exports;
+﻿using Bing.Offices.Exports;
 using NPOI.HSSF.UserModel;
 using NPOI.SS.UserModel;
 using NPOI.XSSF.UserModel;
@@ -22,7 +19,7 @@ public static class WorkbookExtensions
     public static byte[] SaveToBuffer(this IWorkbook workbook)
     {
         using var ms = new MemoryStream();
-        workbook.Write(ms);
+        workbook.Write(ms, false);
         return ms.ToArray();
     }
 
