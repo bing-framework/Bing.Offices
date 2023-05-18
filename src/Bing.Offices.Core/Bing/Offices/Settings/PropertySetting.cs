@@ -1,7 +1,4 @@
-﻿using System.Collections.Generic;
-using System.Linq;
-
-namespace Bing.Offices.Settings;
+﻿namespace Bing.Offices.Settings;
 
 /// <summary>
 /// 属性设置

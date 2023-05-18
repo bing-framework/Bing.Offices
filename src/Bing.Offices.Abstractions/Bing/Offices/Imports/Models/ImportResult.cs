@@ -1,8 +1,4 @@
-﻿using System;
-using System.Linq;
-using System.Collections.Generic;
-
-namespace Bing.Offices.Imports;
+﻿namespace Bing.Offices.Imports.Models;
 
 /// <summary>
 /// 导入结果

@@ -1,5 +1,4 @@
-﻿using System.Collections.Generic;
-using Bing.Offices.Attributes;
+﻿using Bing.Offices.Attributes;
 
 namespace Bing.Offices.Filters;
 

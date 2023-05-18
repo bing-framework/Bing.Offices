@@ -1,5 +1,4 @@
-﻿using System;
-using Bing.Offices.Styles;
+﻿using Bing.Offices.Styles;
 
 // ReSharper disable once CheckNamespace
 namespace Bing.Offices.Attributes;

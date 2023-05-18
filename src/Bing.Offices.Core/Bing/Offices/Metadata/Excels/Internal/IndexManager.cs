@@ -1,7 +1,4 @@
-﻿using System.Collections.Generic;
-using System.Linq;
-
-namespace Bing.Offices.Metadata.Excels.Internal;
+﻿namespace Bing.Offices.Metadata.Excels.Internal;
 
 /// <summary>
 /// 索引管理器

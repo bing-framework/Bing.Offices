@@ -1,4 +1,4 @@
-﻿namespace Bing.Offices.Imports;
+﻿namespace Bing.Offices.Imports.Models;
 
 /// <summary>
 /// 模板错误信息

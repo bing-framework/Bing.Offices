@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using Bing.Offices.Imports;
+﻿using Bing.Offices.Imports;
 using Bing.Offices.Metadata.Excels;
 
 namespace Bing.Offices.Filters;

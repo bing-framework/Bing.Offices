@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace Bing.Offices.Attributes;
+﻿namespace Bing.Offices.Attributes;
 
 /// <summary>
 /// 列名特性

@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace Bing.Offices.Attributes;
+﻿namespace Bing.Offices.Attributes;
 
 /// <summary>
 /// 值映射 特性

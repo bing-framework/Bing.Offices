@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace Bing.Offices.Exceptions;
+﻿namespace Bing.Offices.Exceptions;
 
 /// <summary>
 /// Office数据转换异常

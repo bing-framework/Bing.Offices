@@ -1,5 +1,4 @@
-﻿using System;
-using Bing.Offices.Configurations;
+﻿using Bing.Offices.Configurations;
 
 namespace Bing.Offices.Internals;
 
@@ -16,8 +15,7 @@ internal static class InternalHelper
         InternalCache.TypeExcelConfigurationDictionary.GetOrAdd(entityType, type =>
         {
             var excelConfiguration = CreateExcelConfiguration(type,
-                () => (ExcelConfiguration)Activator.CreateInstance(
-                    typeof(ExcelConfiguration<>).MakeGenericType(entityType)));
+                () => (ExcelConfiguration)Activator.CreateInstance(typeof(ExcelConfiguration<>).MakeGenericType(entityType)));
             return excelConfiguration;
         });
 

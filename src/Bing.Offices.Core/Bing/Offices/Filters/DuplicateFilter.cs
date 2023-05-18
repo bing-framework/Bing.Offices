@@ -1,5 +1,4 @@
-﻿using System.Collections.Generic;
-using Bing.Collections;
+﻿using Bing.Collections;
 using Bing.Offices.Attributes;
 using Bing.Offices.Extensions;
 using Bing.Offices.Imports;

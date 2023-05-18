@@ -1,6 +1,4 @@
-﻿using System.Collections.Generic;
-using System.Linq;
-using Bing.Offices.Metadata.Excels.Internal;
+﻿using Bing.Offices.Metadata.Excels.Internal;
 
 namespace Bing.Offices.Metadata.Excels;
 

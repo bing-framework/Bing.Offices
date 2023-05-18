@@ -1,6 +1,4 @@
-﻿using System;
-using System.Linq;
-using System.Reflection;
+﻿using System.Reflection;
 using Bing.Extensions;
 using Bing.Offices.Configurations;
 using Bing.Offices.Internals;
@@ -20,7 +18,7 @@ public static class FluentSettings
     /// <summary>
     /// 映射配置文件的泛型类型定义
     /// </summary>
-    private static readonly Type ProfileGenericTypeDefinition = typeof(IMappingProfile<>);
+    private static readonly Type _profileGenericTypeDefinition = typeof(IMappingProfile<>);
 
     /// <summary>
     /// 获取指定实体配置入口点
@@ -98,7 +96,7 @@ public static class FluentSettings
         var profileInterfaceType = profile.GetType()
             .GetTypeInfo()
             .ImplementedInterfaces
-            .FirstOrDefault(x => x.IsGenericType && x.GetGenericTypeDefinition() == ProfileGenericTypeDefinition);
+            .FirstOrDefault(x => x.IsGenericType && x.GetGenericTypeDefinition() == _profileGenericTypeDefinition);
         if (profileInterfaceType == null)
             return;
         var entityType = profileInterfaceType.GetGenericArguments()[0];

@@ -1,6 +1,4 @@
-﻿using System.Collections.Generic;
-
-namespace Bing.Offices.Imports;
+﻿namespace Bing.Offices.Imports.Models;
 
 /// <summary>
 /// 数据行错误信息
@@ -23,5 +21,5 @@ public class DataRowErrorInfo
     /// <summary>
     /// 字段错误信息
     /// </summary>
-    public IDictionary<string,string> FieldErrors { get; set; }
+    public IDictionary<string, string> FieldErrors { get; set; }
 }

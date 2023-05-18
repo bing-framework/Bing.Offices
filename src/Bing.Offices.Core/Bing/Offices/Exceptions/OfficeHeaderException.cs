@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace Bing.Offices.Exceptions;
+﻿namespace Bing.Offices.Exceptions;
 
 /// <summary>
 /// Office表头缺列异常
