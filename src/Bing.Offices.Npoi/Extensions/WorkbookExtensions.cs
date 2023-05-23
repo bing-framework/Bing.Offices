@@ -71,7 +71,7 @@ public static class WorkbookExtensions
         for (var i = 0; i < workbook.NumberOfSheets; i++)
         {
             var sheet = workbook.GetSheetAt(i);
-            if(sheet!=null&&!workbook.IsSheetHidden(i))
+            if (sheet != null && !workbook.IsSheetHidden(i))
                 sheets.Add(sheet);
         }
         return sheets;
@@ -103,7 +103,7 @@ public static class WorkbookExtensions
     /// <param name="workbook">工作簿</param>
     /// <param name="name">工作表名称</param>
     /// <param name="heads">表头</param>
-    public static ISheet AddSheet(this IWorkbook workbook,string name,List<string> heads)
+    public static ISheet AddSheet(this IWorkbook workbook, string name, List<string> heads)
     {
         var sheet = workbook.CreateSheet(name);
         var style = workbook.DefaultHeadStyle();

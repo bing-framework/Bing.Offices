@@ -1,4 +1,5 @@
 ﻿using System;
+using Bing.Offices.Exports;
 
 namespace Bing.Offices.Configurations;
 
@@ -39,6 +40,24 @@ public interface IPropertyConfiguration<out TEntity, TProperty> : IPropertyConfi
     /// </summary>
     /// <param name="formatter">格式化文本</param>
     IPropertyConfiguration<TEntity, TProperty> HasColumnFormatter(string formatter);
+
+    /// <summary>
+    /// 设置表头样式
+    /// </summary>
+    /// <param name="styleSetup">样式配置</param>
+    IPropertyConfiguration<TEntity, TProperty> HasHeaderStyle(Action<IBaseStyle> styleSetup);
+
+    /// <summary>
+    /// 设置内容样式
+    /// </summary>
+    /// <param name="styleSetup">样式配置</param>
+    IPropertyConfiguration<TEntity, TProperty> HasBodyStyle(Action<IBaseStyle> styleSetup);
+
+    /// <summary>
+    /// 设置默认值
+    /// </summary>
+    /// <param name="value">默认值</param>
+    IPropertyConfiguration<TEntity, TProperty> HasDefaultValue(object value);
 
     /// <summary>
     /// 设置忽略属性

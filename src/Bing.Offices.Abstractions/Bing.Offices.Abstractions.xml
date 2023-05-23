@@ -89,72 +89,6 @@
             错误消息
             </summary>
         </member>
-        <member name="T:Bing.Offices.Attributes.ImportHeaderAttribute">
-            <summary>
-            导入头 特性
-            </summary>
-        </member>
-        <member name="P:Bing.Offices.Attributes.ImportHeaderAttribute.Name">
-            <summary>
-            显示名称
-            </summary>
-        </member>
-        <member name="P:Bing.Offices.Attributes.ImportHeaderAttribute.Description">
-            <summary>
-            批注
-            </summary>
-        </member>
-        <member name="P:Bing.Offices.Attributes.ImportHeaderAttribute.AutoTrim">
-            <summary>
-            自动过滤空格，默认：启用
-            </summary>
-        </member>
-        <member name="P:Bing.Offices.Attributes.ImportHeaderAttribute.FixAllSpace">
-            <summary>
-            处理掉所有的空格，包括中间空格
-            </summary>
-        </member>
-        <member name="P:Bing.Offices.Attributes.ImportHeaderAttribute.Format">
-            <summary>
-            格式化（仅用于模板生成）
-            </summary>
-        </member>
-        <member name="P:Bing.Offices.Attributes.ImportHeaderAttribute.ColumnIndex">
-            <summary>
-            列索引，如果为0则自动计算
-            </summary>
-        </member>
-        <member name="P:Bing.Offices.Attributes.ImportHeaderAttribute.IsAllowRepeat">
-            <summary>
-            是否允许重复
-            </summary>
-        </member>
-        <member name="P:Bing.Offices.Attributes.ImportHeaderAttribute.IsIgnore">
-            <summary>
-            是否忽略
-            </summary>
-        </member>
-        <member name="P:Bing.Offices.Attributes.ImportHeaderAttribute.IsInterValidation">
-            <summary>
-            是否启用Excel数据验证
-            </summary>
-            <remarks>
-            对于Excel数据验证，仅用于生成导入模板特性中，作为限制用户对Excel模板数据的约束性
-            </remarks>
-        </member>
-        <member name="P:Bing.Offices.Attributes.ImportHeaderAttribute.ShowInputMessage">
-            <summary>
-            选定单元格时，显示输入的信息
-            </summary>
-            <remarks>
-            仅在 <see cref="P:Bing.Offices.Attributes.ImportHeaderAttribute.IsInterValidation"/> 启用的情况下
-            </remarks>
-        </member>
-        <member name="P:Bing.Offices.Attributes.ImportHeaderAttribute.IsImage">
-            <summary>
-            是否图片数据
-            </summary>
-        </member>
         <member name="T:Bing.Offices.Configurations.IExcelConfiguration">
             <summary>
             Excel 配置
@@ -165,6 +99,12 @@
             配置Excel设置
             </summary>
             <param name="configAction">配置操作</param>
+        </member>
+        <member name="M:Bing.Offices.Configurations.IExcelConfiguration.HasExcelExportSetting(System.Action{Bing.Offices.Settings.ExcelExportSetting})">
+            <summary>
+            设置Excel导出设置
+            </summary>
+            <param name="setupAction">配置操作</param>
         </member>
         <member name="M:Bing.Offices.Configurations.IExcelConfiguration.HasSheetSheeting(System.Action{Bing.Offices.Settings.SheetSetting},System.Int32)">
             <summary>
@@ -234,6 +174,24 @@
             设置列格式化
             </summary>
             <param name="formatter">格式化文本</param>
+        </member>
+        <member name="M:Bing.Offices.Configurations.IPropertyConfiguration`2.HasHeaderStyle(System.Action{Bing.Offices.Exports.IBaseStyle})">
+            <summary>
+            设置表头样式
+            </summary>
+            <param name="styleSetup">样式配置</param>
+        </member>
+        <member name="M:Bing.Offices.Configurations.IPropertyConfiguration`2.HasBodyStyle(System.Action{Bing.Offices.Exports.IBaseStyle})">
+            <summary>
+            设置内容样式
+            </summary>
+            <param name="styleSetup">样式配置</param>
+        </member>
+        <member name="M:Bing.Offices.Configurations.IPropertyConfiguration`2.HasDefaultValue(System.Object)">
+            <summary>
+            设置默认值
+            </summary>
+            <param name="value">默认值</param>
         </member>
         <member name="M:Bing.Offices.Configurations.IPropertyConfiguration`2.Ignored(System.Boolean)">
             <summary>
@@ -325,6 +283,156 @@
             属性装饰器信息列表
             </summary>
         </member>
+        <member name="T:Bing.Offices.Enums.Styles.BorderStyle">
+            <summary>
+            线段样式
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Enums.Styles.BorderStyle.None">
+            <summary>
+            无线段
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Enums.Styles.FillPatternType">
+            <summary>
+            填充模式类型
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Enums.Styles.FillPatternType.NoFill">
+            <summary>
+            无填充
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Enums.Styles.FillPatternType.SolidForeground">
+            <summary>
+            填充前景色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Enums.Styles.FillPatternType.FineDots">
+            <summary>
+            细点线
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Enums.Styles.FillPatternType.AltBars">
+            <summary>
+            提示窗
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Enums.Styles.FillPatternType.SparseDots">
+            <summary>
+            稀疏点线
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Enums.Styles.FillPatternType.ThickHorizontalBands">
+            <summary>
+            厚厚的水平线
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Enums.Styles.FillPatternType.ThickVerticalBands">
+            <summary>
+            厚厚的垂直线
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Enums.Styles.FillPatternType.ThickBackwardDiagonals">
+            <summary>
+            厚厚的反向对角线
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Enums.Styles.FillPatternType.ThickForwardDiagonals">
+            <summary>
+            厚厚的正向对角线
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Enums.Styles.FillPatternType.BigSpots">
+            <summary>
+            大的斑点
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Enums.Styles.FillPatternType.Bricks">
+            <summary>
+            砖线
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Enums.Styles.FillPatternType.ThinHorizontalBands">
+            <summary>
+            薄薄的水平线
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Enums.Styles.FillPatternType.ThinVerticalBands">
+            <summary>
+            薄薄的垂直线
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Enums.Styles.FillPatternType.ThinBackwardDiagonals">
+            <summary>
+            薄薄的方向对角线
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Enums.Styles.FillPatternType.ThinForwardDiagonals">
+            <summary>
+            薄薄的正向对角线
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Enums.Styles.FillPatternType.Squares">
+            <summary>
+            正方形
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Enums.Styles.FillPatternType.Diamonds">
+            <summary>
+            菱形
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Enums.Styles.FillPatternType.LessDots">
+            <summary>
+            少点
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Enums.Styles.FillPatternType.LeastDots">
+            <summary>
+            最小点
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Enums.Styles.HorizontalAlignment">
+            <summary>
+            水平对齐方式
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Enums.Styles.HorizontalAlignment.Left">
+            <summary>
+            左对齐
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Enums.Styles.HorizontalAlignment.Center">
+            <summary>
+            居中
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Enums.Styles.HorizontalAlignment.Right">
+            <summary>
+            右对齐
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Enums.Styles.VerticalAlignment">
+            <summary>
+            垂直对齐方式
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Enums.Styles.VerticalAlignment.Top">
+            <summary>
+            顶部对齐
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Enums.Styles.VerticalAlignment.Center">
+            <summary>
+            居中
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Enums.Styles.VerticalAlignment.Bottom">
+            <summary>
+            底部对齐
+            </summary>
+        </member>
         <member name="T:Bing.Offices.ExcelFormat">
             <summary>
             Excel 格式
@@ -338,6 +446,216 @@
         <member name="F:Bing.Offices.ExcelFormat.Xlsx">
             <summary>
             2007
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Exports.Attributes.ColumnStyleAttribute">
+            <summary>
+            内容样式 特性
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Exports.Attributes.ColumnStyleAttribute.#ctor(System.Boolean)">
+            <summary>
+            初始化一个<see cref="T:Bing.Offices.Exports.Attributes.ColumnStyleAttribute"/>类型的实例
+            </summary>
+            <param name="isBold">加粗</param>
+        </member>
+        <member name="M:Bing.Offices.Exports.Attributes.ColumnStyleAttribute.#ctor">
+            <summary>
+            初始化一个<see cref="T:Bing.Offices.Exports.Attributes.ColumnStyleAttribute"/>类型的实例
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Exports.Attributes.ColumnWidthAttribute">
+            <summary>
+            列宽 特性
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Exports.Attributes.ColumnWidthAttribute.MinWidth">
+            <summary>
+            最小宽度
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Exports.Attributes.ColumnWidthAttribute.MaxWidth">
+            <summary>
+            最大宽度
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Exports.Attributes.ColumnWidthAttribute.#ctor(System.Int32,System.Int32)">
+            <summary>
+            初始化一个<see cref="T:Bing.Offices.Exports.Attributes.ColumnWidthAttribute"/>类型的实例
+            </summary>
+            <param name="minWidth">最小宽度</param>
+            <param name="maxWidth">最大宽度</param>
+        </member>
+        <member name="T:Bing.Offices.Exports.Attributes.HeaderStyleAttribute">
+            <summary>
+            表头样式 特性
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Exports.Attributes.HeaderStyleAttribute.#ctor(System.Boolean)">
+            <summary>
+            初始化一个<see cref="T:Bing.Offices.Exports.Attributes.HeaderStyleAttribute"/>类型的实例
+            </summary>
+            <param name="isBold">加粗</param>
+        </member>
+        <member name="M:Bing.Offices.Exports.Attributes.HeaderStyleAttribute.#ctor">
+            <summary>
+            初始化一个<see cref="T:Bing.Offices.Exports.Attributes.HeaderStyleAttribute"/>类型的实例
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Exports.Attributes.RowMergedAttribute">
+            <summary>
+            行合并 特性（根据指定关键字合并）
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Exports.Attributes.StringFormatterAttribute">
+            <summary>
+            字符格式化 特性
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Exports.Attributes.StringFormatterAttribute.Format">
+            <summary>
+            格式化
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Exports.Attributes.StringFormatterAttribute.#ctor(System.String)">
+            <summary>
+            初始化一个<see cref="T:Bing.Offices.Exports.Attributes.StringFormatterAttribute"/>类型的实例
+            </summary>
+            <param name="format">格式化</param>
+        </member>
+        <member name="T:Bing.Offices.Exports.Attributes.StyleAttribute">
+            <summary>
+            样式 特性
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Exports.Attributes.StyleAttribute.Style">
+            <summary>
+            样式
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Exports.Attributes.StyleAttribute.IsBold">
+            <summary>
+            加粗
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Exports.Attributes.StyleAttribute.WrapText">
+            <summary>
+            自动换行
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Exports.Attributes.StyleAttribute.FontColor">
+            <summary>
+            字体颜色
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Exports.Attributes.StyleAttribute.FontSize">
+            <summary>
+            字体大小
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Exports.Attributes.StyleAttribute.FontName">
+            <summary>
+            字体名称
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Exports.Attributes.StyleAttribute.FillForegroundColor">
+            <summary>
+            前景色
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Exports.Attributes.StyleAttribute.HorizontalAlignment">
+            <summary>
+            水平对齐方式
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Exports.Attributes.StyleAttribute.VerticalAlignment">
+            <summary>
+            垂直对齐方式
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Exports.Attributes.StyleAttribute.#ctor">
+            <summary>
+            初始化一个<see cref="T:Bing.Offices.Exports.Attributes.StyleAttribute"/>类型的实例
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Exports.CellStyle">
+            <summary>
+            单元格样式
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Exports.CellStyle.IsBold">
+            <summary>
+            加粗
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Exports.CellStyle.WrapText">
+            <summary>
+            自动换行
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Exports.CellStyle.FontColor">
+            <summary>
+            字体颜色
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Exports.CellStyle.FontSize">
+            <summary>
+            字体大小
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Exports.CellStyle.FontName">
+            <summary>
+            字体名称
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Exports.CellStyle.FillForegroundColor">
+            <summary>
+            前景色
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Exports.CellStyle.HorizontalAlignment">
+            <summary>
+            水平对齐方式
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Exports.CellStyle.VerticalAlignment">
+            <summary>
+            垂直对齐方式
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Exports.CellStyle.ToString">
+            <summary>
+            输出字符串
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Exports.DefaultStyle">
+            <summary>
+            默认样式
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Exports.DefaultStyle.FontName">
+            <summary>
+            字体名称
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Exports.DefaultStyle.FontColor">
+            <summary>
+            字体颜色
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Exports.DefaultStyle.FontSize">
+            <summary>
+            字体大小
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Exports.DefaultStyle.HorizontalAlignment">
+            <summary>
+            水平对齐方式
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Exports.DefaultStyle.VerticalAlignment">
+            <summary>
+            垂直对齐方式
             </summary>
         </member>
         <member name="T:Bing.Offices.Exports.ExportFormat">
@@ -405,6 +723,56 @@
             CSV
             </summary>
         </member>
+        <member name="T:Bing.Offices.Exports.IBaseStyle">
+            <summary>
+            基础样式
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Exports.IBaseStyle.IsBold">
+            <summary>
+            加粗
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Exports.IBaseStyle.WrapText">
+            <summary>
+            自动换行
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Exports.IBaseStyle.FontColor">
+            <summary>
+            字体颜色
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Exports.IBaseStyle.FontSize">
+            <summary>
+            字体大小
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Exports.IBaseStyle.FontName">
+            <summary>
+            字体名称
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Exports.IBaseStyle.FillForegroundColor">
+            <summary>
+            前景色
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Exports.IBaseStyle.HorizontalAlignment">
+            <summary>
+            水平对齐方式
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Exports.IBaseStyle.VerticalAlignment">
+            <summary>
+            垂直对齐方式
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Exports.IExcelExporter">
+            <summary>
+            Excel 导出器
+            </summary>
+        </member>
         <member name="T:Bing.Offices.Exports.IExcelExportProvider">
             <summary>
             Excel导出提供程序
@@ -455,6 +823,52 @@
             </summary>
             <typeparam name="T">实体类型</typeparam>
             <param name="options">导出选项配置</param>
+        </member>
+        <member name="T:Bing.Offices.Exports.IExporter">
+            <summary>
+            导出器
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Exports.IExporter.ExportAsBytesAsync``1(System.Collections.Generic.IEnumerable{``0})">
+            <summary>
+            导出
+            </summary>
+            <typeparam name="TEntity">类型</typeparam>
+            <param name="dataItems">数据</param>
+            <returns>文件二进制数组</returns>
+        </member>
+        <member name="M:Bing.Offices.Exports.IExporter.ExportAsBytesAsync``1(System.Collections.Generic.IEnumerable{``0},Bing.Offices.ExcelFormat)">
+            <summary>
+            导出
+            </summary>
+            <typeparam name="TEntity">类型</typeparam>
+            <param name="dataItems">数据</param>
+            <param name="excelFormat">Excel格式</param>
+            <returns>文件二进制数组</returns>
+        </member>
+        <member name="M:Bing.Offices.Exports.IExporter.ExportAsBytesAsync``1(System.Collections.Generic.IEnumerable{``0},Bing.Offices.ExcelFormat,System.Int32)">
+            <summary>
+            导出
+            </summary>
+            <typeparam name="TEntity">类型</typeparam>
+            <param name="dataItems">数据</param>
+            <param name="excelFormat">Excel格式</param>
+            <param name="sheetIndex">工作簿索引</param>
+            <returns>文件二进制数组</returns>
+        </member>
+        <member name="T:Bing.Offices.Exports.IExportFileByTemplate">
+            <summary>
+            根据模板导出文件
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Exports.IExportFileByTemplate.ExportBytesByTemplate``1(``0,System.String)">
+            <summary>
+            根据模板导出到字节数组
+            </summary>
+            <typeparam name="T">类型</typeparam>
+            <param name="data">数据</param>
+            <param name="template">模板路径</param>
+            <returns></returns>
         </member>
         <member name="T:Bing.Offices.Exports.IExportOptions`1">
             <summary>
@@ -590,24 +1004,145 @@
             </summary>
             <param name="configuration">Excel 配置</param>
         </member>
-        <member name="T:Bing.Offices.Imports.DataRowErrorInfo">
+        <member name="T:Bing.Offices.Imports.Attributes.ExcelImporterAttribute">
             <summary>
-            数据行错误信息
+            Excel导入 特性
             </summary>
         </member>
-        <member name="M:Bing.Offices.Imports.DataRowErrorInfo.#ctor">
+        <member name="P:Bing.Offices.Imports.Attributes.ExcelImporterAttribute.SheetName">
             <summary>
-            初始化一个<see cref="T:Bing.Offices.Imports.DataRowErrorInfo"/>类型的实例
+            指定Sheet名称（获取指定Sheet名称），为空则自动获取第一个
             </summary>
         </member>
-        <member name="P:Bing.Offices.Imports.DataRowErrorInfo.RowIndex">
+        <member name="P:Bing.Offices.Imports.Attributes.ExcelImporterAttribute.SheetIndex">
             <summary>
-            序号
+            指定Sheet下标（获取指定Sheet下标）
             </summary>
         </member>
-        <member name="P:Bing.Offices.Imports.DataRowErrorInfo.FieldErrors">
+        <member name="P:Bing.Offices.Imports.Attributes.ExcelImporterAttribute.EndColumnCount">
             <summary>
-            字段错误信息
+            截止读取的列数（从1开始，如果已设置，则将支持空行以及特殊列）
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Attributes.ExcelImporterAttribute.IsLabelingError">
+            <summary>
+            是否标注错误（默认为true）
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Attributes.ExcelImporterAttribute.ImportDescription">
+            <summary>
+            Sheet顶部导入描述
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Attributes.ExcelImporterAttribute.DescriptionHeight">
+            <summary>
+            Sheet顶部导入描述高度（换行可能无法自动设置高度，默认为Excel的默认行高）
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Attributes.ExcelImporterAttribute.IsOnlyErrorRows">
+            <summary>
+            是否仅导出错误数据
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Imports.Attributes.ImporterAttribute">
+            <summary>
+            导入 特性
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Attributes.ImporterAttribute.HeaderRowIndex">
+            <summary>
+            表头位置
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Imports.Attributes.ImporterAttribute.MaxCount">
+            <summary>
+            最大允许导入的行数
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Attributes.ImporterAttribute.ImportResultFilter">
+            <summary>
+            导入结果筛选器
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Attributes.ImporterAttribute.ImportHeaderFilter">
+            <summary>
+            导入列头筛选器
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Attributes.ImporterAttribute.IsDisableAllFilter">
+            <summary>
+            是否禁用所有筛选器
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Attributes.ImporterAttribute.IsIgnoreColumnCase">
+            <summary>
+            是否忽略列的大小写
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Imports.Attributes.ImportHeaderAttribute">
+            <summary>
+            导入头 特性
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Attributes.ImportHeaderAttribute.Name">
+            <summary>
+            显示名称
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Attributes.ImportHeaderAttribute.Description">
+            <summary>
+            批注
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Attributes.ImportHeaderAttribute.AutoTrim">
+            <summary>
+            自动过滤空格，默认：启用
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Attributes.ImportHeaderAttribute.FixAllSpace">
+            <summary>
+            处理掉所有的空格，包括中间空格
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Attributes.ImportHeaderAttribute.Format">
+            <summary>
+            格式化（仅用于模板生成）
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Attributes.ImportHeaderAttribute.ColumnIndex">
+            <summary>
+            列索引，如果为0则自动计算
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Attributes.ImportHeaderAttribute.IsAllowRepeat">
+            <summary>
+            是否允许重复
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Attributes.ImportHeaderAttribute.IsIgnore">
+            <summary>
+            是否忽略
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Attributes.ImportHeaderAttribute.IsInterValidation">
+            <summary>
+            是否启用Excel数据验证
+            </summary>
+            <remarks>
+            对于Excel数据验证，仅用于生成导入模板特性中，作为限制用户对Excel模板数据的约束性
+            </remarks>
+        </member>
+        <member name="P:Bing.Offices.Imports.Attributes.ImportHeaderAttribute.ShowInputMessage">
+            <summary>
+            选定单元格时，显示输入的信息
+            </summary>
+            <remarks>
+            仅在 <see cref="P:Bing.Offices.Imports.Attributes.ImportHeaderAttribute.IsInterValidation"/> 启用的情况下
+            </remarks>
+        </member>
+        <member name="P:Bing.Offices.Imports.Attributes.ImportHeaderAttribute.IsImage">
+            <summary>
+            是否图片数据
             </summary>
         </member>
         <member name="T:Bing.Offices.Imports.ErrorLevels">
@@ -623,6 +1158,11 @@
         <member name="F:Bing.Offices.Imports.ErrorLevels.Error">
             <summary>
             错误
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Imports.IExcelImporter">
+            <summary>
+            Excel 导入器
             </summary>
         </member>
         <member name="T:Bing.Offices.Imports.IExcelImportProvider">
@@ -661,6 +1201,18 @@
             </summary>
             <typeparam name="T">实体类型</typeparam>
             <param name="options">导入选项配置</param>
+        </member>
+        <member name="T:Bing.Offices.Imports.IImporter">
+            <summary>
+            导入器
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Imports.IImporter.GenerateTemplateBytesAsync``1">
+            <summary>
+            生成导入模板
+            </summary>
+            <typeparam name="T">类型</typeparam>
+            <returns>二进制字节数组</returns>
         </member>
         <member name="T:Bing.Offices.Imports.IImportOptions">
             <summary>
@@ -741,68 +1293,103 @@
             自定义导入提供程序
             </summary>
         </member>
-        <member name="T:Bing.Offices.Imports.ImportResult">
+        <member name="T:Bing.Offices.Imports.Models.DataRowErrorInfo">
+            <summary>
+            数据行错误信息
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Imports.Models.DataRowErrorInfo.#ctor">
+            <summary>
+            初始化一个<see cref="T:Bing.Offices.Imports.Models.DataRowErrorInfo"/>类型的实例
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Models.DataRowErrorInfo.RowIndex">
+            <summary>
+            序号
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Models.DataRowErrorInfo.FieldErrors">
+            <summary>
+            字段错误信息
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Imports.Models.ImportHeaderInfo">
+            <summary>
+            导入列头设置
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Models.ImportHeaderInfo.IsRequired">
+            <summary>
+            是否必填
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Models.ImportHeaderInfo.PropertyName">
+            <summary>
+            列名称
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Imports.Models.ImportResult">
             <summary>
             导入结果
             </summary>
         </member>
-        <member name="M:Bing.Offices.Imports.ImportResult.#ctor">
+        <member name="M:Bing.Offices.Imports.Models.ImportResult.#ctor">
             <summary>
-            初始化一个<see cref="T:Bing.Offices.Imports.ImportResult"/>类型的实例
+            初始化一个<see cref="T:Bing.Offices.Imports.Models.ImportResult"/>类型的实例
             </summary>
         </member>
-        <member name="P:Bing.Offices.Imports.ImportResult.RowErrors">
+        <member name="P:Bing.Offices.Imports.Models.ImportResult.RowErrors">
             <summary>
             验证错误
             </summary>
         </member>
-        <member name="P:Bing.Offices.Imports.ImportResult.TemplateErrors">
+        <member name="P:Bing.Offices.Imports.Models.ImportResult.TemplateErrors">
             <summary>
             模板错误
             </summary>
         </member>
-        <member name="P:Bing.Offices.Imports.ImportResult.Exception">
+        <member name="P:Bing.Offices.Imports.Models.ImportResult.Exception">
             <summary>
             导入异常信息
             </summary>
         </member>
-        <member name="P:Bing.Offices.Imports.ImportResult.HasError">
+        <member name="P:Bing.Offices.Imports.Models.ImportResult.HasError">
             <summary>
             是否存在导入错误
             </summary>
         </member>
-        <member name="T:Bing.Offices.Imports.ImportResult`1">
+        <member name="T:Bing.Offices.Imports.Models.ImportResult`1">
             <summary>
             导入结果
             </summary>
             <typeparam name="T">对象类型</typeparam>
         </member>
-        <member name="P:Bing.Offices.Imports.ImportResult`1.Data">
+        <member name="P:Bing.Offices.Imports.Models.ImportResult`1.Data">
             <summary>
             导入数据
             </summary>
         </member>
-        <member name="T:Bing.Offices.Imports.TemplateErrorInfo">
+        <member name="T:Bing.Offices.Imports.Models.TemplateErrorInfo">
             <summary>
             模板错误信息
             </summary>
         </member>
-        <member name="P:Bing.Offices.Imports.TemplateErrorInfo.ErrorLevel">
+        <member name="P:Bing.Offices.Imports.Models.TemplateErrorInfo.ErrorLevel">
             <summary>
             错误等级
             </summary>
         </member>
-        <member name="P:Bing.Offices.Imports.TemplateErrorInfo.ColumnName">
+        <member name="P:Bing.Offices.Imports.Models.TemplateErrorInfo.ColumnName">
             <summary>
             Excel列名
             </summary>
         </member>
-        <member name="P:Bing.Offices.Imports.TemplateErrorInfo.RequireColumnName">
+        <member name="P:Bing.Offices.Imports.Models.TemplateErrorInfo.RequireColumnName">
             <summary>
             要求的列名
             </summary>
         </member>
-        <member name="P:Bing.Offices.Imports.TemplateErrorInfo.Message">
+        <member name="P:Bing.Offices.Imports.Models.TemplateErrorInfo.Message">
             <summary>
             消息
             </summary>
@@ -1157,6 +1744,72 @@
         <member name="M:Bing.Offices.Metadata.Excels.IWorkSheet.ClearHeader">
             <summary>
             清空表头
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Metadata.Property.ColumnWidthProperty">
+            <summary>
+            列宽属性
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Metadata.Property.ColumnWidthProperty.Width">
+            <summary>
+            宽度
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Metadata.Property.ColumnWidthProperty.#ctor(System.Int32)">
+            <summary>
+            初始化一个<see cref="T:Bing.Offices.Metadata.Property.ColumnWidthProperty"/>类型的实例
+            </summary>
+            <param name="width">宽度</param>
+        </member>
+        <member name="T:Bing.Offices.Settings.ExcelExportSetting">
+            <summary>
+            Excel 导出设置
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Settings.ExcelExportSetting.HeaderStyle">
+            <summary>
+            表头样式
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Settings.ExcelExportSetting.ColumnStyle">
+            <summary>
+            内容样式
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Settings.ExcelExportSetting.MaxRowNumberOnASheet">
+            <summary>
+            一个Sheet最大允许的行数，设置了之后将输出多个Sheet
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Settings.ExcelExportSetting.AutoFitAllColumn">
+            <summary>
+            自适应所有列
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Settings.ExcelExportSetting.ExporterHeaderFilter">
+            <summary>
+            列头筛选器
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Settings.ExcelExportSetting.ExporterHeadersFilter">
+            <summary>
+            列头（集合）筛选器
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Settings.ExcelExportSetting.IsDisableAllFilter">
+            <summary>
+            是否禁用所有筛选器
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Settings.ExcelExportSetting.AutoCenter">
+            <summary>
+            自动居中（设置后全局居中显示）
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Settings.ExcelExportSetting.HeaderRowIndex">
+            <summary>
+            表头位置
             </summary>
         </member>
         <member name="T:Bing.Offices.Settings.ExcelSetting">

@@ -1,4 +1,8 @@
-﻿using Bing.Offices.Configurations;
+﻿using System.ComponentModel.DataAnnotations.Schema;
+using System.Reflection;
+using Bing.Offices.Attributes;
+using Bing.Offices.Configurations;
+using Bing.Reflection;
 
 namespace Bing.Offices.Internals;
 
@@ -40,7 +44,14 @@ internal static class InternalHelper
     private static ExcelConfiguration CreateExcelConfiguration(Type type, Func<ExcelConfiguration> newConfigurationFunc)
     {
         var excelConfiguration = newConfigurationFunc();
-
+        var propertyInfos = TypeReflections.TypeCacheManager.GetTypeProperties(type);
+        foreach (var propertyInfo in propertyInfos)
+        {
+            var propertyConfigurationType = typeof(PropertyConfiguration<,>).MakeGenericType(type, propertyInfo.PropertyType);
+            var propertyConfiguration = (PropertyConfiguration)Activator.CreateInstance(propertyConfigurationType, propertyInfo);
+            propertyConfiguration.Buid();
+            excelConfiguration.PropertyConfigurationDictionary.Add(propertyInfo, propertyConfiguration);
+        }
         return excelConfiguration;
     }
 
@@ -60,5 +71,18 @@ internal static class InternalHelper
         if (duplicateMarkIndex > 0)
             return columnName.Substring(0, duplicateMarkIndex);
         return columnName;
+    }
+
+    /// <summary>
+    /// 是否有忽略特性
+    /// </summary>
+    /// <param name="property">属性信息</param>
+    public static bool HasIgnore(PropertyInfo property)
+    {
+        if (property.IsDefined(typeof(NotMappedAttribute)))
+            return true;
+        if (property.IsDefined(typeof(ExcelIgnoreAttribute)))
+            return true;
+        return false;
     }
 }

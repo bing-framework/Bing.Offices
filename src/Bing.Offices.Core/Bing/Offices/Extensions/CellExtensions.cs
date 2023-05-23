@@ -15,7 +15,7 @@ public static class CellExtensions
     /// <typeparam name="T">过滤器特性类型</typeparam>
     /// <param name="cell">单元格</param>
     /// <param name="typeFilterInfo">类型过滤器信息</param>
-    public static T GetFilterAttribute<T>(this ICell cell, TypeFilterInfo typeFilterInfo) where T:FilterAttributeBase
+    public static T GetFilterAttribute<T>(this ICell cell, TypeFilterInfo typeFilterInfo) where T : FilterAttributeBase
     {
         return typeFilterInfo.PropertyFilterInfos
             .SingleOrDefault(x =>

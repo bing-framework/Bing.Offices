@@ -8,7 +8,7 @@ public sealed class ExcelSetting
     /// <summary>
     /// 默认Excel设置
     /// </summary>
-    private static ExcelSetting _defaultExcelSetting = new ExcelSetting();
+    private static ExcelSetting _defaultExcelSetting = new();
 
     /// <summary>
     /// 作者
