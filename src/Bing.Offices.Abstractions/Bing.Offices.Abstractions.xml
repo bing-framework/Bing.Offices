@@ -89,72 +89,6 @@
             错误消息
             </summary>
         </member>
-        <member name="T:Bing.Offices.Attributes.ImportHeaderAttribute">
-            <summary>
-            导入头 特性
-            </summary>
-        </member>
-        <member name="P:Bing.Offices.Attributes.ImportHeaderAttribute.Name">
-            <summary>
-            显示名称
-            </summary>
-        </member>
-        <member name="P:Bing.Offices.Attributes.ImportHeaderAttribute.Description">
-            <summary>
-            批注
-            </summary>
-        </member>
-        <member name="P:Bing.Offices.Attributes.ImportHeaderAttribute.AutoTrim">
-            <summary>
-            自动过滤空格，默认：启用
-            </summary>
-        </member>
-        <member name="P:Bing.Offices.Attributes.ImportHeaderAttribute.FixAllSpace">
-            <summary>
-            处理掉所有的空格，包括中间空格
-            </summary>
-        </member>
-        <member name="P:Bing.Offices.Attributes.ImportHeaderAttribute.Format">
-            <summary>
-            格式化（仅用于模板生成）
-            </summary>
-        </member>
-        <member name="P:Bing.Offices.Attributes.ImportHeaderAttribute.ColumnIndex">
-            <summary>
-            列索引，如果为0则自动计算
-            </summary>
-        </member>
-        <member name="P:Bing.Offices.Attributes.ImportHeaderAttribute.IsAllowRepeat">
-            <summary>
-            是否允许重复
-            </summary>
-        </member>
-        <member name="P:Bing.Offices.Attributes.ImportHeaderAttribute.IsIgnore">
-            <summary>
-            是否忽略
-            </summary>
-        </member>
-        <member name="P:Bing.Offices.Attributes.ImportHeaderAttribute.IsInterValidation">
-            <summary>
-            是否启用Excel数据验证
-            </summary>
-            <remarks>
-            对于Excel数据验证，仅用于生成导入模板特性中，作为限制用户对Excel模板数据的约束性
-            </remarks>
-        </member>
-        <member name="P:Bing.Offices.Attributes.ImportHeaderAttribute.ShowInputMessage">
-            <summary>
-            选定单元格时，显示输入的信息
-            </summary>
-            <remarks>
-            仅在 <see cref="P:Bing.Offices.Attributes.ImportHeaderAttribute.IsInterValidation"/> 启用的情况下
-            </remarks>
-        </member>
-        <member name="P:Bing.Offices.Attributes.ImportHeaderAttribute.IsImage">
-            <summary>
-            是否图片数据
-            </summary>
-        </member>
         <member name="T:Bing.Offices.Configurations.IExcelConfiguration">
             <summary>
             Excel 配置
@@ -590,24 +524,145 @@
             </summary>
             <param name="configuration">Excel 配置</param>
         </member>
-        <member name="T:Bing.Offices.Imports.DataRowErrorInfo">
+        <member name="T:Bing.Offices.Imports.Attributes.ExcelImporterAttribute">
             <summary>
-            数据行错误信息
+            Excel导入 特性
             </summary>
         </member>
-        <member name="M:Bing.Offices.Imports.DataRowErrorInfo.#ctor">
+        <member name="P:Bing.Offices.Imports.Attributes.ExcelImporterAttribute.SheetName">
             <summary>
-            初始化一个<see cref="T:Bing.Offices.Imports.DataRowErrorInfo"/>类型的实例
+            指定Sheet名称（获取指定Sheet名称），为空则自动获取第一个
             </summary>
         </member>
-        <member name="P:Bing.Offices.Imports.DataRowErrorInfo.RowIndex">
+        <member name="P:Bing.Offices.Imports.Attributes.ExcelImporterAttribute.SheetIndex">
             <summary>
-            序号
+            指定Sheet下标（获取指定Sheet下标）
             </summary>
         </member>
-        <member name="P:Bing.Offices.Imports.DataRowErrorInfo.FieldErrors">
+        <member name="P:Bing.Offices.Imports.Attributes.ExcelImporterAttribute.EndColumnCount">
             <summary>
-            字段错误信息
+            截止读取的列数（从1开始，如果已设置，则将支持空行以及特殊列）
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Attributes.ExcelImporterAttribute.IsLabelingError">
+            <summary>
+            是否标注错误（默认为true）
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Attributes.ExcelImporterAttribute.ImportDescription">
+            <summary>
+            Sheet顶部导入描述
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Attributes.ExcelImporterAttribute.DescriptionHeight">
+            <summary>
+            Sheet顶部导入描述高度（换行可能无法自动设置高度，默认为Excel的默认行高）
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Attributes.ExcelImporterAttribute.IsOnlyErrorRows">
+            <summary>
+            是否仅导出错误数据
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Imports.Attributes.ImporterAttribute">
+            <summary>
+            导入 特性
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Attributes.ImporterAttribute.HeaderRowIndex">
+            <summary>
+            表头位置
+            </summary>
+        </member>
+        <member name="F:Bing.Offices.Imports.Attributes.ImporterAttribute.MaxCount">
+            <summary>
+            最大允许导入的行数
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Attributes.ImporterAttribute.ImportResultFilter">
+            <summary>
+            导入结果筛选器
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Attributes.ImporterAttribute.ImportHeaderFilter">
+            <summary>
+            导入列头筛选器
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Attributes.ImporterAttribute.IsDisableAllFilter">
+            <summary>
+            是否禁用所有筛选器
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Attributes.ImporterAttribute.IsIgnoreColumnCase">
+            <summary>
+            是否忽略列的大小写
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Imports.Attributes.ImportHeaderAttribute">
+            <summary>
+            导入头 特性
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Attributes.ImportHeaderAttribute.Name">
+            <summary>
+            显示名称
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Attributes.ImportHeaderAttribute.Description">
+            <summary>
+            批注
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Attributes.ImportHeaderAttribute.AutoTrim">
+            <summary>
+            自动过滤空格，默认：启用
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Attributes.ImportHeaderAttribute.FixAllSpace">
+            <summary>
+            处理掉所有的空格，包括中间空格
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Attributes.ImportHeaderAttribute.Format">
+            <summary>
+            格式化（仅用于模板生成）
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Attributes.ImportHeaderAttribute.ColumnIndex">
+            <summary>
+            列索引，如果为0则自动计算
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Attributes.ImportHeaderAttribute.IsAllowRepeat">
+            <summary>
+            是否允许重复
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Attributes.ImportHeaderAttribute.IsIgnore">
+            <summary>
+            是否忽略
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Attributes.ImportHeaderAttribute.IsInterValidation">
+            <summary>
+            是否启用Excel数据验证
+            </summary>
+            <remarks>
+            对于Excel数据验证，仅用于生成导入模板特性中，作为限制用户对Excel模板数据的约束性
+            </remarks>
+        </member>
+        <member name="P:Bing.Offices.Imports.Attributes.ImportHeaderAttribute.ShowInputMessage">
+            <summary>
+            选定单元格时，显示输入的信息
+            </summary>
+            <remarks>
+            仅在 <see cref="P:Bing.Offices.Imports.Attributes.ImportHeaderAttribute.IsInterValidation"/> 启用的情况下
+            </remarks>
+        </member>
+        <member name="P:Bing.Offices.Imports.Attributes.ImportHeaderAttribute.IsImage">
+            <summary>
+            是否图片数据
             </summary>
         </member>
         <member name="T:Bing.Offices.Imports.ErrorLevels">
@@ -623,6 +678,11 @@
         <member name="F:Bing.Offices.Imports.ErrorLevels.Error">
             <summary>
             错误
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Imports.IExcelImporter">
+            <summary>
+            Excel 导入器
             </summary>
         </member>
         <member name="T:Bing.Offices.Imports.IExcelImportProvider">
@@ -661,6 +721,18 @@
             </summary>
             <typeparam name="T">实体类型</typeparam>
             <param name="options">导入选项配置</param>
+        </member>
+        <member name="T:Bing.Offices.Imports.IImporter">
+            <summary>
+            导入器
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Imports.IImporter.GenerateTemplateBytesAsync``1">
+            <summary>
+            生成导入模板
+            </summary>
+            <typeparam name="T">类型</typeparam>
+            <returns>二进制字节数组</returns>
         </member>
         <member name="T:Bing.Offices.Imports.IImportOptions">
             <summary>
@@ -741,68 +813,103 @@
             自定义导入提供程序
             </summary>
         </member>
-        <member name="T:Bing.Offices.Imports.ImportResult">
+        <member name="T:Bing.Offices.Imports.Models.DataRowErrorInfo">
+            <summary>
+            数据行错误信息
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Imports.Models.DataRowErrorInfo.#ctor">
+            <summary>
+            初始化一个<see cref="T:Bing.Offices.Imports.Models.DataRowErrorInfo"/>类型的实例
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Models.DataRowErrorInfo.RowIndex">
+            <summary>
+            序号
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Models.DataRowErrorInfo.FieldErrors">
+            <summary>
+            字段错误信息
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Imports.Models.ImportHeaderInfo">
+            <summary>
+            导入列头设置
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Models.ImportHeaderInfo.IsRequired">
+            <summary>
+            是否必填
+            </summary>
+        </member>
+        <member name="P:Bing.Offices.Imports.Models.ImportHeaderInfo.PropertyName">
+            <summary>
+            列名称
+            </summary>
+        </member>
+        <member name="T:Bing.Offices.Imports.Models.ImportResult">
             <summary>
             导入结果
             </summary>
         </member>
-        <member name="M:Bing.Offices.Imports.ImportResult.#ctor">
+        <member name="M:Bing.Offices.Imports.Models.ImportResult.#ctor">
             <summary>
-            初始化一个<see cref="T:Bing.Offices.Imports.ImportResult"/>类型的实例
+            初始化一个<see cref="T:Bing.Offices.Imports.Models.ImportResult"/>类型的实例
             </summary>
         </member>
-        <member name="P:Bing.Offices.Imports.ImportResult.RowErrors">
+        <member name="P:Bing.Offices.Imports.Models.ImportResult.RowErrors">
             <summary>
             验证错误
             </summary>
         </member>
-        <member name="P:Bing.Offices.Imports.ImportResult.TemplateErrors">
+        <member name="P:Bing.Offices.Imports.Models.ImportResult.TemplateErrors">
             <summary>
             模板错误
             </summary>
         </member>
-        <member name="P:Bing.Offices.Imports.ImportResult.Exception">
+        <member name="P:Bing.Offices.Imports.Models.ImportResult.Exception">
             <summary>
             导入异常信息
             </summary>
         </member>
-        <member name="P:Bing.Offices.Imports.ImportResult.HasError">
+        <member name="P:Bing.Offices.Imports.Models.ImportResult.HasError">
             <summary>
             是否存在导入错误
             </summary>
         </member>
-        <member name="T:Bing.Offices.Imports.ImportResult`1">
+        <member name="T:Bing.Offices.Imports.Models.ImportResult`1">
             <summary>
             导入结果
             </summary>
             <typeparam name="T">对象类型</typeparam>
         </member>
-        <member name="P:Bing.Offices.Imports.ImportResult`1.Data">
+        <member name="P:Bing.Offices.Imports.Models.ImportResult`1.Data">
             <summary>
             导入数据
             </summary>
         </member>
-        <member name="T:Bing.Offices.Imports.TemplateErrorInfo">
+        <member name="T:Bing.Offices.Imports.Models.TemplateErrorInfo">
             <summary>
             模板错误信息
             </summary>
         </member>
-        <member name="P:Bing.Offices.Imports.TemplateErrorInfo.ErrorLevel">
+        <member name="P:Bing.Offices.Imports.Models.TemplateErrorInfo.ErrorLevel">
             <summary>
             错误等级
             </summary>
         </member>
-        <member name="P:Bing.Offices.Imports.TemplateErrorInfo.ColumnName">
+        <member name="P:Bing.Offices.Imports.Models.TemplateErrorInfo.ColumnName">
             <summary>
             Excel列名
             </summary>
         </member>
-        <member name="P:Bing.Offices.Imports.TemplateErrorInfo.RequireColumnName">
+        <member name="P:Bing.Offices.Imports.Models.TemplateErrorInfo.RequireColumnName">
             <summary>
             要求的列名
             </summary>
         </member>
-        <member name="P:Bing.Offices.Imports.TemplateErrorInfo.Message">
+        <member name="P:Bing.Offices.Imports.Models.TemplateErrorInfo.Message">
             <summary>
             消息
             </summary>

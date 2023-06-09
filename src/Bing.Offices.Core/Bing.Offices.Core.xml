@@ -1191,7 +1191,7 @@
             映射配置文件的配置方法名
             </summary>
         </member>
-        <member name="F:Bing.Offices.FluentSettings.ProfileGenericTypeDefinition">
+        <member name="F:Bing.Offices.FluentSettings._profileGenericTypeDefinition">
             <summary>
             映射配置文件的泛型类型定义
             </summary>
@@ -1295,6 +1295,18 @@
             转换为字典
             </summary>
             <param name="cells">单元格集合</param>
+        </member>
+        <member name="T:Bing.Offices.Imports.ExcelImporter">
+            <summary>
+            Excel 导入器
+            </summary>
+        </member>
+        <member name="M:Bing.Offices.Imports.ExcelImporter.GenerateTemplateBytesAsync``1">
+            <summary>
+            生成导入模板
+            </summary>
+            <typeparam name="T">类型</typeparam>
+            <returns>二进制字节数组</returns>
         </member>
         <member name="T:Bing.Offices.Imports.ExcelImportService">
             <summary>
