@@ -75,7 +75,7 @@ public class GoodsImportTest
     /// <param name="path">文件路径</param>
     private async Task ImportAsync(string path)
     {
-        var workbook = await _excelImportService.ImportAsync<ImportGoods>(new ImportOptions()
+        var workbook = await _excelImportService.ImportAsync<ImportGoods>(new ImportOptions
         {
             FileUrl = path
         });

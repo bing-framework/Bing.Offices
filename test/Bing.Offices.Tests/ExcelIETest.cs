@@ -76,6 +76,11 @@ public class ExcelIETest : TestBase
                 Output.WriteLine(body.Cells.Select(x => x.Value.ToString()).Join());
             }
         }
+
+        Assert.Equal("系统编号", result.Sheets[0].GetHeader()[0].Cells[0].Value);
+        Assert.Equal("国标码", result.Sheets[0].GetHeader()[0].Cells[1].Value);
+        Assert.Equal("创建时间", result.Sheets[0].GetHeader()[0].Cells[2].Value);
+        Assert.Equal("年龄", result.Sheets[0].GetHeader()[0].Cells[3].Value);
     }
 
     /// <summary>
@@ -276,7 +281,7 @@ public class ExcelIETest : TestBase
     public async Task Test_Export_IgnoreProperty()
     {
         var data = new List<ExportOrder>();
-        for (int i = 0; i < 10000; i++)
+        for (var i = 0; i < 10000; i++)
         {
             DateTime? currentTime = null;
             if (i % 2 == 0)
@@ -292,7 +297,7 @@ public class ExcelIETest : TestBase
             });
         }
 
-        var bytes = await _excelExportService.ExportAsync(new ExportOptions<ExportOrder>()
+        var bytes = await _excelExportService.ExportAsync(new ExportOptions<ExportOrder>
         {
             Data = data,
         });
@@ -337,7 +342,7 @@ public class ExcelIETest : TestBase
     public async Task Test_Export_HeaderRow()
     {
         var data = new List<Bing.Offices.Tests.Models.ExportFormat>();
-        for (int i = 0; i < 10000; i++)
+        for (var i = 0; i < 10000; i++)
         {
             data.Add(new Bing.Offices.Tests.Models.ExportFormat()
             {
@@ -559,7 +564,7 @@ public class ExcelIETest : TestBase
     {
         var codes = new[] { "100", "200", "300", "400" };
         var entities = new List<ExportValueMapping>();
-        for (int i = 0; i < 1000; i++)
+        for (var i = 0; i < 1000; i++)
         {
             var index = new Random().Next(0, 4);
             var code = codes[index];
