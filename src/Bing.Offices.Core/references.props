@@ -1,5 +1,0 @@
-﻿<Project>
-  <ItemGroup>
-    <ProjectReference Include="..\Bing.Offices.Abstractions\Bing.Offices.Abstractions.csproj" />
-  </ItemGroup>
-</Project>

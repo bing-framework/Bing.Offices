@@ -12,9 +12,13 @@ Bing是一个.net core平台下的应用框架，旨在于提升小型团队的�
 
   <Import Project="..\..\common.props" />
 
-  <Import Project="dependency.props" />
+  <ItemGroup>
+    <PackageReference Include="Bing.Utils" Version="$(BingUtilsPackageVersion)" />
+  </ItemGroup>
 
-  <Import Project="references.props" />
+  <ItemGroup>
+    <ProjectReference Include="..\Bing.Offices.Abstractions\Bing.Offices.Abstractions.csproj" />
+  </ItemGroup>
 
   <ItemGroup>
     <Compile Update="Bing\Offices\Resources.Designer.cs">
