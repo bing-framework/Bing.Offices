@@ -13,7 +13,6 @@ using Bing.Offices.Tests.Models;
 using Bing.Extensions;
 using Bing.Helpers;
 using Bing.Offices.Metadata.Excels;
-using Bing.Utils.IdGenerators.Core;
 using Bing.Utils.Json;
 using Xunit;
 using Xunit.Abstractions;
@@ -383,7 +382,7 @@ public class ExcelIETest : TestBase
         {
             data.Add(new ExportScale
             {
-                Id = SnowflakeIdGenerator.Current.Create().ToString(),
+                Id = Id.CreateSnowflakeId().ToString(),
                 Byte = Conv.ToByte(i),
                 NullableByte = i % 2 == 0 ? null : Conv.ToByteOrNull(i),
                 Short = Conv.ToShort(i),
