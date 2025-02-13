@@ -265,4 +265,4 @@ __pycache__/
 /output/*
 /output
 
-/src/**/Bing.*.xml
+/src/**/Bing.Offices*.xml
