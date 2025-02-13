@@ -1,6 +1,4 @@
-﻿using System.Collections.Generic;
-using System.Linq;
-using NPOI.SS.Util;
+﻿using NPOI.SS.Util;
 
 namespace Bing.Offices.Npoi.Extensions;
 

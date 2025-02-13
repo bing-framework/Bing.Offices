@@ -103,7 +103,7 @@ internal sealed class ExcelConfiguration<TEntity> : ExcelConfiguration, IExcelCo
             if (null == property)
                 throw new InvalidOperationException($"this property [{memberInfo.Name}] does not exists!");
         }
-        return (IPropertyConfiguration<TEntity, TProperty>) PropertyConfigurationDictionary[property];
+        return (IPropertyConfiguration<TEntity, TProperty>)PropertyConfigurationDictionary[property];
     }
 
     /// <summary>

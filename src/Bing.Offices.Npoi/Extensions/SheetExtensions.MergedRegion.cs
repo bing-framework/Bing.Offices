@@ -1,5 +1,4 @@
-﻿using System.Collections.Generic;
-using Bing.Offices.Metadata;
+﻿using Bing.Offices.Metadata;
 using NPOI.SS.Util;
 
 namespace Bing.Offices.Npoi.Extensions;

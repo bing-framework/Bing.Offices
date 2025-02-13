@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using Bing.Offices.Metadata.Excels;
+﻿using Bing.Offices.Metadata.Excels;
 
 namespace Bing.Offices.Npoi.Metadata.Excels;
 

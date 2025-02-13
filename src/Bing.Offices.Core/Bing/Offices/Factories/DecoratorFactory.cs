@@ -34,7 +34,7 @@ internal static class DecoratorFactory
                 t.IsDefined(typeof(BindDecoratorAttribute)) &&
                 t.GetCustomAttribute<BindDecoratorAttribute>()?.DecoratorType == type);
         if (decoratorType == null)
-            throw new ArgumentNullException(nameof(decoratorType),"找不到指定装饰器类型");
+            throw new ArgumentNullException(nameof(decoratorType), "找不到指定装饰器类型");
         var decorator = Activator.CreateInstance(decoratorType) as IDecorator;
         DecoratorDict[type] = decorator;
         return decorator;

@@ -1,5 +1,4 @@
-﻿using System;
-using NPOI.SS.UserModel;
+﻿using NPOI.SS.UserModel;
 
 namespace Bing.Offices.Npoi.Extensions;
 

@@ -1,6 +1,4 @@
-﻿using System.Collections.Generic;
-
-namespace Bing.Offices.Imports;
+﻿namespace Bing.Offices.Imports;
 
 /// <summary>
 /// 导入选项配置

@@ -1,6 +1,4 @@
-﻿using System;
-using System.IO;
-using Bing.Offices.Npoi.Internals;
+﻿using Bing.Offices.Npoi.Internals;
 using Bing.Offices.Settings;
 using Bing.Text;
 using NPOI.HPSF;

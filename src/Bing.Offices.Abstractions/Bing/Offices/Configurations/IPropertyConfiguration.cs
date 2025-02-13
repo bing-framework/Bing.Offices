@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace Bing.Offices.Configurations;
+﻿namespace Bing.Offices.Configurations;
 
 /// <summary>
 /// 属性配置

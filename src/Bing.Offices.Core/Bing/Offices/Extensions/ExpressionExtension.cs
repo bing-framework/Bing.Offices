@@ -49,7 +49,7 @@ public static class ExpressionExtension
 
         if (expression.NodeType == ExpressionType.Convert)
         {
-            var operant = ((UnaryExpression) expression).Operand;
+            var operant = ((UnaryExpression)expression).Operand;
             return ExtractMemberExpression(operant);
         }
 

@@ -1,6 +1,4 @@
-﻿using System.Threading.Tasks;
-
-namespace Bing.Offices.Exports;
+﻿namespace Bing.Offices.Exports;
 
 /// <summary>
 /// Excel导出服务

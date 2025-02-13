@@ -38,7 +38,7 @@ public sealed class PropertySetting
     /// <summary>
     /// 映射值 字典
     /// </summary>
-    public Dictionary<string, object> MappingValues { get; internal set; } = new Dictionary<string, object>();
+    public Dictionary<string, object> MappingValues { get; internal set; } = new();
 
     /// <summary>
     /// 是否动态列

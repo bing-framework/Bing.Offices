@@ -1,6 +1,4 @@
-﻿using System.Collections.Generic;
-
-namespace Bing.Offices.Filters;
+﻿namespace Bing.Offices.Filters;
 
 /// <summary>
 /// 类型过滤器信息

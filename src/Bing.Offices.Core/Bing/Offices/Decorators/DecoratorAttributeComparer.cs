@@ -5,7 +5,7 @@ namespace Bing.Offices.Decorators;
 /// <summary>
 /// 装饰器特性比较器
 /// </summary>
-internal class DecoratorAttributeComparer:IEqualityComparer<DecoratorAttributeBase>
+internal class DecoratorAttributeComparer : IEqualityComparer<DecoratorAttributeBase>
 {
     /// <summary>
     /// 是否相等

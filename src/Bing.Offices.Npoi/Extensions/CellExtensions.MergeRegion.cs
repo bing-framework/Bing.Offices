@@ -1,5 +1,4 @@
-﻿using System;
-using Bing.Offices.Exceptions;
+﻿using Bing.Offices.Exceptions;
 using Bing.Offices.Metadata;
 using NPOI.SS.Util;
 

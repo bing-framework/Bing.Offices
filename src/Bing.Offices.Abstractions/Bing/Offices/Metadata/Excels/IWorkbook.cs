@@ -1,6 +1,4 @@
-﻿using System.Collections.Generic;
-
-namespace Bing.Offices.Metadata.Excels;
+﻿namespace Bing.Offices.Metadata.Excels;
 
 /// <summary>
 /// 工作簿

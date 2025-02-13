@@ -12,20 +12,20 @@ internal static class InternalCache
     /// <summary>
     /// 类型 - Excel配置 字典
     /// </summary>
-    public static readonly ConcurrentDictionary<Type, IExcelConfiguration> TypeExcelConfigurationDictionary = new ConcurrentDictionary<Type, IExcelConfiguration>();
+    public static readonly ConcurrentDictionary<Type, IExcelConfiguration> TypeExcelConfigurationDictionary = new();
 
     /// <summary>
     /// 输出格式化函数 缓存
     /// </summary>
-    public static readonly ConcurrentDictionary<PropertyInfo, Delegate> OutputFormatterFuncCache = new ConcurrentDictionary<PropertyInfo, Delegate>();
+    public static readonly ConcurrentDictionary<PropertyInfo, Delegate> OutputFormatterFuncCache = new();
 
     /// <summary>
     /// 输入格式化函数 缓存
     /// </summary>
-    public static readonly ConcurrentDictionary<PropertyInfo, Delegate> InputFormatterFuncCache = new ConcurrentDictionary<PropertyInfo, Delegate>();
+    public static readonly ConcurrentDictionary<PropertyInfo, Delegate> InputFormatterFuncCache = new();
 
     /// <summary>
     /// 列输入格式化函数 缓存
     /// </summary>
-    public static readonly ConcurrentDictionary<PropertyInfo, Delegate> ColumnInputFormatterFunCache = new ConcurrentDictionary<PropertyInfo, Delegate>();
+    public static readonly ConcurrentDictionary<PropertyInfo, Delegate> ColumnInputFormatterFunCache = new();
 }

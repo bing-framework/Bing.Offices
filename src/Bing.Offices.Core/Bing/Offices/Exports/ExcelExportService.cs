@@ -37,7 +37,7 @@ public class ExcelExportService : IExcelExportService
     /// </summary>
     /// <typeparam name="T">实体类型</typeparam>
     /// <param name="options">导出选项配置</param>
-    private IExcelExportProvider GetExportProvider<T>(IExportOptions<T> options) where T:class,new()
+    private IExcelExportProvider GetExportProvider<T>(IExportOptions<T> options) where T : class, new()
     {
         if (options.CustomExportProvider != null)
             return options.CustomExportProvider;
