@@ -3,7 +3,7 @@
     <!-- All Microsoft packages -->
     <MicrosoftPackageVersion>6.0.*</MicrosoftPackageVersion>
     <!-- Bing packages -->
-    <BingUtilsPackageVersion>1.5.0-preview-20240229-1</BingUtilsPackageVersion>
+    <BingUtilsPackageVersion>1.5.0</BingUtilsPackageVersion>
     <!-- Npoi packages -->
     <NpoiPackageVersion>2.6.0</NpoiPackageVersion>
   </PropertyGroup>
