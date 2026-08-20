@@ -1,0 +1,19 @@
+{
+  "active": false,
+  "taskId": "sql-lambda-query-api-v4",
+  "mode": "review-fix",
+  "agentSource": "copilot",
+  "planPath": "ai_docs/tasks/sql-lambda-query-api-v4/plan.md",
+  "executionPath": "ai_docs/tasks/sql-lambda-query-api-v4/execution.md",
+  "reviewPath": "ai_docs/tasks/sql-lambda-query-api-v4/review.md",
+  "reviewRound": 1,
+  "status": "COMPLETED",
+  "startedAt": "2026-08-20T08:38:16.298Z",
+  "updatedAt": "2026-08-20T10:10:00.531Z",
+  "finalStatus": "COMPLETED",
+  "finishedAt": "2026-08-20T18:09:35.3807618+08:00",
+  "completedAt": "2026-08-20T10:10:00.531Z",
+  "finalizedBy": "task-finish.mjs",
+  "notificationStatus": "sent",
+  "notificationUpdatedAt": "2026-08-20T10:10:01.183Z"
+}

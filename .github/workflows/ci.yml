@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            6.0.x
+            8.0.x
+
+      - name: Restore
+        run: dotnet restore Bing.Offices.sln --locked-mode
+
+      - name: Build
+        run: dotnet build Bing.Offices.sln -c Release --no-restore
+
+      - name: Check diff
+        run: git diff --check
+
+      - name: Test
+        run: |
+          dotnet test tests/Bing.Offices.Tests/Bing.Offices.Tests.csproj -f net6.0 -c Release --no-restore
+          dotnet test tests/Bing.Offices.Tests/Bing.Offices.Tests.csproj -f net8.0 -c Release --no-restore
+          dotnet test tests/Bing.Offices.Tests.Integration/Bing.Offices.Tests.Integration.csproj -f net6.0 -c Release --no-restore
+          dotnet test tests/Bing.Offices.Tests.Integration/Bing.Offices.Tests.Integration.csproj -f net8.0 -c Release --no-restore
+
+      - name: Pack
+        run: |
+          dotnet pack src/Bing.Offices.Abstractions/Bing.Offices.Abstractions.csproj -c Release --no-build -o artifacts/packages
+          dotnet pack src/Bing.Offices.Core/Bing.Offices.Core.csproj -c Release --no-build -o artifacts/packages
+          dotnet pack src/Bing.Offices.Npoi/Bing.Offices.Npoi.csproj -c Release --no-build -o artifacts/packages
+
+      - name: Verify packages
+        shell: bash
+        run: |
+          test "$(find artifacts/packages -name '*.nupkg' | wc -l)" -eq 3
+          test "$(find artifacts/packages -name '*.snupkg' | wc -l)" -eq 3
+          for package in artifacts/packages/*.nupkg; do
+            unzip -l "$package" | grep -q 'lib/'
+            unzip -l "$package" | grep -q '\.xml$'
+          done

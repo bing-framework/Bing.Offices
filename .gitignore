@@ -264,5 +264,10 @@ __pycache__/
 *.DotSettings
 /output/*
 /output
+/BenchmarkDotNet.Artifacts/
 
 /src/**/Bing.Offices*.xml
+
+# AI Generated files
+.agents/.env.local
+.agents/runtime/
