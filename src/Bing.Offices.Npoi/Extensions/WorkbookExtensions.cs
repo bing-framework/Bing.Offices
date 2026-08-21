@@ -1,5 +1,4 @@
-﻿using Bing.Offices.Exports;
-using NPOI.HSSF.UserModel;
+﻿using NPOI.HSSF.UserModel;
 using NPOI.SS.UserModel;
 using NPOI.XSSF.UserModel;
 
@@ -8,51 +7,22 @@ namespace Bing.Offices.Npoi.Extensions;
 /// <summary>
 /// NPOI工作簿(<see cref="NPOI.SS.UserModel.IWorkbook"/>) 扩展
 /// </summary>
-public static class WorkbookExtensions
+internal static class WorkbookExtensions
 {
-    #region SaveToBuffer(将工作簿转换成字节数组)
-
-    /// <summary>
-    /// 将工作簿转换成字节数组
-    /// </summary>
-    /// <param name="workbook">工作簿</param>
-    public static byte[] SaveToBuffer(this IWorkbook workbook)
-    {
-        using var ms = new MemoryStream();
-        workbook.Write(ms, false);
-        return ms.ToArray();
-    }
-
-    #endregion
-
-    #region ToWorkbook(转换为工作簿)
-
-    /// <summary>
-    /// 转换为工作簿
-    /// </summary>
-    /// <param name="workbookBytes">工作簿字节数组</param>
-    public static IWorkbook ToWorkbook(this byte[] workbookBytes)
-    {
-        using var stream = new MemoryStream(workbookBytes);
-        return WorkbookFactory.Create(stream);
-    }
-
-    #endregion
-
     #region GetExcelFormat(获取Excel格式类型)
 
     /// <summary>
     /// 获取Excel格式类型
     /// </summary>
     /// <param name="workbook">工作簿</param>
-    public static ExportFormat GetExcelFormat(this IWorkbook workbook)
+    public static ExcelFormat GetExcelFormat(this IWorkbook workbook)
     {
         switch (workbook)
         {
             case HSSFWorkbook _:
-                return ExportFormat.Xlsx;
+                return ExcelFormat.Xls;
             case XSSFWorkbook _:
-                return ExportFormat.Xls;
+                return ExcelFormat.Xlsx;
         }
         throw new NotImplementedException($"未知Excel格式类型");
     }
@@ -71,7 +41,7 @@ public static class WorkbookExtensions
         for (var i = 0; i < workbook.NumberOfSheets; i++)
         {
             var sheet = workbook.GetSheetAt(i);
-            if(sheet!=null&&!workbook.IsSheetHidden(i))
+            if (sheet != null && !workbook.IsSheetHidden(i) && !workbook.IsSheetVeryHidden(i))
                 sheets.Add(sheet);
         }
         return sheets;
@@ -103,13 +73,16 @@ public static class WorkbookExtensions
     /// <param name="workbook">工作簿</param>
     /// <param name="name">工作表名称</param>
     /// <param name="heads">表头</param>
-    public static ISheet AddSheet(this IWorkbook workbook,string name,List<string> heads)
+    public static ISheet AddSheet(this IWorkbook workbook, string name, List<string> heads)
     {
+        if (heads is null)
+            throw new ArgumentNullException(nameof(heads));
         var sheet = workbook.CreateSheet(name);
         var style = workbook.DefaultHeadStyle();
         var row = sheet.CreateRow(0);
         row.Height = 20 * 20;
-        heads.ForEach(item => row.Value(heads.IndexOf(item), item, style));
+        for (var index = 0; index < heads.Count; index++)
+            row.Value(index, heads[index], style);
         return sheet;
     }
 

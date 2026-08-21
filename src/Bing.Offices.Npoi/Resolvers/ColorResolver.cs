@@ -5,7 +5,7 @@ namespace Bing.Offices.Npoi.Resolvers;
 /// <summary>
 /// 颜色解析器
 /// </summary>
-public class ColorResolver
+internal static class ColorResolver
 {
     /// <summary>
     /// 解析

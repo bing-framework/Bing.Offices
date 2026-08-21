@@ -8,7 +8,7 @@ namespace Bing.Offices.Npoi;
 /// <summary>
 /// Excel 操作辅助类
 /// </summary>
-public static class ExcelHelper
+internal static class ExcelHelper
 {
     /// <summary>
     /// 应用程序版本
@@ -57,7 +57,7 @@ public static class ExcelHelper
     /// <param name="excelPath">Excel文件路径</param>
     /// <param name="excelSetting">Excel设置</param>
     /// <exception cref="ArgumentException"></exception>
-    public static NPOI.SS.UserModel.IWorkbook PrepareWorkbook(string excelPath, ExcelSetting? excelSetting)
+    public static NPOI.SS.UserModel.IWorkbook PrepareWorkbook(string excelPath, ExcelSetting excelSetting)
     {
         if (!ValidateExcelFilePath(excelPath, out var msg, true))
             throw new ArgumentException(msg);
@@ -69,7 +69,7 @@ public static class ExcelHelper
     /// </summary>
     /// <param name="format">Excel格式</param>
     /// <param name="excelSetting">Excel设置</param>
-    public static NPOI.SS.UserModel.IWorkbook PrepareWorkbook(ExcelFormat format, ExcelSetting? excelSetting) =>
+    public static NPOI.SS.UserModel.IWorkbook PrepareWorkbook(ExcelFormat format, ExcelSetting excelSetting) =>
         PrepareWorkbook(format == ExcelFormat.Xlsx, excelSetting);
 
     /// <summary>
@@ -94,7 +94,7 @@ public static class ExcelHelper
     /// </summary>
     /// <param name="isXlsx">是否Xlsx格式</param>
     /// <param name="excelSetting">Excel设置</param>
-    public static NPOI.SS.UserModel.IWorkbook PrepareWorkbook(bool isXlsx, ExcelSetting? excelSetting)
+    public static NPOI.SS.UserModel.IWorkbook PrepareWorkbook(bool isXlsx, ExcelSetting excelSetting)
     {
         var setting = excelSetting ?? ExcelSetting.Default;
         if (isXlsx)

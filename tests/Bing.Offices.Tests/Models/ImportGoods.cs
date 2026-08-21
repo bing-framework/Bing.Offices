@@ -6,7 +6,6 @@ namespace Bing.Offices.Tests.Models;
 /// <summary>
 /// 导入商品
 /// </summary>
-[HasDynamicColumn]
 public class ImportGoods
 {
     /// <summary>

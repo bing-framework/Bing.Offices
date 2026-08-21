@@ -5,7 +5,7 @@ namespace Bing.Offices.Npoi.Extensions;
 /// <summary>
 /// 工作表(<see cref="ISheet"/> ) 扩展
 /// </summary>
-public static partial class SheetExtensions
+internal static partial class SheetExtensions
 {
     /// <summary>
     /// 获取所有合并单元格区域。格式：(x1,y1,x2,y2)
@@ -36,32 +36,20 @@ public static partial class SheetExtensions
     /// <param name="count">删除行数</param>
     public static void DeleteRows(this ISheet sheet, int deleteRowStartIndex, int count)
     {
+        if (deleteRowStartIndex < 0)
+            throw new ArgumentOutOfRangeException(nameof(deleteRowStartIndex));
+        if (count <= 0)
+            throw new ArgumentOutOfRangeException(nameof(count));
         var mergedRegions = sheet.NumMergedRegions;
         for (var i = mergedRegions - 1; i >= 0; i--)
         {
             var cellRangeAddress = sheet.GetMergedRegion(i);
-            if (cellRangeAddress.FirstRow >= deleteRowStartIndex + count
-                || cellRangeAddress.LastRow <= deleteRowStartIndex)
-            {
-                // 只有一行的合并单元格 FirstRow==LastRow
-                if (cellRangeAddress.FirstRow == cellRangeAddress.LastRow)
-                {
-                    // 刚好在删除区域的 StartRow 或 EndRow
-                    if (cellRangeAddress.FirstRow == deleteRowStartIndex
-                        || cellRangeAddress.FirstRow == deleteRowStartIndex + count - 1)
-                    {
-                        sheet.RemoveMergedRegion(i);
-                    }
-                }
-            }
-            else
-            {
-                // 该合并单元格的行已经在被删除的区域内，所以解除该合并单元格
-                // 如果不删除该合并单元格将会导致全部格式错乱
+            if (cellRangeAddress.LastRow >= deleteRowStartIndex &&
+                cellRangeAddress.FirstRow < deleteRowStartIndex + count)
                 sheet.RemoveMergedRegion(i);
-            }
         }
-        sheet.ShiftRows(deleteRowStartIndex + count, sheet.LastRowNum, -count, true, false);
+        if (deleteRowStartIndex + count <= sheet.LastRowNum)
+            sheet.ShiftRows(deleteRowStartIndex + count, sheet.LastRowNum, -count, true, false);
     }
 
     /// <summary>
@@ -115,6 +103,10 @@ public static partial class SheetExtensions
     public static NPOI.SS.UserModel.IRow[] InsertRows(this NPOI.SS.UserModel.ISheet sheet, int rowIndex,
         int rowsCount)
     {
+        if (rowIndex < 0)
+            throw new ArgumentOutOfRangeException(nameof(rowIndex));
+        if (rowsCount <= 0)
+            throw new ArgumentOutOfRangeException(nameof(rowsCount));
         if (rowIndex <= sheet.LastRowNum)
             sheet.ShiftRows(rowIndex, sheet.LastRowNum, rowsCount, true, false);
         var rows = new List<NPOI.SS.UserModel.IRow>();
@@ -141,18 +133,23 @@ public static partial class SheetExtensions
     /// <param name="endRowIndex">结束行索引</param>
     public static int RemoveRows(this NPOI.SS.UserModel.ISheet sheet, int startRowIndex, int endRowIndex)
     {
+        if (startRowIndex < 0)
+            throw new ArgumentOutOfRangeException(nameof(startRowIndex));
+        if (endRowIndex < startRowIndex)
+            throw new ArgumentOutOfRangeException(nameof(endRowIndex));
         var span = endRowIndex - startRowIndex + 1;
         sheet.RemoveMergedRegions(startRowIndex, endRowIndex, null, null);
-        sheet.RemovePictures(startRowIndex, endRowIndex, null, null);
+        sheet.RemovePictures(startRowIndex, endRowIndex, null, null, onlyInternal: false);
         for (var i = endRowIndex; i >= startRowIndex; i--)
         {
             var row = sheet.GetRow(i);
-            sheet.RemoveRow(row);
+            if (row != null)
+                sheet.RemoveRow(row);
         }
         if (endRowIndex + 1 <= sheet.LastRowNum)
         {
             sheet.ShiftRows(endRowIndex + 1, sheet.LastRowNum, -span, true, false);
-            sheet.MovePictures(endRowIndex + 1, null, null, null, moveRowCount: -span);
+            sheet.MovePictures(endRowIndex + 1, null, null, null, onlyInternal: false, moveRowCount: -span);
         }
         return span;
     }

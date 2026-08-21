@@ -270,4 +270,6 @@ __pycache__/
 
 # AI Generated files
 .agents/.env.local
-.agents/runtime/
+.agents/runtime/*
+
+packages.lock.json

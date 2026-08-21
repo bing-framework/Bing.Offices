@@ -7,7 +7,7 @@ namespace Bing.Offices.Npoi.Extensions;
 /// <summary>
 /// NPOI单元格(<see cref="NPOI.SS.UserModel.ICell"/>) 扩展
 /// </summary>
-public static partial class CellExtensions
+internal static partial class CellExtensions
 {
     /// <summary>
     /// 合并单元格
@@ -28,7 +28,7 @@ public static partial class CellExtensions
         var lastRowIndex = Math.Max(fromRange.LastRow, toRange.LastRow);
         var lastColIndex = Math.Max(fromRange.LastCol, toRange.LastCol);
         var regionInfoList = sheet.GetMergedRegionInfos(firstRowIndex, lastRowIndex, firstColIndex, lastColIndex, false);
-        foreach (var regionInfo in regionInfoList)
+        foreach (var regionInfo in regionInfoList.OrderByDescending(x => x.Index))
         {
             if (isExpand)
             {

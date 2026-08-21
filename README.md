@@ -14,6 +14,12 @@ Bing.Offices是Bing应用框架的Office操作类库。
 ## 实现功能
 - Excel 导入
 - Excel 导出
+- Workbook Request 异构多 Sheet、动态列、模板、样式和结构化错误
+- XLSX 柱状图、折线图和饼图
+
+## Excel 文档
+
+- [高级 Excel 导入导出](docs/excel/README.md)
 
 ## 依赖类库
 - [Bing.Utils](https://github.com/bing-framework/Bing.NetCore)

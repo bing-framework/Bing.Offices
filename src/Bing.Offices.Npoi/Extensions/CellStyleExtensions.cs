@@ -5,7 +5,7 @@ namespace Bing.Offices.Npoi.Extensions;
 /// <summary>
 /// 单元格样式(<see cref="ICellStyle"/>) 扩展
 /// </summary>
-public static class CellStyleExtensions
+internal static class CellStyleExtensions
 {
     /// <summary>
     /// 设置数据格式

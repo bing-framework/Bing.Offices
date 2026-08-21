@@ -64,7 +64,7 @@ public static class TypeExtensions
         foreach (var value in values)
         {
             var name = names[index];
-            var field = values.GetType().GetField(value.ToString());
+            var field = attrType.GetField(name);
             var displayName = TypeReflections.GetDisplayName(field);
             var des = TypeReflections.GetDescription(field);
             (string Name, int Value, string DisplayName, string Description) item = new(
@@ -75,6 +75,31 @@ public static class TypeExtensions
             );
             list.Add(item);
             index++;
+        }
+
+        return list;
+    }
+
+    /// <summary>
+    /// 获取保留原始底层值的枚举定义列表。
+    /// </summary>
+    /// <param name="type">枚举类型。</param>
+    /// <returns>返回枚举名称、原始值、显示名和描述。</returns>
+    internal static IEnumerable<(string Name, object Value, string DisplayName, string Description)>
+        GetEnumValueDefinitionList(this Type type)
+    {
+        if (!type.IsEnum)
+            return Enumerable.Empty<(string Name, object Value, string DisplayName, string Description)>();
+
+        var list = new List<(string Name, object Value, string DisplayName, string Description)>();
+        foreach (var name in Enum.GetNames(type))
+        {
+            var field = type.GetField(name);
+            var displayName = TypeReflections.GetDisplayName(field);
+            var description = TypeReflections.GetDescription(field);
+            list.Add((name, Enum.Parse(type, name),
+                displayName.IsNullOrWhiteSpace() ? null : displayName,
+                description.IsNullOrWhiteSpace() ? null : description));
         }
 
         return list;

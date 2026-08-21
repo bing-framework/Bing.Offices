@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics;
 using Bing.Offices.Metadata;
 using NPOI.HSSF.UserModel;
+using NPOI.OpenXmlFormats.Dml.Spreadsheet;
 using NPOI.SS.UserModel;
 using NPOI.XSSF.UserModel;
 
@@ -9,7 +10,7 @@ namespace Bing.Offices.Npoi.Extensions;
 /// <summary>
 /// NPOI工作表(<see cref="NPOI.SS.UserModel.ISheet"/>) 扩展
 /// </summary>
-public static partial class SheetExtensions
+internal static partial class SheetExtensions
 {
     /// <summary>
     /// 添加图片
@@ -18,37 +19,25 @@ public static partial class SheetExtensions
     /// <param name="picInfo">图片信息</param>
     public static void AddPicture(this NPOI.SS.UserModel.ISheet sheet, PictureInfo picInfo)
     {
-        var pictureIdx = sheet.Workbook.AddPicture(picInfo.PictureData, PictureType.PNG);
+        if (picInfo is null)
+            throw new ArgumentNullException(nameof(picInfo));
+        if (picInfo.PictureData is null || picInfo.PictureData.Length == 0)
+            throw new ArgumentException("图片数据不能为空", nameof(picInfo));
+        if (picInfo.PictureStyle is null)
+            throw new ArgumentException("图片样式不能为空", nameof(picInfo));
+        var pictureIdx = sheet.Workbook.AddPicture(picInfo.PictureData,
+            PictureTypeResolver.Resolve(picInfo.PictureData));
         var anchor = sheet.Workbook.GetCreationHelper().CreateClientAnchor();
-        anchor.Col1 = picInfo.MinCol;
-        anchor.Col2 = picInfo.MaxCol;
         anchor.Row1 = picInfo.MinRow;
         anchor.Row2 = picInfo.MaxRow;
+        anchor.Col1 = picInfo.MinCol;
+        anchor.Col2 = picInfo.MaxCol;
         anchor.Dx1 = picInfo.PictureStyle.AnchorDx1;
         anchor.Dx2 = picInfo.PictureStyle.AnchorDx2;
         anchor.Dy1 = picInfo.PictureStyle.AnchorDy1;
         anchor.Dy2 = picInfo.PictureStyle.AnchorDy2;
-        anchor.AnchorType = AnchorType.MoveDontResize;
-        var drawing = sheet.CreateDrawingPatriarch();
-        var pic = drawing.CreatePicture(anchor, pictureIdx);
-        if (sheet is HSSFSheet)
-        {
-            var shape = pic as HSSFShape;
-            shape.FillColor = picInfo.PictureStyle.FillColor;
-            shape.IsNoFill = picInfo.PictureStyle.IsNoFill;
-            //shape.LineStyle = picInfo.PictureStyle.LineStyle;
-            shape.LineStyleColor = picInfo.PictureStyle.LineStyleColor;
-            shape.LineWidth = (int)picInfo.PictureStyle.LineWidth;
-        }
-        else if (sheet is XSSFSheet)
-        {
-            var shape = pic as XSSFShape;
-            shape.FillColor = picInfo.PictureStyle.FillColor;
-            shape.IsNoFill = picInfo.PictureStyle.IsNoFill;
-            //shape.LineStyle = picInfo.PictureStyle.LineStyle;
-            //shape.LineStyleColor = picInfo.PictureStyle.LineStyleColor;
-            shape.LineWidth = picInfo.PictureStyle.LineWidth;
-        }
+        var drawing = sheet.DrawingPatriarch ?? sheet.CreateDrawingPatriarch();
+        drawing.CreatePicture(anchor, pictureIdx);
     }
 
     /// <summary>
@@ -96,7 +85,7 @@ public static partial class SheetExtensions
         {
             foreach (var shape in shapeContainer.Children)
             {
-                if (shape is HSSFPicture picture && picture.Anchor is HSSFClientAnchor anchor)
+                if (shape is HSSFPicture picture && picture.ClientAnchor is HSSFClientAnchor anchor)
                 {
                     if (!IsInternalOrIntersect(minRow, maxRow, minCol, maxCol, anchor.Row1, anchor.Row2,
                             anchor.Col1,
@@ -141,8 +130,9 @@ public static partial class SheetExtensions
             {
                 foreach (var shape in drawing.GetShapes())
                 {
-                    var picture = (XSSFPicture)shape;
-                    var anchor = picture.GetPreferredSize();
+                    if (shape is not XSSFPicture picture || picture.ClientAnchor == null)
+                        continue;
+                    var anchor = picture.ClientAnchor;
                     if (!IsInternalOrIntersect(minRow, maxRow, minCol, maxCol, anchor.Row1, anchor.Row2,
                             anchor.Col1,
                             anchor.Col2, onlyInternal))
@@ -153,11 +143,6 @@ public static partial class SheetExtensions
                         AnchorDx2 = anchor.Dx2,
                         AnchorDy1 = anchor.Dy1,
                         AnchorDy2 = anchor.Dy2,
-                        IsNoFill = picture.IsNoFill,
-                        //LineStyle = picture.LineStyle,
-                        LineStyleColor = picture.LineStyleColor,
-                        LineWidth = picture.LineWidth,
-                        FillColor = picture.FillColor,
                     };
                     result.Add(new PictureInfo(anchor.Row1, anchor.Row2, anchor.Col1, anchor.Col2,
                         picture.PictureData.Data, picStyle));
@@ -189,10 +174,10 @@ public static partial class SheetExtensions
         {
             case HSSFSheet hssfSheet:
                 RemovePictures(hssfSheet, minRow, maxRow, minCol, maxCol, onlyInternal);
-                break;
+                return;
             case XSSFSheet xssfSheet:
                 RemovePictures(xssfSheet, minRow, maxRow, minCol, maxCol, onlyInternal);
-                break;
+                return;
         }
         throw new NotImplementedException($"尚未实现该[{sheet.GetType()}]类型的[{nameof(RemovePictures)}]扩展方法");
     }
@@ -211,14 +196,15 @@ public static partial class SheetExtensions
     {
         if (!(sheet.DrawingPatriarch is HSSFShapeContainer shapeContainer))
             return;
-        foreach (var shape in shapeContainer.Children)
+        var pictures = shapeContainer.Children
+            .OfType<HSSFPicture>()
+            .Where(picture => picture.ClientAnchor is HSSFClientAnchor anchor &&
+                              IsInternalOrIntersect(minRow, maxRow, minCol, maxCol, anchor.Row1, anchor.Row2,
+                                  anchor.Col1, anchor.Col2, onlyInternal))
+            .ToList();
+        foreach (var picture in pictures)
         {
-            if (shape is HSSFPicture picture && picture.Anchor is HSSFClientAnchor anchor)
-            {
-                if (IsInternalOrIntersect(minRow, maxRow, minCol, maxCol, anchor.Row1, anchor.Row2, anchor.Col1,
-                        anchor.Col2, onlyInternal))
-                    shapeContainer.RemoveShape(picture);
-            }
+            shapeContainer.RemoveShape(picture);
         }
     }
 
@@ -234,22 +220,11 @@ public static partial class SheetExtensions
     private static void RemovePictures(XSSFSheet sheet, int? minRow, int? maxRow, int? minCol,
         int? maxCol, bool onlyInternal)
     {
-        throw new NotImplementedException($"{typeof(XSSFSheet)}尚未实现ClearPictures()方法");
-        //foreach (var documentPart in sheet.GetRelations())
-        //{
-        //    if (documentPart is XSSFDrawing drawing)
-        //    {
-        //        foreach (var shape in drawing.GetShapes())
-        //        {
-        //            var picture = (XSSFPicture)shape;
-        //            var anchor = picture.GetPreferredSize();
-        //            if (!IsInternalOrIntersect(minRow, maxRow, minCol, maxCol, anchor.Row1, anchor.Row2,
-        //                anchor.Col1,
-        //                anchor.Col2, onlyInternal))
-        //                continue;
-        //        }
-        //    }
-        //}
+        foreach (var drawing in sheet.GetRelations().OfType<XSSFDrawing>())
+        {
+            drawing.GetCTDrawing().CellAnchors.RemoveAll(anchor =>
+                IsPictureInRange(anchor, minRow, maxRow, minCol, maxCol, onlyInternal));
+        }
     }
 
     /// <summary>
@@ -276,21 +251,127 @@ public static partial class SheetExtensions
     public static void MovePictures(this NPOI.SS.UserModel.ISheet sheet, int? minRow, int? maxRow, int? minCol,
         int? maxCol, bool onlyInternal = true, int moveRowCount = 0, int moveColCount = 0)
     {
-        if (!(sheet.DrawingPatriarch is HSSFShapeContainer shapeContainer))
-            return;
-        foreach (var shape in shapeContainer.Children)
+        switch (sheet)
         {
-            if (shape.Anchor is IClientAnchor anchor)
+            case HSSFSheet hssfSheet:
+                MovePictures(hssfSheet, minRow, maxRow, minCol, maxCol, onlyInternal, moveRowCount, moveColCount);
+                return;
+            case XSSFSheet xssfSheet:
+                MovePictures(xssfSheet, minRow, maxRow, minCol, maxCol, onlyInternal, moveRowCount, moveColCount);
+                return;
+        }
+    }
+
+    /// <summary>
+    /// 移动 HSSF 图片锚点。
+    /// </summary>
+    /// <param name="sheet">工作表。</param>
+    /// <param name="minRow">最小行索引。</param>
+    /// <param name="maxRow">最大行索引。</param>
+    /// <param name="minCol">最小列索引。</param>
+    /// <param name="maxCol">最大列索引。</param>
+    /// <param name="onlyInternal">是否仅移动完全位于区域内的图片。</param>
+    /// <param name="moveRowCount">行偏移量。</param>
+    /// <param name="moveColCount">列偏移量。</param>
+    private static void MovePictures(HSSFSheet sheet, int? minRow, int? maxRow, int? minCol, int? maxCol,
+        bool onlyInternal, int moveRowCount, int moveColCount)
+    {
+        if (sheet.DrawingPatriarch is not HSSFShapeContainer shapeContainer)
+            return;
+        foreach (var picture in shapeContainer.Children.OfType<HSSFPicture>())
+        {
+            if (picture.ClientAnchor is IClientAnchor anchor)
+                MovePictureAnchor(anchor, minRow, maxRow, minCol, maxCol, onlyInternal, moveRowCount, moveColCount);
+        }
+    }
+
+    /// <summary>
+    /// 移动 XSSF 图片锚点。
+    /// </summary>
+    /// <param name="sheet">工作表。</param>
+    /// <param name="minRow">最小行索引。</param>
+    /// <param name="maxRow">最大行索引。</param>
+    /// <param name="minCol">最小列索引。</param>
+    /// <param name="maxCol">最大列索引。</param>
+    /// <param name="onlyInternal">是否仅移动完全位于区域内的图片。</param>
+    /// <param name="moveRowCount">行偏移量。</param>
+    /// <param name="moveColCount">列偏移量。</param>
+    private static void MovePictures(XSSFSheet sheet, int? minRow, int? maxRow, int? minCol, int? maxCol,
+        bool onlyInternal, int moveRowCount, int moveColCount)
+    {
+        foreach (var drawing in sheet.GetRelations().OfType<XSSFDrawing>())
+        {
+            foreach (var picture in drawing.GetShapes().OfType<XSSFPicture>())
             {
-                if (IsInternalOrIntersect(minRow, maxRow, minCol, maxCol, anchor.Row1, anchor.Row2, anchor.Col1,
-                        anchor.Col2, onlyInternal))
-                {
-                    anchor.Row1 += moveRowCount;
-                    anchor.Row2 += moveRowCount;
-                    anchor.Col1 += moveColCount;
-                    anchor.Col2 += moveColCount;
-                }
+                if (picture.ClientAnchor is IClientAnchor anchor)
+                    MovePictureAnchor(anchor, minRow, maxRow, minCol, maxCol, onlyInternal, moveRowCount,
+                        moveColCount);
             }
+        }
+    }
+
+    /// <summary>
+    /// 原地移动图片锚点，保留图片关系、类型及样式。
+    /// </summary>
+    private static void MovePictureAnchor(IClientAnchor anchor, int? minRow, int? maxRow, int? minCol, int? maxCol,
+        bool onlyInternal, int moveRowCount, int moveColCount)
+    {
+        if (!IsInternalOrIntersect(minRow, maxRow, minCol, maxCol, anchor.Row1, anchor.Row2, anchor.Col1,
+                anchor.Col2, onlyInternal))
+            return;
+        anchor.Row1 = Math.Max(0, anchor.Row1 + moveRowCount);
+        anchor.Row2 = Math.Max(0, anchor.Row2 + moveRowCount);
+        anchor.Col1 = Math.Max(0, anchor.Col1 + moveColCount);
+        anchor.Col2 = Math.Max(0, anchor.Col2 + moveColCount);
+    }
+
+    /// <summary>
+    /// 判断 DrawingML 锚点是否为区域内的图片。
+    /// </summary>
+    /// <param name="anchor">DrawingML 锚点。</param>
+    /// <param name="minRow">最小行索引。</param>
+    /// <param name="maxRow">最大行索引。</param>
+    /// <param name="minCol">最小列索引。</param>
+    /// <param name="maxCol">最大列索引。</param>
+    /// <param name="onlyInternal">是否仅匹配完全位于区域内的锚点。</param>
+    /// <returns>锚点为符合区域条件的图片时返回 true。</returns>
+    private static bool IsPictureInRange(IEG_Anchor anchor, int? minRow, int? maxRow, int? minCol, int? maxCol,
+        bool onlyInternal)
+    {
+        if (anchor.picture == null || !TryGetAnchorRange(anchor, out var firstRow, out var lastRow, out var firstCol,
+                out var lastCol))
+            return false;
+        return IsInternalOrIntersect(minRow, maxRow, minCol, maxCol, firstRow, lastRow, firstCol, lastCol,
+            onlyInternal);
+    }
+
+    /// <summary>
+    /// 读取 DrawingML 锚点坐标范围。
+    /// </summary>
+    /// <param name="anchor">DrawingML 锚点。</param>
+    /// <param name="firstRow">起始行索引。</param>
+    /// <param name="lastRow">结束行索引。</param>
+    /// <param name="firstCol">起始列索引。</param>
+    /// <param name="lastCol">结束列索引。</param>
+    /// <returns>锚点含有可读取的单元格坐标时返回 true。</returns>
+    private static bool TryGetAnchorRange(IEG_Anchor anchor, out int firstRow, out int lastRow, out int firstCol,
+        out int lastCol)
+    {
+        switch (anchor)
+        {
+            case CT_TwoCellAnchor twoCellAnchor:
+                firstRow = twoCellAnchor.from.row;
+                lastRow = twoCellAnchor.to.row;
+                firstCol = twoCellAnchor.from.col;
+                lastCol = twoCellAnchor.to.col;
+                return true;
+            case CT_OneCellAnchor oneCellAnchor:
+                firstRow = lastRow = oneCellAnchor.from.row;
+                firstCol = lastCol = oneCellAnchor.from.col;
+                return true;
+            default:
+                firstRow = lastRow = firstCol = lastCol = 0;
+                return false;
         }
     }
 

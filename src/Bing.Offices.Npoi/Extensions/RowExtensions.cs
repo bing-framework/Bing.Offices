@@ -5,7 +5,7 @@ namespace Bing.Offices.Npoi.Extensions;
 /// <summary>
 /// 行(<see cref="IRow"/>) 扩展
 /// </summary>
-public static class RowExtensions
+internal static class RowExtensions
 {
     /// <summary>
     /// 获取或创建单元格

@@ -5,7 +5,7 @@ namespace Bing.Offices.Npoi.Extensions;
 /// <summary>
 /// 字体(<see cref="IFont"/>) 扩展
 /// </summary>
-public static class FontExtensions
+internal static class FontExtensions
 {
     #region SetFontHeightInPoints(设置字体大小)
 
@@ -46,7 +46,7 @@ public static class FontExtensions
     /// <param name="boldWeight">粗体大小</param>
     public static IFont SetBoldWeight(this IFont font, short boldWeight)
     {
-        font.Boldweight = boldWeight;
+        font.IsBold = boldWeight >= 700;
         return font;
     }
 
