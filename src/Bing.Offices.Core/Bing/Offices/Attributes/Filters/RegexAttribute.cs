@@ -6,6 +6,7 @@ namespace Bing.Offices.Attributes;
 /// <summary>
 /// 正则表达式特性
 /// </summary>
+[System.Obsolete("请改用 ExcelRegexAttribute。")]
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = true, Inherited = false)]
 public class RegexAttribute : FilterAttributeBase
 {

@@ -595,6 +595,151 @@ public class StreamPipelineTest
     }
 
     /// <summary>
+    /// 测试 - 文件入口也应执行与流入口相同的输入大小限制，避免无界读取。
+    /// </summary>
+    [Fact]
+    public void MappingConfigurationLoader_OversizedFiles_ShouldRejectBeforeUnboundedRead()
+    {
+        // Arrange
+        var directory = Path.Combine(Path.GetTempPath(), $"Bing.Offices.配置.{Guid.NewGuid():N}");
+        var jsonPath = Path.Combine(directory, "oversized.json");
+        var xmlPath = Path.Combine(directory, "oversized.xml");
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(jsonPath, new string('x', 1024 * 1024 + 1), System.Text.Encoding.UTF8);
+        File.WriteAllText(xmlPath, new string('x', 1024 * 1024 + 1), System.Text.Encoding.UTF8);
+
+        try
+        {
+            // Act / Assert
+            Assert.Throws<InvalidOperationException>(() => ExcelMappingConfigurationLoader.FromJsonFile(jsonPath));
+            Assert.Throws<InvalidOperationException>(() => ExcelMappingConfigurationLoader.FromXmlFile(xmlPath));
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+                Directory.Delete(directory, true);
+        }
+    }
+
+    /// <summary>
+    /// 测试 - JSON v1 和 v2 应归一化为同一导入配置，且 v2 保留独立导出方向。
+    /// </summary>
+    [Fact]
+    public void MappingConfigurationLoader_JsonV1AndV2_ShouldNormalizeToEquivalentDocument()
+    {
+        // Arrange
+        const string v1 = "{\"columns\":[{\"propertyName\":\"Name\",\"title\":\"名称\",\"aliases\":[\"旧名称\"]}]}";
+        const string v2 = "{\"version\":2,\"profile\":\"orders\",\"modelAlias\":\"order-row\",\"import\":{\"columns\":[{\"propertyName\":\"Name\",\"title\":\"名称\",\"aliases\":[\"旧名称\"]}]},\"export\":{\"columns\":[{\"propertyName\":\"Name\",\"title\":\"导出名称\"}]}}";
+
+        // Act
+        var migrated = ExcelMappingConfigurationLoader.FromJsonDocument(v1);
+        var document = ExcelMappingConfigurationLoader.FromJsonDocument(v2);
+
+        // Assert
+        Assert.Equal(2, migrated.Version);
+        Assert.Equal("名称", Assert.Single(migrated.Import.Columns).Title);
+        Assert.Equal("名称", Assert.Single(document.Import.Columns).Title);
+        Assert.Equal("旧名称", Assert.Single(document.Import.Columns).Aliases[0]);
+        Assert.Equal("导出名称", Assert.Single(document.Export.Columns).Title);
+        Assert.Equal("orders", document.Profile);
+        Assert.Equal("order-row", document.ModelAlias);
+    }
+
+    /// <summary>
+    /// 测试 - XML v2 与 JSON v2 应生成相同方向配置，并拒绝未知节点。
+    /// </summary>
+    [Fact]
+    public void MappingConfigurationLoader_XmlV2_ShouldNormalizeAndRejectUnknownNodes()
+    {
+        // Arrange
+        const string xml = "<ExcelMappingDocument><Version>2</Version><Profile>orders</Profile><ModelAlias>order-row</ModelAlias><Import><Columns><ExcelColumnConfiguration><PropertyName>Name</PropertyName><Title>名称</Title><Aliases><string>旧名称</string></Aliases></ExcelColumnConfiguration></Columns></Import><Export><Columns><ExcelColumnConfiguration><PropertyName>Name</PropertyName><Title>导出名称</Title></ExcelColumnConfiguration></Columns></Export></ExcelMappingDocument>";
+        const string unknownXml = "<ExcelMappingDocument><Version>2</Version><Unknown>value</Unknown></ExcelMappingDocument>";
+
+        // Act
+        var document = ExcelMappingConfigurationLoader.FromXmlDocument(xml);
+
+        // Assert
+        Assert.Equal(2, document.Version);
+        Assert.Equal("orders", document.Profile);
+        Assert.Equal("名称", Assert.Single(document.Import.Columns).Title);
+        Assert.Equal("导出名称", Assert.Single(document.Export.Columns).Title);
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            ExcelMappingConfigurationLoader.FromXmlDocument(unknownXml));
+        Assert.Contains("/ExcelMappingDocument/Unknown", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 测试 - 配置加载器应拒绝未知 JSON 字段、过长字符串、过深文档和超大输入。
+    /// </summary>
+    [Fact]
+    public void MappingConfigurationLoader_InputLimits_ShouldRejectUnsafeDocuments()
+    {
+        // Arrange
+        var unknown = "{\"columns\":[{\"propertyName\":\"Name\",\"unknown\":true}]}";
+        var longTitle = "{\"columns\":[{\"propertyName\":\"Name\",\"title\":\"" + new string('x', 4097) + "\"}]}";
+        var deep = "{\"version\":2,\"import\":{\"columns\":[{\"aliases\":[" + new string('[', 40) + "\"x\"" + new string(']', 40) + "]}}";
+        var oversized = new string('x', 1024 * 1024 + 1);
+
+        // Act / Assert
+        var unknownException = Assert.Throws<InvalidOperationException>(() => ExcelMappingConfigurationLoader.FromJsonDocument(unknown));
+        Assert.Contains("$.columns[0].unknown", unknownException.Message);
+        Assert.Throws<InvalidOperationException>(() => ExcelMappingConfigurationLoader.FromJsonDocument(longTitle));
+        Assert.ThrowsAny<Exception>(() => ExcelMappingConfigurationLoader.FromJsonDocument(deep));
+        Assert.Throws<InvalidOperationException>(() => ExcelMappingConfigurationLoader.FromJsonDocument(oversized));
+    }
+
+    /// <summary>
+    /// 测试 - v2 文档流读取应保持调用方流可用，XML DTD/外部实体仍必须被禁止。
+    /// </summary>
+    [Fact]
+    public void MappingConfigurationLoader_DocumentStreams_ShouldKeepOwnershipAndRejectDtd()
+    {
+        // Arrange
+        const string json = "{\"version\":2,\"modelAlias\":\"row\",\"import\":{\"columns\":[]},\"export\":{\"columns\":[]}}";
+        const string xml = "<ExcelMappingDocument><Version>2</Version><ModelAlias>row</ModelAlias><Import><Columns /></Import><Export><Columns /></Export></ExcelMappingDocument>";
+        const string unsafeXml = "<!DOCTYPE config [<!ENTITY value SYSTEM 'file:///not-allowed'>]><ExcelMappingDocument />";
+        using var jsonStream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(json));
+        using var xmlStream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(xml));
+
+        // Act
+        var jsonDocument = ExcelMappingConfigurationLoader.FromJsonDocument(jsonStream);
+        var xmlDocument = ExcelMappingConfigurationLoader.FromXmlDocument(xmlStream);
+
+        // Assert
+        Assert.Equal("row", jsonDocument.ModelAlias);
+        Assert.Equal("row", xmlDocument.ModelAlias);
+        Assert.True(jsonStream.CanRead);
+        Assert.True(xmlStream.CanRead);
+        Assert.Throws<System.Xml.XmlException>(() => ExcelMappingConfigurationLoader.FromXmlDocument(unsafeXml));
+    }
+
+    /// <summary>
+    /// 测试 - normalized document 编译时应按方向选择独立配置并继续支持请求级覆盖。
+    /// </summary>
+    [Fact]
+    public void TypeMap_NormalizedDocument_ShouldCompileSelectedDirection()
+    {
+        // Arrange
+        var document = ExcelMappingConfigurationLoader.FromJsonDocument(
+            "{\"version\":2,\"import\":{\"columns\":[{\"propertyName\":\"Name\",\"title\":\"导入名称\"}]},\"export\":{\"columns\":[{\"propertyName\":\"Name\",\"title\":\"导出名称\"}]}}");
+        var request = new ExcelMappingConfiguration
+        {
+            Columns = new List<ExcelColumnConfiguration>
+            {
+                new() { PropertyName = nameof(ConfiguredRow.Name), Title = "请求名称" }
+            }
+        };
+
+        // Act
+        var importMap = ExcelTypeMapFactory.Get<ConfiguredRow>(document, MappingDirection.Import);
+        var exportMap = ExcelTypeMapFactory.Get<ConfiguredRow>(document, request, MappingDirection.Export);
+
+        // Assert
+        Assert.Equal("导入名称", importMap.Properties.Single(property => property.Name == nameof(ConfiguredRow.Name)).Title);
+        Assert.Equal("请求名称", exportMap.Properties.Single(property => property.Name == nameof(ConfiguredRow.Name)).Title);
+    }
+
+    /// <summary>
     /// 测试 - JSON 映射中的转换器名称应仅选择已注册的同名转换器。
     /// </summary>
     [Fact]
@@ -2269,10 +2414,22 @@ public class StreamPipelineTest
         public ExcelMappingConfiguration FromJson(Stream source) => ExcelMappingConfigurationLoader.FromJson(source);
 
         /// <inheritdoc />
+        public ExcelMappingDocument FromJsonDocument(string json) => ExcelMappingConfigurationLoader.FromJsonDocument(json);
+
+        /// <inheritdoc />
+        public ExcelMappingDocument FromJsonDocument(Stream source) => ExcelMappingConfigurationLoader.FromJsonDocument(source);
+
+        /// <inheritdoc />
         public ExcelMappingConfiguration FromXml(string xml) => ExcelMappingConfigurationLoader.FromXml(xml);
 
         /// <inheritdoc />
         public ExcelMappingConfiguration FromXml(Stream source) => ExcelMappingConfigurationLoader.FromXml(source);
+
+        /// <inheritdoc />
+        public ExcelMappingDocument FromXmlDocument(string xml) => ExcelMappingConfigurationLoader.FromXmlDocument(xml);
+
+        /// <inheritdoc />
+        public ExcelMappingDocument FromXmlDocument(Stream source) => ExcelMappingConfigurationLoader.FromXmlDocument(source);
     }
 
     /// <summary>
@@ -2321,7 +2478,7 @@ public class StreamPipelineTest
         {
             CellKind = context.Cell.Kind;
             CultureName = context.Culture.Name;
-            PropertyName = context.Property.Name;
+            PropertyName = context.PropertyName;
             return true;
         }
     }

@@ -5,7 +5,9 @@ using Bing.Offices.Configurations;
 using Bing.Offices.Csv;
 using Bing.Offices.Npoi.Exports;
 using Bing.Offices.Npoi.Imports;
+using Bing.Offices.Providers;
 using Bing.Offices.Validations;
+using Bing.Offices.Mappings;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -29,6 +31,7 @@ public static class ExcelNpoiServiceCollectionExtensions
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IExcelValidationRule, DateTimeExcelValidationRule>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IExcelValidationRule, DuplicationExcelValidationRule>());
         services.TryAddSingleton<IExcelMappingConfigurationLoader, DefaultExcelMappingConfigurationLoader>();
+        ExcelMappingPlanFactoryProvider.RegisterDefault(services);
         services.TryAddTransient<IExcelImporter, NpoiExcelImporter>();
         services.TryAddTransient<IExcelExporter, NpoiExcelExporter>();
         services.TryAddTransient<ICsvImporter, CsvEntityImporter>();

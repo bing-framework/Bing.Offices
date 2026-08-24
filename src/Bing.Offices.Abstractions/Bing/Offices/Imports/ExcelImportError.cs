@@ -17,8 +17,10 @@ public sealed class ExcelImportError
     /// <param name="columnKey">稳定列键。</param>
     /// <param name="header">实际表头。</param>
     /// <param name="rawValue">原始单元格值。</param>
+    /// <param name="firstRowNumber">重复值首次出现的行号。</param>
     public ExcelImportError(ExcelImportErrorCode code, string message, string sheetName, int rowIndex,
-        int columnIndex, string propertyName, string columnKey = null, string header = null, object rawValue = null)
+        int columnIndex, string propertyName, string columnKey = null, string header = null, object rawValue = null,
+        int? firstRowNumber = null)
     {
         Code = code;
         Message = message;
@@ -29,6 +31,7 @@ public sealed class ExcelImportError
         ColumnKey = columnKey ?? propertyName;
         Header = header;
         RawValue = rawValue;
+        FirstRowNumber = firstRowNumber;
     }
 
     /// <summary>
@@ -75,4 +78,9 @@ public sealed class ExcelImportError
     /// 获取未转换的单元格值。
     /// </summary>
     public object RawValue { get; }
+
+    /// <summary>
+    /// 获取重复值首次出现的行号；非重复错误为 null。
+    /// </summary>
+    public int? FirstRowNumber { get; }
 }

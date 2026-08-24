@@ -26,6 +26,16 @@ public enum ExcelImportErrorCode
     Validation,
 
     /// <summary>
+    /// 单元格文本超过最大长度。
+    /// </summary>
+    MaxLength,
+
+    /// <summary>
+    /// 单元格数值超过最大值。
+    /// </summary>
+    MaxValue,
+
+    /// <summary>
     /// 父子导航关系绑定失败。
     /// </summary>
     Relationship,

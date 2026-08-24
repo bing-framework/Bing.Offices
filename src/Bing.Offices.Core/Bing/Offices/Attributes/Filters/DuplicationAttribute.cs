@@ -6,6 +6,7 @@ namespace Bing.Offices.Attributes;
 /// <summary>
 /// 重复数据校验特性
 /// </summary>
+[System.Obsolete("请改用 ExcelUniqueAttribute。")]
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
 public class DuplicationAttribute : FilterAttributeBase
 {

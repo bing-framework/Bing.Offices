@@ -6,6 +6,7 @@ namespace Bing.Offices.Attributes;
 /// <summary>
 /// 最大长度特性
 /// </summary>
+[System.Obsolete("请改用 ExcelMaxLengthAttribute。")]
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
 public class MaxLengthAttribute : FilterAttributeBase
 {

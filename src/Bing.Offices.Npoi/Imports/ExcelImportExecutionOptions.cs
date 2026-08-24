@@ -3,6 +3,7 @@ using System.Globalization;
 using Bing.Offices.Configurations;
 using Bing.Offices.Exports;
 using Bing.Offices.Imports;
+using Bing.Offices.Providers;
 
 namespace Bing.Offices.Npoi.Imports;
 
@@ -31,6 +32,10 @@ internal sealed class ExcelImportExecutionOptions<T> where T : class, new()
     internal bool EnabledEmptyLine { get; set; }
     internal bool IgnoreEmptyLineAfterData { get; set; }
     internal ExcelMappingConfiguration MappingConfiguration { get; set; }
-    internal ExcelMappingProfile<T> MappingProfile { get; set; }
+    internal ExcelMappingDocument MappingDocument { get; set; }
+    internal object MappingProfile { get; set; }
+    internal IExcelMappingPlan MappingPlan { get; set; }
+    internal int? MaxTrackedUniqueValues { get; set; }
+    internal StringComparison UniqueComparison { get; set; } = StringComparison.OrdinalIgnoreCase;
     internal CultureInfo Culture { get; set; } = CultureInfo.InvariantCulture;
 }

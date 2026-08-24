@@ -3,7 +3,10 @@ using System.Reflection;
 using System.Text;
 using Bing.Offices.Attributes;
 using Bing.Offices.Conversions;
+using Bing.Offices.Configurations;
+using Bing.Offices.Imports;
 using Bing.Offices.Mappings;
+using Bing.Offices.Providers;
 using Bing.Offices.Validations;
 using CsvHelper;
 using CsvHelper.Configuration;
@@ -16,13 +19,20 @@ namespace Bing.Offices.Csv;
 public sealed class CsvEntityExporter : ICsvExporter
 {
     private readonly IReadOnlyList<IExcelValueConverter> _valueConverters;
+    private readonly IExcelMappingPlanFactory _mappingPlanFactory;
 
     /// <summary>
     /// 初始化一个<see cref="CsvEntityExporter"/>类型的实例。
     /// </summary>
     /// <param name="valueConverters">值转换器集合。</param>
-    public CsvEntityExporter(IEnumerable<IExcelValueConverter> valueConverters = null) =>
+    /// <param name="mappingPlanFactory">方向化映射计划工厂。</param>
+    public CsvEntityExporter(IEnumerable<IExcelValueConverter> valueConverters = null,
+        IExcelMappingPlanFactory mappingPlanFactory = null)
+    {
         _valueConverters = valueConverters?.ToArray() ?? Array.Empty<IExcelValueConverter>();
+        _mappingPlanFactory = mappingPlanFactory ?? new ExcelMappingPlanFactory(
+            valueConverters: _valueConverters);
+    }
 
     /// <inheritdoc />
     public void Export<T>(IEnumerable<T> data, Stream destination, CsvExportOptions<T> options = null,
@@ -38,7 +48,11 @@ public sealed class CsvEntityExporter : ICsvExporter
         options ??= new CsvExportOptions<T>();
         ValidateOptions(options.Delimiter, options.Quote, options.NewLine, options.Encoding, options.Culture,
             options.FormulaInjectionPolicy);
-        var columns = CreateColumns(ExcelTypeMapFactory.Get(options.MappingProfile, options.MappingConfiguration),
+        var document = ExcelMappingDocumentFactory.Create<T>(
+            options.DirectionalMappingProfile ?? options.MappingProfile,
+            options.MappingDocument, options.MappingConfiguration, MappingDirection.Export);
+        var map = _mappingPlanFactory.Create<T>(document, MappingDirection.Export);
+        var columns = CreateColumns<T>(map,
             options.DynamicColumns);
         using var writer = new StreamWriter(destination, options.Encoding, 1024, true);
         if (options.IncludeHeader)
@@ -72,20 +86,20 @@ public sealed class CsvEntityExporter : ICsvExporter
             throw new ArgumentOutOfRangeException(nameof(formulaInjectionPolicy));
     }
 
-    private string FormatValue(ExcelPropertyMap column, object value, int rowIndex, int columnIndex, CultureInfo culture)
+    private string FormatValue(CsvPropertyBinding column, object value, int rowIndex, int columnIndex, CultureInfo culture)
     {
         if (value == null)
             return string.Empty;
         var context = new ExcelConversionContext(value, column.Name, column.Property.PropertyType, null, rowIndex,
             columnIndex, culture);
-        foreach (var converter in ResolveValueConverters(column))
+        foreach (var converter in column.ValueConverters)
         {
             if (converter.TryConvertTo(context, out var convertedValue))
                 return Convert.ToString(convertedValue, culture) ?? string.Empty;
         }
         if (!string.IsNullOrWhiteSpace(column.Formatter) && value is IFormattable formattable)
             return formattable.ToString(column.Formatter, culture);
-        var mapping = column.ValueMap.FirstOrDefault(pair => IsMappedValue(pair.Value, value));
+        var mapping = column.ValueMap.FirstOrDefault(pair => IsMappedValue(pair.Value, value, culture));
         if (mapping.Key != null)
             return mapping.Key;
         return Convert.ToString(value, culture) ?? string.Empty;
@@ -96,25 +110,38 @@ public sealed class CsvEntityExporter : ICsvExporter
         if (!column.IsDynamic)
             return FormatValue(column.Property, column.Property.Getter(item), rowIndex, columnIndex, culture);
         var values = column.Property.Getter(item) as IDictionary<string, object>;
-        return values != null && values.TryGetValue(column.Title, out var value)
-            ? Convert.ToString(value, culture) ?? string.Empty
-            : string.Empty;
+        if (values == null || !values.TryGetValue(column.DynamicColumn?.Key ?? column.Title, out var value))
+            return string.Empty;
+        var type = ResolveDynamicType(column.DynamicColumn?.DataTypeName);
+        var context = new ExcelConversionContext(value, column.DynamicColumn?.Key ?? column.Title, type,
+            null, rowIndex, columnIndex, culture);
+        foreach (var converter in column.DynamicColumn?.ValueConverters ?? Array.Empty<IExcelValueConverter>())
+        {
+            if (converter.TryConvertTo(context, out var convertedValue))
+                return Convert.ToString(convertedValue, culture) ?? string.Empty;
+        }
+        return Convert.ToString(value, culture) ?? string.Empty;
     }
 
-    private static IReadOnlyList<CsvExportColumn> CreateColumns<T>(ExcelTypeMap<T> map,
+    private static IReadOnlyList<CsvExportColumn> CreateColumns<T>(IExcelMappingPlan map,
         IReadOnlyList<string> dynamicColumns) where T : class, new()
     {
         var columns = new List<CsvExportColumn>();
-        foreach (var property in map.Properties.Where(property => !property.Ignored))
+        foreach (var property in map.Columns.Where(property => !property.Ignored))
         {
+            var binding = CsvPropertyBinding.Create<T>(property);
             if (!property.IsDynamicColumn)
-                columns.Add(new CsvExportColumn(property, property.Title, false));
+                columns.Add(new CsvExportColumn(binding, property.Title, false));
+            else if (map.DynamicColumns.Count > 0)
+                foreach (var dynamicColumn in map.DynamicColumns.OrderBy(column => column.Order)
+                             .ThenBy(column => column.Key, StringComparer.Ordinal))
+                    columns.Add(new CsvExportColumn(binding, dynamicColumn.Title, true, dynamicColumn));
             else
                 foreach (var title in dynamicColumns ?? Array.Empty<string>())
                 {
                     if (string.IsNullOrWhiteSpace(title))
                         throw new ArgumentException("动态列名称不能为空。", nameof(dynamicColumns));
-                    columns.Add(new CsvExportColumn(property, title, true));
+                    columns.Add(new CsvExportColumn(binding, title, true));
                 }
         }
         if (columns.Select(column => column.Title).Distinct(StringComparer.OrdinalIgnoreCase).Count() != columns.Count)
@@ -122,44 +149,103 @@ public sealed class CsvEntityExporter : ICsvExporter
         return columns;
     }
 
-    private IEnumerable<IExcelValueConverter> ResolveValueConverters(ExcelPropertyMap property)
-    {
-        var propertyType = property.Property.PropertyType;
-        if (string.IsNullOrWhiteSpace(property.ConverterName))
-            return _valueConverters.Where(converter => converter.CanConvert(propertyType));
-        var converters = _valueConverters.OfType<INamedExcelValueConverter>().Where(converter =>
-            string.Equals(converter.Name, property.ConverterName, StringComparison.OrdinalIgnoreCase)).ToList();
-        if (converters.Count != 1)
-            throw new InvalidOperationException($"未找到唯一命名值转换器: {property.ConverterName}");
-        if (!converters[0].CanConvert(propertyType))
-            throw new InvalidOperationException($"值转换器 {property.ConverterName} 不支持属性类型: {propertyType.FullName}");
-        return converters;
-    }
-
-    private static bool IsMappedValue(object mappedValue, object value)
+    private static bool IsMappedValue(string mappedValue, object value, CultureInfo culture)
     {
         if (mappedValue == null || value == null)
             return mappedValue == null && value == null;
-        if (Equals(mappedValue, value))
-            return true;
-        if (value is not Enum enumValue)
-            return false;
-        return Equals(mappedValue, Convert.ChangeType(enumValue, Enum.GetUnderlyingType(enumValue.GetType()),
-            CultureInfo.InvariantCulture));
+        return string.Equals(mappedValue, Convert.ToString(value, culture), StringComparison.Ordinal);
     }
 
     private sealed class CsvExportColumn
     {
-        public CsvExportColumn(ExcelPropertyMap property, string title, bool isDynamic)
+        public CsvExportColumn(CsvPropertyBinding property, string title, bool isDynamic,
+            IExcelDynamicMappingColumn dynamicColumn = null)
         {
             Property = property;
             Title = title;
             IsDynamic = isDynamic;
+            DynamicColumn = dynamicColumn;
         }
 
-        public ExcelPropertyMap Property { get; }
+        public CsvPropertyBinding Property { get; }
         public string Title { get; }
         public bool IsDynamic { get; }
+        public IExcelDynamicMappingColumn DynamicColumn { get; }
+    }
+
+    private static Type ResolveDynamicType(string name)
+    {
+        switch ((name ?? "string").ToLowerInvariant())
+        {
+            case "object": return typeof(object);
+            case "string": return typeof(string);
+            case "boolean": case "bool": return typeof(bool);
+            case "byte": return typeof(byte);
+            case "int16": return typeof(short);
+            case "int32": case "int": return typeof(int);
+            case "int64": case "long": return typeof(long);
+            case "single": case "float": return typeof(float);
+            case "double": return typeof(double);
+            case "decimal": return typeof(decimal);
+            case "datetime": return typeof(DateTime);
+            case "datetimeoffset": return typeof(DateTimeOffset);
+            case "guid": return typeof(Guid);
+            case "bytes": return typeof(byte[]);
+            default: throw new InvalidOperationException($"动态列数据类型不在允许列表中: {name}");
+        }
+    }
+}
+
+internal sealed class CsvPropertyBinding
+{
+    private CsvPropertyBinding(IExcelMappingColumn mapping, PropertyInfo property,
+        Func<object, object> getter, Action<object, object> setter, IReadOnlyList<Attribute> attributes)
+    {
+        Mapping = mapping;
+        Property = property;
+        Getter = getter;
+        Setter = setter;
+        Attributes = attributes;
+        ValueConverters = mapping.ValueConverters;
+        ValidationBindings = mapping.ValidationBindings;
+        IsUnique = mapping.IsUnique;
+        UniqueIgnoreEmpty = mapping.UniqueIgnoreEmpty;
+    }
+
+    internal IExcelMappingColumn Mapping { get; }
+    internal PropertyInfo Property { get; }
+    internal string Name => Mapping.Name;
+    internal string Title => Mapping.Title;
+    internal IReadOnlyList<string> Aliases => Mapping.Aliases;
+    internal string Formatter => Mapping.Formatter;
+    internal bool Ignored => Mapping.Ignored;
+    internal bool IsDynamicColumn => Mapping.IsDynamicColumn;
+    internal ExcelWhitespacePolicy? ImportWhitespace => Mapping.ImportWhitespace;
+    internal byte? DecimalScale => Mapping.DecimalScale;
+    internal string ConverterName => Mapping.ConverterName;
+    internal IReadOnlyList<string> ValidationRuleNames => Mapping.ValidationRuleNames;
+    internal IReadOnlyDictionary<string, string> ValueMap => Mapping.ValueMap;
+    internal Func<object, object> Getter { get; }
+    internal Action<object, object> Setter { get; }
+    internal IReadOnlyList<Attribute> Attributes { get; }
+    internal IReadOnlyList<IExcelValueConverter> ValueConverters { get; }
+    internal IReadOnlyList<IExcelValidationBinding> ValidationBindings { get; }
+    internal bool IsUnique { get; }
+    internal bool UniqueIgnoreEmpty { get; }
+
+    internal static CsvPropertyBinding Create<T>(IExcelMappingColumn mapping) where T : class, new()
+    {
+        if (mapping == null)
+            throw new ArgumentNullException(nameof(mapping));
+        if (mapping is IExcelCompiledMappingColumn compiled)
+            return new CsvPropertyBinding(mapping, compiled.Property, compiled.Getter, compiled.Setter,
+                compiled.Attributes);
+        var property = typeof(T).GetProperty(mapping.Name, BindingFlags.Instance | BindingFlags.Public);
+        if (property == null)
+            throw new InvalidOperationException($"无法解析映射属性: {mapping.Name}");
+        return new CsvPropertyBinding(mapping, property, instance => property.GetValue(instance),
+            (instance, value) => property.SetValue(instance, value),
+            property.GetCustomAttributes<Attribute>().ToArray());
     }
 }
 
@@ -171,6 +257,7 @@ public sealed class CsvEntityImporter : ICsvImporter
     private readonly IReadOnlyList<IExcelValueConverter> _valueConverters;
     private readonly IReadOnlyList<IExcelValidationRule> _validationRules;
     private readonly IReadOnlyList<INamedExcelValidationRule> _namedValidationRules;
+    private readonly IExcelMappingPlanFactory _mappingPlanFactory;
 
     /// <summary>
     /// 初始化一个<see cref="CsvEntityImporter"/>类型的实例。
@@ -178,13 +265,19 @@ public sealed class CsvEntityImporter : ICsvImporter
     /// <param name="valueConverters">值转换器集合。</param>
     /// <param name="validationRules">属性校验规则集合。</param>
     /// <param name="namedValidationRules">命名配置校验规则集合。</param>
+    /// <param name="mappingPlanFactory">方向化映射计划工厂。</param>
     public CsvEntityImporter(IEnumerable<IExcelValueConverter> valueConverters = null,
         IEnumerable<IExcelValidationRule> validationRules = null,
-        IEnumerable<INamedExcelValidationRule> namedValidationRules = null)
+        IEnumerable<INamedExcelValidationRule> namedValidationRules = null,
+        IExcelMappingPlanFactory mappingPlanFactory = null)
     {
         _valueConverters = valueConverters?.ToArray() ?? Array.Empty<IExcelValueConverter>();
         _validationRules = validationRules?.ToArray() ?? ExcelValidationRules.CreateDefault();
         _namedValidationRules = namedValidationRules?.ToArray() ?? Array.Empty<INamedExcelValidationRule>();
+        _mappingPlanFactory = mappingPlanFactory ?? new ExcelMappingPlanFactory(
+            valueConverters: _valueConverters,
+            validationRules: _validationRules,
+            namedValidationRules: _namedValidationRules);
     }
 
     /// <inheritdoc />
@@ -206,21 +299,26 @@ public sealed class CsvEntityImporter : ICsvImporter
         if (options.Culture == null)
             throw new ArgumentNullException(nameof(options.Culture));
 
-        var map = ExcelTypeMapFactory.Get(options.MappingProfile, options.MappingConfiguration);
-        var properties = map.Properties.Where(property => !property.Ignored && !property.IsDynamicColumn).ToList();
-        var dynamicProperties = map.Properties.Where(property => !property.Ignored && property.IsDynamicColumn).ToList();
+        var document = ExcelMappingDocumentFactory.Create<T>(
+            options.DirectionalMappingProfile ?? options.MappingProfile,
+            options.MappingDocument, options.MappingConfiguration, MappingDirection.Import);
+        var map = _mappingPlanFactory.Create<T>(document, MappingDirection.Import);
+        var properties = map.Columns.Where(property => !property.Ignored && !property.IsDynamicColumn)
+            .Select(CsvPropertyBinding.Create<T>).ToList();
+        var dynamicProperties = map.Columns.Where(property => !property.Ignored && property.IsDynamicColumn)
+            .Select(CsvPropertyBinding.Create<T>).ToList();
         if (dynamicProperties.Count > 1)
             throw new InvalidOperationException($"CSV 模板 {typeof(T).FullName} 只能声明一个动态列属性。");
-        ValidateValidationRuleBindings(properties);
-        ValidateNamedValidationRuleBindings(properties);
         using var reader = new StreamReader(source, options.Encoding, true, 1024, true);
         var records = CsvRecordReader.Read(reader, options.Delimiter, options.Quote, cancellationToken).GetEnumerator();
         var columns = options.HasHeader
-            ? CreateColumns(records, properties, dynamicProperties, options.HeaderMatch)
+            ? CreateColumns(records, properties, dynamicProperties, map.DynamicColumns, options.HeaderMatch)
             : properties.Select((property, index) => new CsvColumn(index, property, property.Title, false)).ToList();
         var items = new List<T>();
         var errors = new List<CsvImportError>();
         var duplicateValues = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+        var uniqueTracker = new UniqueTracker(duplicateValues, options.MaxTrackedUniqueValues,
+            CreateStringComparer(options.UniqueComparison));
         var rowIndex = options.HasHeader ? 1 : 0;
         while (records.MoveNext())
         {
@@ -229,27 +327,38 @@ public sealed class CsvEntityImporter : ICsvImporter
             var record = records.Current;
             var item = new T();
             var valid = true;
-            var rowDuplicateValues = CloneDuplicateValues(duplicateValues);
+            uniqueTracker.BeginRow();
             Dictionary<string, object> dynamicValues = null;
             foreach (var column in columns)
             {
                 var value = column.Index < record.Count ? record[column.Index] : string.Empty;
+                value = NormalizeText(value, column.Property.ImportWhitespace);
                 try
                 {
                     if (column.IsDynamic)
                     {
                         dynamicValues ??= new Dictionary<string, object>(StringComparer.Ordinal);
-                        dynamicValues[column.HeaderName] = value;
+                        ValidateRawValue(value, column, rowIndex, duplicateValues, options.Culture);
+                        var dynamicValue = ConvertDynamicValue(value, column, rowIndex, options.Culture);
+                        ValidateConvertedValue(value, dynamicValue, column, rowIndex, duplicateValues,
+                            uniqueTracker, options.Culture);
+                        dynamicValues[column.DynamicColumn?.Key ?? column.HeaderName] = dynamicValue;
                         continue;
                     }
-                    ValidateRawValue(value, column, rowIndex, rowDuplicateValues, options.Culture);
+                    ValidateRawValue(value, column, rowIndex, duplicateValues, options.Culture);
                     var converted = ConvertValue(value, column.Property, rowIndex, column.Index + 1, options.Culture);
-                    ValidateConvertedValue(value, converted, column, rowIndex, rowDuplicateValues, options.Culture);
-                    column.Property.Property.SetValue(item, converted);
+                    ValidateConvertedValue(value, converted, column, rowIndex, duplicateValues, uniqueTracker,
+                        options.Culture);
+                    column.Property.Setter(item, converted);
                 }
                 catch (Exception exception)
                 {
-                    errors.Add(new CsvImportError(exception.Message, rowIndex, column.Index + 1, column.Property.Name));
+                    int? firstRowNumber = null;
+                    var errorColumnKey = column.DynamicColumn?.Key ?? column.Property.Name;
+                    if (uniqueTracker.TryGetFirstRowNumber(errorColumnKey, value, out var firstRow))
+                        firstRowNumber = firstRow;
+                    errors.Add(new CsvImportError(exception.Message, rowIndex, column.Index + 1,
+                        errorColumnKey, firstRowNumber));
                     valid = false;
                     break;
                 }
@@ -257,17 +366,19 @@ public sealed class CsvEntityImporter : ICsvImporter
             if (valid)
             {
                 if (dynamicValues != null)
-                    dynamicProperties[0].Property.SetValue(item, dynamicValues);
+                    dynamicProperties[0].Setter(item, dynamicValues);
                 items.Add(item);
-                duplicateValues = rowDuplicateValues;
+                uniqueTracker.CommitRow();
             }
+            else
+                uniqueTracker.RollbackRow();
         }
         return new CsvImportResult<T>(items, errors);
     }
 
     private static IReadOnlyList<CsvColumn> CreateColumns(IEnumerator<IReadOnlyList<string>> records,
-        IReadOnlyCollection<ExcelPropertyMap> properties, IReadOnlyCollection<ExcelPropertyMap> dynamicProperties,
-        bool headerMatch)
+        IReadOnlyCollection<CsvPropertyBinding> properties, IReadOnlyCollection<CsvPropertyBinding> dynamicProperties,
+        IReadOnlyList<IExcelDynamicMappingColumn> dynamicColumns, bool headerMatch)
     {
         if (!records.MoveNext())
             throw new InvalidOperationException("CSV 不包含表头。");
@@ -280,14 +391,23 @@ public sealed class CsvEntityImporter : ICsvImporter
                 throw new InvalidOperationException($"CSV 包含重复表头: {header}");
             var property = properties.FirstOrDefault(candidate =>
                 string.Equals(candidate.Title, header, StringComparison.OrdinalIgnoreCase)
+                || candidate.Aliases.Any(alias => string.Equals(alias, header, StringComparison.OrdinalIgnoreCase))
                 || string.Equals(candidate.Name, header, StringComparison.OrdinalIgnoreCase));
+            IExcelDynamicMappingColumn dynamicColumn = null;
             if (property == null && dynamicProperties.Count == 1)
-                property = dynamicProperties.First();
+            {
+                dynamicColumn = dynamicColumns?.FirstOrDefault(candidate =>
+                    string.Equals(candidate.Title, header, StringComparison.OrdinalIgnoreCase)
+                    || candidate.Aliases.Any(alias => string.Equals(alias, header,
+                        StringComparison.OrdinalIgnoreCase)));
+                if (dynamicColumns == null || dynamicColumns.Count == 0 || dynamicColumn != null)
+                    property = dynamicProperties.First();
+            }
             if (property != null)
             {
                 if (!property.Property.CanWrite)
                     throw new InvalidOperationException($"导入模板属性不可写入: {property.Name}");
-                columns.Add(new CsvColumn(index, property, header, property.IsDynamicColumn));
+                columns.Add(new CsvColumn(index, property, header, property.IsDynamicColumn, dynamicColumn));
             }
         }
         if (headerMatch)
@@ -299,11 +419,11 @@ public sealed class CsvEntityImporter : ICsvImporter
         return columns;
     }
 
-    private object ConvertValue(string value, ExcelPropertyMap property, int rowIndex, int columnIndex, CultureInfo culture)
+    private object ConvertValue(string value, CsvPropertyBinding property, int rowIndex, int columnIndex, CultureInfo culture)
     {
         var type = property.Property.PropertyType;
         var context = new ExcelConversionContext(value, property.Name, type, null, rowIndex, columnIndex, culture);
-        foreach (var converter in ResolveValueConverters(property))
+        foreach (var converter in property.ValueConverters)
         {
             if (converter.TryConvertFrom(context, out var convertedValue))
                 return convertedValue;
@@ -315,7 +435,7 @@ public sealed class CsvEntityImporter : ICsvImporter
             throw new InvalidCastException($"值转换失败。输入值为空，目标类型为: {type.FullName}");
         }
         if (property.ValueMap.TryGetValue(value, out var mappedValue))
-            return mappedValue;
+            return ConvertMappedValue(mappedValue, type, culture);
         var targetType = Nullable.GetUnderlyingType(type) ?? type;
         if (targetType.IsEnum)
             return Enum.Parse(targetType, value, true);
@@ -326,122 +446,147 @@ public sealed class CsvEntityImporter : ICsvImporter
         return Convert.ChangeType(value, targetType, culture);
     }
 
-    private IEnumerable<IExcelValueConverter> ResolveValueConverters(ExcelPropertyMap property)
+    private static object ConvertDynamicValue(string value, CsvColumn column, int rowIndex, CultureInfo culture)
     {
-        var propertyType = property.Property.PropertyType;
-        if (string.IsNullOrWhiteSpace(property.ConverterName))
-            return _valueConverters.Where(converter => converter.CanConvert(propertyType));
-        var converters = _valueConverters.OfType<INamedExcelValueConverter>().Where(converter =>
-            string.Equals(converter.Name, property.ConverterName, StringComparison.OrdinalIgnoreCase)).ToList();
-        if (converters.Count != 1)
-            throw new InvalidOperationException($"未找到唯一命名值转换器: {property.ConverterName}");
-        if (!converters[0].CanConvert(propertyType))
-            throw new InvalidOperationException($"值转换器 {property.ConverterName} 不支持属性类型: {propertyType.FullName}");
-        return converters;
-    }
-
-    private INamedExcelValidationRule ResolveNamedValidationRule(string ruleName)
-    {
-        var rules = _namedValidationRules.Where(rule => string.Equals(rule.Name, ruleName,
-            StringComparison.OrdinalIgnoreCase)).ToList();
-        if (rules.Count != 1)
-            throw new InvalidOperationException($"未找到唯一命名校验规则: {ruleName}");
-        return rules[0];
+        if (column.DynamicColumn == null)
+            return value;
+        var type = ResolveDynamicType(column.DynamicColumn.DataTypeName);
+        var context = new ExcelConversionContext(value, column.DynamicColumn.Key, type, null, rowIndex,
+            column.Index + 1, culture, new ExcelCellValue(value, value, ExcelCellKind.Text));
+        foreach (var converter in column.DynamicColumn.ValueConverters)
+        {
+            if (converter.TryConvertFrom(context, out var convertedValue))
+                return convertedValue;
+        }
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            if (!type.IsValueType || Nullable.GetUnderlyingType(type) != null)
+                return null;
+            throw new InvalidCastException($"值转换失败。输入值为空，目标类型为: {type.FullName}");
+        }
+        var targetType = Nullable.GetUnderlyingType(type) ?? type;
+        if (targetType == typeof(Guid)) return Guid.Parse(value);
+        if (targetType == typeof(DateTime)) return DateTime.Parse(value, culture);
+        if (targetType == typeof(DateTimeOffset)) return DateTimeOffset.Parse(value, culture);
+        return Convert.ChangeType(value, targetType, culture);
     }
 
     private void ValidateRawValue(string value, CsvColumn column, int rowIndex,
         IDictionary<string, HashSet<string>> duplicateValues, CultureInfo culture)
     {
         var context = CreateValidationContext(value, null, column, rowIndex, duplicateValues, culture);
-        foreach (var attribute in column.Property.Property.GetCustomAttributes(true).OfType<FilterAttributeBase>()
-                 .Where(IsRawValidationAttribute))
+        foreach (var binding in GetValidationBindings(column).Where(binding => binding.IsRaw))
         {
-            var rule = ResolveValidationRule(attribute);
-            if (!rule.Validate(attribute, context))
-                throw new InvalidOperationException(attribute.ErrorMsg);
+            if (!binding.Validate(context))
+                throw new InvalidOperationException(binding.ErrorMessage);
         }
     }
 
     private void ValidateConvertedValue(string value, object convertedValue, CsvColumn column, int rowIndex,
-        IDictionary<string, HashSet<string>> duplicateValues, CultureInfo culture)
+        IDictionary<string, HashSet<string>> duplicateValues, UniqueTracker uniqueTracker, CultureInfo culture)
     {
         var context = CreateValidationContext(value, convertedValue, column, rowIndex, duplicateValues, culture);
-        foreach (var attribute in column.Property.Property.GetCustomAttributes(true).OfType<FilterAttributeBase>()
-                 .Where(attribute => !IsRawValidationAttribute(attribute)))
+        foreach (var binding in GetValidationBindings(column).Where(binding => !binding.IsRaw
+                     && binding.Kind != ExcelValidationBindingKind.Unique))
         {
-            var rule = ResolveValidationRule(attribute);
-            if (!rule.Validate(attribute, context))
-                throw new InvalidOperationException(attribute.ErrorMsg);
+            if (!binding.Validate(context))
+                throw new InvalidOperationException(binding.ErrorMessage);
         }
-        foreach (var ruleName in column.Property.ValidationRuleNames)
-        {
-            var rule = ResolveNamedValidationRule(ruleName);
-            if (!rule.Validate(context))
-                throw new InvalidOperationException(rule.ErrorMessage);
-        }
+        var uniqueKey = column.DynamicColumn?.Key ?? column.Property.Name;
+        var isUnique = column.DynamicColumn?.IsUnique ?? column.Property.IsUnique;
+        var ignoreEmpty = column.DynamicColumn?.UniqueIgnoreEmpty ?? column.Property.UniqueIgnoreEmpty;
+        if (isUnique && !uniqueTracker.TryReserve(uniqueKey, value, false, ignoreEmpty, rowIndex))
+            throw new InvalidOperationException("重复数据");
     }
 
     private static ExcelValidationContext CreateValidationContext(string value, object convertedValue, CsvColumn column,
         int rowIndex, IDictionary<string, HashSet<string>> duplicateValues, CultureInfo culture) => new(value, null,
-        rowIndex, column.Index + 1, column.Property.Name, duplicateValues, convertedValue,
-        column.Property.Property.PropertyType, new ExcelCellValue(value, value, ExcelCellKind.Text), culture,
-        column.Property.Property);
+        rowIndex, column.Index + 1, column.DynamicColumn?.Key ?? column.Property.Name, convertedValue,
+        column.DynamicColumn == null ? column.Property.Property.PropertyType
+            : ResolveDynamicType(column.DynamicColumn.DataTypeName),
+        new ExcelCellValue(value, value, ExcelCellKind.Text), culture);
 
-    private IExcelValidationRule ResolveValidationRule(FilterAttributeBase attribute)
+    private static IReadOnlyList<IExcelValidationBinding> GetValidationBindings(CsvColumn column) =>
+        column.DynamicColumn?.ValidationBindings ?? column.Property.ValidationBindings;
+
+    private static Type ResolveDynamicType(string name)
     {
-        var binding = attribute.GetType().GetCustomAttribute<BindFilterAttribute>();
-        if (binding != null)
+        switch ((name ?? "string").ToLowerInvariant())
         {
-            var boundRule = _validationRules.FirstOrDefault(rule => binding.RuleType.IsInstanceOfType(rule));
-            if (boundRule == null)
-                throw new InvalidOperationException($"未注册校验规则: {binding.RuleType.FullName}");
-            if (!boundRule.CanValidate(attribute))
-                throw new InvalidOperationException($"校验规则 {binding.RuleType.FullName} 不支持特性: {attribute.GetType().FullName}");
-            return boundRule;
+            case "object": return typeof(object);
+            case "string": return typeof(string);
+            case "boolean": case "bool": return typeof(bool);
+            case "byte": return typeof(byte);
+            case "int16": return typeof(short);
+            case "int32": case "int": return typeof(int);
+            case "int64": case "long": return typeof(long);
+            case "single": case "float": return typeof(float);
+            case "double": return typeof(double);
+            case "decimal": return typeof(decimal);
+            case "datetime": return typeof(DateTime);
+            case "datetimeoffset": return typeof(DateTimeOffset);
+            case "guid": return typeof(Guid);
+            case "bytes": return typeof(byte[]);
+            default: throw new InvalidOperationException($"动态列数据类型不在允许列表中: {name}");
         }
-        var rule = _validationRules.FirstOrDefault(candidate => candidate.CanValidate(attribute));
-        return rule ?? throw new InvalidOperationException($"未找到特性对应的校验规则: {attribute.GetType().FullName}");
     }
 
-    private void ValidateValidationRuleBindings(IEnumerable<ExcelPropertyMap> properties)
+    private static object ConvertMappedValue(string value, Type type, CultureInfo culture)
     {
-        foreach (var attribute in properties.SelectMany(property => property.Property.GetCustomAttributes(true)
-                     .OfType<FilterAttributeBase>()))
-            ResolveValidationRule(attribute);
+        var targetType = Nullable.GetUnderlyingType(type) ?? type;
+        if (targetType == typeof(string))
+            return value;
+        if (targetType.IsEnum)
+            return Enum.Parse(targetType, value, true);
+        if (targetType == typeof(Guid))
+            return Guid.Parse(value);
+        if (targetType == typeof(Version))
+            return new Version(value);
+        if (targetType == typeof(DateTime))
+            return DateTime.Parse(value, culture);
+        return Convert.ChangeType(value, targetType, culture);
     }
 
-    private void ValidateNamedValidationRuleBindings(IEnumerable<ExcelPropertyMap> properties)
+    private static string NormalizeText(string value, ExcelWhitespacePolicy? policy)
     {
-        foreach (var ruleName in properties.SelectMany(property => property.ValidationRuleNames))
-            ResolveNamedValidationRule(ruleName);
+        value ??= string.Empty;
+        return policy switch
+        {
+            null or ExcelWhitespacePolicy.Preserve => value,
+            ExcelWhitespacePolicy.Trim => value.Trim(),
+            ExcelWhitespacePolicy.RemoveAll => new string(value.Where(character => !char.IsWhiteSpace(character)).ToArray()),
+            _ => throw new ArgumentOutOfRangeException(nameof(policy))
+        };
     }
 
-    private static bool IsRawValidationAttribute(FilterAttributeBase attribute) =>
-        attribute is RequiredAttribute || attribute is RegexAttribute;
-
-    private static Dictionary<string, HashSet<string>> CloneDuplicateValues(
-        IReadOnlyDictionary<string, HashSet<string>> duplicateValues)
+    private static StringComparer CreateStringComparer(StringComparison comparison) => comparison switch
     {
-        var result = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
-        foreach (var pair in duplicateValues)
-            result[pair.Key] = new HashSet<string>(pair.Value, StringComparer.OrdinalIgnoreCase);
-        return result;
-    }
+        StringComparison.Ordinal => StringComparer.Ordinal,
+        StringComparison.OrdinalIgnoreCase => StringComparer.OrdinalIgnoreCase,
+        StringComparison.InvariantCulture => StringComparer.InvariantCulture,
+        StringComparison.InvariantCultureIgnoreCase => StringComparer.InvariantCultureIgnoreCase,
+        StringComparison.CurrentCulture => StringComparer.CurrentCulture,
+        StringComparison.CurrentCultureIgnoreCase => StringComparer.CurrentCultureIgnoreCase,
+        _ => throw new ArgumentOutOfRangeException(nameof(comparison))
+    };
 
     private sealed class CsvColumn
     {
-        public CsvColumn(int index, ExcelPropertyMap property, string headerName, bool isDynamic)
+        public CsvColumn(int index, CsvPropertyBinding property, string headerName, bool isDynamic,
+            IExcelDynamicMappingColumn dynamicColumn = null)
         {
             Index = index;
             Property = property;
             HeaderName = headerName;
             IsDynamic = isDynamic;
+            DynamicColumn = dynamicColumn;
         }
 
         public int Index { get; }
-        public ExcelPropertyMap Property { get; }
+        public CsvPropertyBinding Property { get; }
         public string HeaderName { get; }
         public bool IsDynamic { get; }
+        public IExcelDynamicMappingColumn DynamicColumn { get; }
     }
 }
 

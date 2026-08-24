@@ -15,16 +15,21 @@ public sealed class ExcelPropertyMap
     /// <param name="title">默认列标题。</param>
     /// <param name="formatter">默认格式化字符串。</param>
     /// <param name="ignored">是否忽略。</param>
+    /// <param name="importWhitespace">导入文本空白策略。</param>
     /// <param name="isDynamicColumn">是否为动态列。</param>
     /// <param name="decimalScale">小数精度。</param>
     /// <param name="converterName">值转换器名称。</param>
     /// <param name="validationRuleNames">校验规则名称集合。</param>
     /// <param name="valueMap">显示文本到原始值的映射。</param>
+    /// <param name="aliases">历史列标题别名。</param>
     /// <param name="getter">已编译的属性读取器。</param>
     /// <param name="setter">已编译的属性写入器。</param>
+    /// <param name="imageMultiplicity">图片列多重性策略。</param>
     internal ExcelPropertyMap(PropertyInfo property, string title, string formatter, bool ignored, bool isDynamicColumn,
-        byte? decimalScale, string converterName, IReadOnlyList<string> validationRuleNames,
-        IReadOnlyDictionary<string, object> valueMap, Func<object, object> getter, Action<object, object> setter,
+        ExcelWhitespacePolicy? importWhitespace, byte? decimalScale, string converterName,
+        IReadOnlyList<string> validationRuleNames,
+        IReadOnlyDictionary<string, object> valueMap, IReadOnlyList<string> aliases,
+        Func<object, object> getter, Action<object, object> setter,
         ExcelImageMultiplicityPolicy imageMultiplicity = ExcelImageMultiplicityPolicy.First)
     {
         Property = property;
@@ -32,10 +37,12 @@ public sealed class ExcelPropertyMap
         Formatter = formatter;
         Ignored = ignored;
         IsDynamicColumn = isDynamicColumn;
+        ImportWhitespace = importWhitespace;
         DecimalScale = decimalScale;
         ConverterName = converterName;
         ValidationRuleNames = validationRuleNames;
         ValueMap = valueMap;
+        Aliases = aliases;
         Getter = getter;
         Setter = setter;
         ImageMultiplicity = imageMultiplicity;
@@ -57,6 +64,11 @@ public sealed class ExcelPropertyMap
     public string Title { get; }
 
     /// <summary>
+    /// 获取历史列标题别名。
+    /// </summary>
+    public IReadOnlyList<string> Aliases { get; }
+
+    /// <summary>
     /// 获取默认格式化字符串。
     /// </summary>
     public string Formatter { get; }
@@ -70,6 +82,11 @@ public sealed class ExcelPropertyMap
     /// 获取是否为动态列。
     /// </summary>
     public bool IsDynamicColumn { get; }
+
+    /// <summary>
+    /// 获取列级导入文本空白策略；为空时使用请求级正文策略。
+    /// </summary>
+    public ExcelWhitespacePolicy? ImportWhitespace { get; }
 
     /// <summary>
     /// 获取小数精度。

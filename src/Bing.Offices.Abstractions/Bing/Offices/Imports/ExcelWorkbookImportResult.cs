@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 
 namespace Bing.Offices.Imports;
 
@@ -8,7 +9,8 @@ namespace Bing.Offices.Imports;
 /// </summary>
 public sealed class ExcelWorkbookImportResult<TWorkbook> where TWorkbook : class, new()
 {
-    internal ExcelWorkbookImportResult(TWorkbook workbook, IReadOnlyList<ExcelSheetImportResult> sheets,
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public ExcelWorkbookImportResult(TWorkbook workbook, IReadOnlyList<ExcelSheetImportResult> sheets,
         IReadOnlyList<ExcelImportError> errors, bool errorsTruncated, int? maxErrors)
     {
         Workbook = workbook;
@@ -54,7 +56,8 @@ public sealed class ExcelWorkbookImportResult<TWorkbook> where TWorkbook : class
 /// </summary>
 public sealed class ExcelSheetImportResult
 {
-    internal ExcelSheetImportResult(string name, Type itemType,
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public ExcelSheetImportResult(string name, Type itemType,
         IReadOnlyList<int> sourceRows, IReadOnlyList<ExcelImportError> errors)
     {
         Name = name;

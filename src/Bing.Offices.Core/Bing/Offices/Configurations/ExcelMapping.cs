@@ -61,17 +61,24 @@ public sealed class ExcelMappingBuilder<T> where T : class, new()
     {
         PropertyName = source.PropertyName,
         Title = source.Title,
+        Aliases = source.Aliases.ToList(),
         ColumnIndex = source.ColumnIndex,
         Ignored = source.Ignored,
         Formatter = source.Formatter,
         DecimalScale = source.DecimalScale,
         ConverterName = source.ConverterName,
+        ImportWhitespace = source.ImportWhitespace,
         ValidationRuleNames = source.ValidationRuleNames.ToList(),
+        ValidationRuleNamesToRemove = source.ValidationRuleNamesToRemove.ToList(),
+        ClearValidationRules = source.ClearValidationRules,
+        ValidationRuleMergeMode = source.ValidationRuleMergeMode,
         ValueMappings = source.ValueMappings.Select(mapping => new ExcelValueMappingConfiguration
         {
             Text = mapping.Text,
             Value = mapping.Value
-        }).ToList()
+        }).ToList(),
+        ValueMappingMergeMode = source.ValueMappingMergeMode,
+        ImageMultiplicity = source.ImageMultiplicity
     };
 }
 

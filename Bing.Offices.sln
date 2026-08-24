@@ -65,6 +65,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Bing.Offices.Docs.Tests", "
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Bing.Offices.Benchmarks", "benchmarks\Bing.Offices.Benchmarks\Bing.Offices.Benchmarks.csproj", "{D9605B36-0A8E-42C7-9D88-33B0B665D753}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Bing.Offices.ProfileFixtures", "tests\Bing.Offices.ProfileFixtures\Bing.Offices.ProfileFixtures.csproj", "{F6F98266-4D7D-4B66-A7E2-8F30DFAD11C4}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -103,6 +105,10 @@ Global
 		{D9605B36-0A8E-42C7-9D88-33B0B665D753}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D9605B36-0A8E-42C7-9D88-33B0B665D753}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D9605B36-0A8E-42C7-9D88-33B0B665D753}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F6F98266-4D7D-4B66-A7E2-8F30DFAD11C4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F6F98266-4D7D-4B66-A7E2-8F30DFAD11C4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F6F98266-4D7D-4B66-A7E2-8F30DFAD11C4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F6F98266-4D7D-4B66-A7E2-8F30DFAD11C4}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -123,6 +129,7 @@ Global
 		{B982B601-3AE7-43F0-8C69-F8C3DD96E605} = {280D49AD-7FE4-4CF5-A554-B856318CAD08}
 		{6D2BD0E6-68B2-4E1D-9C3C-A13CFD5C20A1} = {280D49AD-7FE4-4CF5-A554-B856318CAD08}
 		{D9605B36-0A8E-42C7-9D88-33B0B665D753} = {280D49AD-7FE4-4CF5-A554-B856318CAD08}
+		{F6F98266-4D7D-4B66-A7E2-8F30DFAD11C4} = {280D49AD-7FE4-4CF5-A554-B856318CAD08}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {A893205E-C0E7-49FA-8F8C-E493BDDF365B}

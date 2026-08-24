@@ -4,6 +4,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using Bing.Offices.Attributes;
 using Bing.Offices.Configurations;
 using Bing.Offices.Exceptions;
@@ -36,6 +37,32 @@ public static class ExcelTypeMapFactory
     public static ExcelTypeMap<T> Get<T>(ExcelMappingConfiguration configuration)
     {
         return ApplyConfiguration(configuration, Get<T>());
+    }
+
+    /// <summary>
+    /// 获取 normalized Mapping Document 指定方向的类型映射。
+    /// </summary>
+    /// <typeparam name="T">实体类型。</typeparam>
+    /// <param name="document">规范化映射文档。</param>
+    /// <param name="direction">映射方向。</param>
+    public static ExcelTypeMap<T> Get<T>(ExcelMappingDocument document, MappingDirection direction)
+    {
+        if (document == null)
+            throw new ArgumentNullException(nameof(document));
+        return Get<T>(direction == MappingDirection.Import ? document.Import : document.Export);
+    }
+
+    /// <summary>
+    /// 获取 normalized Mapping Document 指定方向的类型映射，并应用请求级配置。
+    /// </summary>
+    /// <typeparam name="T">实体类型。</typeparam>
+    /// <param name="document">规范化映射文档。</param>
+    /// <param name="configuration">请求级映射配置。</param>
+    /// <param name="direction">映射方向。</param>
+    public static ExcelTypeMap<T> Get<T>(ExcelMappingDocument document, ExcelMappingConfiguration configuration,
+        MappingDirection direction)
+    {
+        return Get<T>(configuration, Get<T>(document, direction));
     }
 
     /// <summary>
@@ -75,11 +102,14 @@ public static class ExcelTypeMapFactory
                 throw new InvalidOperationException($"动态列属性不支持请求级固定列映射: {property.Name}");
             var title = string.IsNullOrWhiteSpace(configurationColumn.Title) ? property.Title : configurationColumn.Title;
             var values = CreateConfiguredValueMap(property, configurationColumn);
+            var aliases = CreateAliases(configurationColumn, property.Aliases);
             var configuredProperty = new ExcelPropertyMap(property.Property, title,
                 configurationColumn.Formatter ?? property.Formatter, configurationColumn.Ignored ?? property.Ignored,
-                property.IsDynamicColumn, configurationColumn.DecimalScale ?? property.DecimalScale,
+                property.IsDynamicColumn, configurationColumn.ImportWhitespace ?? property.ImportWhitespace,
+                configurationColumn.DecimalScale ?? property.DecimalScale,
                 configurationColumn.ConverterName ?? property.ConverterName,
-                CreateValidationRuleNames(configurationColumn, property.ValidationRuleNames), values, property.Getter,
+                CreateValidationRuleNames(configurationColumn, property.ValidationRuleNames), values, aliases,
+                property.Getter,
                 property.Setter, configurationColumn.ImageMultiplicity ?? property.ImageMultiplicity);
             properties.Add((configuredProperty, configurationColumn.ColumnIndex ?? int.MaxValue - source.Properties.Count + defaultOrder++));
         }
@@ -104,6 +134,30 @@ public static class ExcelTypeMapFactory
     public static ExcelTypeMap<T> Get<T>(ExcelMappingProfile<T> profile, ExcelMappingConfiguration configuration)
         where T : class, new() =>
         Get<T>(configuration, profile == null ? Get<T>() : Get<T>(profile.Configuration));
+
+    /// <summary>
+    /// 获取指定方向的双模型 Profile 映射，并按请求配置继续覆盖。
+    /// </summary>
+    [Obsolete("请改用 ExcelMappingDocument 和 IExcelMappingPlanFactory。", false)]
+    public static ExcelTypeMap<T> Get<T>(object profile, ExcelMappingConfiguration configuration,
+        MappingDirection direction) where T : class, new()
+    {
+        if (profile == null)
+            return Get<T>(configuration);
+        if (profile is ExcelMappingProfile<T> legacy)
+            return Get(legacy, configuration);
+        if (!(profile is IMappingProfileSnapshot snapshot))
+            throw new ArgumentException("映射 Profile 类型不受支持。", nameof(profile));
+        var expectedType = direction == MappingDirection.Import ? snapshot.ImportType : snapshot.ExportType;
+        if (expectedType != typeof(T))
+            throw new ArgumentException($"映射 Profile 的{(direction == MappingDirection.Import ? "导入" : "导出")}模型类型不匹配: {typeof(T).FullName}",
+                nameof(profile));
+        var profileConfiguration = direction == MappingDirection.Import
+            ? snapshot.ImportConfiguration
+            : snapshot.ExportConfiguration;
+        var mapped = Get<T>(profileConfiguration);
+        return Get<T>(configuration, mapped);
+    }
 
     private static ExcelTypeMap<T> Get<T>(ExcelMappingConfiguration configuration, ExcelTypeMap<T> source)
     {
@@ -145,6 +199,10 @@ public static class ExcelTypeMapFactory
     /// <param name="property">属性元数据。</param>
     private static ExcelPropertyMap CreatePropertyMap(PropertyInfo property)
     {
+        foreach (var attribute in property.GetCustomAttributes<ExcelRegexAttribute>())
+            _ = new Regex(attribute.Pattern, RegexOptions.Compiled, TimeSpan.FromSeconds(1));
+        foreach (var attribute in property.GetCustomAttributes<RegexAttribute>())
+            _ = new Regex(attribute.RegexString, RegexOptions.Compiled, TimeSpan.FromSeconds(1));
         var isDynamicColumn = property.IsDefined(typeof(DynamicColumnAttribute));
         if (isDynamicColumn &&
             (!property.CanWrite || !typeof(IDictionary<string, object>).IsAssignableFrom(property.PropertyType)))
@@ -165,9 +223,10 @@ public static class ExcelTypeMapFactory
             ? property.GetCustomAttribute<DecimalScaleAttribute>()?.Scale
             : null;
         var title = property.GetCustomAttribute<ColumnNameAttribute>()?.Name ?? property.Name;
-        return new ExcelPropertyMap(property, title, format, property.HasIgnore(), isDynamicColumn, scale, null,
+        return new ExcelPropertyMap(property, title, format, property.HasIgnore(), isDynamicColumn, null, scale, null,
             Array.Empty<string>(),
-            new ReadOnlyDictionary<string, object>(values), CreateGetter(property), CreateSetter(property));
+            new ReadOnlyDictionary<string, object>(values), Array.Empty<string>(), CreateGetter(property),
+            CreateSetter(property));
     }
 
     /// <summary>
@@ -231,6 +290,9 @@ public static class ExcelTypeMapFactory
         if (configuration.ValueMappings == null || configuration.ValueMappings.Count == 0)
             return property.ValueMap;
         var values = new Dictionary<string, object>(StringComparer.Ordinal);
+        if (configuration.ValueMappingMergeMode == ExcelValueMappingMergeMode.Append)
+            foreach (var pair in property.ValueMap)
+                values.Add(pair.Key, pair.Value);
         foreach (var mapping in configuration.ValueMappings)
         {
             if (mapping == null || string.IsNullOrWhiteSpace(mapping.Text))
@@ -241,6 +303,21 @@ public static class ExcelTypeMapFactory
         return new ReadOnlyDictionary<string, object>(values);
     }
 
+    private static IReadOnlyList<string> CreateAliases(ExcelColumnConfiguration configuration,
+        IReadOnlyList<string> defaults)
+    {
+        if (configuration.Aliases == null || configuration.Aliases.Count == 0)
+            return defaults ?? Array.Empty<string>();
+        var aliases = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var alias in configuration.Aliases)
+        {
+            if (string.IsNullOrWhiteSpace(alias))
+                throw new ArgumentException("映射配置的列别名不能为空。", nameof(configuration));
+            aliases.Add(alias);
+        }
+        return aliases.ToArray();
+    }
+
     /// <summary>
     /// 验证并创建配置的命名校验器引用。
     /// </summary>
@@ -249,16 +326,21 @@ public static class ExcelTypeMapFactory
     private static IReadOnlyList<string> CreateValidationRuleNames(ExcelColumnConfiguration configuration,
         IReadOnlyList<string> defaultNames = null)
     {
-        if (configuration.ValidationRuleNames == null || configuration.ValidationRuleNames.Count == 0)
-            return defaultNames ?? Array.Empty<string>();
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var name in configuration.ValidationRuleNames)
+        if (!configuration.ClearValidationRules)
+            foreach (var defaultName in defaultNames ?? Array.Empty<string>())
+                names.Add(defaultName);
+        if (configuration.ValidationRuleMergeMode == ExcelValidationRuleMergeMode.Replace)
+            names.Clear();
+        foreach (var name in configuration.ValidationRuleNames ?? new List<string>())
         {
             if (string.IsNullOrWhiteSpace(name))
                 throw new ArgumentException("映射配置的校验规则名称不能为空。", nameof(configuration));
             if (!names.Add(name))
                 throw new ArgumentException($"映射配置包含重复校验规则名称: {name}", nameof(configuration));
         }
+        foreach (var name in configuration.ValidationRuleNamesToRemove ?? new List<string>())
+            names.Remove(name);
         return names.ToArray();
     }
 

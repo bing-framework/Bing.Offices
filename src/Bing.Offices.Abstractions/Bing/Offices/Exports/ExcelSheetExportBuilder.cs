@@ -24,8 +24,10 @@ public sealed class ExcelSheetExportBuilder<T> where T : class, new()
     private bool _hidden;
     private readonly List<ExcelChartDefinition> _charts = new List<ExcelChartDefinition>();
     private IReadOnlyList<ExcelHeaderRow> _headerRows = Array.Empty<ExcelHeaderRow>();
-    private Configurations.ExcelMappingConfiguration _mappingConfiguration;
-    private Configurations.ExcelMappingProfile<T> _mappingProfile;
+    private Configurations.ExcelMappingConfiguration _documentMappingConfiguration;
+    private Configurations.ExcelMappingConfiguration _requestMappingConfiguration;
+    private Configurations.ExcelMappingDocument _mappingDocument;
+    private object _mappingProfile;
     private System.Globalization.CultureInfo _culture = System.Globalization.CultureInfo.InvariantCulture;
     private ExcelColumnWidthOptions _columnWidth;
     private ExcelCommentConflictPolicy _commentConflictPolicy = ExcelCommentConflictPolicy.Preserve;
@@ -122,7 +124,21 @@ public sealed class ExcelSheetExportBuilder<T> where T : class, new()
     /// </summary>
     public ExcelSheetExportBuilder<T> Mapping(Configurations.ExcelMappingConfiguration configuration)
     {
-        _mappingConfiguration = configuration;
+        _requestMappingConfiguration = configuration == null ? null :
+            Configurations.MappingConfigurationCloner.Clone(configuration, Configurations.MappingSourceKind.Request);
+        return this;
+    }
+
+    /// <summary>
+    /// 设置规范化映射文档的导出方向配置。
+    /// </summary>
+    public ExcelSheetExportBuilder<T> Mapping(Configurations.ExcelMappingDocument document)
+    {
+        if (document == null)
+            throw new ArgumentNullException(nameof(document));
+        _documentMappingConfiguration = document.Export == null ? null :
+            Configurations.MappingConfigurationCloner.Clone(document.Export, Configurations.MappingSourceKind.Document);
+        _mappingDocument = Configurations.MappingDocumentCloner.Clone(document);
         return this;
     }
 
@@ -130,6 +146,16 @@ public sealed class ExcelSheetExportBuilder<T> where T : class, new()
     /// 设置 Fluent 映射 Profile。
     /// </summary>
     public ExcelSheetExportBuilder<T> Mapping(Configurations.ExcelMappingProfile<T> profile)
+    {
+        _mappingProfile = profile;
+        return this;
+    }
+
+    /// <summary>
+    /// 设置导出方向的双模型 Mapping Profile。
+    /// </summary>
+    public ExcelSheetExportBuilder<T> Mapping<TImport>(Configurations.ExcelMappingProfile<TImport, T> profile)
+        where TImport : class, new()
     {
         _mappingProfile = profile;
         return this;
@@ -213,11 +239,36 @@ public sealed class ExcelSheetExportBuilder<T> where T : class, new()
                 throw new ArgumentException($"动态列 {definition.Key} 不能重复指定物理索引。",
                     nameof(_dynamicColumns));
         }
+        var mappingConfiguration = Configurations.MappingConfigurationMerger.Merge(_documentMappingConfiguration,
+            _requestMappingConfiguration, Configurations.MappingSourceKind.Request);
+        mappingConfiguration = ExcelDynamicColumnCloner.MergeIntoConfiguration(mappingConfiguration, _dynamicColumns);
         return new ExcelSheetExportRequest(_name, typeof(T), _data, _headerRowIndex, _dataRowStartIndex,
-            _dynamicColumns, _failOnUnknownDynamicValues, _dynamicGetter, _sheetStyle, _headerStyle, _bodyStyle,
-            _templateRegion, _hidden, _charts.AsReadOnly(), _headerRows, _mappingConfiguration, _mappingProfile,
+            CloneDynamicColumns(_dynamicColumns), _failOnUnknownDynamicValues, _dynamicGetter, _sheetStyle, _headerStyle, _bodyStyle,
+            _templateRegion, _hidden, _charts.AsReadOnly(), _headerRows,
+            mappingConfiguration, _mappingDocument,
+            _mappingProfile,
             _culture, _columnWidth, _commentConflictPolicy);
     }
+
+    private static IReadOnlyList<ExcelDynamicColumnDefinition> CloneDynamicColumns(
+        IReadOnlyList<ExcelDynamicColumnDefinition> columns) =>
+        (columns ?? Array.Empty<ExcelDynamicColumnDefinition>()).Select(column => new ExcelDynamicColumnDefinition
+        {
+            Key = column.Key,
+            Title = column.Title,
+            Aliases = (column.Aliases ?? Array.Empty<string>()).ToArray(),
+            DataType = column.DataType,
+            Order = column.Order,
+            Placement = column.Placement,
+            PhysicalColumnIndex = column.PhysicalColumnIndex,
+            NumberFormat = column.NumberFormat,
+            HeaderStyle = column.HeaderStyle,
+            BodyStyle = column.BodyStyle,
+            ConverterName = column.ConverterName,
+            ValidatorName = column.ValidatorName,
+            ValidationRuleNames = (column.ValidationRuleNames ?? Array.Empty<string>()).ToArray(),
+            ImageMultiplicity = column.ImageMultiplicity
+        }).ToArray();
 
     private void ValidateHeaderRows()
     {

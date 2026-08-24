@@ -15,3 +15,13 @@ exporter.Export(request, stream);
 ```
 
 详细设计见 `ai_docs/excel/00-overview.md` 至 `08-validation.md`。
+
+迁移与使用：
+
+- [mapping-profile.md](mapping-profile.md)
+- [mapping-json-xml.md](mapping-json-xml.md)
+- [import-validation.md](import-validation.md)
+- [dynamic-columns.md](dynamic-columns.md)
+- [nuget-migration.md](nuget-migration.md)
+
+ASP.NET Core 上传示例见 `import-validation.md`；公开示例由 `Bing.Offices.Docs.Tests` 使用本地打包的三个 NuGet 包持续编译和执行。

@@ -2,11 +2,12 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Reflection;
 using Bing.Offices.Attributes;
 using Bing.Offices.Conversions;
 using Bing.Offices.Exports;
 using Bing.Offices.Imports;
-using Bing.Offices.Mappings;
+using Bing.Offices.Providers;
 using Bing.Offices.Styles;
 using Bing.Offices.Validations;
 using Bing.Offices.Npoi.Extensions;
@@ -19,42 +20,51 @@ namespace Bing.Offices.Npoi;
 /// </summary>
 internal sealed class ExcelColumnPlan
 {
-    internal ExcelColumnPlan(string headerName, ExcelPropertyMap property, bool isDynamic, int columnIndex,
+    internal ExcelColumnPlan(string headerName, IExcelMappingColumn property, bool isDynamic, int columnIndex,
         ExcelDynamicColumnDefinition dynamicDefinition, string key = null,
         IReadOnlyList<IExcelValueConverter> valueConverters = null,
-        IReadOnlyList<ExcelAttributeValidationBinding> attributeValidations = null,
-        IReadOnlyList<INamedExcelValidationRule> namedValidationRules = null)
+        IReadOnlyList<IExcelValidationBinding> validationBindings = null,
+        PropertyInfo reflectionProperty = null,
+        bool? isUnique = null,
+        bool uniqueIgnoreEmpty = true)
     {
         HeaderName = headerName;
         Title = headerName;
         Property = property;
+        ReflectionProperty = reflectionProperty;
         IsDynamic = isDynamic;
         ColumnIndex = columnIndex;
         DynamicDefinition = dynamicDefinition;
         Key = key ?? dynamicDefinition?.Key ?? (isDynamic ? headerName : property.Name);
-        Getter = property.Getter;
-        Setter = property.Setter;
+        if (reflectionProperty == null)
+            throw new InvalidOperationException($"无法解析映射属性: {property.Name}");
+        Getter = instance => reflectionProperty.GetValue(instance);
+        Setter = (instance, value) => reflectionProperty.SetValue(instance, value);
         ConverterName = dynamicDefinition?.ConverterName ?? property.ConverterName;
         ValidationRuleNames = property.ValidationRuleNames;
         ValidatorName = dynamicDefinition?.ValidatorName;
-        ValueType = dynamicDefinition?.DataType ?? property.Property.PropertyType;
+        ValueType = dynamicDefinition?.DataType ?? reflectionProperty.PropertyType;
         Formatter = dynamicDefinition?.NumberFormat ?? property.Formatter;
         DecimalScale = property.DecimalScale;
         ValueMap = property.ValueMap;
         Ignored = property.Ignored;
-        IsUnique = property.Property.IsDefined(typeof(DuplicationAttribute), false);
-        IsMerged = property.Property.IsDefined(typeof(MergeColumnsAttribute), false);
+        var attributes = reflectionProperty.GetCustomAttributes<Attribute>().ToArray();
+        IsUnique = isUnique ?? attributes.Any(attribute => attribute is DuplicationAttribute
+            || attribute is ExcelUniqueAttribute);
+        UniqueIgnoreEmpty = isUnique.HasValue ? uniqueIgnoreEmpty
+            : attributes.OfType<ExcelUniqueAttribute>().FirstOrDefault()?.IgnoreEmpty ?? true;
+        IsMerged = attributes.Any(attribute => attribute is MergeColumnsAttribute);
         ImageMultiplicity = dynamicDefinition?.ImageMultiplicity ?? property.ImageMultiplicity;
         HeaderStyle = dynamicDefinition?.HeaderStyle;
         BodyStyle = dynamicDefinition?.BodyStyle;
         ValueConverters = valueConverters ?? Array.Empty<IExcelValueConverter>();
-        AttributeValidations = attributeValidations ?? Array.Empty<ExcelAttributeValidationBinding>();
-        NamedValidationRules = namedValidationRules ?? Array.Empty<INamedExcelValidationRule>();
+        ValidationBindings = validationBindings ?? Array.Empty<IExcelValidationBinding>();
     }
 
     internal string HeaderName { get; }
     internal string Title { get; }
-    internal ExcelPropertyMap Property { get; }
+    internal IExcelMappingColumn Property { get; }
+    internal PropertyInfo ReflectionProperty { get; }
     internal bool IsDynamic { get; }
     internal int ColumnIndex { get; }
     internal ExcelDynamicColumnDefinition DynamicDefinition { get; }
@@ -67,16 +77,16 @@ internal sealed class ExcelColumnPlan
     internal Type ValueType { get; }
     internal string Formatter { get; }
     internal byte? DecimalScale { get; }
-    internal IReadOnlyDictionary<string, object> ValueMap { get; }
+    internal IReadOnlyDictionary<string, string> ValueMap { get; }
     internal bool Ignored { get; }
     internal bool IsUnique { get; }
+    internal bool UniqueIgnoreEmpty { get; }
     internal bool IsMerged { get; }
     internal ExcelImageMultiplicityPolicy ImageMultiplicity { get; }
     internal ExcelCellStyle HeaderStyle { get; }
     internal ExcelCellStyle BodyStyle { get; }
     internal IReadOnlyList<IExcelValueConverter> ValueConverters { get; }
-    internal IReadOnlyList<ExcelAttributeValidationBinding> AttributeValidations { get; }
-    internal IReadOnlyList<INamedExcelValidationRule> NamedValidationRules { get; }
+    internal IReadOnlyList<IExcelValidationBinding> ValidationBindings { get; }
 
     internal object ConvertFrom(string value, ExcelCellValue cellValue, string sheetName, int rowIndex,
         int columnIndex, CultureInfo culture)
@@ -97,7 +107,7 @@ internal sealed class ExcelColumnPlan
             throw new InvalidCastException($"值转换失败。输入值为空，目标类型为: {ValueType.FullName}");
         }
         if (ValueMap.TryGetValue(value, out var mappedValue))
-            return mappedValue;
+            return ConvertMappedValue(mappedValue, culture);
         var targetType = Nullable.GetUnderlyingType(ValueType) ?? ValueType;
         if (targetType.IsEnum)
             return Enum.Parse(targetType, value, true);
@@ -120,7 +130,7 @@ internal sealed class ExcelColumnPlan
         }
         if (string.IsNullOrWhiteSpace(Formatter) && ValueMap.Count > 0)
         {
-            var mapping = ValueMap.FirstOrDefault(pair => IsMappedValue(pair.Value, value));
+            var mapping = ValueMap.FirstOrDefault(pair => IsMappedValue(pair.Value, value, culture));
             if (mapping.Key != null)
                 return mapping.Key;
         }
@@ -154,30 +164,28 @@ internal sealed class ExcelColumnPlan
             cell.SetValue(value, DecimalScale);
     }
 
-    private static bool IsMappedValue(object mappingValue, object value)
+    private object ConvertMappedValue(string value, CultureInfo culture)
+    {
+        if (value == null)
+            return null;
+        var targetType = Nullable.GetUnderlyingType(ValueType) ?? ValueType;
+        if (targetType == typeof(string))
+            return value;
+        if (targetType.IsEnum)
+            return Enum.Parse(targetType, value, true);
+        if (targetType == typeof(Guid))
+            return Guid.Parse(value);
+        if (targetType == typeof(Version))
+            return new Version(value);
+        if (targetType == typeof(DateTime))
+            return DateTime.Parse(value, culture);
+        return Convert.ChangeType(value, targetType, culture);
+    }
+
+    private static bool IsMappedValue(string mappingValue, object value, CultureInfo culture)
     {
         if (mappingValue == null || value == null)
             return mappingValue == null && value == null;
-        if (Equals(mappingValue, value))
-            return true;
-        if (value is not Enum enumValue)
-            return false;
-        var underlyingType = Enum.GetUnderlyingType(enumValue.GetType());
-        return Equals(mappingValue, Convert.ChangeType(enumValue, underlyingType, CultureInfo.InvariantCulture));
+        return string.Equals(mappingValue, Convert.ToString(value, culture), StringComparison.Ordinal);
     }
-}
-
-internal sealed class ExcelAttributeValidationBinding
-{
-    internal ExcelAttributeValidationBinding(FilterAttributeBase attribute, IExcelValidationRule rule,
-        bool isRaw)
-    {
-        Attribute = attribute;
-        Rule = rule;
-        IsRaw = isRaw;
-    }
-
-    internal FilterAttributeBase Attribute { get; }
-    internal IExcelValidationRule Rule { get; }
-    internal bool IsRaw { get; }
 }

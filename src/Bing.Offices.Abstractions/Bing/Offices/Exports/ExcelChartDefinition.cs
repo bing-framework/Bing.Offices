@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 
 namespace Bing.Offices.Exports;
@@ -134,7 +135,8 @@ public sealed class ExcelChartDefinition
     /// </summary>
     public ExcelChartAnchor Anchor { get; init; }
 
-    internal void Validate()
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public void Validate()
     {
         if (Categories == null)
             throw new ArgumentException("图表必须指定分类范围。", nameof(Categories));

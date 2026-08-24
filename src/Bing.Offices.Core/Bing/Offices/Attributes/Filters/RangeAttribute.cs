@@ -6,6 +6,7 @@ namespace Bing.Offices.Attributes;
 /// <summary>
 /// 区间特性
 /// </summary>
+[System.Obsolete("请改用 ExcelRangeAttribute。")]
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
 public class RangeAttribute : FilterAttributeBase
 {

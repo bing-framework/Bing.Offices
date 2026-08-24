@@ -170,8 +170,10 @@ public sealed class ExcelSheetImportBuilder<TItem> where TItem : class, new()
     private bool _headerMatch = true;
     private ValidateMode _validateMode = ValidateMode.StopOnFirstFailure;
     private System.Globalization.CultureInfo _culture = System.Globalization.CultureInfo.InvariantCulture;
-    private Configurations.ExcelMappingConfiguration _mappingConfiguration;
-    private Configurations.ExcelMappingProfile<TItem> _mappingProfile;
+    private Configurations.ExcelMappingConfiguration _documentMappingConfiguration;
+    private Configurations.ExcelMappingConfiguration _requestMappingConfiguration;
+    private Configurations.ExcelMappingDocument _mappingDocument;
+    private object _mappingProfile;
     private Expression<Func<TItem, IDictionary<string, object>>> _dynamicTarget;
     private int _maxColumnLength = 100;
     private ExcelReadColumnRange _readColumnRange;
@@ -325,7 +327,21 @@ public sealed class ExcelSheetImportBuilder<TItem> where TItem : class, new()
     /// </summary>
     public ExcelSheetImportBuilder<TItem> Mapping(Configurations.ExcelMappingConfiguration configuration)
     {
-        _mappingConfiguration = configuration;
+        _requestMappingConfiguration = configuration == null ? null :
+            Configurations.MappingConfigurationCloner.Clone(configuration, Configurations.MappingSourceKind.Request);
+        return this;
+    }
+
+    /// <summary>
+    /// 设置规范化映射文档的导入方向配置。
+    /// </summary>
+    public ExcelSheetImportBuilder<TItem> Mapping(Configurations.ExcelMappingDocument document)
+    {
+        if (document == null)
+            throw new ArgumentNullException(nameof(document));
+        _documentMappingConfiguration = document.Import == null ? null :
+            Configurations.MappingConfigurationCloner.Clone(document.Import, Configurations.MappingSourceKind.Document);
+        _mappingDocument = Configurations.MappingDocumentCloner.Clone(document);
         return this;
     }
 
@@ -333,6 +349,16 @@ public sealed class ExcelSheetImportBuilder<TItem> where TItem : class, new()
     /// 设置 Fluent 映射 Profile。
     /// </summary>
     public ExcelSheetImportBuilder<TItem> Mapping(Configurations.ExcelMappingProfile<TItem> profile)
+    {
+        _mappingProfile = profile;
+        return this;
+    }
+
+    /// <summary>
+    /// 设置导入方向的双模型 Mapping Profile。
+    /// </summary>
+    public ExcelSheetImportBuilder<TItem> Mapping<TExport>(Configurations.ExcelMappingProfile<TItem, TExport> profile)
+        where TExport : class, new()
     {
         _mappingProfile = profile;
         return this;
@@ -362,9 +388,15 @@ public sealed class ExcelSheetImportBuilder<TItem> where TItem : class, new()
             var compiledDynamicTarget = _dynamicTarget.Compile();
             dynamicGetter = value => compiledDynamicTarget((TItem)value);
         }
+        var mappingConfiguration = Configurations.MappingConfigurationMerger.Merge(_documentMappingConfiguration,
+            _requestMappingConfiguration, Configurations.MappingSourceKind.Request);
+        mappingConfiguration = Exports.ExcelDynamicColumnCloner.MergeIntoConfiguration(mappingConfiguration,
+            _dynamicColumns);
         return new ExcelSheetImportRequest(_name, _selector, typeof(TItem), targetGetter,
-        _headerRowIndex, _dataRowStartIndex, _dynamicColumns, _dynamicTarget, _headerMatch, _validateMode, _culture,
-        _mappingConfiguration, _mappingProfile, dynamicGetter, _maxColumnLength,
+        _headerRowIndex, _dataRowStartIndex, Exports.ExcelDynamicColumnCloner.Clone(_dynamicColumns), _dynamicTarget, _headerMatch, _validateMode, _culture,
+        mappingConfiguration, _mappingDocument,
+        _mappingProfile, dynamicGetter,
+        _maxColumnLength,
         _failOnUnknownDynamicColumns, _enabledEmptyLine, _ignoreEmptyLineAfterData, _readColumnRange,
         _headerComparison, _headerWhitespace, _bodyWhitespace);
     }

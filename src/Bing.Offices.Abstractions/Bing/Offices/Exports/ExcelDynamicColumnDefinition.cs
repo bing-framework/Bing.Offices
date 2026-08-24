@@ -70,6 +70,11 @@ public sealed class ExcelDynamicColumnDefinition
     public string ValidatorName { get; init; }
 
     /// <summary>
+    /// 获取或设置按顺序执行的注册校验规则名称。
+    /// </summary>
+    public IReadOnlyList<string> ValidationRuleNames { get; init; } = Array.Empty<string>();
+
+    /// <summary>
     /// 图片列出现多个图片时的处理策略。
     /// </summary>
     public ExcelImageMultiplicityPolicy ImageMultiplicity { get; init; } = ExcelImageMultiplicityPolicy.First;

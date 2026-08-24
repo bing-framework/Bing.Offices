@@ -6,6 +6,7 @@ namespace Bing.Offices.Attributes;
 /// <summary>
 /// 必填特性
 /// </summary>
+[System.Obsolete("请改用 ExcelRequiredAttribute。")]
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
 public class RequiredAttribute : FilterAttributeBase
 {

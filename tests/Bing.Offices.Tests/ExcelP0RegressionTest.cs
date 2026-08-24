@@ -88,9 +88,8 @@ public sealed class ExcelP0RegressionTest
     {
         // Arrange
         var attribute = new RangeAttribute(1, 2);
-        var context = new ExcelValidationContext("1,5", "Data", 2, 1, "Amount", 
-            new Dictionary<string, HashSet<string>>(), null, typeof(decimal), null,
-            CultureInfo.GetCultureInfo("fr-FR"));
+        var context = new ExcelValidationContext("1,5", "Data", 2, 1, "Amount",
+            null, typeof(decimal), null, CultureInfo.GetCultureInfo("fr-FR"));
 
         // Act
         var valid = new RangeExcelValidationRule().Validate(attribute, context);

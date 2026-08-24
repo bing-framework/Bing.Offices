@@ -51,9 +51,19 @@ public sealed class CsvExportOptions<T> where T : class, new()
     public ExcelMappingConfiguration MappingConfiguration { get; set; }
 
     /// <summary>
+    /// 获取或设置规范化映射文档；导出器使用其 Export 方向。
+    /// </summary>
+    public ExcelMappingDocument MappingDocument { get; set; }
+
+    /// <summary>
     /// 获取或设置本次导出使用的 Fluent 映射 Profile。
     /// </summary>
     public ExcelMappingProfile<T> MappingProfile { get; set; }
+
+    /// <summary>
+    /// 获取或设置方向化 Mapping Profile 快照。
+    /// </summary>
+    public object DirectionalMappingProfile { get; set; }
 
     /// <summary>
     /// 获取或设置动态列名称。

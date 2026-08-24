@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
+using System.Runtime.CompilerServices;
 using Bing.Offices.Imports;
 using Bing.Offices.Mappings;
 using Bing.Offices.Npoi.Imports;
@@ -27,7 +29,30 @@ public class PublicApiContractTest
             "Bing.Offices.Abstractions:Bing.Offices.Attributes.BindFilterAttribute",
             "Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelColumnConfiguration",
             "Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelMappingConfiguration",
+            "Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelMappingDiagnostic",
+            "Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelMappingDocument",
+            "Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelMappingDocumentFactory",
+            "Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelMappingDynamicColumnConfiguration",
+            "Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelMappingDynamicValidationConfiguration",
+            "Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelMappingLayoutConfiguration",
+            "Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelMappingProfile`2",
+            "Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelMappingStyleConfiguration",
+            "Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelValidationRuleMergeMode",
+            "Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelValueMappingMergeMode",
             "Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelValueMappingConfiguration",
+            "Bing.Offices.Abstractions:Bing.Offices.Configurations.ExportColumnMappingBuilder`2",
+            "Bing.Offices.Abstractions:Bing.Offices.Configurations.ExportMappingBuilder`1",
+            "Bing.Offices.Abstractions:Bing.Offices.Configurations.FluentSetting`2",
+            "Bing.Offices.Abstractions:Bing.Offices.Configurations.IMappingProfile`1",
+            "Bing.Offices.Abstractions:Bing.Offices.Configurations.IMappingProfile`2",
+            "Bing.Offices.Abstractions:Bing.Offices.Configurations.IMappingProfileRegistry",
+            "Bing.Offices.Abstractions:Bing.Offices.Configurations.IMappingProfileSnapshot",
+            "Bing.Offices.Abstractions:Bing.Offices.Configurations.ImportColumnMappingBuilder`2",
+            "Bing.Offices.Abstractions:Bing.Offices.Configurations.ImportMappingBuilder`1",
+            "Bing.Offices.Abstractions:Bing.Offices.Configurations.MappingDirection",
+            "Bing.Offices.Abstractions:Bing.Offices.Configurations.MappingProfileRegistry",
+            "Bing.Offices.Abstractions:Bing.Offices.Configurations.MappingSourceKind",
+            "Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelModelAliasRegistry",
             "Bing.Offices.Abstractions:Bing.Offices.Conversions.ExcelCellKind",
             "Bing.Offices.Abstractions:Bing.Offices.Conversions.ExcelCellValue",
             "Bing.Offices.Abstractions:Bing.Offices.Conversions.ExcelConversionContext",
@@ -59,6 +84,7 @@ public class PublicApiContractTest
             "Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelHeaderCell",
             "Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelHeaderRow",
             "Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelSheetExportBuilder`1",
+            "Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelSheetExportRequest",
             "Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelUnknownDynamicValuePolicy",
             "Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelWorkbookExportBuilder",
             "Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelWorkbookExportRequest",
@@ -73,15 +99,26 @@ public class PublicApiContractTest
             "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelImageData",
             "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelNameComparison",
             "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelReadColumnRange",
+            "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelRelationRequest",
             "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelResourceLimits",
             "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelSheetImportBuilder`1",
             "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelSheetSelector",
             "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelSheetSelectorKind",
             "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelSheetImportResult",
+            "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelSheetImportRequest",
             "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelWorkbookImportBuilder`1",
             "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelWorkbookImportRequest`1",
             "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelWorkbookImportResult`1",
             "Bing.Offices.Abstractions:Bing.Offices.Imports.IExcelImporter",
+            "Bing.Offices.Abstractions:Bing.Offices.Providers.UniqueTracker",
+            "Bing.Offices.Abstractions:Bing.Offices.Providers.IExcelDynamicMappingColumn",
+            "Bing.Offices.Abstractions:Bing.Offices.Providers.IExcelMappingLayout",
+            "Bing.Offices.Abstractions:Bing.Offices.Providers.IExcelMappingColumn",
+            "Bing.Offices.Abstractions:Bing.Offices.Providers.IExcelMappingPlan",
+            "Bing.Offices.Abstractions:Bing.Offices.Providers.IExcelMappingPlanFactory",
+            "Bing.Offices.Abstractions:Bing.Offices.Providers.IExcelMappingSheetPlan",
+            "Bing.Offices.Abstractions:Bing.Offices.Providers.IExcelMappingStyle",
+            "Bing.Offices.Abstractions:Bing.Offices.Providers.IExcelMappingWorkbookPlan",
             "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelUnsupportedFeaturePolicy",
             "Bing.Offices.Abstractions:Bing.Offices.Imports.ValidateMode",
             "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelWhitespacePolicy",
@@ -95,6 +132,8 @@ public class PublicApiContractTest
             "Bing.Offices.Abstractions:Bing.Offices.Styles.ExcelHorizontalAlignment",
             "Bing.Offices.Abstractions:Bing.Offices.Styles.ExcelVerticalAlignment",
             "Bing.Offices.Abstractions:Bing.Offices.Validations.ExcelValidationContext",
+            "Bing.Offices.Abstractions:Bing.Offices.Validations.ExcelValidationBindingKind",
+            "Bing.Offices.Abstractions:Bing.Offices.Validations.IExcelValidationBinding",
             "Bing.Offices.Abstractions:Bing.Offices.Validations.IExcelValidationRule",
             "Bing.Offices.Abstractions:Bing.Offices.Validations.INamedExcelValidationRule",
             "Bing.Offices.Core:Bing.Offices.Attributes.ColumnNameAttribute",
@@ -103,7 +142,14 @@ public class PublicApiContractTest
             "Bing.Offices.Core:Bing.Offices.Attributes.DecimalScaleAttribute",
             "Bing.Offices.Core:Bing.Offices.Attributes.DuplicationAttribute",
             "Bing.Offices.Core:Bing.Offices.Attributes.DynamicColumnAttribute",
+            "Bing.Offices.Core:Bing.Offices.Attributes.ExcelDateAttribute",
             "Bing.Offices.Core:Bing.Offices.Attributes.ExcelIgnoreAttribute",
+            "Bing.Offices.Core:Bing.Offices.Attributes.ExcelMaxLengthAttribute",
+            "Bing.Offices.Core:Bing.Offices.Attributes.ExcelMaxValueAttribute",
+            "Bing.Offices.Core:Bing.Offices.Attributes.ExcelRangeAttribute",
+            "Bing.Offices.Core:Bing.Offices.Attributes.ExcelRegexAttribute",
+            "Bing.Offices.Core:Bing.Offices.Attributes.ExcelRequiredAttribute",
+            "Bing.Offices.Core:Bing.Offices.Attributes.ExcelUniqueAttribute",
             "Bing.Offices.Core:Bing.Offices.Attributes.HeaderAttribute",
             "Bing.Offices.Core:Bing.Offices.Attributes.MaxLengthAttribute",
             "Bing.Offices.Core:Bing.Offices.Attributes.MergeColumnsAttribute",
@@ -130,9 +176,13 @@ public class PublicApiContractTest
             "Bing.Offices.Core:Bing.Offices.Extensions.PropertyInfoExtensions",
             "Bing.Offices.Core:Bing.Offices.Extensions.TypeExtensions",
             "Bing.Offices.Core:Bing.Offices.Mappings.ExcelPropertyMap",
+            "Bing.Offices.Core:Bing.Offices.Mappings.ExcelMappingPlanFactory",
+            "Bing.Offices.Core:Bing.Offices.Mappings.ExcelMappingPlanFactoryProvider",
             "Bing.Offices.Core:Bing.Offices.Mappings.ExcelTypeMap`1",
             "Bing.Offices.Core:Bing.Offices.Mappings.ExcelTypeMapFactory",
+            "Bing.Offices.Core:Bing.Offices.Mappings.ExcelValidationBindingFactory",
             "Bing.Offices.Core:Bing.Offices.Mappings.ExcelValueMap`1",
+            "Bing.Offices.Core:Bing.Offices.Mappings.ExcelValueConverterBindingResolver",
             "Bing.Offices.Core:Bing.Offices.Metadata.MergedRegionInfo",
             "Bing.Offices.Core:Bing.Offices.Metadata.PictureInfo",
             "Bing.Offices.Core:Bing.Offices.Metadata.PictureStyle",
@@ -142,10 +192,12 @@ public class PublicApiContractTest
             "Bing.Offices.Core:Bing.Offices.Validations.DuplicationExcelValidationRule",
             "Bing.Offices.Core:Bing.Offices.Validations.ExcelValidationRules",
             "Bing.Offices.Core:Bing.Offices.Validations.MaxLengthExcelValidationRule",
+            "Bing.Offices.Core:Bing.Offices.Validations.MaxValueExcelValidationRule",
             "Bing.Offices.Core:Bing.Offices.Validations.RangeExcelValidationRule",
             "Bing.Offices.Core:Bing.Offices.Validations.RegexExcelValidationRule",
             "Bing.Offices.Core:Bing.Offices.Validations.RequiredExcelValidationRule",
-            "Bing.Offices.Npoi:Bing.Offices.Npoi.Extensions.ExcelNpoiServiceCollectionExtensions"
+            "Bing.Offices.Npoi:Bing.Offices.Npoi.Extensions.ExcelNpoiServiceCollectionExtensions",
+            "Bing.Offices.Npoi:Bing.Offices.Npoi.Extensions.MappingProfileServiceCollectionExtensions"
         };
         var assemblies = new[]
         {
@@ -192,6 +244,30 @@ public class PublicApiContractTest
     }
 
     /// <summary>
+    /// 测试 - 发布程序集不得包含指向 Core/NPOI 的生产 InternalsVisibleTo，仅允许测试友元。
+    /// </summary>
+    [Fact]
+    public void PublicApi_ProductionAssemblies_ShouldNotExposeProductionFriendAssemblies()
+    {
+        // Arrange
+        var assemblies = new[]
+        {
+            typeof(IExcelImporter).Assembly,
+            typeof(ExcelTypeMapFactory).Assembly,
+            typeof(NpoiExcelImporter).Assembly
+        };
+
+        // Act
+        var friends = assemblies.SelectMany(assembly => assembly.GetCustomAttributes<InternalsVisibleToAttribute>())
+            .Select(attribute => attribute.AssemblyName.Split(',')[0])
+            .Where(name => name.IndexOf(".Tests", StringComparison.Ordinal) < 0)
+            .ToArray();
+
+        // Assert
+        Assert.Empty(friends);
+    }
+
+    /// <summary>
     /// 测试 - NPOI 适配程序集只公开 DI 注册入口，不公开实现和低层 NPOI 类型。
     /// </summary>
     [Fact]
@@ -205,7 +281,11 @@ public class PublicApiContractTest
             .OrderBy(name => name, StringComparer.Ordinal).ToArray();
 
         // Assert
-        Assert.Equal(new[] { "Bing.Offices.Npoi.Extensions.ExcelNpoiServiceCollectionExtensions" }, exported);
+        Assert.Equal(new[]
+        {
+            "Bing.Offices.Npoi.Extensions.ExcelNpoiServiceCollectionExtensions",
+            "Bing.Offices.Npoi.Extensions.MappingProfileServiceCollectionExtensions"
+        }, exported);
         var leaked = assembly.GetExportedTypes().SelectMany(type => type.GetMembers(
                 System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance
                 | System.Reflection.BindingFlags.Static))
@@ -225,7 +305,11 @@ public class PublicApiContractTest
         var expected = new[]
         {
             "type|Bing.Offices.Npoi.Extensions.ExcelNpoiServiceCollectionExtensions|generic=0",
-            "method|Bing.Offices.Npoi.Extensions.ExcelNpoiServiceCollectionExtensions.AddNpoi|static|System.Void|Microsoft.Extensions.DependencyInjection.IServiceCollection|generic=0"
+            "method|Bing.Offices.Npoi.Extensions.ExcelNpoiServiceCollectionExtensions.AddNpoi|static|System.Void|Microsoft.Extensions.DependencyInjection.IServiceCollection|generic=0",
+            "type|Bing.Offices.Npoi.Extensions.MappingProfileServiceCollectionExtensions|generic=0",
+            "method|Bing.Offices.Npoi.Extensions.MappingProfileServiceCollectionExtensions.AddMappingProfile|static|Microsoft.Extensions.DependencyInjection.IServiceCollection|Microsoft.Extensions.DependencyInjection.IServiceCollection,System.String|generic=3",
+            "method|Bing.Offices.Npoi.Extensions.MappingProfileServiceCollectionExtensions.AddMappingProfilesFromAssemblies|static|Microsoft.Extensions.DependencyInjection.IServiceCollection|Microsoft.Extensions.DependencyInjection.IServiceCollection,System.Reflection.Assembly[]|generic=0",
+            "method|Bing.Offices.Npoi.Extensions.MappingProfileServiceCollectionExtensions.AddMappingProfilesFromAssembly|static|Microsoft.Extensions.DependencyInjection.IServiceCollection|Microsoft.Extensions.DependencyInjection.IServiceCollection,System.Reflection.Assembly|generic=0"
         };
         var assembly = typeof(NpoiExcelImporter).Assembly;
 
@@ -251,8 +335,9 @@ public class PublicApiContractTest
                     | System.Reflection.BindingFlags.DeclaredOnly)
                 .Where(method => !method.IsSpecialName)
                 .Select(method => FormatMethod(type, method)))
-            .OrderBy(member => member, StringComparer.Ordinal)
             .ToArray());
+
+            actual = actual.OrderBy(member => member, StringComparer.Ordinal).ToArray();
 
         // Assert
         Assert.Equal(expected.OrderBy(member => member, StringComparer.Ordinal), actual);
@@ -270,9 +355,9 @@ public class PublicApiContractTest
         // Arrange
         var expected = new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["Bing.Offices.Abstractions"] = "3E70EDCBE4D6EA7BB1F75F7D99F40BF946C768E23F6D50D5E4E4CE4606FDD702",
-            ["Bing.Offices.Core"] = "8A162DB09DB5090CD29A39DD2C55BF3E9CB263BEF5AD3EE480963CE788636D6F",
-            ["Bing.Offices.Npoi"] = "A0DBE9808D82547601429D8958C7ED283467031A3763EB9037B19D03F19D80BD"
+            ["Bing.Offices.Abstractions"] = "7A6023B42034BA06CEB5D266D47ACE8FF587F5EF5B3B1A66F5BB6847007FC836",
+            ["Bing.Offices.Core"] = "3F8161A5788931096136D82DA89D9FF2DDEA9B6EB141C7701079606A51C4E862",
+            ["Bing.Offices.Npoi"] = "489916813420B04CD646319158AC204F8B4490C60C58E86694BBD5E41C74CC2B"
         };
         var assemblies = new[]
         {
@@ -286,7 +371,11 @@ public class PublicApiContractTest
             GetPublicMemberSnapshotHash, StringComparer.Ordinal);
 
         // Assert
-        Assert.Equal(expected, actual);
+        foreach (var pair in expected)
+        {
+            if (!string.Equals(pair.Value, actual[pair.Key], StringComparison.Ordinal))
+                throw new InvalidOperationException($"{pair.Key}: expected={pair.Value}; actual={actual[pair.Key]}");
+        }
 #endif
     }
 

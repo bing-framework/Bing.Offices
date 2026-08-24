@@ -184,6 +184,12 @@ public sealed class ExcelResourceLimits
     /// <summary>所有图片最大总字节数；null 表示不额外限制。</summary>
     public long? MaxTotalPictureBytes { get; init; }
 
+    /// <summary>单个工作表最大跟踪唯一值数量；null 表示不额外限制。</summary>
+    public int? MaxTrackedUniqueValues { get; init; }
+
+    /// <summary>唯一值比较策略。</summary>
+    public StringComparison UniqueComparison { get; init; } = StringComparison.OrdinalIgnoreCase;
+
     /// <summary>验证限制值。</summary>
     public void Validate()
     {
@@ -199,6 +205,14 @@ public sealed class ExcelResourceLimits
             throw new ArgumentOutOfRangeException(nameof(MaxPictureBytes));
         if (MaxTotalPictureBytes <= 0)
             throw new ArgumentOutOfRangeException(nameof(MaxTotalPictureBytes));
+        if (MaxTrackedUniqueValues <= 0)
+            throw new ArgumentOutOfRangeException(nameof(MaxTrackedUniqueValues));
+        if (UniqueComparison != StringComparison.Ordinal && UniqueComparison != StringComparison.OrdinalIgnoreCase
+            && UniqueComparison != StringComparison.InvariantCulture
+            && UniqueComparison != StringComparison.InvariantCultureIgnoreCase
+            && UniqueComparison != StringComparison.CurrentCulture
+            && UniqueComparison != StringComparison.CurrentCultureIgnoreCase)
+            throw new ArgumentOutOfRangeException(nameof(UniqueComparison));
     }
 }
 

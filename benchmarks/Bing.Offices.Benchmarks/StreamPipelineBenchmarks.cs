@@ -16,7 +16,7 @@ public class StreamPipelineBenchmarks
     /// <summary>
     /// 测量的数据行数。
     /// </summary>
-    [Params(1000)]
+    [Params(1000, 10000, 100000)]
     public int RowCount { get; set; }
 
     /// <summary>

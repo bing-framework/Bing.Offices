@@ -1,6 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
+using System.ComponentModel;
+using System.Linq;
+using Bing.Offices.Configurations;
 
 namespace Bing.Offices.Imports;
 
@@ -28,25 +31,34 @@ public sealed class ExcelWorkbookImportRequest<TWorkbook> where TWorkbook : clas
     /// </summary>
     public int SheetCount => Sheets.Count;
 
-    internal IReadOnlyList<ExcelSheetImportRequest> Sheets { get; }
-    internal IReadOnlyList<ExcelRelationRequest> Relations { get; }
-    internal ExcelNameComparison SheetNameComparison { get; }
-    internal ExcelResourceLimits ResourceLimits { get; }
-    internal ExcelImportFailureOptions FailureOptions { get; }
-    internal ExcelImportValidationMode ValidationMode { get; }
-    internal ExcelUnsupportedFeaturePolicy UnsupportedFeaturePolicy { get; }
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public IReadOnlyList<ExcelSheetImportRequest> Sheets { get; }
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public IReadOnlyList<ExcelRelationRequest> Relations { get; }
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public ExcelNameComparison SheetNameComparison { get; }
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public ExcelResourceLimits ResourceLimits { get; }
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public ExcelImportFailureOptions FailureOptions { get; }
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public ExcelImportValidationMode ValidationMode { get; }
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public ExcelUnsupportedFeaturePolicy UnsupportedFeaturePolicy { get; }
 }
 
 /// <summary>
 /// 单个 Sheet 导入请求的执行描述。
 /// </summary>
-internal sealed class ExcelSheetImportRequest
+[EditorBrowsable(EditorBrowsableState.Never)]
+public sealed class ExcelSheetImportRequest
 {
     internal ExcelSheetImportRequest(string name, ExcelSheetSelector selector, Type itemType, Func<object, object> target,
         int headerRowIndex,
         int dataRowStartIndex, IReadOnlyList<Exports.ExcelDynamicColumnDefinition> dynamicColumns,
         Expression dynamicTarget, bool headerMatch, ValidateMode validateMode,
         System.Globalization.CultureInfo culture, Configurations.ExcelMappingConfiguration mappingConfiguration,
+        Configurations.ExcelMappingDocument mappingDocument,
         object mappingProfile, Func<object, object> dynamicTargetGetter, int maxColumnLength,
         bool failOnUnknownDynamicColumns,
         bool enabledEmptyLine, bool ignoreEmptyLineAfterData, ExcelReadColumnRange readColumnRange,
@@ -59,12 +71,14 @@ internal sealed class ExcelSheetImportRequest
         Target = target;
         HeaderRowIndex = headerRowIndex;
         DataRowStartIndex = dataRowStartIndex;
-        DynamicColumns = dynamicColumns;
+        DynamicColumns = dynamicColumns?.ToArray() ?? Array.Empty<Exports.ExcelDynamicColumnDefinition>();
         DynamicTarget = dynamicTarget;
         HeaderMatch = headerMatch;
         ValidateMode = validateMode;
         Culture = culture;
-        MappingConfiguration = mappingConfiguration;
+        MappingConfiguration = mappingConfiguration == null ? null :
+            MappingConfigurationCloner.Clone(mappingConfiguration, mappingConfiguration.SourceKind);
+        MappingDocument = Configurations.MappingDocumentCloner.Clone(mappingDocument);
         MappingProfile = mappingProfile;
         DynamicTargetGetter = dynamicTargetGetter;
         MaxColumnLength = maxColumnLength;
@@ -102,30 +116,51 @@ internal sealed class ExcelSheetImportRequest
     /// </summary>
     public int DynamicColumnCount => DynamicColumns.Count;
 
-    internal Type ItemType { get; }
-    internal Func<object, object> Target { get; }
-    internal IReadOnlyList<Exports.ExcelDynamicColumnDefinition> DynamicColumns { get; }
-    internal Expression DynamicTarget { get; }
-    internal bool HeaderMatch { get; }
-    internal ValidateMode ValidateMode { get; }
-    internal System.Globalization.CultureInfo Culture { get; }
-    internal Configurations.ExcelMappingConfiguration MappingConfiguration { get; }
-    internal object MappingProfile { get; }
-    internal Func<object, object> DynamicTargetGetter { get; }
-    internal int MaxColumnLength { get; }
-    internal ExcelReadColumnRange ReadColumnRange { get; }
-    internal ExcelNameComparison HeaderComparison { get; }
-    internal ExcelWhitespacePolicy HeaderWhitespace { get; }
-    internal ExcelWhitespacePolicy BodyWhitespace { get; }
-    internal bool FailOnUnknownDynamicColumns { get; }
-    internal bool EnabledEmptyLine { get; }
-    internal bool IgnoreEmptyLineAfterData { get; }
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public Type ItemType { get; }
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public Func<object, object> Target { get; }
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public IReadOnlyList<Exports.ExcelDynamicColumnDefinition> DynamicColumns { get; }
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public Expression DynamicTarget { get; }
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public bool HeaderMatch { get; }
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public ValidateMode ValidateMode { get; }
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public System.Globalization.CultureInfo Culture { get; }
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public Configurations.ExcelMappingConfiguration MappingConfiguration { get; }
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public Configurations.ExcelMappingDocument MappingDocument { get; }
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public object MappingProfile { get; }
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public Func<object, object> DynamicTargetGetter { get; }
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public int MaxColumnLength { get; }
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public ExcelReadColumnRange ReadColumnRange { get; }
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public ExcelNameComparison HeaderComparison { get; }
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public ExcelWhitespacePolicy HeaderWhitespace { get; }
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public ExcelWhitespacePolicy BodyWhitespace { get; }
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public bool FailOnUnknownDynamicColumns { get; }
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public bool EnabledEmptyLine { get; }
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public bool IgnoreEmptyLineAfterData { get; }
 }
 
 /// <summary>
 /// Workbook 导入父子关系执行描述。
 /// </summary>
-internal sealed class ExcelRelationRequest
+[EditorBrowsable(EditorBrowsableState.Never)]
+public sealed class ExcelRelationRequest
 {
     private ExcelRelationRequest(Func<object, object> parents, Func<object, object> children, Delegate parentKey,
         Delegate childKey, Func<object, object> navigation, Type parentType, Type childType,
@@ -141,14 +176,22 @@ internal sealed class ExcelRelationRequest
         Comparer = comparer;
     }
 
-    internal Func<object, object> Parents { get; }
-    internal Func<object, object> Children { get; }
-    internal Delegate ParentKey { get; }
-    internal Delegate ChildKey { get; }
-    internal Func<object, object> Navigation { get; }
-    internal Type ParentType { get; }
-    internal Type ChildType { get; }
-    internal object Comparer { get; }
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public Func<object, object> Parents { get; }
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public Func<object, object> Children { get; }
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public Delegate ParentKey { get; }
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public Delegate ChildKey { get; }
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public Func<object, object> Navigation { get; }
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public Type ParentType { get; }
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public Type ChildType { get; }
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public object Comparer { get; }
 
     internal static ExcelRelationRequest Create<TWorkbook, TParent, TChild, TKey>(
         Expression<Func<TWorkbook, ICollection<TParent>>> parents,

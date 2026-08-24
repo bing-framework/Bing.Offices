@@ -6,6 +6,7 @@ namespace Bing.Offices.Attributes;
 /// <summary>
 /// 日期特性
 /// </summary>
+[System.Obsolete("请改用 ExcelDateAttribute。")]
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
 public class DateTimeAttribute : FilterAttributeBase
 {

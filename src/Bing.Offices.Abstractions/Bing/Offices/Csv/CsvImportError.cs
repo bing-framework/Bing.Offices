@@ -12,12 +12,15 @@ public sealed class CsvImportError
     /// <param name="rowIndex">从一开始的行号。</param>
     /// <param name="columnIndex">从一开始的列号。</param>
     /// <param name="propertyName">属性名称。</param>
-    public CsvImportError(string message, int rowIndex, int columnIndex, string propertyName)
+    /// <param name="firstRowNumber">重复值首次出现的行号。</param>
+    public CsvImportError(string message, int rowIndex, int columnIndex, string propertyName,
+        int? firstRowNumber = null)
     {
         Message = message ?? throw new ArgumentNullException(nameof(message));
         RowIndex = rowIndex;
         ColumnIndex = columnIndex;
         PropertyName = propertyName;
+        FirstRowNumber = firstRowNumber;
     }
 
     /// <summary>
@@ -39,4 +42,9 @@ public sealed class CsvImportError
     /// 获取属性名称。
     /// </summary>
     public string PropertyName { get; }
+
+    /// <summary>
+    /// 获取重复值首次出现的行号；非重复错误为 null。
+    /// </summary>
+    public int? FirstRowNumber { get; }
 }

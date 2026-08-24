@@ -1,7 +1,9 @@
 ﻿using Bing.Offices.Exports;
 using Bing.Offices.Attributes;
 using Bing.Offices.Conversions;
+using Bing.Offices.Configurations;
 using Bing.Offices.Mappings;
+using Bing.Offices.Providers;
 using Bing.Offices.Npoi.Extensions;
 using Bing.Offices.Npoi.Resolvers;
 using System.Globalization;
@@ -22,13 +24,20 @@ internal sealed class NpoiExcelExporter : IExcelExporter
     /// 当前导出器使用的值转换器。
     /// </summary>
     private readonly IReadOnlyList<IExcelValueConverter> _valueConverters;
+    private readonly IExcelMappingPlanFactory _mappingPlanFactory;
 
     /// <summary>
     /// 初始化一个<see cref="NpoiExcelExporter"/>类型的实例。
     /// </summary>
     /// <param name="valueConverters">值转换器集合。</param>
-    public NpoiExcelExporter(IEnumerable<IExcelValueConverter> valueConverters = null) =>
+    /// <param name="mappingPlanFactory">方向化映射计划工厂。</param>
+    public NpoiExcelExporter(IEnumerable<IExcelValueConverter> valueConverters = null,
+        IExcelMappingPlanFactory mappingPlanFactory = null)
+    {
         _valueConverters = valueConverters?.ToArray() ?? Array.Empty<IExcelValueConverter>();
+        _mappingPlanFactory = mappingPlanFactory ?? NpoiMappingPlanFactoryResolver.CreateDefault(
+            _valueConverters);
+    }
 
     /// <inheritdoc />
     public void Export(ExcelWorkbookExportRequest request, Stream destination,
@@ -45,6 +54,7 @@ internal sealed class NpoiExcelExporter : IExcelExporter
         try
         {
             using var workbook = CreateWorkbook(request);
+            var planBySheet = CreateWorkbookPlans(request);
             var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var sheetRequest in request.Sheets)
             {
@@ -52,7 +62,8 @@ internal sealed class NpoiExcelExporter : IExcelExporter
                 ValidateSheetName(sheetRequest.Name);
                 if (!names.Add(sheetRequest.Name))
                     throw new ArgumentException($"Workbook 包含重复 Sheet 名称: {sheetRequest.Name}");
-                WriteSheet(workbook, sheetRequest, request.Template != null, cancellationToken);
+                WriteSheet(workbook, sheetRequest, request.Template != null, cancellationToken,
+                    planBySheet[sheetRequest]);
             }
 
             using var bufferedDestination = new MemoryStream();
@@ -95,14 +106,66 @@ internal sealed class NpoiExcelExporter : IExcelExporter
     /// <summary>
     /// 通过一次类型擦除调用执行具体 Sheet 的泛型计划。
     /// </summary>
+    private Dictionary<ExcelSheetExportRequest, IExcelMappingPlan> CreateWorkbookPlans(
+        ExcelWorkbookExportRequest request)
+    {
+        var result = new Dictionary<ExcelSheetExportRequest, IExcelMappingPlan>();
+        foreach (var group in request.Sheets.GroupBy(GetWorkbookPlanKey, StringComparer.Ordinal))
+        {
+            var first = group.First();
+            var plan = CreateWorkbookPlan(first, group.Select(sheet => sheet.Name).ToArray());
+            foreach (var sheet in group)
+                result.Add(sheet, plan.Sheets.Single(item => string.Equals(item.Name, sheet.Name,
+                    StringComparison.OrdinalIgnoreCase)).Mapping);
+        }
+        return result;
+    }
+
+    private static string GetWorkbookPlanKey(ExcelSheetExportRequest request)
+    {
+        var method = typeof(NpoiExcelExporter).GetMethod(nameof(CreateNormalizedDocument),
+            BindingFlags.Static | BindingFlags.NonPublic).MakeGenericMethod(request.ItemType);
+        var document = (ExcelMappingDocument)method.Invoke(null, new object[] { request });
+        return string.Join("|", request.ItemType.AssemblyQualifiedName,
+            ExcelMappingConfigurationLoader.ToJson(document));
+    }
+
+    private static ExcelMappingDocument CreateNormalizedDocument<T>(ExcelSheetExportRequest request)
+        where T : class, new() =>
+        ExcelMappingDocumentFactory.Create<T>(request.MappingProfile, request.MappingDocument,
+            request.MappingConfiguration, MappingDirection.Export);
+
+    private IExcelMappingWorkbookPlan CreateWorkbookPlan(ExcelSheetExportRequest request,
+        IReadOnlyList<string> sheetNames)
+    {
+        var method = GetType().GetMethod(nameof(CreateTypedWorkbookPlan), BindingFlags.Instance
+            | BindingFlags.NonPublic).MakeGenericMethod(request.ItemType);
+        try
+        {
+            return (IExcelMappingWorkbookPlan)method.Invoke(this, new object[] { request, sheetNames });
+        }
+        catch (TargetInvocationException exception) when (exception.InnerException != null)
+        {
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(exception.InnerException).Throw();
+            throw;
+        }
+    }
+
+    private IExcelMappingWorkbookPlan CreateTypedWorkbookPlan<T>(ExcelSheetExportRequest request,
+        IReadOnlyList<string> sheetNames) where T : class, new()
+    {
+        var document = CreateNormalizedDocument<T>(request);
+        return _mappingPlanFactory.CreateWorkbook<T>(document, MappingDirection.Export, sheetNames);
+    }
+
     private void WriteSheet(NPOI.SS.UserModel.IWorkbook workbook, ExcelSheetExportRequest request,
-        bool isTemplate, CancellationToken cancellationToken)
+        bool isTemplate, CancellationToken cancellationToken, IExcelMappingPlan mapping)
     {
         var method = GetType().GetMethod(nameof(WriteTypedSheet), BindingFlags.Instance | BindingFlags.NonPublic);
         try
         {
             method.MakeGenericMethod(request.ItemType).Invoke(this,
-                new object[] { workbook, request, isTemplate, cancellationToken });
+                new object[] { workbook, request, isTemplate, cancellationToken, mapping });
         }
         catch (TargetInvocationException exception) when (exception.InnerException != null)
         {
@@ -115,7 +178,7 @@ internal sealed class NpoiExcelExporter : IExcelExporter
     /// 执行一个泛型 Sheet 的统一列计划和 Cell Writer。
     /// </summary>
     private void WriteTypedSheet<T>(NPOI.SS.UserModel.IWorkbook workbook, ExcelSheetExportRequest request,
-        bool isTemplate, CancellationToken cancellationToken) where T : class, new()
+        bool isTemplate, CancellationToken cancellationToken, IExcelMappingPlan map) where T : class, new()
     {
         var sheet = workbook.GetSheet(request.Name);
         if (sheet == null && isTemplate)
@@ -129,11 +192,12 @@ internal sealed class NpoiExcelExporter : IExcelExporter
         var templateOrigin = ResolveTemplateOrigin(workbook, sheet, request, isTemplate);
         var headerRowIndex = templateOrigin.Row + request.HeaderRowIndex;
         var firstColumnIndex = templateOrigin.Column;
-        var map = ExcelTypeMapFactory.Get(request.MappingProfile as Configurations.ExcelMappingProfile<T>,
-            request.MappingConfiguration);
-        ValidateDynamicDefinitions(request.DynamicColumns);
-        var columns = CreateColumns(map, request.DynamicColumns);
-        ValidateDynamicColumns(request.DynamicColumns, columns);
+        var dynamicDefinitions = map.DynamicColumns.Select(column => CreateDynamicDefinition(column,
+            request.DynamicColumns.FirstOrDefault(item => string.Equals(item.Key, column.Key,
+                StringComparison.OrdinalIgnoreCase)), map)).ToArray();
+        ValidateDynamicDefinitions(dynamicDefinitions);
+        var columns = CreateColumns<T>(map, dynamicDefinitions);
+        ValidateDynamicColumns(dynamicDefinitions, columns);
         var header = sheet.GetRow(headerRowIndex) ?? sheet.CreateRow(headerRowIndex);
         WriteCustomHeaders(sheet, request.HeaderRows, templateOrigin.Row, firstColumnIndex,
             request.CommentConflictPolicy);
@@ -157,7 +221,7 @@ internal sealed class NpoiExcelExporter : IExcelExporter
             rowIndex++;
         }
 
-        ApplyRequestStyles(workbook, sheet, header, columns, request, firstColumnIndex,
+        ApplyRequestStyles(workbook, sheet, header, columns, request, map, firstColumnIndex,
             templateOrigin.Row + request.DataRowStartIndex, rowIndex);
         ApplyHeaderStyle<T>(workbook, sheet, headerRowIndex);
         ApplyWrapText<T>(sheet);
@@ -366,14 +430,18 @@ internal sealed class NpoiExcelExporter : IExcelExporter
     /// </summary>
     private static void ApplyRequestStyles(NPOI.SS.UserModel.IWorkbook workbook,
         NPOI.SS.UserModel.ISheet sheet, NPOI.SS.UserModel.IRow header, IReadOnlyList<ExcelColumnPlan> columns,
-        ExcelSheetExportRequest request, int firstColumnIndex, int firstDataRowIndex, int lastRowIndex)
+        ExcelSheetExportRequest request, IExcelMappingPlan mapping, int firstColumnIndex,
+        int firstDataRowIndex, int lastRowIndex)
     {
+        var mappingHeaderStyle = ResolveStyle(mapping.Style?.HeaderStyleKey, true);
+        var mappingBodyStyle = ResolveStyle(mapping.Style?.BodyStyleKey, false);
         if (request.HeaderStyle == null && request.BodyStyle == null && request.SheetStyle == null
+            && mappingHeaderStyle == null && mappingBodyStyle == null
             && columns.All(column => column.HeaderStyle == null && column.BodyStyle == null))
             return;
         for (var index = 0; index < columns.Count; index++)
         {
-            var style = columns[index].HeaderStyle ?? request.HeaderStyle ?? request.SheetStyle;
+            var style = columns[index].HeaderStyle ?? request.HeaderStyle ?? mappingHeaderStyle ?? request.SheetStyle;
             if (style != null)
             {
                 var cell = header.GetCell(firstColumnIndex + index);
@@ -387,7 +455,7 @@ internal sealed class NpoiExcelExporter : IExcelExporter
                 continue;
             for (var index = 0; index < columns.Count; index++)
             {
-                var style = columns[index].BodyStyle ?? request.BodyStyle ?? request.SheetStyle;
+                var style = columns[index].BodyStyle ?? request.BodyStyle ?? mappingBodyStyle ?? request.SheetStyle;
                 if (style != null)
                 {
                     var cell = row.GetCell(firstColumnIndex + index);
@@ -395,6 +463,19 @@ internal sealed class NpoiExcelExporter : IExcelExporter
                 }
             }
         }
+    }
+
+    private static Bing.Offices.Styles.ExcelCellStyle ResolveStyle(string key, bool header)
+    {
+        if (string.IsNullOrWhiteSpace(key))
+            return null;
+        if (string.Equals(key, "header", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(key, "bold", StringComparison.OrdinalIgnoreCase))
+            return new Bing.Offices.Styles.ExcelCellStyle { Bold = true };
+        if (string.Equals(key, "body", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(key, "default", StringComparison.OrdinalIgnoreCase))
+            return new Bing.Offices.Styles.ExcelCellStyle();
+        throw new InvalidOperationException($"未注册的{(header ? "表头" : "正文")}样式键: {key}");
     }
 
     /// <summary>
@@ -608,33 +689,42 @@ internal sealed class NpoiExcelExporter : IExcelExporter
     /// <summary>
     /// 创建 Workbook 请求使用的固定列和 typed 动态列计划。
     /// </summary>
-    private IReadOnlyList<ExcelColumnPlan> CreateColumns<T>(ExcelTypeMap<T> typeMap,
+    private static IReadOnlyList<ExcelColumnPlan> CreateColumns<T>(IExcelMappingPlan typeMap,
         IReadOnlyList<ExcelDynamicColumnDefinition> dynamicColumns)
+        where T : class, new()
     {
         var fixedColumns = new List<ExcelColumnPlan>();
-        foreach (var property in typeMap.Properties)
+        foreach (var property in typeMap.Columns)
         {
             if (property.Ignored)
                 continue;
             if (!property.IsDynamicColumn)
             {
+                var reflectionProperty = ResolveProperty<T>(property.Name);
                 fixedColumns.Add(new ExcelColumnPlan(property.Title, property, false, -1, null, null,
-                    BindValueConverters(property.ConverterName, property.Property.PropertyType)));
+                    property.ValueConverters, property.ValidationBindings,
+                    reflectionProperty: reflectionProperty));
                 continue;
             }
         }
         var columns = fixedColumns.ToList();
-        var dynamicProperty = typeMap.Properties.FirstOrDefault(property => property.IsDynamicColumn);
+        var dynamicProperty = typeMap.Columns.FirstOrDefault(property => property.IsDynamicColumn);
         if (dynamicProperty == null)
             return columns;
+        var dynamicReflectionProperty = ResolveProperty<T>(dynamicProperty.Name);
         var definitions = (dynamicColumns ?? Array.Empty<ExcelDynamicColumnDefinition>())
             .OrderBy(definition => definition.Order)
             .ThenBy(definition => definition.Key, StringComparer.Ordinal)
             .ToList();
         foreach (var definition in definitions)
         {
+            var dynamicPlan = typeMap.DynamicColumns.Single(column => string.Equals(column.Key, definition.Key,
+                StringComparison.OrdinalIgnoreCase));
             var column = new ExcelColumnPlan(definition.Title, dynamicProperty, true, -1, definition, definition.Key,
-                BindValueConverters(definition.ConverterName ?? dynamicProperty.ConverterName, definition.DataType));
+                dynamicPlan.ValueConverters, dynamicPlan.ValidationBindings,
+                reflectionProperty: dynamicReflectionProperty,
+                isUnique: dynamicPlan.IsUnique,
+                uniqueIgnoreEmpty: dynamicPlan.UniqueIgnoreEmpty);
             var placement = definition.Placement;
             var physicalIndex = definition.PhysicalColumnIndex ?? placement?.PhysicalColumnIndex;
             if (physicalIndex.HasValue)
@@ -666,6 +756,69 @@ internal sealed class NpoiExcelExporter : IExcelExporter
             columns.Add(column);
         }
         return columns;
+    }
+
+    private static ExcelDynamicColumnDefinition CreateDynamicDefinition(IExcelDynamicMappingColumn column,
+        ExcelDynamicColumnDefinition requestColumn, IExcelMappingPlan mapping)
+    {
+        var columnIndex = column.ColumnIndex;
+        var placementKey = column.PlacementKey;
+        if (!columnIndex.HasValue && string.IsNullOrWhiteSpace(placementKey)
+            && mapping.DynamicColumns.Count == 1)
+        {
+            columnIndex = mapping.Layout?.ColumnIndex;
+            placementKey = mapping.Layout?.PlacementKey;
+        }
+        return new ExcelDynamicColumnDefinition
+        {
+            Key = column.Key,
+            Title = column.Title,
+            Aliases = column.Aliases,
+            DataType = ResolveDynamicType(column.DataTypeName),
+            Order = column.Order,
+            Placement = CreatePlacement(placementKey),
+            PhysicalColumnIndex = columnIndex,
+            NumberFormat = column.NumberFormat ?? mapping.Style?.NumberFormat,
+            HeaderStyle = requestColumn?.HeaderStyle,
+            BodyStyle = requestColumn?.BodyStyle,
+            ConverterName = column.ConverterName,
+            ValidatorName = column.ValidatorName,
+            ValidationRuleNames = column.ValidationRuleNames,
+            ImageMultiplicity = column.ImageMultiplicity
+        };
+    }
+
+    private static ExcelColumnPlacement CreatePlacement(string placementKey)
+    {
+        if (string.IsNullOrWhiteSpace(placementKey))
+            return null;
+        var key = placementKey.Substring(placementKey.IndexOfAny(new[] { ':', '-' }) + 1);
+        return placementKey.StartsWith("before:", StringComparison.OrdinalIgnoreCase)
+            || placementKey.StartsWith("before-", StringComparison.OrdinalIgnoreCase)
+            ? ExcelColumnPlacement.Before(key)
+            : ExcelColumnPlacement.After(key);
+    }
+
+    private static Type ResolveDynamicType(string name)
+    {
+        switch ((name ?? "string").ToLowerInvariant())
+        {
+            case "object": return typeof(object);
+            case "string": return typeof(string);
+            case "boolean": case "bool": return typeof(bool);
+            case "byte": return typeof(byte);
+            case "int16": return typeof(short);
+            case "int32": case "int": return typeof(int);
+            case "int64": case "long": return typeof(long);
+            case "single": case "float": return typeof(float);
+            case "double": return typeof(double);
+            case "decimal": return typeof(decimal);
+            case "datetime": return typeof(DateTime);
+            case "datetimeoffset": return typeof(DateTimeOffset);
+            case "guid": return typeof(Guid);
+            case "bytes": return typeof(byte[]);
+            default: throw new InvalidOperationException($"动态列数据类型不在允许列表中: {name}");
+        }
     }
 
     /// <summary>
@@ -711,21 +864,12 @@ internal sealed class NpoiExcelExporter : IExcelExporter
         column.WriteValue(cell, value);
     }
 
-    /// <summary>
-    /// 解析属性允许使用的值转换器。
-    /// </summary>
-    /// <param name="property">属性映射。</param>
-    private IReadOnlyList<IExcelValueConverter> BindValueConverters(string converterName, Type propertyType)
+    private static PropertyInfo ResolveProperty<T>(string name) where T : class, new()
     {
-        if (string.IsNullOrWhiteSpace(converterName))
-            return _valueConverters.Where(converter => converter.CanConvert(propertyType)).ToArray();
-        var converters = _valueConverters.OfType<INamedExcelValueConverter>().Where(converter =>
-            string.Equals(converter.Name, converterName, StringComparison.OrdinalIgnoreCase)).ToList();
-        if (converters.Count != 1)
-            throw new InvalidOperationException($"未找到唯一命名值转换器: {converterName}");
-        if (!converters[0].CanConvert(propertyType))
-            throw new InvalidOperationException($"值转换器 {converterName} 不支持属性类型: {propertyType.FullName}");
-        return converters;
+        var property = typeof(T).GetProperty(name, BindingFlags.Instance | BindingFlags.Public);
+        if (property == null)
+            throw new InvalidOperationException($"无法解析映射属性: {name}");
+        return property;
     }
 
     /// <summary>

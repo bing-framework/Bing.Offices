@@ -1,7 +1,6 @@
 ﻿namespace Bing.Offices.Validations;
 
 using System.Globalization;
-using System.Reflection;
 using Bing.Offices.Conversions;
 
 /// <summary>
@@ -17,27 +16,23 @@ public sealed class ExcelValidationContext
     /// <param name="rowIndex">从一开始的行号。</param>
     /// <param name="columnIndex">从一开始的列号。</param>
     /// <param name="propertyName">目标属性名称。</param>
-    /// <param name="duplicateValues">当前工作表的重复值状态。</param>
     /// <param name="convertedValue">转换后的属性值。</param>
     /// <param name="propertyType">目标属性类型。</param>
     /// <param name="cell">提供程序无关的原始单元格描述。</param>
     /// <param name="culture">当前请求的转换与校验区域性。</param>
-    /// <param name="property">目标属性元数据。</param>
     public ExcelValidationContext(string value, string sheetName, int rowIndex, int columnIndex, string propertyName,
-        IDictionary<string, HashSet<string>> duplicateValues, object convertedValue = null, Type propertyType = null,
-        ExcelCellValue cell = null, CultureInfo culture = null, PropertyInfo property = null)
+        object convertedValue = null, Type propertyType = null, ExcelCellValue cell = null,
+        CultureInfo culture = null)
     {
         Value = value ?? string.Empty;
         SheetName = sheetName;
         RowIndex = rowIndex;
         ColumnIndex = columnIndex;
         PropertyName = propertyName;
-        DuplicateValues = duplicateValues ?? throw new ArgumentNullException(nameof(duplicateValues));
         ConvertedValue = convertedValue;
         PropertyType = propertyType;
         Cell = cell;
         Culture = culture ?? CultureInfo.InvariantCulture;
-        Property = property;
     }
 
     /// <summary>
@@ -66,11 +61,6 @@ public sealed class ExcelValidationContext
     public string PropertyName { get; }
 
     /// <summary>
-    /// 获取当前工作表的重复值状态。
-    /// </summary>
-    public IDictionary<string, HashSet<string>> DuplicateValues { get; }
-
-    /// <summary>
     /// 获取转换后的属性值。
     /// </summary>
     public object ConvertedValue { get; }
@@ -90,8 +80,4 @@ public sealed class ExcelValidationContext
     /// </summary>
     public CultureInfo Culture { get; }
 
-    /// <summary>
-    /// 获取目标属性元数据。
-    /// </summary>
-    public PropertyInfo Property { get; }
 }

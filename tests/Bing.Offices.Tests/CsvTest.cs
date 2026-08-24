@@ -9,6 +9,7 @@ using Bing.Offices.Attributes;
 using Bing.Offices.Configurations;
 using Bing.Offices.Conversions;
 using Bing.Offices.Extensions;
+using Bing.Offices.Imports;
 using Bing.Offices.Validations;
 using Xunit;
 
@@ -467,6 +468,167 @@ public class CsvTest
     }
 
     /// <summary>
+    /// 测试 - CSV 表头应复用统一映射中的历史 Alias 绑定固定属性。
+    /// </summary>
+    [Fact]
+    public void EntityPipeline_AliasHeader_ShouldBindConfiguredProperty()
+    {
+        // Arrange
+        var mapping = new ExcelMappingConfiguration
+        {
+            Columns = new List<ExcelColumnConfiguration>
+            {
+                new ExcelColumnConfiguration
+                {
+                    PropertyName = nameof(CsvRow.Name),
+                    Aliases = new List<string> { "旧名称" }
+                }
+            }
+        };
+        using var source = new MemoryStream(Encoding.UTF8.GetBytes("旧名称,Count,Description\r\n兼容,1,说明\r\n"));
+
+        // Act
+        var result = new CsvEntityImporter().Import<CsvRow>(source,
+            new CsvImportOptions<CsvRow> { MappingConfiguration = mapping });
+
+        // Assert
+        Assert.Empty(result.Errors);
+        Assert.Equal("兼容", Assert.Single(result.Items).Name);
+    }
+
+    /// <summary>
+    /// 测试 - CSV 应按统一映射的列级 ImportWhitespace 策略规范化输入文本。
+    /// </summary>
+    [Fact]
+    public void EntityPipeline_ColumnWhitespace_ShouldTrimBeforeConversion()
+    {
+        // Arrange
+        var mapping = new ExcelMappingConfiguration
+        {
+            Columns = new List<ExcelColumnConfiguration>
+            {
+                new ExcelColumnConfiguration
+                {
+                    PropertyName = nameof(CsvRow.Name),
+                    ImportWhitespace = ExcelWhitespacePolicy.Trim
+                }
+            }
+        };
+        using var source = new MemoryStream(Encoding.UTF8.GetBytes("Name,Count,Description\r\n  带空白  ,1,说明\r\n"));
+
+        // Act
+        var result = new CsvEntityImporter().Import<CsvRow>(source,
+            new CsvImportOptions<CsvRow> { MappingConfiguration = mapping });
+
+        // Assert
+        Assert.Empty(result.Errors);
+        Assert.Equal("带空白", Assert.Single(result.Items).Name);
+    }
+
+    /// <summary>
+    /// 测试 - CSV 应使用 normalized JSON 文档的 Import/Export 独立方向配置。
+    /// </summary>
+    [Fact]
+    public void EntityPipeline_NormalizedDocument_ShouldUseDirectionalMappings()
+    {
+        // Arrange
+        var document = ExcelMappingConfigurationLoader.FromJsonDocument(
+            "{\"version\":2,\"import\":{\"columns\":[{\"propertyName\":\"Name\",\"title\":\"输入名称\"}]},\"export\":{\"columns\":[{\"propertyName\":\"Name\",\"title\":\"输出名称\"}]}}");
+        using var source = new MemoryStream(Encoding.UTF8.GetBytes("输入名称,Count,Description\r\nCSV,1,说明\r\n"));
+        using var destination = new MemoryStream();
+
+        // Act
+        var imported = new CsvEntityImporter().Import<CsvRow>(source,
+            new CsvImportOptions<CsvRow> { MappingDocument = document });
+        new CsvEntityExporter().Export(new[] { new CsvRow { Name = "CSV", Count = 1, Description = "说明" } },
+            destination, new CsvExportOptions<CsvRow> { MappingDocument = document });
+
+        // Assert
+        Assert.Empty(imported.Errors);
+        Assert.Equal("CSV", Assert.Single(imported.Items).Name);
+        Assert.StartsWith("输出名称,Count,Description", Encoding.UTF8.GetString(destination.ToArray()),
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 测试 - Unique 跟踪达到上限后应拒绝新值，已提交的首行仍应保留。
+    /// </summary>
+    [Fact]
+    public void EntityPipeline_UniqueLimit_ShouldKeepCommittedRowsAndRejectOverflow()
+    {
+        // Arrange
+        const string content = "Code,Count\r\nA,1\r\nB,2\r\n";
+        using var source = new MemoryStream(Encoding.UTF8.GetBytes(content));
+
+        // Act
+        var result = new CsvEntityImporter().Import<CsvValidatedRow>(source,
+            new CsvImportOptions<CsvValidatedRow> { MaxTrackedUniqueValues = 1 });
+
+        // Assert
+        Assert.Single(result.Items);
+        Assert.Equal("A", result.Items[0].Code);
+        Assert.Single(result.Errors);
+        Assert.Contains("Unique", result.Errors[0].Message);
+    }
+
+    /// <summary>
+    /// 测试 - CSV 重复值错误应携带首次成功行号，便于定位唯一约束冲突。
+    /// </summary>
+    [Fact]
+    public void EntityPipeline_UniqueDuplicate_ShouldReportFirstRowNumber()
+    {
+        // Arrange
+        using var source = new MemoryStream(Encoding.UTF8.GetBytes(
+            "Code,Date,Amount\r\nOK-1,2026-01-01,1\r\nOK-1,2026-01-02,2\r\n"));
+
+        // Act
+        var result = new CsvEntityImporter().Import<CsvV2ValidatedRow>(source);
+
+        // Assert
+        var error = Assert.Single(result.Errors);
+        Assert.Equal(2, error.FirstRowNumber);
+    }
+
+    /// <summary>
+    /// 测试 - v2 校验特性应在 CSV 主链按原始值、转换值和唯一值顺序执行。
+    /// </summary>
+    [Fact]
+    public void EntityPipeline_V2ValidationAttributes_ShouldValidateAllRules()
+    {
+        // Arrange
+        const string content = "Code,Date,Amount\r\nOK-1,2024-01-02,5\r\nBAD,2024-01-02,5\r\n"
+            + "OK-123456789,2024-01-02,5\r\nOK-2,not-date,5\r\nOK-3,2024-01-02,11\r\n"
+            + "OK-1,2024-01-02,5\r\n,2024-01-02,5\r\n";
+        using var source = new MemoryStream(Encoding.UTF8.GetBytes(content));
+
+        // Act
+        var result = new CsvEntityImporter().Import<CsvV2ValidatedRow>(source);
+
+        // Assert
+        Assert.Single(result.Items);
+        Assert.Equal(6, result.Errors.Count);
+        Assert.Contains(result.Errors, error => error.RowIndex == 3 && error.PropertyName == nameof(CsvV2ValidatedRow.Code));
+        Assert.Contains(result.Errors, error => error.RowIndex == 4 && error.PropertyName == nameof(CsvV2ValidatedRow.Code));
+        Assert.Contains(result.Errors, error => error.RowIndex == 5 && error.PropertyName == nameof(CsvV2ValidatedRow.Date));
+        Assert.Contains(result.Errors, error => error.RowIndex == 6 && error.PropertyName == nameof(CsvV2ValidatedRow.Amount));
+        Assert.Contains(result.Errors, error => error.RowIndex == 7 && error.PropertyName == nameof(CsvV2ValidatedRow.Code));
+        Assert.Contains(result.Errors, error => error.RowIndex == 8 && error.PropertyName == nameof(CsvV2ValidatedRow.Code));
+    }
+
+    /// <summary>
+    /// 测试 - v2 Range Attribute 应在构建时拒绝最小值大于最大值。
+    /// </summary>
+    [Fact]
+    public void ExcelRangeAttribute_InvalidBounds_ShouldThrow()
+    {
+        // Act
+        var action = () => new ExcelRangeAttribute(5, 1);
+
+        // Assert
+        Assert.Throws<ArgumentException>(action);
+    }
+
+    /// <summary>
     /// CSV 实体测试模型。
     /// </summary>
     private class CsvRow
@@ -537,6 +699,25 @@ public class CsvTest
     private class CsvDecimalRow
     {
         public decimal Value { get; set; }
+    }
+
+    /// <summary>
+    /// CSV v2 校验特性测试模型。
+    /// </summary>
+    private class CsvV2ValidatedRow
+    {
+        [ExcelRequired]
+        [ExcelRegex("^OK-")]
+        [ExcelMaxLength(8)]
+        [ExcelUnique]
+        public string Code { get; set; }
+
+        [ExcelDate(Format = "yyyy-MM-dd")]
+        public DateTime Date { get; set; }
+
+        [ExcelRange(1, 10)]
+        [ExcelMaxValue(10)]
+        public int Amount { get; set; }
     }
 
     /// <summary>

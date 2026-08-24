@@ -2,9 +2,11 @@
 using System.Reflection;
 using Bing.Offices.Attributes;
 using Bing.Offices.Conversions;
+using Bing.Offices.Configurations;
 using Bing.Offices.Exports;
 using Bing.Offices.Imports;
 using Bing.Offices.Mappings;
+using Bing.Offices.Providers;
 using Bing.Offices.Metadata;
 using Bing.Offices.Npoi.Extensions;
 using Bing.Offices.Validations;
@@ -31,6 +33,7 @@ internal sealed class NpoiExcelImporter : IExcelImporter
     /// 当前导入器使用的旧版仅文本单元格转换器。
     /// </summary>
     private readonly IReadOnlyList<ICellValueConverter> _legacyValueConverters;
+    private readonly IExcelMappingPlanFactory _mappingPlanFactory;
 
     /// <summary>
     /// 当前导入器使用的命名配置校验规则。
@@ -44,15 +47,19 @@ internal sealed class NpoiExcelImporter : IExcelImporter
     /// <param name="valueConverters">值转换器集合。</param>
     /// <param name="namedValidationRules">命名配置校验规则集合。</param>
     /// <param name="legacyValueConverters">旧版仅文本单元格转换器集合。</param>
+    /// <param name="mappingPlanFactory">方向化映射计划工厂。</param>
     public NpoiExcelImporter(IEnumerable<IExcelValidationRule> validationRules = null,
         IEnumerable<IExcelValueConverter> valueConverters = null,
         IEnumerable<INamedExcelValidationRule> namedValidationRules = null,
-        IEnumerable<ICellValueConverter> legacyValueConverters = null)
+        IEnumerable<ICellValueConverter> legacyValueConverters = null,
+        IExcelMappingPlanFactory mappingPlanFactory = null)
     {
         _validationRules = validationRules?.ToArray() ?? ExcelValidationRules.CreateDefault();
         _valueConverters = valueConverters?.ToArray() ?? Array.Empty<IExcelValueConverter>();
         _namedValidationRules = namedValidationRules?.ToArray() ?? Array.Empty<INamedExcelValidationRule>();
         _legacyValueConverters = legacyValueConverters?.ToArray() ?? Array.Empty<ICellValueConverter>();
+        _mappingPlanFactory = mappingPlanFactory ?? NpoiMappingPlanFactoryResolver.CreateDefault(
+            _valueConverters, _validationRules, _namedValidationRules);
     }
 
     /// <inheritdoc />
@@ -77,6 +84,7 @@ internal sealed class NpoiExcelImporter : IExcelImporter
         var errors = new ExcelImportErrorCollector(request.ResourceLimits?.MaxErrors);
         var sourceLocations = new Dictionary<object, SourceLocation>(ReferenceObjectComparer.Instance);
         var runtime = new ExcelImportRuntime(request.ResourceLimits);
+        var plans = CreateWorkbookPlans(request, workbook);
         foreach (var sheetRequest in request.Sheets)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -102,7 +110,7 @@ internal sealed class NpoiExcelImporter : IExcelImporter
             {
                 ImportTypedSheet(sheet, sheetRequest, root, sheetResults, errors, request.ValidationMode,
                     request.ResourceLimits, request.UnsupportedFeaturePolicy, sourceLocations, runtime,
-                    cancellationToken);
+                    cancellationToken, plans[sheetRequest]);
             }
             catch (SheetStructureException exception)
             {
@@ -148,6 +156,64 @@ internal sealed class NpoiExcelImporter : IExcelImporter
     private static string GetSelectorDescription(ExcelSheetSelector selector) =>
         selector.Kind == ExcelSheetSelectorKind.ByIndex ? $"#{selector.Index.Value}" : selector.Name;
 
+    private Dictionary<ExcelSheetImportRequest, IExcelMappingPlan> CreateWorkbookPlans<TWorkbook>(
+        ExcelWorkbookImportRequest<TWorkbook> request, IWorkbook workbook) where TWorkbook : class, new()
+    {
+        var result = new Dictionary<ExcelSheetImportRequest, IExcelMappingPlan>();
+        var existing = request.Sheets.Select(sheet => new
+        {
+            Request = sheet,
+            Index = ResolveSheetIndex(workbook, sheet.Selector, request.SheetNameComparison)
+        }).Where(item => item.Index >= 0).ToArray();
+        foreach (var group in existing.GroupBy(item => GetWorkbookPlanKey(item.Request), StringComparer.Ordinal))
+        {
+            var first = group.First().Request;
+            var sheetNames = group.Select(item => workbook.GetSheetName(item.Index)).ToArray();
+            var plan = CreateWorkbookPlan(first, sheetNames);
+            foreach (var item in group)
+                result.Add(item.Request, plan.Sheets.Single(sheet => string.Equals(sheet.Name,
+                    workbook.GetSheetName(item.Index), StringComparison.OrdinalIgnoreCase)).Mapping);
+        }
+        return result;
+    }
+
+    private static string GetWorkbookPlanKey(ExcelSheetImportRequest request)
+    {
+        var method = typeof(NpoiExcelImporter).GetMethod(nameof(CreateNormalizedDocument),
+            BindingFlags.Static | BindingFlags.NonPublic).MakeGenericMethod(request.ItemType);
+        var document = (ExcelMappingDocument)method.Invoke(null, new object[] { request });
+        return string.Join("|", request.ItemType.AssemblyQualifiedName,
+            ExcelMappingConfigurationLoader.ToJson(document));
+    }
+
+    private static ExcelMappingDocument CreateNormalizedDocument<T>(ExcelSheetImportRequest request)
+        where T : class, new() =>
+        ExcelMappingDocumentFactory.Create<T>(request.MappingProfile, request.MappingDocument,
+            request.MappingConfiguration, MappingDirection.Import);
+
+    private IExcelMappingWorkbookPlan CreateWorkbookPlan(ExcelSheetImportRequest request,
+        IReadOnlyList<string> sheetNames)
+    {
+        var method = GetType().GetMethod(nameof(CreateTypedWorkbookPlan), BindingFlags.Instance
+            | BindingFlags.NonPublic).MakeGenericMethod(request.ItemType);
+        try
+        {
+            return (IExcelMappingWorkbookPlan)method.Invoke(this, new object[] { request, sheetNames });
+        }
+        catch (TargetInvocationException exception) when (exception.InnerException != null)
+        {
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(exception.InnerException).Throw();
+            throw;
+        }
+    }
+
+    private IExcelMappingWorkbookPlan CreateTypedWorkbookPlan<T>(ExcelSheetImportRequest request,
+        IReadOnlyList<string> sheetNames) where T : class, new()
+    {
+        var document = CreateNormalizedDocument<T>(request);
+        return _mappingPlanFactory.CreateWorkbook<T>(document, MappingDirection.Import, sheetNames);
+    }
+
     /// <summary>
     /// 通过一次类型擦除调用执行单个 Sheet 导入计划。
     /// </summary>
@@ -157,7 +223,7 @@ internal sealed class NpoiExcelImporter : IExcelImporter
         ExcelUnsupportedFeaturePolicy unsupportedFeaturePolicy,
         IDictionary<object, SourceLocation> sourceLocations,
         ExcelImportRuntime runtime,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, IExcelMappingPlan mappingPlan)
         where TWorkbook : class, new()
     {
         var method = GetType().GetMethod(nameof(ImportTypedSheetCore), BindingFlags.Instance | BindingFlags.NonPublic);
@@ -165,7 +231,7 @@ internal sealed class NpoiExcelImporter : IExcelImporter
         {
             method.MakeGenericMethod(typeof(TWorkbook), request.ItemType).Invoke(this,
                 new object[] { sheet, request, root, sheetResults, errors, validationMode, resourceLimits,
-                    unsupportedFeaturePolicy, sourceLocations, runtime, cancellationToken });
+                    unsupportedFeaturePolicy, sourceLocations, runtime, cancellationToken, mappingPlan });
         }
         catch (TargetInvocationException exception) when (exception.InnerException != null)
         {
@@ -183,7 +249,7 @@ internal sealed class NpoiExcelImporter : IExcelImporter
         ExcelUnsupportedFeaturePolicy unsupportedFeaturePolicy,
         IDictionary<object, SourceLocation> sourceLocations,
         ExcelImportRuntime runtime,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, IExcelMappingPlan mappingPlan)
         where TWorkbook : class, new()
         where TItem : class, new()
     {
@@ -207,7 +273,11 @@ internal sealed class NpoiExcelImporter : IExcelImporter
             EnabledEmptyLine = request.EnabledEmptyLine,
             IgnoreEmptyLineAfterData = request.IgnoreEmptyLineAfterData,
             MappingConfiguration = request.MappingConfiguration,
-            MappingProfile = request.MappingProfile as Configurations.ExcelMappingProfile<TItem>
+            MappingDocument = request.MappingDocument,
+            MappingProfile = request.MappingProfile,
+            MappingPlan = mappingPlan,
+            MaxTrackedUniqueValues = resourceLimits?.MaxTrackedUniqueValues,
+            UniqueComparison = resourceLimits?.UniqueComparison ?? StringComparison.OrdinalIgnoreCase
         };
         var items = new List<TItem>();
         var rows = new List<int>();
@@ -671,6 +741,8 @@ internal sealed class NpoiExcelImporter : IExcelImporter
         var validationIndex = ValidationRangeIndex.Create(workbookValidations, options.DataRowIndex, sheet.LastRowNum,
             0, Math.Max(0, header.LastCellNum - 1));
         var duplicateValues = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+        var uniqueTracker = new UniqueTracker(duplicateValues, options.MaxTrackedUniqueValues,
+            CreateStringComparer(options.UniqueComparison));
         for (var rowIndex = options.DataRowIndex; rowIndex <= sheet.LastRowNum; rowIndex++)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -703,11 +775,11 @@ internal sealed class NpoiExcelImporter : IExcelImporter
                 }
                 continue;
             }
-            var duplicateChanges = CaptureDuplicateChanges(row, columns, duplicateValues, options.BodyWhitespace);
+            uniqueTracker.BeginRow();
             if (!ValidateWorkbookValues(row, columns, validationIndex, sheet, sheet.SheetName, rowIndex,
                 options.BodyWhitespace, options.ValidateMode, options.UnsupportedFeaturePolicy, errors))
             {
-                RollbackDuplicateChanges(duplicateValues, duplicateChanges);
+                uniqueTracker.RollbackRow();
                 if (errors.IsLimitReached)
                 {
                     errors.MarkTruncated();
@@ -718,7 +790,7 @@ internal sealed class NpoiExcelImporter : IExcelImporter
             if (!ValidateRawValues(row, columns, duplicateValues, sheet.SheetName, rowIndex, options.ValidateMode,
                     options.Culture, options.BodyWhitespace, errors))
             {
-                RollbackDuplicateChanges(duplicateValues, duplicateChanges);
+                uniqueTracker.RollbackRow();
                 if (errors.IsLimitReached)
                 {
                     errors.MarkTruncated();
@@ -726,15 +798,17 @@ internal sealed class NpoiExcelImporter : IExcelImporter
                 }
                 continue;
             }
-            if (TryCreateItem(row, columns, duplicateValues, sheet.SheetName, rowIndex, options.ValidateMode, errors,
-                    options.Culture, options.BodyWhitespace, options.DynamicTargetGetter, imageIndex, out T item))
+            if (TryCreateItem(row, columns, duplicateValues, uniqueTracker, sheet.SheetName, rowIndex,
+                    options.ValidateMode, errors, options.Culture, options.BodyWhitespace,
+                    options.DynamicTargetGetter, imageIndex, out T item))
             {
                 items.Add(item);
                 sourceRows?.Add(rowIndex);
+                uniqueTracker.CommitRow();
             }
             else
             {
-                RollbackDuplicateChanges(duplicateValues, duplicateChanges);
+                uniqueTracker.RollbackRow();
             }
             if (errors.IsLimitReached)
             {
@@ -996,12 +1070,20 @@ internal sealed class NpoiExcelImporter : IExcelImporter
     private IReadOnlyDictionary<int, ExcelColumnPlan> CreateColumns<T>(IRow header, ExcelImportExecutionOptions<T> options)
         where T : class, new()
     {
-        var map = ExcelTypeMapFactory.Get(options.MappingProfile, options.MappingConfiguration);
-        var dynamicProperties = map.Properties.Where(property => property.IsDynamicColumn).ToList();
+        var map = options.MappingPlan;
+        if (map == null)
+        {
+            var document = ExcelMappingDocumentFactory.Create<T>(options.MappingProfile, options.MappingDocument,
+                options.MappingConfiguration, MappingDirection.Import);
+            map = _mappingPlanFactory.CreateWorkbook<T>(document, MappingDirection.Import,
+                new[] { header.Sheet.SheetName }).Sheets[0].Mapping;
+        }
+        var dynamicProperties = map.Columns.Where(property => property.IsDynamicColumn).ToList();
+        var dynamicPlans = map.DynamicColumns;
         if (dynamicProperties.Count > 1)
             throw new InvalidOperationException($"导入模板 {typeof(T).FullName} 只能声明一个动态列属性。");
 
-        var fixedProperties = map.Properties.Where(property => !property.Ignored && !property.IsDynamicColumn).ToList();
+        var fixedProperties = map.Columns.Where(property => !property.Ignored && !property.IsDynamicColumn).ToList();
         var headerNames = new HashSet<string>(options.HeaderComparison == ExcelNameComparison.Ordinal
             ? StringComparer.Ordinal
             : StringComparer.OrdinalIgnoreCase);
@@ -1017,10 +1099,12 @@ internal sealed class NpoiExcelImporter : IExcelImporter
                 throw new SheetStructureException($"导入的表格存在重复列:{headerName}");
             var property = FindProperty(fixedProperties, headerName, null, options.HeaderComparison);
             ExcelDynamicColumnDefinition dynamicDefinition = null;
+            IExcelDynamicMappingColumn dynamicPlan = null;
             if (property == null && dynamicProperties.Count == 1)
             {
-                dynamicDefinition = FindDynamicDefinition(headerName, options.DynamicColumns, options.HeaderComparison);
-                if (options.DynamicColumns != null && options.DynamicColumns.Count > 0 && dynamicDefinition == null)
+                dynamicPlan = FindDynamicDefinition(headerName, dynamicPlans, options.HeaderComparison);
+                dynamicDefinition = dynamicPlan == null ? null : CreateDynamicDefinition(dynamicPlan);
+                if (dynamicPlans.Count > 0 && dynamicDefinition == null)
                 {
                     if (options.FailOnUnknownDynamicColumns)
                         throw new SheetStructureException($"导入包含未知动态列: {headerName}");
@@ -1030,18 +1114,26 @@ internal sealed class NpoiExcelImporter : IExcelImporter
             }
             if (property != null)
             {
-                if (!property.Property.CanWrite)
-                    throw new InvalidOperationException($"导入模板属性不可写入: {property.Name}");
                 var isUnspecifiedDynamicColumn = property.IsDynamicColumn && dynamicDefinition == null;
-                var valueType = dynamicDefinition?.DataType ?? property.Property.PropertyType;
+                var reflectionProperty = typeof(T).GetProperty(property.Name,
+                    BindingFlags.Instance | BindingFlags.Public);
+                if (reflectionProperty == null)
+                    throw new InvalidOperationException($"无法解析映射属性: {property.Name}");
+                if (!property.IsDynamicColumn && !reflectionProperty.CanWrite)
+                    throw new InvalidOperationException($"属性不可写入: {property.Name}");
                 var valueConverters = isUnspecifiedDynamicColumn
                     ? Array.Empty<IExcelValueConverter>()
-                    : BindValueConverters(dynamicDefinition?.ConverterName ?? property.ConverterName, valueType);
-                var attributeValidations = BindAttributeValidations(property);
-                var namedValidationRules = BindNamedValidationRules(property, dynamicDefinition);
+                    : property.IsDynamicColumn
+                        ? dynamicPlan.ValueConverters
+                        : property.ValueConverters;
+                var validationBindings = property.IsDynamicColumn && dynamicPlan != null
+                    ? dynamicPlan.ValidationBindings
+                    : property.ValidationBindings;
                 columns[headerCell.ColumnIndex] = new ExcelColumnPlan(headerName, property, property.IsDynamicColumn,
-                    headerCell.ColumnIndex, dynamicDefinition, null, valueConverters, attributeValidations,
-                    namedValidationRules);
+                    headerCell.ColumnIndex, dynamicDefinition, null, valueConverters, validationBindings,
+                    reflectionProperty: reflectionProperty,
+                    isUnique: dynamicPlan?.IsUnique,
+                    uniqueIgnoreEmpty: dynamicPlan?.UniqueIgnoreEmpty ?? true);
             }
         }
 
@@ -1050,8 +1142,11 @@ internal sealed class NpoiExcelImporter : IExcelImporter
             var missing = fixedProperties.Where(property => !columns.Values.Any(column => column.Property == property)
                 && (options.ReadColumnRange == null || !header.Cells.Any(cell =>
                     !options.ReadColumnRange.Contains(cell.ColumnIndex)
-                    && string.Equals(NormalizeText(GetRawStringValue(cell), options.HeaderWhitespace), property.Title,
-                        ToStringComparison(options.HeaderComparison))))).ToList();
+                        && (string.Equals(NormalizeText(GetRawStringValue(cell), options.HeaderWhitespace), property.Title,
+                            ToStringComparison(options.HeaderComparison))
+                            || property.Aliases.Any(alias => string.Equals(
+                                NormalizeText(GetRawStringValue(cell), options.HeaderWhitespace), alias,
+                                ToStringComparison(options.HeaderComparison))))))).ToList();
             if (missing.Any())
                 throw new SheetStructureException($"导入的表格不存在列：{string.Join(",", missing.Select(property => property.Title))}");
         }
@@ -1061,13 +1156,63 @@ internal sealed class NpoiExcelImporter : IExcelImporter
     /// <summary>
     /// 按展示标题或历史别名查找 typed 动态列定义。
     /// </summary>
-    private static ExcelDynamicColumnDefinition FindDynamicDefinition(string headerName,
-        IReadOnlyList<ExcelDynamicColumnDefinition> definitions, ExcelNameComparison comparison)
+    private static IExcelDynamicMappingColumn FindDynamicDefinition(string headerName,
+        IReadOnlyList<IExcelDynamicMappingColumn> definitions, ExcelNameComparison comparison)
     {
-        return (definitions ?? Array.Empty<ExcelDynamicColumnDefinition>()).FirstOrDefault(definition =>
+        return (definitions ?? Array.Empty<IExcelDynamicMappingColumn>()).FirstOrDefault(definition =>
             string.Equals(definition.Title, headerName, ToStringComparison(comparison))
             || (definition.Aliases ?? Array.Empty<string>()).Any(alias =>
                 string.Equals(alias, headerName, ToStringComparison(comparison))));
+    }
+
+    private static ExcelDynamicColumnDefinition CreateDynamicDefinition(IExcelDynamicMappingColumn column) => new()
+    {
+        Key = column.Key,
+        Title = column.Title,
+        Aliases = column.Aliases,
+        DataType = ResolveDynamicType(column.DataTypeName),
+        Order = column.Order,
+        Placement = CreatePlacement(column.PlacementKey),
+        PhysicalColumnIndex = column.ColumnIndex,
+        NumberFormat = column.NumberFormat,
+        ConverterName = column.ConverterName,
+        ValidatorName = column.ValidatorName,
+        ValidationRuleNames = column.ValidationRuleNames,
+        ImageMultiplicity = column.ImageMultiplicity
+    };
+
+    private static ExcelColumnPlacement CreatePlacement(string placementKey)
+    {
+        if (string.IsNullOrWhiteSpace(placementKey))
+            return null;
+        var separator = placementKey.IndexOfAny(new[] { ':', '-' });
+        var key = placementKey.Substring(separator + 1);
+        return placementKey.StartsWith("before:", StringComparison.OrdinalIgnoreCase)
+            || placementKey.StartsWith("before-", StringComparison.OrdinalIgnoreCase)
+            ? ExcelColumnPlacement.Before(key)
+            : ExcelColumnPlacement.After(key);
+    }
+
+    private static Type ResolveDynamicType(string name)
+    {
+        switch ((name ?? "string").ToLowerInvariant())
+        {
+            case "object": return typeof(object);
+            case "string": return typeof(string);
+            case "boolean": case "bool": return typeof(bool);
+            case "byte": return typeof(byte);
+            case "int16": return typeof(short);
+            case "int32": case "int": return typeof(int);
+            case "int64": case "long": return typeof(long);
+            case "single": case "float": return typeof(float);
+            case "double": return typeof(double);
+            case "decimal": return typeof(decimal);
+            case "datetime": return typeof(DateTime);
+            case "datetimeoffset": return typeof(DateTimeOffset);
+            case "guid": return typeof(Guid);
+            case "bytes": return typeof(byte[]);
+            default: throw new InvalidOperationException($"动态列数据类型不在允许列表中: {name}");
+        }
     }
 
     /// <summary>
@@ -1077,7 +1222,7 @@ internal sealed class NpoiExcelImporter : IExcelImporter
     /// <param name="fixedProperties">可映射的固定属性集合。</param>
     /// <param name="dynamicProperties">动态列属性集合。</param>
     private static void ValidateHeaderMappings(IReadOnlyDictionary<string, string> headerMappings,
-        IReadOnlyCollection<ExcelPropertyMap> fixedProperties, IReadOnlyCollection<ExcelPropertyMap> dynamicProperties)
+        IReadOnlyCollection<IExcelMappingColumn> fixedProperties, IReadOnlyCollection<IExcelMappingColumn> dynamicProperties)
     {
         if (headerMappings == null)
             return;
@@ -1106,7 +1251,7 @@ internal sealed class NpoiExcelImporter : IExcelImporter
     /// <param name="properties">固定属性集合。</param>
     /// <param name="headerName">表头名称。</param>
     /// <param name="headerMappings">请求级映射。</param>
-    private static ExcelPropertyMap FindProperty(IEnumerable<ExcelPropertyMap> properties, string headerName,
+    private static IExcelMappingColumn FindProperty(IEnumerable<IExcelMappingColumn> properties, string headerName,
         IReadOnlyDictionary<string, string> headerMappings, ExcelNameComparison comparison)
     {
         var stringComparison = ToStringComparison(comparison);
@@ -1118,6 +1263,7 @@ internal sealed class NpoiExcelImporter : IExcelImporter
                 && string.Equals(mappedHeader, headerName, stringComparison))
                 return property;
             if (string.Equals(property.Title, headerName, stringComparison)
+                || property.Aliases.Any(alias => string.Equals(alias, headerName, stringComparison))
                 || string.Equals(property.Name, headerName, stringComparison))
                 return property;
         }
@@ -1126,23 +1272,6 @@ internal sealed class NpoiExcelImporter : IExcelImporter
 
     private static StringComparison ToStringComparison(ExcelNameComparison comparison) =>
         comparison == ExcelNameComparison.Ordinal ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
-
-    private IReadOnlyList<ExcelAttributeValidationBinding> BindAttributeValidations(ExcelPropertyMap property)
-    {
-        return property.Property.GetCustomAttributes<FilterAttributeBase>()
-            .Select(attribute => new ExcelAttributeValidationBinding(attribute, ResolveValidationRule(attribute),
-                IsRawValidationAttribute(attribute)))
-            .ToArray();
-    }
-
-    private IReadOnlyList<INamedExcelValidationRule> BindNamedValidationRules(ExcelPropertyMap property,
-        ExcelDynamicColumnDefinition dynamicDefinition)
-    {
-        var names = new List<string>(property.ValidationRuleNames ?? Array.Empty<string>());
-        if (!string.IsNullOrWhiteSpace(dynamicDefinition?.ValidatorName))
-            names.Add(dynamicDefinition.ValidatorName);
-        return names.Select(ResolveNamedValidationRule).ToArray();
-    }
 
     private static string GetRawStringValue(ICell cell)
     {
@@ -1203,7 +1332,8 @@ internal sealed class NpoiExcelImporter : IExcelImporter
     /// <param name="item">成功绑定的实体。</param>
     /// <returns>绑定成功时返回 <see langword="true"/>。</returns>
     private bool TryCreateItem<T>(IRow row, IReadOnlyDictionary<int, ExcelColumnPlan> columns,
-        IDictionary<string, HashSet<string>> duplicateValues, string sheetName, int rowIndex, ValidateMode validateMode,
+        IDictionary<string, HashSet<string>> duplicateValues, UniqueTracker uniqueTracker,
+        string sheetName, int rowIndex, ValidateMode validateMode,
         ExcelImportErrorCollector errors, CultureInfo culture, ExcelWhitespacePolicy bodyWhitespace,
         Func<object, object> dynamicTargetGetter,
         IReadOnlyDictionary<(int Row, int Column), IReadOnlyList<PictureInfo>> imageIndex, out T item)
@@ -1223,13 +1353,15 @@ internal sealed class NpoiExcelImporter : IExcelImporter
                     && imageMultiplicity == ExcelImageMultiplicityPolicy.Fail)
                 {
                     errors.Add(new ExcelImportError(ExcelImportErrorCode.InvalidInput, "同一单元格存在多个图片。",
-                        sheetName, rowIndex + 1, column.Key + 1, column.Value.Property.Name));
+                        sheetName, rowIndex + 1, column.Key + 1, column.Value.Property.Name,
+                        GetErrorColumnKey(column.Value)));
                     item = null;
                     return false;
                 }
                 var image = images?.FirstOrDefault();
                 cellValue = image == null
-                    ? NormalizeCellValue(ApplyLegacyTextConverters(cell, ReadCellValue(cell)), bodyWhitespace)
+                    ? NormalizeCellValue(ApplyLegacyTextConverters(cell, ReadCellValue(cell)),
+                        column.Value.Property.ImportWhitespace ?? bodyWhitespace)
                     : new ExcelCellValue(image, string.Empty, ExcelCellKind.Empty);
                 var value = cellValue.Text;
                 if (column.Value.IsDynamic)
@@ -1249,7 +1381,7 @@ internal sealed class NpoiExcelImporter : IExcelImporter
                                 column.Key + 1, culture);
                     }
                     if (!ValidateColumnValue(value, cellValue, dynamicConvertedValue, column.Value,
-                        duplicateValues, sheetName, rowIndex, validateMode, culture, errors))
+                        duplicateValues, uniqueTracker, sheetName, rowIndex, validateMode, culture, errors))
                     {
                         item = null;
                         return false;
@@ -1261,8 +1393,8 @@ internal sealed class NpoiExcelImporter : IExcelImporter
                     ? ConvertImages(images, column.Value.ValueType,
                         imageMultiplicity)
                     : column.Value.ConvertFrom(value, cellValue, sheetName, rowIndex + 1, column.Key + 1, culture);
-                if (!ValidateColumnValue(value, cellValue, converted, column.Value, duplicateValues, sheetName,
-                    rowIndex, validateMode, culture, errors))
+                if (!ValidateColumnValue(value, cellValue, converted, column.Value, duplicateValues,
+                    uniqueTracker, sheetName, rowIndex, validateMode, culture, errors))
                 {
                     item = null;
                     return false;
@@ -1272,7 +1404,7 @@ internal sealed class NpoiExcelImporter : IExcelImporter
             catch (Exception exception)
             {
                 errors.Add(new ExcelImportError(ExcelImportErrorCode.ValueConversion, exception.Message, sheetName,
-                    rowIndex + 1, column.Key + 1, column.Value.Property.Name, column.Value.Property.Name,
+                    rowIndex + 1, column.Key + 1, column.Value.Property.Name, GetErrorColumnKey(column.Value),
                     column.Value.HeaderName, cellValue?.Value ?? cellValue?.Text));
                 item = null;
                 return false;
@@ -1468,22 +1600,22 @@ internal sealed class NpoiExcelImporter : IExcelImporter
         foreach (var column in columns)
         {
             var cell = row.GetCell(column.Key);
-            var cellValue = NormalizeCellValue(ApplyLegacyTextConverters(cell, ReadCellValue(cell)), bodyWhitespace);
+            var cellValue = NormalizeCellValue(ApplyLegacyTextConverters(cell, ReadCellValue(cell)),
+                column.Value.Property.ImportWhitespace ?? bodyWhitespace);
             var value = cellValue.Text;
-            foreach (var binding in column.Value.AttributeValidations.Where(binding => binding.IsRaw))
+            foreach (var binding in column.Value.ValidationBindings.Where(binding => binding.IsRaw))
             {
                 var context = new ExcelValidationContext(value, sheetName, rowIndex + 1, column.Key + 1,
-                    column.Value.Property.Name, duplicateValues, null, column.Value.ValueType, cellValue,
-                    culture, column.Value.Property.Property);
+                    column.Value.Property.Name, null, column.Value.ValueType, cellValue, culture);
                 bool isValid;
                 try
                 {
-                    isValid = binding.Rule.Validate(binding.Attribute, context);
+                    isValid = binding.Validate(context);
                 }
                 catch (Exception exception)
                 {
                     errors.Add(new ExcelImportError(ExcelImportErrorCode.Validation, exception.Message, sheetName,
-                        rowIndex + 1, column.Key + 1, column.Value.Property.Name, column.Value.Property.Name,
+                        rowIndex + 1, column.Key + 1, column.Value.Property.Name, GetErrorColumnKey(column.Value),
                         column.Value.HeaderName, cellValue.Value ?? cellValue.Text));
                     valid = false;
                     if (validateMode == ValidateMode.StopOnFirstFailure)
@@ -1492,8 +1624,8 @@ internal sealed class NpoiExcelImporter : IExcelImporter
                 }
                 if (isValid)
                     continue;
-                errors.Add(new ExcelImportError(ExcelImportErrorCode.Validation, binding.Attribute.ErrorMsg, sheetName,
-                    rowIndex + 1, column.Key + 1, column.Value.Property.Name, column.Value.Property.Name,
+                errors.Add(new ExcelImportError(GetValidationErrorCode(binding), binding.ErrorMessage, sheetName,
+                    rowIndex + 1, column.Key + 1, column.Value.Property.Name, GetErrorColumnKey(column.Value),
                     column.Value.HeaderName, cellValue.Value ?? cellValue.Text));
                 valid = false;
                 if (validateMode == ValidateMode.StopOnFirstFailure)
@@ -1507,25 +1639,27 @@ internal sealed class NpoiExcelImporter : IExcelImporter
     /// 校验转换后的属性值及配置命名规则。
     /// </summary>
     private bool ValidateColumnValue(string value, ExcelCellValue cellValue, object convertedValue, ExcelColumnPlan column,
-        IDictionary<string, HashSet<string>> duplicateValues, string sheetName, int rowIndex, ValidateMode validateMode,
+        IDictionary<string, HashSet<string>> duplicateValues, UniqueTracker uniqueTracker,
+        string sheetName, int rowIndex, ValidateMode validateMode,
         CultureInfo culture, ExcelImportErrorCollector errors)
     {
         var valid = true;
         var property = column.Property;
         var context = new ExcelValidationContext(value, sheetName, rowIndex + 1, column.ColumnIndex + 1,
             column.IsDynamic ? column.Key : property.Name,
-            duplicateValues, convertedValue, column.ValueType, cellValue, culture, property.Property);
-        foreach (var binding in column.AttributeValidations.Where(binding => !binding.IsRaw))
+            convertedValue, column.ValueType, cellValue, culture);
+        foreach (var binding in column.ValidationBindings.Where(binding => !binding.IsRaw
+                 && binding.Kind != ExcelValidationBindingKind.Unique))
         {
             bool isValid;
             try
             {
-                isValid = binding.Rule.Validate(binding.Attribute, context);
+                isValid = binding.Validate(context);
             }
             catch (Exception exception)
             {
                 errors.Add(new ExcelImportError(ExcelImportErrorCode.Validation, exception.Message, sheetName,
-                    rowIndex + 1, column.ColumnIndex + 1, property.Name, property.Name, column.HeaderName,
+                    rowIndex + 1, column.ColumnIndex + 1, property.Name, GetErrorColumnKey(column), column.HeaderName,
                     cellValue.Value ?? cellValue.Text));
                 valid = false;
                 if (validateMode == ValidateMode.StopOnFirstFailure)
@@ -1534,133 +1668,61 @@ internal sealed class NpoiExcelImporter : IExcelImporter
             }
             if (isValid)
                 continue;
-            errors.Add(new ExcelImportError(ExcelImportErrorCode.Validation, binding.Attribute.ErrorMsg, sheetName,
-                rowIndex + 1, column.ColumnIndex + 1, property.Name, property.Name, column.HeaderName,
+            errors.Add(new ExcelImportError(GetValidationErrorCode(binding), binding.ErrorMessage, sheetName,
+                rowIndex + 1, column.ColumnIndex + 1, property.Name, GetErrorColumnKey(column), column.HeaderName,
                 cellValue.Value ?? cellValue.Text));
             valid = false;
             if (validateMode == ValidateMode.StopOnFirstFailure)
                 return false;
         }
-        foreach (var rule in column.NamedValidationRules)
+        if (column.IsUnique)
         {
-            bool isValid;
+            bool reserved;
             try
             {
-                isValid = rule.Validate(context);
+                reserved = uniqueTracker.TryReserve(column.Key, value, false, column.UniqueIgnoreEmpty, rowIndex + 1);
             }
             catch (Exception exception)
             {
-                errors.Add(new ExcelImportError(ExcelImportErrorCode.Validation, exception.Message, sheetName,
-                    rowIndex + 1, column.ColumnIndex + 1, property.Name, property.Name, column.HeaderName,
+                errors.Add(new ExcelImportError(ExcelImportErrorCode.ResourceLimit, exception.Message, sheetName,
+                    rowIndex + 1, column.ColumnIndex + 1, property.Name, GetErrorColumnKey(column), column.HeaderName,
                     cellValue.Value ?? cellValue.Text));
-                valid = false;
-                if (validateMode == ValidateMode.StopOnFirstFailure)
-                    return false;
-                continue;
-            }
-            if (isValid)
-                continue;
-            errors.Add(new ExcelImportError(ExcelImportErrorCode.Validation, rule.ErrorMessage, sheetName,
-                rowIndex + 1, column.ColumnIndex + 1, property.Name, property.Name, column.HeaderName,
-                cellValue.Value ?? cellValue.Text));
-            valid = false;
-            if (validateMode == ValidateMode.StopOnFirstFailure)
                 return false;
+            }
+            if (!reserved)
+            {
+                var firstRowNumber = uniqueTracker.TryGetFirstRowNumber(column.Key, value, out var firstRow)
+                    ? firstRow
+                    : (int?)null;
+                errors.Add(new ExcelImportError(ExcelImportErrorCode.Validation, "重复数据", sheetName,
+                    rowIndex + 1, column.ColumnIndex + 1, property.Name, GetErrorColumnKey(column), column.HeaderName,
+                    cellValue.Value ?? cellValue.Text, firstRowNumber));
+                return false;
+            }
         }
         return valid;
     }
 
-    private static bool IsRawValidationAttribute(FilterAttributeBase attribute) =>
-        attribute is RequiredAttribute || attribute is RegexAttribute;
-
-    /// <summary>
-    /// 捕获当前行可能新增的重复校验值，行失败时只回滚本行新增项。
-    /// </summary>
-    private static IReadOnlyList<DuplicateChange> CaptureDuplicateChanges(IRow row,
-        IReadOnlyDictionary<int, ExcelColumnPlan> columns, IReadOnlyDictionary<string, HashSet<string>> duplicateValues,
-        ExcelWhitespacePolicy bodyWhitespace)
+    private static StringComparer CreateStringComparer(StringComparison comparison) => comparison switch
     {
-        var changes = new List<DuplicateChange>();
-        foreach (var column in columns.Values)
-        {
-            if (!column.IsUnique)
-                continue;
-            var cellValue = NormalizeCellValue(ReadCellValue(row.GetCell(column.ColumnIndex)), bodyWhitespace);
-            if (string.IsNullOrWhiteSpace(cellValue.Text))
-                continue;
-            var key = column.Key;
-            var wasPresent = duplicateValues.TryGetValue(key, out var values)
-                             && values.Contains(cellValue.Text);
-            changes.Add(new DuplicateChange(key, cellValue.Text, wasPresent));
-        }
-        return changes;
-    }
+        StringComparison.Ordinal => StringComparer.Ordinal,
+        StringComparison.OrdinalIgnoreCase => StringComparer.OrdinalIgnoreCase,
+        StringComparison.InvariantCulture => StringComparer.InvariantCulture,
+        StringComparison.InvariantCultureIgnoreCase => StringComparer.InvariantCultureIgnoreCase,
+        StringComparison.CurrentCulture => StringComparer.CurrentCulture,
+        StringComparison.CurrentCultureIgnoreCase => StringComparer.CurrentCultureIgnoreCase,
+        _ => throw new ArgumentOutOfRangeException(nameof(comparison))
+    };
 
-    /// <summary>
-    /// 回滚当前失败行新增的重复校验值。
-    /// </summary>
-    private static void RollbackDuplicateChanges(IDictionary<string, HashSet<string>> duplicateValues,
-        IReadOnlyList<DuplicateChange> changes)
-    {
-        foreach (var change in changes)
-        {
-            if (change.WasPresent || !duplicateValues.TryGetValue(change.PropertyName, out var values))
-                continue;
-            values.Remove(change.Value);
-            if (values.Count == 0)
-                duplicateValues.Remove(change.PropertyName);
-        }
-    }
+    private static ExcelImportErrorCode GetValidationErrorCode(IExcelValidationBinding binding) =>
+        binding.Kind == ExcelValidationBindingKind.MaxLength
+            ? ExcelImportErrorCode.MaxLength
+            : binding.Kind == ExcelValidationBindingKind.MaxValue
+                ? ExcelImportErrorCode.MaxValue
+                : ExcelImportErrorCode.Validation;
 
-    /// <summary>
-    /// 解析指定特性对应的校验规则。
-    /// </summary>
-    /// <param name="attribute">筛选特性。</param>
-    private IExcelValidationRule ResolveValidationRule(FilterAttributeBase attribute)
-    {
-        var binding = attribute.GetType().GetCustomAttribute<BindFilterAttribute>();
-        if (binding != null)
-        {
-            var boundRule = _validationRules.FirstOrDefault(rule => binding.RuleType.IsInstanceOfType(rule));
-            if (boundRule == null)
-                throw new InvalidOperationException($"未注册校验规则: {binding.RuleType.FullName}");
-            if (!boundRule.CanValidate(attribute))
-                throw new InvalidOperationException($"校验规则 {binding.RuleType.FullName} 不支持特性: {attribute.GetType().FullName}");
-            return boundRule;
-        }
-
-        var rule = _validationRules.FirstOrDefault(candidate => candidate.CanValidate(attribute));
-        return rule ?? throw new InvalidOperationException($"未找到特性对应的校验规则: {attribute.GetType().FullName}");
-    }
-
-    /// <summary>
-    /// 在读取数据前验证静态特性校验规则均可解析。
-    /// </summary>
-    /// <summary>
-    /// 解析配置指定的命名校验规则。
-    /// </summary>
-    /// <param name="ruleName">规则名称。</param>
-    private INamedExcelValidationRule ResolveNamedValidationRule(string ruleName)
-    {
-        var rules = _namedValidationRules.Where(rule => string.Equals(rule.Name, ruleName,
-            StringComparison.OrdinalIgnoreCase)).ToList();
-        if (rules.Count != 1)
-            throw new InvalidOperationException($"未找到唯一命名校验规则: {ruleName}");
-        return rules[0];
-    }
-
-    private IReadOnlyList<IExcelValueConverter> BindValueConverters(string converterName, Type propertyType)
-    {
-        if (string.IsNullOrWhiteSpace(converterName))
-            return _valueConverters.Where(converter => converter.CanConvert(propertyType)).ToArray();
-        var converters = _valueConverters.OfType<INamedExcelValueConverter>().Where(converter =>
-            string.Equals(converter.Name, converterName, StringComparison.OrdinalIgnoreCase)).ToList();
-        if (converters.Count != 1)
-            throw new InvalidOperationException($"未找到唯一命名值转换器: {converterName}");
-        if (!converters[0].CanConvert(propertyType))
-            throw new InvalidOperationException($"值转换器 {converterName} 不支持属性类型: {propertyType.FullName}");
-        return converters;
-    }
+    private static string GetErrorColumnKey(ExcelColumnPlan column) =>
+        column.IsDynamic ? column.Key : column.Property.Name;
 
     /// <summary>
     /// 判断行是否没有任何非空单元格。
@@ -1670,25 +1732,6 @@ internal sealed class NpoiExcelImporter : IExcelImporter
         IReadOnlyDictionary<(int Row, int Column), IReadOnlyList<PictureInfo>> imageIndex, int rowIndex) => row == null
         || (imageIndex == null || !imageIndex.Keys.Any(key => key.Row == rowIndex))
         && row.Cells.All(cell => string.IsNullOrWhiteSpace(NormalizeText(GetRawStringValue(cell), bodyWhitespace)));
-
-    /// <summary>
-    /// 单行重复校验状态变更。
-    /// </summary>
-    private sealed class DuplicateChange
-    {
-        public DuplicateChange(string propertyName, string value, bool wasPresent)
-        {
-            PropertyName = propertyName;
-            Value = value;
-            WasPresent = wasPresent;
-        }
-
-        public string PropertyName { get; }
-
-        public string Value { get; }
-
-        public bool WasPresent { get; }
-    }
 
     private sealed class SheetStructureException : InvalidOperationException
     {
