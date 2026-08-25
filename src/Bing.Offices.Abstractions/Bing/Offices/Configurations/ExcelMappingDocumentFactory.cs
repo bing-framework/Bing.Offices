@@ -18,7 +18,7 @@ public static class ExcelMappingDocumentFactory
         Create<T>(null, requestConfiguration, direction);
 
     /// <summary>
-    /// 将文档方向配置与请求级覆盖配置合并为独立快照。
+    /// 选择文档方向并创建独立快照；请求级配置由 Plan Factory 在最终编译阶段合并。
     /// </summary>
     /// <typeparam name="T">方向模型类型。</typeparam>
     /// <param name="document">规范化映射文档。</param>
@@ -31,27 +31,23 @@ public static class ExcelMappingDocumentFactory
         if (!Enum.IsDefined(typeof(MappingDirection), direction))
             throw new ArgumentOutOfRangeException(nameof(direction));
 
-        var directionConfiguration = document == null
-            ? null
-            : direction == MappingDirection.Import ? document.Import : document.Export;
-        var merged = MappingConfigurationMerger.Merge(directionConfiguration, requestConfiguration,
-            MappingSourceKind.Request);
+        var directionConfiguration = document == null ? null :
+            direction == MappingDirection.Import ? document.Import : document.Export;
         return new ExcelMappingDocument
         {
             Version = document?.Version ?? 2,
             TenantId = document?.TenantId,
             ConfigurationVersion = document?.ConfigurationVersion,
+            UseConventionFallback = document?.UseConventionFallback ?? false,
             Import = direction == MappingDirection.Import
-                ? CloneOrEmpty(merged)
-                : CloneOrEmpty(document?.Import),
+                ? CloneOrNull(directionConfiguration)
+                : CloneOrNull(document?.Import),
             Export = direction == MappingDirection.Export
-                ? CloneOrEmpty(merged)
-                : CloneOrEmpty(document?.Export)
+                ? CloneOrNull(directionConfiguration)
+                : CloneOrNull(document?.Export)
         };
     }
 
-    private static ExcelMappingConfiguration CloneOrEmpty(ExcelMappingConfiguration configuration) =>
-        configuration == null
-            ? new ExcelMappingConfiguration { SourceKind = MappingSourceKind.Convention }
-            : MappingConfigurationCloner.Clone(configuration, configuration.SourceKind);
+    private static ExcelMappingConfiguration CloneOrNull(ExcelMappingConfiguration configuration) =>
+        configuration == null ? null : MappingConfigurationCloner.Clone(configuration, configuration.SourceKind);
 }

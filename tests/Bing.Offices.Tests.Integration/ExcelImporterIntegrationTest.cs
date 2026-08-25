@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Bing.Offices.Attributes;
 using Bing.Offices.Conversions;
 using Bing.Offices.Configurations;
@@ -44,6 +45,35 @@ public class ExcelImporterIntegrationTest
         Assert.Equal(ExcelImportErrorCode.Validation, error.Code);
         Assert.Equal(nameof(IntegrationRow.Code), error.PropertyName);
         Assert.True(source.CanRead);
+    }
+
+    /// <summary>
+    /// 测试 - 通过 AddNpoi 解析的导入器应执行最大值特性校验。
+    /// </summary>
+    [Fact]
+    public void AddNpoi_MaxValueAttribute_ShouldValidateRealWorkbook()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        services.AddNpoi();
+        using var provider = services.BuildServiceProvider();
+        using var source = new MemoryStream(CreateWorkbook(workbook =>
+        {
+            var sheet = workbook.CreateSheet("Data");
+            sheet.CreateRow(0).CreateCell(0).SetCellValue("Amount");
+            sheet.CreateRow(1).CreateCell(0).SetCellValue("11");
+        }));
+
+        // Act
+        var result = provider.GetRequiredService<IExcelImporter>().Import(source,
+            ExcelImport.Workbook<IntegrationWorkbook<MaxValueIntegrationRow>>(
+                builder => builder.Sheet("Data", root => root.Rows)));
+
+        // Assert
+        Assert.Empty(result.Workbook.Rows);
+        var error = Assert.Single(result.Errors);
+        Assert.Equal(ExcelImportErrorCode.MaxValue, error.Code);
+        Assert.Equal(nameof(MaxValueIntegrationRow.Amount), error.PropertyName);
     }
 
     /// <summary>
@@ -112,8 +142,9 @@ public class ExcelImporterIntegrationTest
         services.AddSingleton<INamedExcelValidationRule, NamedStartsWithValidationRule>();
         using var provider = services.BuildServiceProvider();
         using var source = new MemoryStream(CreateWorkbook());
-        var configuration = ExcelMappingConfigurationLoader.FromJson(
+        var document = ExcelMappingConfigurationLoader.FromJsonDocument(
             "{\"version\":2,\"import\":{\"columns\":[{\"propertyName\":\"Code\",\"validationRuleNames\":[\"starts-with-ok\"]}]}}");
+        var configuration = document.Import;
 
         // Act
         var result = provider.GetRequiredService<IExcelImporter>().Import(source,
@@ -191,6 +222,34 @@ public class ExcelImporterIntegrationTest
     }
 
     /// <summary>
+    /// 测试 - 导出写入过程中取消时应停止后续写入并保持调用方目标流打开。
+    /// </summary>
+    [Fact]
+    public void AddNpoi_MidWriteCancelledExport_ShouldStopWritingAndPreserveDestination()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        services.AddNpoi();
+        using var provider = services.BuildServiceProvider();
+        using var cancellationTokenSource = new System.Threading.CancellationTokenSource();
+        using var destination = new CancelAfterFirstWriteStream(cancellationTokenSource);
+        var request = ExcelExport.Workbook(builder => builder.AddSheet("Data",
+            Enumerable.Range(0, 20).Select(index => new FileIntegrationRow
+            {
+                Name = $"取消-{index}", Count = index
+            })));
+
+        // Act
+        var action = () => provider.GetRequiredService<IExcelExporter>().Export(request, destination,
+            cancellationTokenSource.Token);
+
+        // Assert
+        Assert.Throws<OperationCanceledException>(action);
+        Assert.Equal(1, destination.WriteCount);
+        Assert.True(destination.CanWrite);
+    }
+
+    /// <summary>
     /// 测试 - 通过 DI 解析的导入器应支持不可寻址 XLSX 流、保持调用方流打开，并在预取消时不读取输入。
     /// </summary>
     [Fact]
@@ -238,7 +297,7 @@ public class ExcelImporterIntegrationTest
         var profile = ExcelMapping.For<MappingIntegrationRow>()
             .Property(row => row.Code).HasTitle("业务编码").And()
             .Build();
-        var xmlConfiguration = ExcelMappingConfigurationLoader.FromXml(
+        var xmlConfiguration = ExcelMappingConfigurationLoader.FromXmlDocument(
             "<ExcelMappingDocument><Version>2</Version><Import><Columns><ExcelColumnConfiguration><PropertyName>Code</PropertyName><Title>业务编码</Title></ExcelColumnConfiguration></Columns></Import></ExcelMappingDocument>");
 
         // Act
@@ -268,15 +327,15 @@ public class ExcelImporterIntegrationTest
         using var destination = new MemoryStream();
 
         // Act
-        var configuration = provider.GetRequiredService<IExcelMappingConfigurationLoader>().FromJson(
+        var configuration = provider.GetRequiredService<IExcelMappingConfigurationLoader>().FromJsonDocument(
             "{\"version\":2,\"import\":{\"columns\":[{\"propertyName\":\"Code\",\"converterName\":\"integration-code\"}]},\"export\":{\"columns\":[]}}");
         provider.GetRequiredService<ICsvExporter>().Export(new[]
         {
             new ConvertedIntegrationRow { Code = new IntegrationCode("42") }
-        }, destination, new CsvExportOptions<ConvertedIntegrationRow> { MappingConfiguration = configuration });
+        }, destination, new CsvExportOptions<ConvertedIntegrationRow> { MappingDocument = configuration });
         destination.Position = 0;
         var result = provider.GetRequiredService<ICsvImporter>().Import<ConvertedIntegrationRow>(destination,
-            new CsvImportOptions<ConvertedIntegrationRow> { MappingConfiguration = configuration });
+            new CsvImportOptions<ConvertedIntegrationRow> { MappingDocument = configuration });
 
         // Assert
         Assert.Empty(result.Errors);
@@ -299,12 +358,17 @@ public class ExcelImporterIntegrationTest
         public List<T> Rows { get; } = new();
     }
 
-    private static byte[] CreateWorkbook()
+    private static byte[] CreateWorkbook(Action<XSSFWorkbook> configure = null)
     {
         using var workbook = new XSSFWorkbook();
-        var sheet = workbook.CreateSheet("Data");
-        sheet.CreateRow(0).CreateCell(0).SetCellValue(nameof(IntegrationRow.Code));
-        sheet.CreateRow(1).CreateCell(0).SetCellValue("invalid");
+        if (configure == null)
+        {
+            var sheet = workbook.CreateSheet("Data");
+            sheet.CreateRow(0).CreateCell(0).SetCellValue(nameof(IntegrationRow.Code));
+            sheet.CreateRow(1).CreateCell(0).SetCellValue("invalid");
+        }
+        else
+            configure(workbook);
         using var destination = new MemoryStream();
         workbook.Write(destination, false);
         return destination.ToArray();
@@ -331,6 +395,18 @@ public class ExcelImporterIntegrationTest
         /// 业务编码。
         /// </summary>
         public IntegrationCode Code { get; set; }
+    }
+
+    /// <summary>
+    /// 包含最大值校验的集成测试行模型。
+    /// </summary>
+    private class MaxValueIntegrationRow
+    {
+        /// <summary>
+        /// 金额。
+        /// </summary>
+        [ExcelMaxValue(10)]
+        public string Amount { get; set; }
     }
 
     /// <summary>
@@ -520,6 +596,71 @@ public class ExcelImporterIntegrationTest
 
         /// <inheritdoc />
         public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        /// <inheritdoc />
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+                _inner.Dispose();
+            base.Dispose(disposing);
+        }
+    }
+
+    /// <summary>
+    /// 在首次底层写入完成后取消令牌，用于确定性验证写入边界取消语义。
+    /// </summary>
+    private sealed class CancelAfterFirstWriteStream : Stream
+    {
+        private readonly MemoryStream _inner = new();
+        private readonly System.Threading.CancellationTokenSource _cancellationTokenSource;
+
+        /// <summary>
+        /// 初始化一个<see cref="CancelAfterFirstWriteStream"/>类型的实例。
+        /// </summary>
+        /// <param name="cancellationTokenSource">用于在首次写入后取消的令牌源。</param>
+        public CancelAfterFirstWriteStream(System.Threading.CancellationTokenSource cancellationTokenSource) =>
+            _cancellationTokenSource = cancellationTokenSource;
+
+        /// <summary>
+        /// 获取底层写入次数。
+        /// </summary>
+        public int WriteCount { get; private set; }
+
+        /// <inheritdoc />
+        public override bool CanRead => true;
+
+        /// <inheritdoc />
+        public override bool CanSeek => true;
+
+        /// <inheritdoc />
+        public override bool CanWrite => true;
+
+        /// <inheritdoc />
+        public override long Length => _inner.Length;
+
+        /// <inheritdoc />
+        public override long Position { get => _inner.Position; set => _inner.Position = value; }
+
+        /// <inheritdoc />
+        public override void Flush() => _inner.Flush();
+
+        /// <inheritdoc />
+        public override int Read(byte[] buffer, int offset, int count) => _inner.Read(buffer, offset, count);
+
+        /// <inheritdoc />
+        public override long Seek(long offset, SeekOrigin origin) => _inner.Seek(offset, origin);
+
+        /// <inheritdoc />
+        public override void SetLength(long value) => _inner.SetLength(value);
+
+        /// <inheritdoc />
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            WriteCount++;
+            _inner.Write(buffer, offset, count);
+            if (WriteCount == 1)
+                _cancellationTokenSource.Cancel();
+        }
 
         /// <inheritdoc />
         protected override void Dispose(bool disposing)

@@ -1,5 +1,11 @@
 # Excel 高级导入导出
 
+## Excel 主路径
+
+导入和导出统一使用 Workbook Request。Mapping 的最终优先级为 `Attribute < Profile < JSON/XML Document < Request Fluent`，仅 Plan compiler 完成最终合并；JSON/XML 保留为 Document 级 API。
+
+导出模板写入默认使用 `PreserveTemplate`，保留目标单元格的模板样式和批注；需要清除模板样式和批注时，显式选择 `ReplaceTemplate`。NPOI 管线是 DOM 管线，不承诺 streaming 或零 GC。
+
 生产 API 以 Workbook Request 为中心，支持：
 
 - 异构多 Sheet 导出和导入

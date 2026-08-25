@@ -6,7 +6,6 @@ using System.Linq;
 using System.Reflection;
 using System.Collections.ObjectModel;
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using Bing.Offices.Attributes;
 using Bing.Offices.Conversions;
@@ -21,7 +20,7 @@ namespace Bing.Offices.Mappings;
 /// </summary>
 public sealed class ExcelMappingPlanFactory : IExcelMappingPlanFactory
 {
-    private readonly Configurations.IMappingProfileRegistry _profileRegistry;
+    private readonly Configurations.IMappingProfileResolver _profileRegistry;
     private readonly Configurations.ExcelModelAliasRegistry _modelAliases;
     private readonly IReadOnlyList<IExcelValueConverter> _valueConverters;
     private readonly IReadOnlyList<IExcelValidationRule> _validationRules;
@@ -35,7 +34,7 @@ public sealed class ExcelMappingPlanFactory : IExcelMappingPlanFactory
         IEnumerable<IExcelValidationRule> validationRules = null,
         IEnumerable<INamedExcelValidationRule> namedValidationRules = null,
         int cacheCapacity = 256,
-        Configurations.IMappingProfileRegistry profileRegistry = null,
+        Configurations.IMappingProfileResolver profileRegistry = null,
         Configurations.ExcelModelAliasRegistry modelAliases = null)
     {
         _profileRegistry = profileRegistry;
@@ -52,9 +51,39 @@ public sealed class ExcelMappingPlanFactory : IExcelMappingPlanFactory
     public IExcelMappingPlan Create<T>(ExcelMappingDocument document, MappingDirection direction)
         where T : class, new()
     {
+        return Create<T>(document, null, direction);
+    }
+
+    /// <inheritdoc />
+    public IExcelMappingWorkbookPlan CreateWorkbook<T>(ExcelMappingDocument document, MappingDirection direction,
+        IReadOnlyList<string> sheetNames) where T : class, new()
+    {
+        if (sheetNames == null || sheetNames.Count == 0)
+            throw new ArgumentException("Workbook 至少需要一个 Sheet。", nameof(sheetNames));
+        var mapping = Create<T>(document, direction);
+        return new ExcelMappingWorkbookPlan(sheetNames.Select(name =>
+            new ExcelMappingSheetPlan(name, mapping)).ToArray());
+    }
+
+    /// <inheritdoc />
+    public IExcelMappingWorkbookPlan CreateWorkbook<T>(ExcelMappingDocument document,
+        ExcelMappingConfiguration requestConfiguration, MappingDirection direction,
+        IReadOnlyList<string> sheetNames) where T : class, new()
+    {
+        if (sheetNames == null || sheetNames.Count == 0)
+            throw new ArgumentException("Workbook 至少需要一个 Sheet。", nameof(sheetNames));
+        var mapping = Create<T>(document, requestConfiguration, direction);
+        return new ExcelMappingWorkbookPlan(sheetNames.Select(name =>
+            new ExcelMappingSheetPlan(name, mapping)).ToArray());
+    }
+
+    /// <inheritdoc />
+    public IExcelMappingPlan Create<T>(ExcelMappingDocument document, ExcelMappingConfiguration configuration,
+        MappingDirection direction) where T : class, new()
+    {
         if (document == null)
             throw new ArgumentNullException(nameof(document));
-        var resolved = ResolveDocument<T>(document, direction);
+        var resolved = ResolveDocument<T>(document, configuration, direction);
         var key = CreateCacheKey<T>(document, direction, resolved.Configuration);
         if (_planCache.TryGetValue(key, out var existing))
             return existing.Value;
@@ -70,27 +99,8 @@ public sealed class ExcelMappingPlanFactory : IExcelMappingPlanFactory
         return cached.Value;
     }
 
-    /// <inheritdoc />
-    public IExcelMappingWorkbookPlan CreateWorkbook<T>(ExcelMappingDocument document, MappingDirection direction,
-        IReadOnlyList<string> sheetNames) where T : class, new()
-    {
-        if (sheetNames == null || sheetNames.Count == 0)
-            throw new ArgumentException("Workbook 至少需要一个 Sheet。", nameof(sheetNames));
-        var mapping = Create<T>(document, direction);
-        return new ExcelMappingWorkbookPlan(sheetNames.Select(name =>
-            new ExcelMappingSheetPlan(name, mapping)).ToArray());
-    }
-
-    /// <inheritdoc />
-    public IExcelMappingPlan Create<T>(ExcelMappingDocument document, ExcelMappingConfiguration configuration,
-        MappingDirection direction) where T : class, new()
-    {
-        if (document == null)
-            throw new ArgumentNullException(nameof(document));
-        return Create<T>(ExcelMappingDocumentFactory.Create<T>(document, configuration, direction), direction);
-    }
-
-    private ResolvedMapping ResolveDocument<T>(ExcelMappingDocument document, MappingDirection direction)
+    private ResolvedMapping ResolveDocument<T>(ExcelMappingDocument document,
+        ExcelMappingConfiguration requestConfiguration, MappingDirection direction)
         where T : class, new()
     {
         if (document == null)
@@ -99,6 +109,10 @@ public sealed class ExcelMappingPlanFactory : IExcelMappingPlanFactory
             throw new ArgumentOutOfRangeException(nameof(direction));
         var normalized = ExcelMappingDocumentFactory.Create<T>(document, null, direction);
         var directionConfiguration = direction == MappingDirection.Import ? normalized.Import : normalized.Export;
+        if (directionConfiguration == null && requestConfiguration == null && !document.UseConventionFallback)
+            throw new InvalidOperationException(
+                $"映射文档未提供方向配置: 文档={typeof(ExcelMappingDocument).Name}，方向={direction}，模型={typeof(T).FullName}。"
+                + "如需约定映射，请显式设置 UseConventionFallback=true。");
         var profileName = directionConfiguration?.Profile;
         var modelAlias = directionConfiguration?.ModelAlias;
         if (_modelAliases != null && _modelAliases.HasRegistrations
@@ -124,6 +138,9 @@ public sealed class ExcelMappingPlanFactory : IExcelMappingPlanFactory
             ? directionConfiguration
             : MappingConfigurationMerger.Merge(profileDescriptor.Configuration,
                 directionConfiguration, MappingSourceKind.Document);
+        if (requestConfiguration != null)
+            configuration = MappingConfigurationMerger.Merge(configuration, requestConfiguration,
+                MappingSourceKind.Request);
         return new ResolvedMapping(configuration, profileName, modelAlias, profileDescriptor == null);
     }
 
@@ -304,7 +321,7 @@ public sealed class ExcelMappingPlanFactory : IExcelMappingPlanFactory
     private static string CreateCacheKey<T>(ExcelMappingDocument document, MappingDirection direction,
         ExcelMappingConfiguration configuration) where T : class, new()
     {
-        var payload = JsonSerializer.Serialize(new
+        var payload = JsonSerializer.SerializeToUtf8Bytes(new
         {
             document.TenantId,
             ModelType = typeof(T).AssemblyQualifiedName,
@@ -313,7 +330,7 @@ public sealed class ExcelMappingPlanFactory : IExcelMappingPlanFactory
             Configuration = configuration
         }, new JsonSerializerOptions { IgnoreNullValues = false });
         using var sha256 = SHA256.Create();
-        return Convert.ToBase64String(sha256.ComputeHash(Encoding.UTF8.GetBytes(payload)));
+        return Convert.ToBase64String(sha256.ComputeHash(payload));
     }
 
     private sealed class ResolvedMapping

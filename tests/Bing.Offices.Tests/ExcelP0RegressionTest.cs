@@ -8,8 +8,10 @@ using Bing.Offices.Configurations;
 using Bing.Offices.Exports;
 using Bing.Offices.Imports;
 using Bing.Offices.Npoi.Exports;
+using Bing.Offices.Extensions;
 using Bing.Offices.Npoi.Extensions;
 using Bing.Offices.Npoi.Imports;
+using Microsoft.Extensions.DependencyInjection;
 using Bing.Offices.Validations;
 using NPOI.SS.UserModel;
 using NPOI.SS.Util;
@@ -23,6 +25,76 @@ namespace Bing.Offices.Tests;
 /// </summary>
 public sealed class ExcelP0RegressionTest
 {
+    /// <summary>
+    /// 测试 - 四种 ValidationMode 应只执行声明启用的校验来源，并保持 Workbook 校验先于配置校验。
+    /// </summary>
+    [Theory]
+    [InlineData(ExcelImportValidationMode.Disabled, 0, 0)]
+    [InlineData(ExcelImportValidationMode.ConfiguredRules, 1, 0)]
+    [InlineData(ExcelImportValidationMode.WorkbookRules, 0, 1)]
+    [InlineData(ExcelImportValidationMode.ConfiguredAndWorkbook, 0, 1)]
+    public void Import_ValidationMode_ShouldSelectConfiguredAndWorkbookRules(
+        ExcelImportValidationMode mode, int configuredErrorCount, int workbookErrorCount)
+    {
+        // Arrange
+        using var source = new MemoryStream(CreateWorkbook(workbook =>
+        {
+            var sheet = workbook.CreateSheet("Data");
+            sheet.CreateRow(0).CreateCell(0).SetCellValue("Amount");
+            sheet.CreateRow(1).CreateCell(0).SetCellValue("11");
+            var helper = sheet.GetDataValidationHelper();
+            var constraint = helper.CreateExplicitListConstraint(new[] { "10" });
+            sheet.AddValidationData(helper.CreateValidation(constraint, new CellRangeAddressList(1, 1, 0, 0)));
+        }));
+        var request = ExcelImport.Workbook<RowsWorkbook<ValidationModeRow>>(builder => builder
+            .ValidationMode(mode)
+            .Sheet("Data", root => root.Rows, sheet => sheet.Validate(ValidateMode.Continue)));
+
+        // Act
+        var result = new NpoiExcelImporter().Import(source, request);
+
+        // Assert
+        Assert.Equal(configuredErrorCount + workbookErrorCount, result.Errors.Count);
+        Assert.Equal(configuredErrorCount == 0 && workbookErrorCount == 0, result.IsSuccess);
+        Assert.Equal(configuredErrorCount, result.Errors.Count(error => error.Code == ExcelImportErrorCode.MaxValue));
+        Assert.Equal(workbookErrorCount,
+            result.Errors.Count(error => error.Code == ExcelImportErrorCode.WorkbookValidation));
+        if (configuredErrorCount == 0 && workbookErrorCount == 1)
+            Assert.Equal(ExcelImportErrorCode.WorkbookValidation, Assert.Single(result.Errors).Code);
+    }
+
+    /// <summary>
+    /// 测试 - Workbook 校验失败的行即使使用 Continue，也不应继续转换并产生额外错误。
+    /// </summary>
+    [Theory]
+    [InlineData(ExcelImportValidationMode.WorkbookRules)]
+    [InlineData(ExcelImportValidationMode.ConfiguredAndWorkbook)]
+    public void Import_WorkbookValidationFailure_Continue_ShouldSkipMaterialization(
+        ExcelImportValidationMode validationMode)
+    {
+        // Arrange
+        using var source = new MemoryStream(CreateWorkbook(workbook =>
+        {
+            var sheet = workbook.CreateSheet("Data");
+            sheet.CreateRow(0).CreateCell(0).SetCellValue(nameof(ConversionRow.Count));
+            sheet.CreateRow(1).CreateCell(0).SetCellValue("not-a-number");
+            var helper = sheet.GetDataValidationHelper();
+            var constraint = helper.CreateExplicitListConstraint(new[] { "10" });
+            sheet.AddValidationData(helper.CreateValidation(constraint, new CellRangeAddressList(1, 1, 0, 0)));
+        }));
+        var request = ExcelImport.Workbook<RowsWorkbook<ConversionRow>>(builder => builder
+            .ValidationMode(validationMode)
+            .Sheet("Data", root => root.Rows, sheet => sheet.Validate(ValidateMode.Continue)));
+
+        // Act
+        var result = new NpoiExcelImporter().Import(source, request);
+
+        // Assert
+        Assert.Empty(result.Workbook.Rows);
+        var error = Assert.Single(result.Errors);
+        Assert.Equal(ExcelImportErrorCode.WorkbookValidation, error.Code);
+    }
+
     /// <summary>
     /// 测试 - Attribute 显示值映射为整数时，应先转换为目标枚举再写入属性。
     /// </summary>
@@ -358,6 +430,45 @@ public sealed class ExcelP0RegressionTest
         Assert.Equal("__SourceSheet", outputSheet.GetRow(0).GetCell(2).StringCellValue);
         Assert.Equal("__Errors", outputSheet.GetRow(0).GetCell(5).StringCellValue);
         Assert.NotNull(output.GetSheet("_ImportErrors"));
+    }
+
+    /// <summary>
+    /// 测试 - ErrorRowsOnly 按 Sheet 索引解析时应使用实际 Sheet 的非零表头行，而不是源首行。
+    /// </summary>
+    [Fact]
+    public void Import_ErrorRowsOnly_ByIndex_ShouldUseResolvedSheetHeader()
+    {
+        // Arrange
+        using var source = new MemoryStream(CreateWorkbook(workbook =>
+        {
+            var first = workbook.CreateSheet("Cover");
+            first.CreateRow(0).CreateCell(0).SetCellValue("封面");
+            var data = workbook.CreateSheet("Data");
+            data.CreateRow(0).CreateCell(0).SetCellValue("错误的首行");
+            data.CreateRow(2).CreateCell(0).SetCellValue("Count");
+            data.CreateRow(3).CreateCell(0).SetCellValue("invalid");
+        }));
+        using var failure = new MemoryStream();
+        var request = ExcelImport.Workbook<FailureWorkbook>(builder => builder
+            .FailureWorkbook(new ExcelImportFailureOptions
+            {
+                Mode = ExcelImportFailureWorkbookMode.ErrorRowsOnly,
+                Destination = failure
+            })
+            .Sheet(ExcelSheetSelector.ByIndex(1), root => root.Rows,
+                sheet => sheet.HeaderRowIndex(2).DataRowStartIndex(3)));
+
+        // Act
+        var result = new NpoiExcelImporter().Import(source, request);
+
+        // Assert
+        Assert.False(result.IsSuccess);
+        failure.Position = 0;
+        using var output = WorkbookFactory.Create(failure);
+        var data = output.GetSheet("Data");
+        Assert.Equal("Count", data.GetRow(0).GetCell(0).StringCellValue);
+        Assert.Equal("invalid", data.GetRow(1).GetCell(0).StringCellValue);
+        Assert.Equal("Data", data.GetRow(1).GetCell(1).StringCellValue);
     }
 
     /// <summary>
@@ -777,6 +888,12 @@ public sealed class ExcelP0RegressionTest
     private sealed class ValidationWorkbook
     {
         public List<ValidationRow> Rows { get; } = new List<ValidationRow>();
+    }
+
+    private sealed class ValidationModeRow
+    {
+        [ExcelMaxValue(10)]
+        public string Amount { get; set; }
     }
 
     private sealed class ValidationRow

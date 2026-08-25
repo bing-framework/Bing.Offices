@@ -1,9 +1,14 @@
 ﻿using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Jobs;
 using System.Diagnostics;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using Bing.Offices.Configurations;
 using Bing.Offices.Mappings;
 using Bing.Offices.Providers;
-using Bing.Offices.Npoi.Extensions;
+using Bing.Offices.Validations;
+using Bing.Offices.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using System.Threading;
 
@@ -13,13 +18,12 @@ namespace Bing.Offices.Benchmarks;
 /// Mapping、Unique、配置解析和 Profile 注册基准矩阵。
 /// </summary>
 [MemoryDiagnoser]
+[SimpleJob(launchCount: 1, warmupCount: 2, iterationCount: 3)]
 public class MappingValidationBenchmarks
 {
-    private const long LohCeilingBytes = 512L * 1024 * 1024;
     private const long PeakWorkingSetCeilingBytes = 1024L * 1024 * 1024;
-    private static int _lohEvidenceWritten;
     private static int _workingSetEvidenceWritten;
-    private readonly ExcelMappingPlanFactory _planFactory = new();
+    private ExcelMappingPlanFactory _planFactory = null!;
     private ExcelMappingConfiguration _configuration = null!;
     private ExcelMappingDocument _document = null!;
     private string _json = string.Empty;
@@ -28,7 +32,7 @@ public class MappingValidationBenchmarks
     private string _xmlV1 = string.Empty;
     private ExcelMappingConfiguration _multiRuleConfiguration = null!;
     private ExcelMappingConfiguration _profileConfiguration = null!;
-    private List<byte[]> _resourcePayload = new();
+    private JsonSerializerOptions _cacheKeySerializerOptions = null!;
 
     /// <summary>动态计划构建次数。</summary>
     [Params(100, 500)]
@@ -52,6 +56,11 @@ public class MappingValidationBenchmarks
     [GlobalSetup]
     public void Setup()
     {
+        var namedRules = Enumerable.Range(0, 10000)
+            .Select(index => (INamedExcelValidationRule)new BenchmarkNamedValidationRule($"rule-{index}"))
+            .ToArray();
+        _planFactory = new ExcelMappingPlanFactory(namedValidationRules: namedRules);
+        _cacheKeySerializerOptions = new JsonSerializerOptions { IgnoreNullValues = false };
         _configuration = new ExcelMappingConfiguration
         {
             Columns =
@@ -91,18 +100,35 @@ public class MappingValidationBenchmarks
 
     /// <summary>测量重复构建固定方向计划。</summary>
     [Benchmark]
-    public int DynamicPlanBuild()
+    public int DynamicPlanBuildCold()
     {
         var count = 0;
         for (var index = 0; index < PlanBuildCount; index++)
-            count += _planFactory.Create<BenchmarkRow>(new ExcelMappingDocument
-            {
-                Import = new ExcelMappingConfiguration
-                {
-                    Profile = "benchmarks",
-                    Columns = _profileConfiguration.Columns
-                }
-            }, MappingDirection.Import).Columns.Count;
+        {
+            var factory = CreatePlanFactory();
+            count += factory.Create<BenchmarkRow>(CreateDynamicDocument(index), MappingDirection.Import).Columns.Count;
+        }
+        return count;
+    }
+
+    /// <summary>测量相同配置命中计划缓存时的构建开销。</summary>
+    [Benchmark]
+    public int DynamicPlanBuildCacheHit()
+    {
+        var document = CreateDynamicDocument(0);
+        var count = _planFactory.Create<BenchmarkRow>(document, MappingDirection.Import).Columns.Count;
+        for (var index = 1; index < PlanBuildCount; index++)
+            count += _planFactory.Create<BenchmarkRow>(CreateDynamicDocument(0), MappingDirection.Import).Columns.Count;
+        return count;
+    }
+
+    /// <summary>测量每次配置变化导致计划缓存未命中时的构建开销。</summary>
+    [Benchmark]
+    public int DynamicPlanBuildCacheMiss()
+    {
+        var count = 0;
+        for (var index = 0; index < PlanBuildCount; index++)
+            count += CreatePlan(index, true).Columns.Count;
         return count;
     }
 
@@ -163,6 +189,23 @@ public class MappingValidationBenchmarks
         return count;
     }
 
+    /// <summary>测量旧式 JSON 字符串转 UTF-8 的缓存键序列化路径。</summary>
+    [Benchmark]
+    public string CacheKeyStringToUtf8()
+    {
+        var json = JsonSerializer.Serialize(CreateCacheKeyPayload(), _cacheKeySerializerOptions);
+        var payload = Encoding.UTF8.GetBytes(json);
+        return Convert.ToBase64String(SHA256.HashData(payload));
+    }
+
+    /// <summary>测量直接序列化 UTF-8 字节的缓存键路径。</summary>
+    [Benchmark]
+    public string CacheKeyUtf8Bytes()
+    {
+        var payload = JsonSerializer.SerializeToUtf8Bytes(CreateCacheKeyPayload(), _cacheKeySerializerOptions);
+        return Convert.ToBase64String(SHA256.HashData(payload));
+    }
+
     /// <summary>读取当前进程已观测峰值工作集，供资源证据采集。</summary>
     [Benchmark]
     public long PeakWorkingSetBytes()
@@ -172,32 +215,35 @@ public class MappingValidationBenchmarks
         return value;
     }
 
-    /// <summary>测量当前 Unique 行列场景下保持存活的大对象负载及 retained LOH 大小。</summary>
-    [Benchmark]
-    public long LohSizeBytes()
-    {
-        const int largeObjectBytes = 90 * 1024;
-        var payloadCount = Math.Max(1, UniqueRowCount / 1000) * UniqueColumnCount;
-        _resourcePayload = Enumerable.Range(0, payloadCount)
-            .Select(_ => new byte[largeObjectBytes]).ToList();
-        GC.Collect(2, GCCollectionMode.Forced, true, true);
-        var payloadBytes = (long)_resourcePayload.Count * largeObjectBytes;
-        var value = Math.Max(payloadBytes, GC.GetGCMemoryInfo().GenerationInfo[3].SizeAfterBytes);
-        EnsureResourceCeiling("LohRetainedBytes", value, LohCeilingBytes);
-        GC.KeepAlive(_resourcePayload);
-        return value;
-    }
-
     private static void EnsureResourceCeiling(string metric, long value, long ceiling)
     {
         if (value > ceiling)
             throw new InvalidOperationException($"RESOURCE_CEILING failed metric={metric} value={value} ceiling={ceiling}");
-        var shouldWrite = metric == "LohSizeBytes"
-            ? Interlocked.Exchange(ref _lohEvidenceWritten, 1) == 0
-            : Interlocked.Exchange(ref _workingSetEvidenceWritten, 1) == 0;
+        var shouldWrite = Interlocked.Exchange(ref _workingSetEvidenceWritten, 1) == 0;
         if (shouldWrite)
             Console.WriteLine($"RESOURCE_METRIC metric={metric} value={value} ceiling={ceiling} status=passed");
     }
+
+    private IExcelMappingPlan CreatePlan(int index, bool uniqueConfiguration)
+    {
+        var document = CreateDynamicDocument(uniqueConfiguration ? index : 0);
+        return _planFactory.Create<BenchmarkRow>(document, MappingDirection.Import);
+    }
+
+    private ExcelMappingPlanFactory CreatePlanFactory() => new(namedValidationRules:
+        Enumerable.Range(0, 10000)
+            .Select(index => (INamedExcelValidationRule)new BenchmarkNamedValidationRule($"rule-{index}"))
+            .ToArray());
+
+    private ExcelMappingDocument CreateDynamicDocument(int index) => new()
+    {
+        TenantId = $"tenant-{index}",
+        Import = new ExcelMappingConfiguration
+        {
+            Profile = "benchmarks",
+            Columns = _profileConfiguration.Columns
+        }
+    };
 
     /// <summary>测量 Unique committed/pending journal 的线性插入。</summary>
     [Benchmark]
@@ -247,12 +293,30 @@ public class MappingValidationBenchmarks
         Export = _document.Export
     };
 
+    private object CreateCacheKeyPayload() => new
+    {
+        _document.TenantId,
+        ModelType = typeof(BenchmarkRow).AssemblyQualifiedName,
+        Direction = MappingDirection.Import,
+        _document.ConfigurationVersion,
+        Configuration = _configuration
+    };
+
     private sealed class BenchmarkProfile : IImportMappingProfile<BenchmarkRow>
     {
         public void Configure(ImportMappingBuilder<BenchmarkRow> setting)
         {
             setting.Property(row => row.Code).HasHeader("编码");
         }
+    }
+
+    private sealed class BenchmarkNamedValidationRule : INamedExcelValidationRule
+    {
+        public BenchmarkNamedValidationRule(string name) => Name = name;
+
+        public string Name { get; }
+        public string ErrorMessage => "benchmark";
+        public bool Validate(ExcelValidationContext context) => true;
     }
 
     private sealed class BenchmarkRow

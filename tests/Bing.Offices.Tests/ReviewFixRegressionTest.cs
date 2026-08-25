@@ -8,6 +8,7 @@ using Bing.Offices.Imports;
 using Bing.Offices.Mappings;
 using Bing.Offices.Providers;
 using Bing.Offices.Validations;
+using Bing.Offices.Extensions;
 using Bing.Offices.Npoi.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;

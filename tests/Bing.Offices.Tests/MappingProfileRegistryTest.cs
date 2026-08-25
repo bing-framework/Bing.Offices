@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using Bing.Offices.Configurations;
+using Bing.Offices.Extensions;
 using Bing.Offices.Npoi.Extensions;
 using Bing.Offices.ProfileFixtures;
 using Microsoft.Extensions.DependencyInjection;
@@ -36,6 +38,28 @@ public class MappingProfileRegistryTest
         // Assert
         Assert.Equal("导入", import.Configuration.Columns[0].Title);
         Assert.Equal("导出", export.Configuration.Columns[0].Title);
+    }
+
+    /// <summary>
+    /// 测试 - 显式稳定 Profile 名称应替代 FullName 参与方向解析，并可通过只读 Resolver 消费。
+    /// </summary>
+    [Fact]
+    public void ExplicitRegistration_WithStableName_ShouldResolveThroughReadOnlyResolver()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        services.AddMappingProfile<ExplicitProfile>("orders");
+
+        // Act
+        using var provider = services.BuildServiceProvider();
+        var resolver = provider.GetRequiredService<IMappingProfileResolver>();
+
+        // Assert
+        Assert.True(resolver.TryGetDescriptor("orders", MappingDirection.Import,
+            typeof(ImportModel), out var descriptor));
+        Assert.Equal("orders", descriptor.Name);
+        Assert.False(resolver.TryGetDescriptor(typeof(ExplicitProfile).FullName,
+            MappingDirection.Import, typeof(ImportModel), out _));
     }
 
     /// <summary>
@@ -248,6 +272,47 @@ public class MappingProfileRegistryTest
         Assert.Throws<InvalidOperationException>(action);
     }
 
+    /// <summary>
+    /// 测试 - 程序集部分类型加载失败时，应继续注册可加载的 Profile 并保留诊断上下文。
+    /// </summary>
+    [Fact]
+    public void AssemblyScan_WhenSomeTypesFailToLoad_ShouldKeepLoadableProfiles()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        var assembly = new ThrowingAssembly(new[] { typeof(ScannedProfile), null },
+            new Exception[] { new TypeLoadException("missing dependency") });
+
+        // Act
+        services.AddMappingProfiles(assembly);
+        using var provider = services.BuildServiceProvider();
+        var registry = provider.GetRequiredService<IMappingProfileRegistry>();
+
+        // Assert
+        Assert.True(registry.TryGetDescriptor(typeof(ScannedProfile).FullName,
+            MappingDirection.Import, typeof(ImportModel), out _));
+    }
+
+    /// <summary>
+    /// 测试 - 程序集没有任何可加载类型时，应抛出包含加载诊断的异常。
+    /// </summary>
+    [Fact]
+    public void AssemblyScan_WhenNoTypesCanLoad_ShouldThrowWithDiagnostics()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        var assembly = new ThrowingAssembly(new Type[] { null },
+            new Exception[] { new TypeLoadException("all types unavailable") });
+
+        // Act
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            services.AddMappingProfiles(assembly));
+
+        // Assert
+        Assert.Contains("all types unavailable", exception.Message);
+        Assert.IsType<ReflectionTypeLoadException>(exception.InnerException);
+    }
+
     private static ServiceProvider BuildProvider(params System.Reflection.Assembly[] assemblies)
     {
         var services = new ServiceCollection();
@@ -336,5 +401,21 @@ public class MappingProfileRegistryTest
     public sealed class ExportModel
     {
         public string Label { get; set; }
+    }
+
+    private sealed class ThrowingAssembly : Assembly
+    {
+        private readonly Type[] _types;
+        private readonly Exception[] _loaderExceptions;
+
+        public ThrowingAssembly(Type[] types, Exception[] loaderExceptions)
+        {
+            _types = types;
+            _loaderExceptions = loaderExceptions;
+        }
+
+        public override string FullName => "Bing.Offices.Tests.ThrowingAssembly";
+
+        public override Type[] GetTypes() => throw new ReflectionTypeLoadException(_types, _loaderExceptions);
     }
 }

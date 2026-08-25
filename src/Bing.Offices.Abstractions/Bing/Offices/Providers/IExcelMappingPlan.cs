@@ -118,7 +118,17 @@ public interface IExcelMappingPlanFactory
     IExcelMappingPlan Create<T>(Configurations.ExcelMappingDocument document,
         Configurations.MappingDirection direction) where T : class, new();
 
+    /// <summary>从文档和请求级配置构建指定方向的最终映射计划。</summary>
+    IExcelMappingPlan Create<T>(Configurations.ExcelMappingDocument document,
+        Configurations.ExcelMappingConfiguration requestConfiguration,
+        Configurations.MappingDirection direction) where T : class, new();
+
     /// <summary>从规范化文档构建包含 Sheet 视图的 Workbook 计划。</summary>
     IExcelMappingWorkbookPlan CreateWorkbook<T>(Configurations.ExcelMappingDocument document,
+        Configurations.MappingDirection direction, IReadOnlyList<string> sheetNames) where T : class, new();
+
+    /// <summary>从文档和请求级配置构建包含 Sheet 视图的最终 Workbook 计划。</summary>
+    IExcelMappingWorkbookPlan CreateWorkbook<T>(Configurations.ExcelMappingDocument document,
+        Configurations.ExcelMappingConfiguration requestConfiguration,
         Configurations.MappingDirection direction, IReadOnlyList<string> sheetNames) where T : class, new();
 }

@@ -53,7 +53,8 @@ public sealed class ExcelSheetExportRequest
         IReadOnlyList<ExcelHeaderRow> headerRows, Configurations.ExcelMappingConfiguration mappingConfiguration,
         Configurations.ExcelMappingDocument mappingDocument,
         System.Globalization.CultureInfo culture, ExcelColumnWidthOptions columnWidth,
-        ExcelCommentConflictPolicy commentConflictPolicy)
+        ExcelCommentConflictPolicy commentConflictPolicy,
+        ExcelTemplateCellOverwritePolicy templateCellOverwritePolicy)
     {
         Name = name;
         ItemType = itemType;
@@ -92,6 +93,7 @@ public sealed class ExcelSheetExportRequest
         Culture = culture;
         ColumnWidth = columnWidth;
         CommentConflictPolicy = commentConflictPolicy;
+        TemplateCellOverwritePolicy = templateCellOverwritePolicy;
     }
 
     /// <summary>
@@ -151,4 +153,6 @@ public sealed class ExcelSheetExportRequest
     public ExcelColumnWidthOptions ColumnWidth { get; }
     [EditorBrowsable(EditorBrowsableState.Never)]
     public ExcelCommentConflictPolicy CommentConflictPolicy { get; }
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public ExcelTemplateCellOverwritePolicy TemplateCellOverwritePolicy { get; }
 }

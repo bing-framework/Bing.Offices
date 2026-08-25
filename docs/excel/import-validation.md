@@ -2,6 +2,15 @@
 
 校验按以下阶段执行：原始单元格空白规范化、Required/Regex、类型转换、Date/MaxValue/Range/MaxLength、Unique、成功后 Setter。
 
+`ExcelImportValidationMode` 控制配置/属性规则和 Workbook 原生规则的来源：
+
+- `Disabled`：禁用配置/属性规则和 Workbook 原生规则。
+- `ConfiguredRules`：只执行配置/属性规则。
+- `WorkbookRules`：只执行 Workbook 原生规则。
+- `ConfiguredAndWorkbook`：按 Workbook 原生规则在前、配置/属性规则在后的顺序执行两类规则。
+
+在 `ValidateMode.Continue` 下，两个来源的错误都会收集；Workbook 校验失败的实体不会进入成功结果，Unique pending journal 也会回滚。
+
 可用 v2 Attribute：
 
 - `ExcelRequired`

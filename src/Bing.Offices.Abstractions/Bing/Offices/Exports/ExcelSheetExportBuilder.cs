@@ -30,6 +30,8 @@ public sealed class ExcelSheetExportBuilder<T> where T : class, new()
     private System.Globalization.CultureInfo _culture = System.Globalization.CultureInfo.InvariantCulture;
     private ExcelColumnWidthOptions _columnWidth;
     private ExcelCommentConflictPolicy _commentConflictPolicy = ExcelCommentConflictPolicy.Preserve;
+    private ExcelTemplateCellOverwritePolicy _templateCellOverwritePolicy =
+        ExcelTemplateCellOverwritePolicy.PreserveTemplate;
 
     internal ExcelSheetExportBuilder(string name, IEnumerable<T> data)
     {
@@ -169,6 +171,15 @@ public sealed class ExcelSheetExportBuilder<T> where T : class, new()
     }
 
     /// <summary>
+    /// 设置模板单元格写入策略。
+    /// </summary>
+    public ExcelSheetExportBuilder<T> TemplateCellOverwrite(ExcelTemplateCellOverwritePolicy policy)
+    {
+        _templateCellOverwritePolicy = policy;
+        return this;
+    }
+
+    /// <summary>
     /// 使用模板中的命名区域作为当前 Sheet 写入区域。
     /// </summary>
     public ExcelSheetExportBuilder<T> UseTemplateRegion(string name)
@@ -207,6 +218,8 @@ public sealed class ExcelSheetExportBuilder<T> where T : class, new()
         _columnWidth?.Validate();
         if (!Enum.IsDefined(typeof(ExcelCommentConflictPolicy), _commentConflictPolicy))
             throw new ArgumentOutOfRangeException(nameof(_commentConflictPolicy));
+        if (!Enum.IsDefined(typeof(ExcelTemplateCellOverwritePolicy), _templateCellOverwritePolicy))
+            throw new ArgumentOutOfRangeException(nameof(_templateCellOverwritePolicy));
         ValidateHeaderRows();
         foreach (var definition in _dynamicColumns)
         {
@@ -219,14 +232,13 @@ public sealed class ExcelSheetExportBuilder<T> where T : class, new()
                 throw new ArgumentException($"动态列 {definition.Key} 不能重复指定物理索引。",
                     nameof(_dynamicColumns));
         }
-        var mappingConfiguration = Configurations.MappingConfigurationMerger.Merge(_documentMappingConfiguration,
-            _requestMappingConfiguration, Configurations.MappingSourceKind.Request);
-        mappingConfiguration = ExcelDynamicColumnCloner.MergeIntoConfiguration(mappingConfiguration, _dynamicColumns);
+        var requestConfiguration = ExcelDynamicColumnCloner.MergeIntoConfiguration(
+            _requestMappingConfiguration, _dynamicColumns);
         return new ExcelSheetExportRequest(_name, typeof(T), _data, _headerRowIndex, _dataRowStartIndex,
             CloneDynamicColumns(_dynamicColumns), _failOnUnknownDynamicValues, _dynamicGetter, _sheetStyle, _headerStyle, _bodyStyle,
             _templateRegion, _hidden, _charts.AsReadOnly(), _headerRows,
-            mappingConfiguration, _mappingDocument,
-            _culture, _columnWidth, _commentConflictPolicy);
+            requestConfiguration, _mappingDocument,
+            _culture, _columnWidth, _commentConflictPolicy, _templateCellOverwritePolicy);
     }
 
     private static IReadOnlyList<ExcelDynamicColumnDefinition> CloneDynamicColumns(

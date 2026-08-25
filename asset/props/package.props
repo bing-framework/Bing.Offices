@@ -8,6 +8,7 @@
 		<PackageProjectUrl>https://github.com/bing-framework/Bing.Offices</PackageProjectUrl>
 		<PackageIcon>icon.png</PackageIcon>
 		<PackageLicenseFile>LICENSE</PackageLicenseFile>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
 		<PackageTags>bing;dotnetcore;aspnetcore;npoi;excel;word;</PackageTags>
 	</PropertyGroup>
 
@@ -16,4 +17,8 @@
 		<IncludeSymbols>true</IncludeSymbols>
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
 	</PropertyGroup>
+
+	<ItemGroup>
+		<None Include="$(MSBuildThisFileDirectory)..\..\README.md" Pack="true" PackagePath="README.md" />
+	</ItemGroup>
 </Project>

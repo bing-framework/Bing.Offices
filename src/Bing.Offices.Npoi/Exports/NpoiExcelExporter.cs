@@ -5,6 +5,7 @@ using Bing.Offices.Configurations;
 using Bing.Offices.Mappings;
 using Bing.Offices.Providers;
 using Bing.Offices.Npoi.Extensions;
+using Bing.Offices.Npoi.Internals;
 using Bing.Offices.Npoi.Resolvers;
 using System.Globalization;
 using System.Reflection;
@@ -24,7 +25,8 @@ internal sealed class NpoiExcelExporter : IExcelExporter
     /// 当前导出器使用的值转换器。
     /// </summary>
     private readonly IReadOnlyList<IExcelValueConverter> _valueConverters;
-    private readonly IExcelMappingPlanFactory _mappingPlanFactory;
+    private readonly NpoiExportPlanBuilder _planBuilder;
+    private readonly NpoiExportSheetWriter _sheetWriter;
 
     /// <summary>
     /// 初始化一个<see cref="NpoiExcelExporter"/>类型的实例。
@@ -35,8 +37,9 @@ internal sealed class NpoiExcelExporter : IExcelExporter
         IExcelMappingPlanFactory mappingPlanFactory = null)
     {
         _valueConverters = valueConverters?.ToArray() ?? Array.Empty<IExcelValueConverter>();
-        _mappingPlanFactory = mappingPlanFactory ?? NpoiMappingPlanFactoryResolver.CreateDefault(
-            _valueConverters);
+        _planBuilder = new NpoiExportPlanBuilder(mappingPlanFactory ?? NpoiMappingPlanFactoryResolver.CreateDefault(
+            _valueConverters));
+        _sheetWriter = new NpoiExportSheetWriter();
     }
 
     /// <inheritdoc />
@@ -54,7 +57,7 @@ internal sealed class NpoiExcelExporter : IExcelExporter
         try
         {
             using var workbook = CreateWorkbook(request);
-            var planBySheet = CreateWorkbookPlans(request);
+            var planBySheet = _planBuilder.Create(request);
             var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var sheetRequest in request.Sheets)
             {
@@ -66,10 +69,17 @@ internal sealed class NpoiExcelExporter : IExcelExporter
                     planBySheet[sheetRequest]);
             }
 
-            using var bufferedDestination = new MemoryStream();
-            workbook.Write(new NonDisposingStream(bufferedDestination), false);
-            bufferedDestination.Position = 0;
-            CopyTo(bufferedDestination, destination, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                workbook.Write(new NonDisposingStream(destination, cancellationToken), false);
+            }
+            catch (Exception exception) when (cancellationToken.IsCancellationRequested
+                && exception.GetBaseException() is OperationCanceledException)
+            {
+                throw new OperationCanceledException(cancellationToken);
+            }
+            cancellationToken.ThrowIfCancellationRequested();
         }
         finally
         {
@@ -101,61 +111,6 @@ internal sealed class NpoiExcelExporter : IExcelExporter
             throw new ArgumentException("工作表名称不能超过 31 个字符。", nameof(name));
         if (name.IndexOfAny(new[] { ':', '\\', '/', '?', '*', '[', ']' }) >= 0)
             throw new ArgumentException($"工作表名称包含非法字符: {name}", nameof(name));
-    }
-
-    /// <summary>
-    /// 通过一次类型擦除调用执行具体 Sheet 的泛型计划。
-    /// </summary>
-    private Dictionary<ExcelSheetExportRequest, IExcelMappingPlan> CreateWorkbookPlans(
-        ExcelWorkbookExportRequest request)
-    {
-        var result = new Dictionary<ExcelSheetExportRequest, IExcelMappingPlan>();
-        foreach (var group in request.Sheets.GroupBy(GetWorkbookPlanKey, StringComparer.Ordinal))
-        {
-            var first = group.First();
-            var plan = CreateWorkbookPlan(first, group.Select(sheet => sheet.Name).ToArray());
-            foreach (var sheet in group)
-                result.Add(sheet, plan.Sheets.Single(item => string.Equals(item.Name, sheet.Name,
-                    StringComparison.OrdinalIgnoreCase)).Mapping);
-        }
-        return result;
-    }
-
-    private static string GetWorkbookPlanKey(ExcelSheetExportRequest request)
-    {
-        var method = typeof(NpoiExcelExporter).GetMethod(nameof(CreateNormalizedDocument),
-            BindingFlags.Static | BindingFlags.NonPublic).MakeGenericMethod(request.ItemType);
-        var document = (ExcelMappingDocument)method.Invoke(null, new object[] { request });
-        return string.Join("|", request.ItemType.AssemblyQualifiedName,
-            ExcelMappingConfigurationLoader.ToJson(document));
-    }
-
-    private static ExcelMappingDocument CreateNormalizedDocument<T>(ExcelSheetExportRequest request)
-        where T : class, new() =>
-        ExcelMappingDocumentFactory.Create<T>(request.MappingDocument,
-            request.MappingConfiguration, MappingDirection.Export);
-
-    private IExcelMappingWorkbookPlan CreateWorkbookPlan(ExcelSheetExportRequest request,
-        IReadOnlyList<string> sheetNames)
-    {
-        var method = GetType().GetMethod(nameof(CreateTypedWorkbookPlan), BindingFlags.Instance
-            | BindingFlags.NonPublic).MakeGenericMethod(request.ItemType);
-        try
-        {
-            return (IExcelMappingWorkbookPlan)method.Invoke(this, new object[] { request, sheetNames });
-        }
-        catch (TargetInvocationException exception) when (exception.InnerException != null)
-        {
-            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(exception.InnerException).Throw();
-            throw;
-        }
-    }
-
-    private IExcelMappingWorkbookPlan CreateTypedWorkbookPlan<T>(ExcelSheetExportRequest request,
-        IReadOnlyList<string> sheetNames) where T : class, new()
-    {
-        var document = CreateNormalizedDocument<T>(request);
-        return _mappingPlanFactory.CreateWorkbook<T>(document, MappingDirection.Export, sheetNames);
     }
 
     private void WriteSheet(NPOI.SS.UserModel.IWorkbook workbook, ExcelSheetExportRequest request,
@@ -198,137 +153,8 @@ internal sealed class NpoiExcelExporter : IExcelExporter
         ValidateDynamicDefinitions(dynamicDefinitions);
         var columns = CreateColumns<T>(map, dynamicDefinitions);
         ValidateDynamicColumns(dynamicDefinitions, columns);
-        var header = sheet.GetRow(headerRowIndex) ?? sheet.CreateRow(headerRowIndex);
-        WriteCustomHeaders(sheet, request.HeaderRows, templateOrigin.Row, firstColumnIndex,
-            request.CommentConflictPolicy);
-        for (var index = 0; index < columns.Count; index++)
-            header.CreateCell(firstColumnIndex + index).SetCellValue(columns[index].Title);
-
-        var rowIndex = templateOrigin.Row + request.DataRowStartIndex;
-        foreach (var item in request.Data.Cast<T>())
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var row = sheet.GetRow(rowIndex) ?? sheet.CreateRow(rowIndex);
-            var dynamicValues = request.DynamicGetter?.Invoke(item);
-            ValidateUnknownDynamicValues(request, dynamicValues, columns);
-            for (var columnIndex = 0; columnIndex < columns.Count; columnIndex++)
-            {
-                var physicalColumnIndex = firstColumnIndex + columnIndex;
-                var cell = row.GetCell(physicalColumnIndex) ?? row.CreateCell(physicalColumnIndex);
-                WriteRequestCell(cell, item, columns[columnIndex], request, dynamicValues, sheet.SheetName,
-                    rowIndex + 1, physicalColumnIndex + 1);
-            }
-            rowIndex++;
-        }
-
-        ApplyRequestStyles(workbook, sheet, header, columns, request, map, firstColumnIndex,
-            templateOrigin.Row + request.DataRowStartIndex, rowIndex);
-        ApplyHeaderStyle<T>(workbook, sheet, headerRowIndex);
-        ApplyWrapText<T>(sheet);
-        ApplyColumnWidths(sheet, columns, firstColumnIndex, templateOrigin.Row, request.ColumnWidth);
-        MergeColumns<T>(sheet, columns, templateOrigin.Row + request.DataRowStartIndex, rowIndex - 1,
+        _sheetWriter.Write<T>(workbook, request, cancellationToken, map, columns, templateOrigin.Row,
             firstColumnIndex);
-        CreateCharts(workbook, sheet, columns, request.Charts, templateOrigin.Row + request.DataRowStartIndex,
-            rowIndex, firstColumnIndex);
-    }
-
-    /// <summary>
-    /// 将 provider-neutral 图表定义转换为 XSSF 图表。
-    /// </summary>
-    private static void CreateCharts(NPOI.SS.UserModel.IWorkbook workbook, NPOI.SS.UserModel.ISheet sheet,
-        IReadOnlyList<ExcelColumnPlan> columns, IReadOnlyList<ExcelChartDefinition> charts, int dataStartRow,
-        int dataEndRow, int firstColumnIndex)
-    {
-        if (charts == null || charts.Count == 0)
-            return;
-        if (!(workbook is XSSFWorkbook) || !(sheet.CreateDrawingPatriarch() is XSSFDrawing drawing))
-            throw new NotSupportedException("当前 Excel 格式不支持图表。");
-        foreach (var definition in charts)
-        {
-            definition.Validate();
-            var categoryColumn = ResolveChartColumn(columns, definition.Categories.ColumnKey);
-            var categoryRange = CreateChartRange(sheet, definition.Categories, firstColumnIndex + categoryColumn,
-                dataStartRow, dataEndRow);
-            var anchor = definition.Anchor;
-            var chartAnchor = drawing.CreateAnchor(0, 0, 0, 0, anchor.StartColumn, anchor.StartRow,
-                anchor.EndColumn, anchor.EndRow);
-            var chart = drawing.CreateChart(chartAnchor);
-            if (!string.IsNullOrWhiteSpace(definition.Title))
-                chart.SetTitle(definition.Title);
-            var categories = DataSources.FromStringCellRange(sheet, categoryRange);
-            switch (definition.Type)
-            {
-                case ExcelChartType.Column:
-                {
-                    var data = chart.ChartDataFactory.CreateColumnChartData<string, double>();
-                    foreach (var seriesDefinition in definition.Series)
-                    {
-                        var valueColumn = ResolveChartColumn(columns, seriesDefinition.Values.ColumnKey);
-                        var values = DataSources.FromNumericCellRange(sheet,
-                            CreateChartRange(sheet, seriesDefinition.Values, firstColumnIndex + valueColumn,
-                                dataStartRow, dataEndRow));
-                        data.AddSeries(categories, values).SetTitle(seriesDefinition.Name);
-                    }
-                    var categoryAxis = chart.ChartAxisFactory.CreateCategoryAxis(AxisPosition.Bottom);
-                    var valueAxis = chart.ChartAxisFactory.CreateValueAxis(AxisPosition.Left);
-                    valueAxis.Crosses = AxisCrosses.AutoZero;
-                    chart.Plot(data, categoryAxis, valueAxis);
-                    break;
-                }
-                case ExcelChartType.Line:
-                {
-                    var data = chart.ChartDataFactory.CreateLineChartData<string, double>();
-                    foreach (var seriesDefinition in definition.Series)
-                    {
-                        var valueColumn = ResolveChartColumn(columns, seriesDefinition.Values.ColumnKey);
-                        var values = DataSources.FromNumericCellRange(sheet,
-                            CreateChartRange(sheet, seriesDefinition.Values, firstColumnIndex + valueColumn,
-                                dataStartRow, dataEndRow));
-                        data.AddSeries(categories, values).SetTitle(seriesDefinition.Name);
-                    }
-                    var categoryAxis = chart.ChartAxisFactory.CreateCategoryAxis(AxisPosition.Bottom);
-                    var valueAxis = chart.ChartAxisFactory.CreateValueAxis(AxisPosition.Left);
-                    valueAxis.Crosses = AxisCrosses.AutoZero;
-                    chart.Plot(data, categoryAxis, valueAxis);
-                    break;
-                }
-                case ExcelChartType.Pie:
-                {
-                    var data = chart.ChartDataFactory.CreatePieChartData<string, double>();
-                    var seriesDefinition = definition.Series[0];
-                    var valueColumn = ResolveChartColumn(columns, seriesDefinition.Values.ColumnKey);
-                    var values = DataSources.FromNumericCellRange(sheet,
-                        CreateChartRange(sheet, seriesDefinition.Values, firstColumnIndex + valueColumn,
-                            dataStartRow, dataEndRow));
-                    data.AddSeries(categories, values).SetTitle(seriesDefinition.Name);
-                    chart.Plot(data);
-                    break;
-                }
-                default:
-                    throw new NotSupportedException($"不支持的图表类型: {definition.Type}");
-            }
-        }
-    }
-
-    private static int ResolveChartColumn(IReadOnlyList<ExcelColumnPlan> columns, string key)
-    {
-        var index = columns.ToList().FindIndex(column => string.Equals(column.Key, key,
-            StringComparison.OrdinalIgnoreCase)
-            || string.Equals(column.Title, key, StringComparison.OrdinalIgnoreCase)
-            || string.Equals(column.Property.Name, key, StringComparison.OrdinalIgnoreCase));
-        if (index < 0)
-            throw new ArgumentException($"图表引用的列不存在: {key}", nameof(key));
-        return index;
-    }
-
-    private static CellRangeAddress CreateChartRange(NPOI.SS.UserModel.ISheet sheet, ExcelChartRange range,
-        int columnIndex, int defaultStartRow, int defaultEndRow)
-    {
-        var startRow = range.StartRow ?? defaultStartRow;
-        var endRow = range.EndRow ?? defaultEndRow;
-        if (startRow < 0 || endRow <= startRow || endRow > sheet.LastRowNum + 1)
-            throw new ArgumentException($"图表范围行索引无效: {range.ColumnKey}", nameof(range));
-        return new CellRangeAddress(startRow, endRow - 1, columnIndex, columnIndex);
     }
 
     /// <summary>
@@ -397,292 +223,6 @@ internal sealed class NpoiExcelExporter : IExcelExporter
             if (definition == null || string.IsNullOrWhiteSpace(definition.Key)
                 || string.IsNullOrWhiteSpace(definition.Title))
                 throw new ArgumentException("动态列 Key 和 Title 不能为空。", nameof(definitions));
-        }
-    }
-
-    /// <summary>
-    /// 拒绝动态字典中未声明的值。
-    /// </summary>
-    private static void ValidateUnknownDynamicValues(ExcelSheetExportRequest request,
-        IDictionary<string, object> values, IReadOnlyList<ExcelColumnPlan> columns)
-    {
-        if (!request.FailOnUnknownDynamicValues || values == null)
-            return;
-        var keys = new HashSet<string>(columns.Where(column => column.IsDynamic).Select(column => column.Key),
-            StringComparer.Ordinal);
-        var unknown = values.Keys.FirstOrDefault(key => !keys.Contains(key));
-        if (unknown != null)
-            throw new InvalidOperationException($"动态值未声明: {unknown}");
-    }
-
-    /// <summary>
-    /// 新 Workbook 请求使用统一的 Cell Writer 写入动态和固定列。
-    /// </summary>
-    private void WriteRequestCell<T>(NPOI.SS.UserModel.ICell cell, T item, ExcelColumnPlan column,
-        ExcelSheetExportRequest request, IDictionary<string, object> dynamicValues, string sheetName,
-        int rowIndex, int columnIndex) where T : class, new()
-    {
-        WriteCell(cell, item, column, dynamicValues, sheetName, rowIndex, columnIndex, request.Culture);
-    }
-
-    /// <summary>
-    /// 应用 Workbook 请求级区域和动态列样式。
-    /// </summary>
-    private static void ApplyRequestStyles(NPOI.SS.UserModel.IWorkbook workbook,
-        NPOI.SS.UserModel.ISheet sheet, NPOI.SS.UserModel.IRow header, IReadOnlyList<ExcelColumnPlan> columns,
-        ExcelSheetExportRequest request, IExcelMappingPlan mapping, int firstColumnIndex,
-        int firstDataRowIndex, int lastRowIndex)
-    {
-        var mappingHeaderStyle = ResolveStyle(mapping.Style?.HeaderStyleKey, true);
-        var mappingBodyStyle = ResolveStyle(mapping.Style?.BodyStyleKey, false);
-        if (request.HeaderStyle == null && request.BodyStyle == null && request.SheetStyle == null
-            && mappingHeaderStyle == null && mappingBodyStyle == null
-            && columns.All(column => column.HeaderStyle == null && column.BodyStyle == null))
-            return;
-        for (var index = 0; index < columns.Count; index++)
-        {
-            var style = columns[index].HeaderStyle ?? request.HeaderStyle ?? mappingHeaderStyle ?? request.SheetStyle;
-            if (style != null)
-            {
-                var cell = header.GetCell(firstColumnIndex + index);
-                cell.CellStyle = NpoiStyleCache.Compose(workbook, cell.CellStyle, style);
-            }
-        }
-        for (var rowIndex = firstDataRowIndex; rowIndex < lastRowIndex; rowIndex++)
-        {
-            var row = sheet.GetRow(rowIndex);
-            if (row == null)
-                continue;
-            for (var index = 0; index < columns.Count; index++)
-            {
-                var style = columns[index].BodyStyle ?? request.BodyStyle ?? mappingBodyStyle ?? request.SheetStyle;
-                if (style != null)
-                {
-                    var cell = row.GetCell(firstColumnIndex + index);
-                    cell.CellStyle = NpoiStyleCache.Compose(workbook, cell.CellStyle, style);
-                }
-            }
-        }
-    }
-
-    private static Bing.Offices.Styles.ExcelCellStyle ResolveStyle(string key, bool header)
-    {
-        if (string.IsNullOrWhiteSpace(key))
-            return null;
-        if (string.Equals(key, "header", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(key, "bold", StringComparison.OrdinalIgnoreCase))
-            return new Bing.Offices.Styles.ExcelCellStyle { Bold = true };
-        if (string.Equals(key, "body", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(key, "default", StringComparison.OrdinalIgnoreCase))
-            return new Bing.Offices.Styles.ExcelCellStyle();
-        throw new InvalidOperationException($"未注册的{(header ? "表头" : "正文")}样式键: {key}");
-    }
-
-    /// <summary>
-    /// 将已完成的工作簿缓冲写入调用方目标流，并在每个数据块之间检查取消状态。
-    /// </summary>
-    /// <param name="source">实现拥有的已完成工作簿缓冲。</param>
-    /// <param name="destination">调用方拥有的目标流。</param>
-    /// <param name="cancellationToken">取消令牌。</param>
-    private static void CopyTo(Stream source, Stream destination, CancellationToken cancellationToken)
-    {
-        var buffer = new byte[81920];
-        int count;
-        while (true)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            count = source.Read(buffer, 0, buffer.Length);
-            if (count == 0)
-                break;
-            cancellationToken.ThrowIfCancellationRequested();
-            destination.Write(buffer, 0, count);
-        }
-    }
-
-    /// <summary>
-    /// 在当前工作簿中写入自定义表头布局。
-    /// </summary>
-    /// <param name="sheet">目标工作表。</param>
-    /// <param name="headerRows">自定义表头行。</param>
-    /// <param name="originRow">模板区域的行起点。</param>
-    /// <param name="originColumn">模板区域的列起点。</param>
-    private static void WriteCustomHeaders(NPOI.SS.UserModel.ISheet sheet, IReadOnlyList<ExcelHeaderRow> headerRows,
-        int originRow, int originColumn, ExcelCommentConflictPolicy commentConflictPolicy)
-    {
-        foreach (var headerRow in headerRows ?? Array.Empty<ExcelHeaderRow>())
-        {
-            var rowIndex = originRow + headerRow.RowIndex;
-            var row = sheet.GetRow(rowIndex) ?? sheet.CreateRow(rowIndex);
-            foreach (var headerCell in headerRow.Cells)
-            {
-                var columnIndex = originColumn + headerCell.ColumnIndex;
-                var cell = row.CreateCell(columnIndex);
-                cell.SetValue(headerCell.Value);
-                if (headerCell.Comment != null)
-                    ApplyComment(sheet, cell, headerCell.Comment, commentConflictPolicy);
-                if (headerCell.RowSpan > 1 || headerCell.ColumnSpan > 1)
-                {
-                    sheet.AddMergedRegion(new CellRangeAddress(rowIndex, rowIndex + headerCell.RowSpan - 1,
-                        columnIndex, columnIndex + headerCell.ColumnSpan - 1));
-                }
-            }
-        }
-    }
-
-    private static void ApplyComment(NPOI.SS.UserModel.ISheet sheet, NPOI.SS.UserModel.ICell cell,
-        ExcelComment comment, ExcelCommentConflictPolicy conflictPolicy)
-    {
-        var existing = cell.CellComment;
-        if (existing != null)
-        {
-            switch (conflictPolicy)
-            {
-                case ExcelCommentConflictPolicy.Preserve:
-                    return;
-                case ExcelCommentConflictPolicy.Fail:
-                    throw new InvalidOperationException($"单元格已有批注: {cell.Address}");
-                case ExcelCommentConflictPolicy.Append:
-                    comment = new ExcelComment(existing.String.String + Environment.NewLine + comment.Text,
-                        string.IsNullOrWhiteSpace(comment.Author) ? existing.Author : comment.Author, comment.Visible);
-                    break;
-                case ExcelCommentConflictPolicy.Replace:
-                    cell.RemoveCellComment();
-                    break;
-            }
-        }
-        var anchor = sheet.Workbook.GetCreationHelper().CreateClientAnchor();
-        anchor.Col1 = cell.ColumnIndex;
-        anchor.Col2 = cell.ColumnIndex + 2;
-        anchor.Row1 = cell.RowIndex;
-        anchor.Row2 = cell.RowIndex + 3;
-        var created = sheet.CreateDrawingPatriarch().CreateCellComment(anchor);
-        created.String = sheet.Workbook.GetCreationHelper().CreateRichTextString(comment.Text);
-        created.Author = comment.Author;
-        created.Visible = comment.Visible;
-        cell.CellComment = created;
-    }
-
-    private static void ApplyHeaderStyle<T>(NPOI.SS.UserModel.IWorkbook workbook,
-        NPOI.SS.UserModel.ISheet sheet, int headerRowIndex) where T : class, new()
-    {
-        var attribute = typeof(T).GetCustomAttributes(typeof(HeaderAttribute), false).Cast<HeaderAttribute>()
-            .SingleOrDefault();
-        if (attribute == null)
-            return;
-        var row = sheet.GetRow(headerRowIndex);
-        if (row == null)
-            return;
-        foreach (var cell in row.Cells)
-        {
-            var style = workbook.CreateCellStyle();
-            style.CloneStyleFrom(cell.CellStyle);
-            var font = workbook.CreateFont();
-            font.CloneStyleFrom(workbook.GetFontAt(cell.CellStyle.FontIndex));
-            font.FontName = attribute.FontName;
-            font.Color = ColorResolver.Resolve(attribute.Color);
-            font.FontHeightInPoints = attribute.FontSize;
-            font.IsBold = attribute.Bold;
-            style.SetFont(font);
-            cell.CellStyle = style;
-        }
-    }
-
-    private static void ApplyColumnWidths(NPOI.SS.UserModel.ISheet sheet, IReadOnlyList<ExcelColumnPlan> columns,
-        int firstColumnIndex, int originRow, ExcelColumnWidthOptions options)
-    {
-        if (options == null || options.Mode == ExcelColumnWidthMode.None)
-            return;
-        for (var index = 0; index < columns.Count; index++)
-        {
-            var physicalColumnIndex = firstColumnIndex + index;
-            double width;
-            switch (options.Mode)
-            {
-                case ExcelColumnWidthMode.Fixed:
-                    width = options.FixedWidth.Value;
-                    break;
-                case ExcelColumnWidthMode.AutoFit:
-                    sheet.AutoSizeColumn(physicalColumnIndex);
-                    width = sheet.GetColumnWidth(physicalColumnIndex) / 256d;
-                    break;
-                case ExcelColumnWidthMode.Adaptive:
-                    width = MeasureAdaptiveWidth(sheet, physicalColumnIndex, originRow, options.SampleRows);
-                    break;
-                default:
-                    continue;
-            }
-            width = Math.Max(options.MinWidth ?? 0, width);
-            width = Math.Min(options.MaxWidth ?? 255, width);
-            sheet.SetColumnWidth(physicalColumnIndex, (int)Math.Min(255 * 256, Math.Max(0, width * 256)));
-        }
-    }
-
-    private static double MeasureAdaptiveWidth(NPOI.SS.UserModel.ISheet sheet, int columnIndex, int originRow,
-        int sampleRows)
-    {
-        var width = 0d;
-        var endRow = Math.Min(sheet.LastRowNum, originRow + sampleRows);
-        for (var rowIndex = originRow; rowIndex <= endRow; rowIndex++)
-        {
-            var cell = sheet.GetRow(rowIndex)?.GetCell(columnIndex);
-            if (cell == null)
-                continue;
-            var text = cell.ToString() ?? string.Empty;
-            foreach (var line in text.Split(new[] { '\r', '\n' }, StringSplitOptions.None))
-            {
-                var lineWidth = 0d;
-                foreach (var character in line)
-                    lineWidth += character > 0xFF ? 2 : 1;
-                width = Math.Max(width, lineWidth);
-            }
-        }
-        return width + 2;
-    }
-
-    private static void ApplyWrapText<T>(NPOI.SS.UserModel.ISheet sheet) where T : class, new()
-    {
-        if (!typeof(T).IsDefined(typeof(WrapTextAttribute), false))
-            return;
-        for (var rowIndex = sheet.FirstRowNum; rowIndex <= sheet.LastRowNum; rowIndex++)
-        {
-            var row = sheet.GetRow(rowIndex);
-            if (row == null)
-                continue;
-            foreach (var cell in row.Cells)
-                cell.CellStyle = cell.GetStyleWithWrapText();
-        }
-    }
-
-    private static void MergeColumns<T>(NPOI.SS.UserModel.ISheet sheet, IReadOnlyList<ExcelColumnPlan> columns,
-        int dataRowStartIndex, int dataRowEndIndex, int firstColumnIndex) where T : class, new()
-    {
-        if (dataRowEndIndex - dataRowStartIndex < 1)
-            return;
-        for (var columnIndex = 0; columnIndex < columns.Count; columnIndex++)
-        {
-            var column = columns[columnIndex];
-            if (column.IsDynamic || !column.IsMerged)
-                continue;
-            var physicalColumnIndex = firstColumnIndex + columnIndex;
-            var groupStart = dataRowStartIndex;
-            var groupValue = sheet.GetRow(groupStart)?.GetCell(physicalColumnIndex).GetStringValue();
-            for (var rowIndex = dataRowStartIndex + 1; rowIndex <= dataRowEndIndex + 1; rowIndex++)
-            {
-                var currentValue = rowIndex <= dataRowEndIndex
-                    ? sheet.GetRow(rowIndex)?.GetCell(physicalColumnIndex).GetStringValue()
-                    : null;
-                if (rowIndex <= dataRowEndIndex && string.Equals(groupValue, currentValue, StringComparison.Ordinal))
-                    continue;
-                if (!string.IsNullOrWhiteSpace(groupValue) && rowIndex - groupStart > 1)
-                {
-                    sheet.AddMergedRegion(new CellRangeAddress(groupStart, rowIndex - 1, physicalColumnIndex,
-                        physicalColumnIndex));
-                    var cell = sheet.GetRow(groupStart).GetCell(physicalColumnIndex);
-                    cell.CellStyle = cell.GetStyleWithVerticalAlignment(NPOI.SS.UserModel.VerticalAlignment.Center);
-                }
-                groupStart = rowIndex;
-                groupValue = currentValue;
-            }
         }
     }
 
@@ -835,35 +375,6 @@ internal sealed class NpoiExcelExporter : IExcelExporter
         }
     }
 
-    /// <summary>
-    /// 写入一个已解析列的单元格值。
-    /// </summary>
-    /// <typeparam name="T">实体类型。</typeparam>
-    /// <param name="cell">目标单元格。</param>
-    /// <param name="item">当前实体。</param>
-    /// <param name="column">导出列定义。</param>
-    /// <param name="sheetName">工作表名称。</param>
-    /// <param name="rowIndex">从一开始的行索引。</param>
-    /// <param name="columnIndex">从一开始的列索引。</param>
-    /// <param name="culture">值转换使用的区域性。</param>
-    private void WriteCell<T>(NPOI.SS.UserModel.ICell cell, T item, ExcelColumnPlan column,
-        IDictionary<string, object> dynamicValues, string sheetName, int rowIndex, int columnIndex,
-        CultureInfo culture) where T : class, new()
-    {
-        object value;
-        if (column.IsDynamic)
-        {
-            var values = dynamicValues ?? column.Getter(item) as IDictionary<string, object>;
-            values ??= new Dictionary<string, object>();
-            values.TryGetValue(column.Key, out value);
-        }
-        else
-            value = column.Getter(item);
-
-        value = column.ConvertTo(value, sheetName, rowIndex, columnIndex, culture);
-        column.WriteValue(cell, value);
-    }
-
     private static PropertyInfo ResolveProperty<T>(string name) where T : class, new()
     {
         var property = typeof(T).GetProperty(name, BindingFlags.Instance | BindingFlags.Public);
@@ -878,19 +389,33 @@ internal sealed class NpoiExcelExporter : IExcelExporter
     private sealed class NonDisposingStream : Stream
     {
         private readonly Stream _inner;
+        private readonly CancellationToken _cancellationToken;
 
-        public NonDisposingStream(Stream inner) => _inner = inner;
+        public NonDisposingStream(Stream inner, CancellationToken cancellationToken = default)
+        {
+            _inner = inner;
+            _cancellationToken = cancellationToken;
+        }
 
         public override bool CanRead => _inner.CanRead;
         public override bool CanSeek => _inner.CanSeek;
         public override bool CanWrite => _inner.CanWrite;
         public override long Length => _inner.Length;
         public override long Position { get => _inner.Position; set => _inner.Position = value; }
-        public override void Flush() => _inner.Flush();
+        public override void Flush()
+        {
+            _cancellationToken.ThrowIfCancellationRequested();
+            _inner.Flush();
+        }
         public override int Read(byte[] buffer, int offset, int count) => _inner.Read(buffer, offset, count);
         public override long Seek(long offset, SeekOrigin origin) => _inner.Seek(offset, origin);
         public override void SetLength(long value) => _inner.SetLength(value);
-        public override void Write(byte[] buffer, int offset, int count) => _inner.Write(buffer, offset, count);
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            _cancellationToken.ThrowIfCancellationRequested();
+            _inner.Write(buffer, offset, count);
+            _cancellationToken.ThrowIfCancellationRequested();
+        }
         protected override void Dispose(bool disposing)
         {
             if (disposing)

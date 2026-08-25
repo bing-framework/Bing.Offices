@@ -24,12 +24,8 @@ public static class ExcelNpoiServiceCollectionExtensions
     /// <param name="services">服务集合</param>
     public static void AddNpoi(this IServiceCollection services)
     {
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IExcelValidationRule, RequiredExcelValidationRule>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IExcelValidationRule, RegexExcelValidationRule>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IExcelValidationRule, RangeExcelValidationRule>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IExcelValidationRule, MaxLengthExcelValidationRule>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IExcelValidationRule, DateTimeExcelValidationRule>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IExcelValidationRule, DuplicationExcelValidationRule>());
+        foreach (var rule in ExcelValidationRules.CreateDefault())
+            services.TryAddEnumerable(ServiceDescriptor.Singleton(typeof(IExcelValidationRule), rule.GetType()));
         services.TryAddSingleton<IExcelMappingConfigurationLoader, DefaultExcelMappingConfigurationLoader>();
         ExcelMappingPlanFactoryProvider.RegisterDefault(services);
         services.TryAddTransient<IExcelImporter, NpoiExcelImporter>();

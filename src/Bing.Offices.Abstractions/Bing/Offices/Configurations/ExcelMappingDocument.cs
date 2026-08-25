@@ -23,18 +23,17 @@ public sealed class ExcelMappingDocument
     public string ConfigurationVersion { get; set; }
 
     /// <summary>
+    /// 获取或设置目标方向缺失时是否允许回退到约定映射；默认不回退。
+    /// </summary>
+    public bool UseConventionFallback { get; set; }
+
+    /// <summary>
     /// 获取或设置导入方向配置。
     /// </summary>
-    public ExcelMappingConfiguration Import { get; set; } = new ExcelMappingConfiguration
-    {
-        Columns = new List<ExcelColumnConfiguration>()
-    };
+    public ExcelMappingConfiguration Import { get; set; }
 
     /// <summary>
     /// 获取或设置导出方向配置。
     /// </summary>
-    public ExcelMappingConfiguration Export { get; set; } = new ExcelMappingConfiguration
-    {
-        Columns = new List<ExcelColumnConfiguration>()
-    };
+    public ExcelMappingConfiguration Export { get; set; }
 }

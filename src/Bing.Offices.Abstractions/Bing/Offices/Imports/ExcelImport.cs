@@ -368,13 +368,11 @@ public sealed class ExcelSheetImportBuilder<TItem> where TItem : class, new()
             var compiledDynamicTarget = _dynamicTarget.Compile();
             dynamicGetter = value => compiledDynamicTarget((TItem)value);
         }
-        var mappingConfiguration = Configurations.MappingConfigurationMerger.Merge(_documentMappingConfiguration,
-            _requestMappingConfiguration, Configurations.MappingSourceKind.Request);
-        mappingConfiguration = Exports.ExcelDynamicColumnCloner.MergeIntoConfiguration(mappingConfiguration,
-            _dynamicColumns);
+        var requestConfiguration = Exports.ExcelDynamicColumnCloner.MergeIntoConfiguration(
+            _requestMappingConfiguration, _dynamicColumns);
         return new ExcelSheetImportRequest(_name, _selector, typeof(TItem), targetGetter,
         _headerRowIndex, _dataRowStartIndex, Exports.ExcelDynamicColumnCloner.Clone(_dynamicColumns), _dynamicTarget, _headerMatch, _validateMode, _culture,
-        mappingConfiguration, _mappingDocument,
+        requestConfiguration, _mappingDocument,
         dynamicGetter,
         _maxColumnLength,
         _failOnUnknownDynamicColumns, _enabledEmptyLine, _ignoreEmptyLineAfterData, _readColumnRange,

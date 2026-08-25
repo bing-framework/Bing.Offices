@@ -23,7 +23,7 @@ public static class ExcelMappingPlanFactoryProvider
         IEnumerable<IExcelValueConverter> valueConverters = null,
         IEnumerable<IExcelValidationRule> validationRules = null,
         IEnumerable<INamedExcelValidationRule> namedValidationRules = null,
-        Configurations.IMappingProfileRegistry profileRegistry = null,
+        Configurations.IMappingProfileResolver profileRegistry = null,
         Configurations.ExcelModelAliasRegistry modelAliases = null) =>
         new ExcelMappingPlanFactory(valueConverters, validationRules, namedValidationRules,
             profileRegistry: profileRegistry, modelAliases: modelAliases);
@@ -41,7 +41,7 @@ public static class ExcelMappingPlanFactoryProvider
                 provider.GetServices<IExcelValueConverter>(),
                 provider.GetServices<IExcelValidationRule>(),
                 provider.GetServices<INamedExcelValidationRule>(),
-                provider.GetService<Configurations.IMappingProfileRegistry>(),
+                provider.GetService<Configurations.IMappingProfileResolver>(),
                 provider.GetService<Configurations.ExcelModelAliasRegistry>()));
         return services;
     }

@@ -49,6 +49,28 @@ public sealed class ExcelWorkbookRequestTest
         };
 
     /// <summary>
+    /// 测试 - Excel 导出应直接写入调用方目标流，保持目标流打开并生成可重开的工作簿。
+    /// </summary>
+    [Fact]
+    public void Export_DestinationStream_ShouldRemainOpenAfterDirectWrite()
+    {
+        // Arrange
+        var request = ExcelExport.Workbook(workbook => workbook.AddSheet("客户",
+            new[] { new ExportCustomer { Name = "客户 A" } }));
+        using var destination = new MemoryStream();
+
+        // Act
+        new NpoiExcelExporter().Export(request, destination);
+
+        // Assert
+        Assert.True(destination.CanWrite);
+        Assert.True(destination.Length > 0);
+        destination.Position = 0;
+        using var workbook = WorkbookFactory.Create(destination);
+        Assert.Equal("客户 A", workbook.GetSheet("客户").GetRow(1).GetCell(0).StringCellValue);
+    }
+
+    /// <summary>
     /// 测试 - Workbook 导出请求应使用同一 Cell Writer 写入多个 Sheet，并按动态 Key 读取字典值。
     /// </summary>
     [Fact]
@@ -241,7 +263,10 @@ public sealed class ExcelWorkbookRequestTest
     public void ColumnPlan_FixedAndDynamic_ShouldShareCompiledExecutionMetadata()
     {
         // Arrange
-        var map = new Bing.Offices.Mappings.ExcelMappingPlanFactory().Create<ImportOrder>(new ExcelMappingDocument(), null,
+        var map = new Bing.Offices.Mappings.ExcelMappingPlanFactory().Create<ImportOrder>(new ExcelMappingDocument
+        {
+            UseConventionFallback = true
+        }, null,
             MappingDirection.Import);
         var fixedProperty = map.Columns.Single(property => property.Name == nameof(ImportOrder.OrderNo));
         var dynamicProperty = map.Columns.Single(property => property.Name == nameof(ImportOrder.CustomFields));
@@ -487,6 +512,96 @@ public sealed class ExcelWorkbookRequestTest
         var cell = result.GetSheet("订单").GetRow(3).GetCell(1);
         Assert.Equal("0.00", cell.CellStyle.GetDataFormatString());
         Assert.True(result.GetSheet("订单").GetRow(3).GetCell(1).CellStyle.Index > 0);
+    }
+
+    /// <summary>
+    /// 测试 - 默认模板策略应保留表头和正文的模板样式、批注，并用导出值替换公式。
+    /// </summary>
+    [Fact]
+    public void Export_TemplateCellOverwrite_Default_ShouldPreserveTemplateMetadata()
+    {
+        // Arrange
+        using var template = new MemoryStream(CreateWorkbook(workbook =>
+        {
+            var sheet = workbook.CreateSheet("客户");
+            var headerStyle = workbook.CreateCellStyle();
+            headerStyle.DataFormat = workbook.CreateDataFormat().GetFormat("0.00");
+            var header = sheet.CreateRow(0).CreateCell(0);
+            header.SetCellFormula("1+1");
+            header.CellStyle = headerStyle;
+            var body = sheet.CreateRow(1).CreateCell(0);
+            body.SetCellFormula("2+2");
+            body.CellStyle = headerStyle;
+            var anchor = workbook.GetCreationHelper().CreateClientAnchor();
+            anchor.Col1 = 0;
+            anchor.Col2 = 2;
+            anchor.Row1 = 0;
+            anchor.Row2 = 3;
+            var comment = sheet.CreateDrawingPatriarch().CreateCellComment(anchor);
+            comment.String = workbook.GetCreationHelper().CreateRichTextString("模板批注");
+            comment.Author = "template";
+            header.CellComment = comment;
+        }));
+        var request = ExcelExport.Workbook(workbook => workbook
+            .UseTemplate(template, leaveOpen: true)
+            .AddSheet("客户", new[] { new ExportCustomer { Name = "客户 A" } }));
+        using var destination = new MemoryStream();
+
+        // Act
+        new NpoiExcelExporter().Export(request, destination);
+
+        // Assert
+        destination.Position = 0;
+        using var result = WorkbookFactory.Create(destination);
+        var sheet = result.GetSheet("客户");
+        Assert.Equal("Name", sheet.GetRow(0).GetCell(0).StringCellValue);
+        Assert.Equal("客户 A", sheet.GetRow(1).GetCell(0).StringCellValue);
+        Assert.Equal("0.00", sheet.GetRow(0).GetCell(0).CellStyle.GetDataFormatString());
+        Assert.Equal("0.00", sheet.GetRow(1).GetCell(0).CellStyle.GetDataFormatString());
+        Assert.NotNull(sheet.GetRow(0).GetCell(0).CellComment);
+        Assert.Equal("模板批注", sheet.GetRow(0).GetCell(0).CellComment.String.String);
+    }
+
+    /// <summary>
+    /// 测试 - ReplaceTemplate 策略应清除模板样式和批注后写入导出值。
+    /// </summary>
+    [Fact]
+    public void Export_TemplateCellOverwrite_Replace_ShouldClearTemplateMetadata()
+    {
+        // Arrange
+        using var template = new MemoryStream(CreateWorkbook(workbook =>
+        {
+            var sheet = workbook.CreateSheet("客户");
+            var style = workbook.CreateCellStyle();
+            style.DataFormat = workbook.CreateDataFormat().GetFormat("0.00");
+            var header = sheet.CreateRow(0).CreateCell(0);
+            header.CellStyle = style;
+            var anchor = workbook.GetCreationHelper().CreateClientAnchor();
+            anchor.Col1 = 0;
+            anchor.Col2 = 2;
+            anchor.Row1 = 0;
+            anchor.Row2 = 3;
+            var comment = sheet.CreateDrawingPatriarch().CreateCellComment(anchor);
+            comment.String = workbook.GetCreationHelper().CreateRichTextString("模板批注");
+            header.CellComment = comment;
+        }));
+        var request = ExcelExport.Workbook(workbook => workbook
+            .UseTemplate(template, leaveOpen: true)
+            .AddSheet("客户", new[] { new ExportCustomer { Name = "客户 A" } },
+                sheet => sheet.TemplateCellOverwrite(ExcelTemplateCellOverwritePolicy.ReplaceTemplate)));
+        using var destination = new MemoryStream();
+
+        // Act
+        new NpoiExcelExporter().Export(request, destination);
+
+        // Assert
+        destination.Position = 0;
+        using var result = WorkbookFactory.Create(destination);
+        var sheet = result.GetSheet("客户");
+        Assert.Equal("Name", sheet.GetRow(0).GetCell(0).StringCellValue);
+        Assert.Equal("客户 A", sheet.GetRow(1).GetCell(0).StringCellValue);
+        Assert.Equal("General", sheet.GetRow(0).GetCell(0).CellStyle.GetDataFormatString());
+        Assert.Null(sheet.GetRow(0).GetCell(0).CellComment);
     }
 
     /// <summary>
@@ -1564,11 +1679,23 @@ public sealed class ExcelWorkbookRequestTest
         public IExcelMappingPlan Create<T>(ExcelMappingDocument document, MappingDirection direction)
             where T : class, new() => _inner.Create<T>(document, direction);
 
+        public IExcelMappingPlan Create<T>(ExcelMappingDocument document,
+            ExcelMappingConfiguration requestConfiguration, MappingDirection direction)
+            where T : class, new() => _inner.Create<T>(document, requestConfiguration, direction);
+
         public IExcelMappingWorkbookPlan CreateWorkbook<T>(ExcelMappingDocument document,
             MappingDirection direction, IReadOnlyList<string> sheetNames) where T : class, new()
         {
             _workbookPlanSheetCounts.Add(sheetNames.Count);
             return _inner.CreateWorkbook<T>(document, direction, sheetNames);
+        }
+
+        public IExcelMappingWorkbookPlan CreateWorkbook<T>(ExcelMappingDocument document,
+            ExcelMappingConfiguration requestConfiguration, MappingDirection direction,
+            IReadOnlyList<string> sheetNames) where T : class, new()
+        {
+            _workbookPlanSheetCounts.Add(sheetNames.Count);
+            return _inner.CreateWorkbook<T>(document, requestConfiguration, direction, sheetNames);
         }
     }
 }

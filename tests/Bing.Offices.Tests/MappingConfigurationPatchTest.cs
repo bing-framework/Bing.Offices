@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using Bing.Offices.Attributes;
 using Bing.Offices.Configurations;
 using Bing.Offices.Imports;
@@ -243,7 +244,7 @@ public sealed class MappingConfigurationPatchTest
         Assert.Equal(ExcelDynamicColumnMergeMode.Append, roundTrip.Import.DynamicColumnMergeMode);
         Assert.True(roundTrip.Import.Style.ClearHeaderStyleKey);
         Assert.True(roundTrip.Import.Layout.ResetColumnIndex);
-        Assert.Empty(roundTrip.Export.Columns);
+        Assert.Null(roundTrip.Export);
     }
 
     /// <summary>
@@ -306,6 +307,49 @@ public sealed class MappingConfigurationPatchTest
         Assert.False(column.Ignored);
         Assert.Empty(column.ValueMap);
         Assert.Equal(ExcelImageMultiplicityPolicy.First, column.ImageMultiplicity);
+    }
+
+    /// <summary>
+    /// 测试 - 显式文档缺少目标方向时默认失败，避免静默回退到约定映射。
+    /// </summary>
+    [Fact]
+    public void Plan_MissingDirection_ShouldFailWithoutExplicitFallback()
+    {
+        // Arrange
+        var factory = new ExcelMappingPlanFactory();
+        var document = new ExcelMappingDocument
+        {
+            Import = new ExcelMappingConfiguration()
+        };
+
+        // Act
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            factory.Create<PatchRow>(document, MappingDirection.Export));
+
+        // Assert
+        Assert.Contains("UseConventionFallback", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("Export", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 测试 - 显式启用 Convention fallback 后，缺失方向应使用实体约定映射。
+    /// </summary>
+    [Fact]
+    public void Plan_MissingDirection_WithExplicitFallback_ShouldUseConvention()
+    {
+        // Arrange
+        var factory = new ExcelMappingPlanFactory();
+        var document = new ExcelMappingDocument
+        {
+            UseConventionFallback = true,
+            Import = new ExcelMappingConfiguration()
+        };
+
+        // Act
+        var plan = factory.Create<PatchRow>(document, MappingDirection.Export);
+
+        // Assert
+        Assert.NotNull(plan.Columns.Single(column => column.Name == nameof(PatchRow.Name)));
     }
 
     /// <summary>

@@ -5,6 +5,7 @@ v2 文档统一使用以下结构，JSON 和 XML 会先归一化为 `ExcelMappin
 ```json
 {
   "version": 2,
+  "useConventionFallback": false,
   "import": {
     "profile": "orders",
     "modelAlias": "order-import",
@@ -25,6 +26,8 @@ var importRequest = ExcelImport.Workbook<OrdersWorkbook>(builder =>
 ```
 
 XML 使用同名元素：`ExcelMappingDocument/Version/Import/Profile/ModelAlias/Export/Profile/ModelAlias`。Profile 和 alias 只能出现在对应方向节点；根节点不再承载方向业务元数据。v2 主加载器拒绝旧版平铺 v1 配置。
+
+文档缺少目标方向时默认失败。只有显式设置根级 `useConventionFallback: true`，或通过无文档的传统请求路径使用约定映射时，才允许 Convention fallback；该行为不会由空方向配置自动触发。
 
 限制包括 UTF-8 文档大小、JSON 深度、字符串、列、别名、校验规则和 XML 字符数。未知 JSON 字段和 XML 节点拒绝并报告路径。XML 禁止 DTD 与外部实体，禁止使用程序集限定 CLR 类型名；`modelAlias` 是稳定业务别名。
 

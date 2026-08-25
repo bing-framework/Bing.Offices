@@ -193,18 +193,16 @@ public class CsvTest
     }
 
         /// <summary>
-        /// 测试 - 旧异步字节数组入口应委托当前 CSV Stream-first 导出器。
+        /// 测试 - 同步字节数组入口应委托当前 CSV Stream-first 导出器。
         /// </summary>
         [Fact]
-        public async System.Threading.Tasks.Task StreamExtensions_LegacyAsyncBytes_ShouldDelegateToExporter()
+        public void StreamExtensions_Bytes_ShouldDelegateToExporter()
         {
         // Arrange
         var exporter = new CsvEntityExporter();
 
         // Act
-    #pragma warning disable CS0618
-        var content = await exporter.ExportToBytesAsync(new[] { new CsvRow { Name = "兼容", Count = 1 } });
-    #pragma warning restore CS0618
+        var content = exporter.ExportToBytes(new[] { new CsvRow { Name = "兼容", Count = 1 } });
 
         // Assert
         Assert.NotEmpty(content);

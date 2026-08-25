@@ -127,7 +127,7 @@ public enum ExcelImportFailureWorkbookMode
 /// </summary>
 public enum ExcelImportValidationMode
 {
-    /// <summary>禁用工作簿规则。</summary>
+    /// <summary>禁用配置和工作簿原生规则。</summary>
     Disabled,
     /// <summary>只执行配置和属性规则。</summary>
     ConfiguredRules,

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Bing.Offices.Attributes;
@@ -73,6 +74,92 @@ public class StreamPipelineTest
             descriptor.ServiceType == typeof(ICsvExporter))).Lifetime);
         Assert.All(services.Where(descriptor => descriptor.ServiceType == typeof(IExcelValidationRule)), descriptor =>
             Assert.Equal(ServiceLifetime.Singleton, descriptor.Lifetime));
+    }
+
+    /// <summary>
+    /// 测试 - AddNpoi 应注册与直接构造相同的全部内置校验规则，包括最大值规则。
+    /// </summary>
+    [Fact]
+    public void AddNpoi_DefaultValidationRules_ShouldMatchDirectConstruction()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        services.AddNpoi();
+        using var provider = services.BuildServiceProvider();
+
+        // Act
+        var registered = provider.GetServices<IExcelValidationRule>()
+            .Select(rule => rule.GetType())
+            .OrderBy(type => type.FullName, StringComparer.Ordinal)
+            .ToArray();
+        var direct = ExcelValidationRules.CreateDefault()
+            .Select(rule => rule.GetType())
+            .OrderBy(type => type.FullName, StringComparer.Ordinal)
+            .ToArray();
+
+        // Assert
+        Assert.Equal(direct, registered);
+    }
+
+    /// <summary>
+    /// 测试 - 流复制协作者应完整复制数据且不关闭调用方拥有的源流和目标流。
+    /// </summary>
+    [Fact]
+    public void NpoiStreamCopier_Copy_ShouldPreserveDataAndStreamOwnership()
+    {
+        // Arrange
+        var expected = Encoding.UTF8.GetBytes("Bing.Offices stream payload");
+        using var source = new MemoryStream(expected);
+        using var destination = new MemoryStream();
+
+        // Act
+        NpoiStreamCopier.Copy(source, destination, CancellationToken.None);
+
+        // Assert
+        Assert.Equal(expected, destination.ToArray());
+        Assert.True(source.CanRead);
+        Assert.True(destination.CanRead);
+        Assert.True(destination.CanWrite);
+    }
+
+    /// <summary>
+    /// 测试 - 流复制超过最大输入字节数时应拒绝继续写入。
+    /// </summary>
+    [Fact]
+    public void NpoiStreamCopier_Copy_WhenMaxBytesExceeded_ShouldThrowBeforeWrite()
+    {
+        // Arrange
+        using var source = new MemoryStream(new byte[] { 1, 2, 3 });
+        using var destination = new MemoryStream();
+
+        // Act
+        var action = () => NpoiStreamCopier.Copy(source, destination, CancellationToken.None, 2);
+
+        // Assert
+        var exception = Assert.Throws<InvalidOperationException>(action);
+        Assert.Equal("输入工作簿超过最大字节数: 2", exception.Message);
+        Assert.Empty(destination.ToArray());
+    }
+
+    /// <summary>
+    /// 测试 - 复制开始前已取消时应立即抛出取消异常且不读取或写入流。
+    /// </summary>
+    [Fact]
+    public void NpoiStreamCopier_Copy_WhenCancelled_ShouldThrowBeforeIo()
+    {
+        // Arrange
+        using var source = new MemoryStream(new byte[] { 1, 2, 3 });
+        using var destination = new MemoryStream();
+        using var cancellationTokenSource = new CancellationTokenSource();
+        cancellationTokenSource.Cancel();
+
+        // Act
+        var action = () => NpoiStreamCopier.Copy(source, destination, cancellationTokenSource.Token);
+
+        // Assert
+        Assert.Throws<OperationCanceledException>(action);
+        Assert.Equal(0, source.Position);
+        Assert.Empty(destination.ToArray());
     }
 
     /// <summary>
@@ -552,7 +639,7 @@ public class StreamPipelineTest
         // Assert
         Assert.Equal("JSON 名称", Assert.Single(jsonConfiguration.Columns).Title);
         Assert.Equal("XML 名称", Assert.Single(xmlConfiguration.Columns).Title);
-        Assert.Throws<System.Xml.XmlException>(() => ExcelMappingConfigurationLoader.FromXml(unsafeXml));
+            Assert.Throws<System.Xml.XmlException>(() => ExcelMappingConfigurationLoader.FromXmlDocument(unsafeXml));
     }
 
     /// <summary>
@@ -617,8 +704,10 @@ public class StreamPipelineTest
         try
         {
             // Act / Assert
-            Assert.Throws<InvalidOperationException>(() => ExcelMappingConfigurationLoader.FromJsonFile(jsonPath));
-            Assert.Throws<InvalidOperationException>(() => ExcelMappingConfigurationLoader.FromXmlFile(xmlPath));
+            Assert.Throws<InvalidOperationException>(() => ExcelMappingConfigurationLoader.FromJsonDocument(
+                File.ReadAllText(jsonPath, Encoding.UTF8)));
+            Assert.Throws<InvalidOperationException>(() => ExcelMappingConfigurationLoader.FromXmlDocument(
+                File.ReadAllText(xmlPath, Encoding.UTF8)));
         }
         finally
         {
@@ -2418,11 +2507,6 @@ public class StreamPipelineTest
     private sealed class TestMappingConfigurationLoader : IExcelMappingConfigurationLoader
     {
         /// <inheritdoc />
-        public ExcelMappingConfiguration FromJson(string json) => ExcelMappingConfigurationLoader.FromJson(json);
-
-        /// <inheritdoc />
-        public ExcelMappingConfiguration FromJson(Stream source) => ExcelMappingConfigurationLoader.FromJson(source);
-
         /// <inheritdoc />
         public ExcelMappingDocument FromJsonDocument(string json) => ExcelMappingConfigurationLoader.FromJsonDocument(json);
 
@@ -2430,11 +2514,6 @@ public class StreamPipelineTest
         public ExcelMappingDocument FromJsonDocument(Stream source) => ExcelMappingConfigurationLoader.FromJsonDocument(source);
 
         /// <inheritdoc />
-        public ExcelMappingConfiguration FromXml(string xml) => ExcelMappingConfigurationLoader.FromXml(xml);
-
-        /// <inheritdoc />
-        public ExcelMappingConfiguration FromXml(Stream source) => ExcelMappingConfigurationLoader.FromXml(source);
-
         /// <inheritdoc />
         public ExcelMappingDocument FromXmlDocument(string xml) => ExcelMappingConfigurationLoader.FromXmlDocument(xml);
 

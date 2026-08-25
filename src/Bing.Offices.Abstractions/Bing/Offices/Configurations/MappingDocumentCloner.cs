@@ -13,12 +13,11 @@ internal static class MappingDocumentCloner
             Version = document.Version,
             TenantId = document.TenantId,
             ConfigurationVersion = document.ConfigurationVersion,
-            Import = document.Import == null
-                ? new ExcelMappingConfiguration { Columns = new List<ExcelColumnConfiguration>() }
-                : MappingConfigurationCloner.Clone(document.Import, MappingSourceKind.Document),
-            Export = document.Export == null
-                ? new ExcelMappingConfiguration { Columns = new List<ExcelColumnConfiguration>() }
-                : MappingConfigurationCloner.Clone(document.Export, MappingSourceKind.Document)
+            UseConventionFallback = document.UseConventionFallback,
+            Import = document.Import == null ? null :
+                MappingConfigurationCloner.Clone(document.Import, MappingSourceKind.Document),
+            Export = document.Export == null ? null :
+                MappingConfigurationCloner.Clone(document.Export, MappingSourceKind.Document)
         };
     }
 }

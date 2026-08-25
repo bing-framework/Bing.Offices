@@ -10,22 +10,6 @@ public static class CsvStreamExtensions
     /// <summary>
     /// 将实体集合导出为 CSV 字节数组。
     /// </summary>
-    /// <remarks>
-    /// 该兼容入口不提供真实异步 I/O，仅委托当前 Stream-first 导出器。
-    /// </remarks>
-    /// <typeparam name="T">实体类型。</typeparam>
-    /// <param name="exporter">CSV 导出器。</param>
-    /// <param name="data">实体集合。</param>
-    /// <param name="options">导出选项。</param>
-    /// <param name="cancellationToken">取消令牌。</param>
-    [Obsolete("请使用 ExportToBytes；主导出契约为同步 Stream-first API。")]
-    public static Task<byte[]> ExportToBytesAsync<T>(this ICsvExporter exporter, IEnumerable<T> data,
-        CsvExportOptions<T> options = null, CancellationToken cancellationToken = default) where T : class, new() =>
-        Task.FromResult(exporter.ExportToBytes(data, options, cancellationToken));
-
-    /// <summary>
-    /// 将实体集合导出为 CSV 字节数组。
-    /// </summary>
     /// <typeparam name="T">实体类型。</typeparam>
     /// <param name="exporter">CSV 导出器。</param>
     /// <param name="data">实体集合。</param>

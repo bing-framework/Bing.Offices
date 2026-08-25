@@ -15,33 +15,12 @@ namespace Bing.Offices.Configurations;
 /// </summary>
 public static class ExcelMappingConfigurationLoader
 {
-    private const int MaxDocumentBytes = 1024 * 1024;
+    private const int MaxDocumentBytes = ExcelMappingTextReader.MaxDocumentBytes;
     private const int MaxDepth = 32;
     private const int MaxColumns = 1000;
     private const int MaxAliasesPerColumn = 100;
     private const int MaxValidationsPerColumn = 100;
     private const int MaxStringLength = 4096;
-
-    /// <summary>
-    /// 从 JSON 文本加载 v2 映射配置；v1 平铺配置必须通过显式迁移入口处理。
-    /// </summary>
-    public static ExcelMappingConfiguration FromJson(string json) => FromJsonDocument(json).Import;
-
-    /// <summary>
-    /// 从 JSON 流加载兼容映射配置。
-    /// </summary>
-    public static ExcelMappingConfiguration FromJson(Stream source) => FromJsonDocument(source).Import;
-
-    /// <summary>
-    /// 从 UTF-8 JSON 配置文件加载兼容映射配置。
-    /// </summary>
-    public static ExcelMappingConfiguration FromJsonFile(string path)
-    {
-        if (string.IsNullOrWhiteSpace(path))
-            throw new ArgumentException("JSON 配置文件路径不能为空。", nameof(path));
-        using var source = File.OpenRead(path);
-        return FromJsonDocument(source).Import;
-    }
 
     /// <summary>
     /// 从 JSON 文本加载规范化映射文档。
@@ -92,7 +71,7 @@ public static class ExcelMappingConfigurationLoader
         if (!source.CanRead)
             throw new ArgumentException("JSON 配置流不可读取。", nameof(source));
         using var reader = new StreamReader(source, Encoding.UTF8, true, 1024, true);
-        return MigrateV1Json(ReadLimitedText(reader), direction);
+        return MigrateV1Json(ExcelMappingTextReader.ReadLimitedText(reader), direction);
     }
     /// <summary>
     /// 从 JSON 文本加载文档，并返回非阻断的迁移诊断。
@@ -132,7 +111,7 @@ public static class ExcelMappingConfigurationLoader
             var isV2 = document.RootElement.TryGetProperty("version", out _)
                        || document.RootElement.TryGetProperty("import", out _)
                        || document.RootElement.TryGetProperty("export", out _);
-            ValidateJsonElement(document.RootElement, "$", isV2);
+            ExcelMappingDocumentValidator.ValidateJsonElement(document.RootElement, "$", isV2);
             var options = new JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true,
@@ -151,7 +130,7 @@ public static class ExcelMappingConfigurationLoader
                 throw new InvalidOperationException(
                     "检测到 v1 平铺 JSON；请调用 MigrateV1Json(json, direction) 并显式指定迁移方向。");
             }
-            ValidateDocument(result, modelAliases);
+            ExcelMappingDocumentValidator.ValidateDocument(result, modelAliases);
             return result;
         }
         catch (JsonException exception)
@@ -176,28 +155,7 @@ public static class ExcelMappingConfigurationLoader
         if (!source.CanRead)
             throw new ArgumentException("JSON 配置流不可读取。", nameof(source));
         using var reader = new StreamReader(source, Encoding.UTF8, true, 1024, true);
-        return FromJsonDocument(ReadLimitedText(reader), modelAliases);
-    }
-
-    /// <summary>
-    /// 从 XML 文本加载兼容映射配置；v2 文档返回 Import 方向配置。
-    /// </summary>
-    public static ExcelMappingConfiguration FromXml(string xml) => FromXmlDocument(xml).Import;
-
-    /// <summary>
-    /// 从 XML 流加载兼容映射配置。
-    /// </summary>
-    public static ExcelMappingConfiguration FromXml(Stream source) => FromXmlDocument(source).Import;
-
-    /// <summary>
-    /// 从 UTF-8 XML 配置文件加载兼容映射配置。
-    /// </summary>
-    public static ExcelMappingConfiguration FromXmlFile(string path)
-    {
-        if (string.IsNullOrWhiteSpace(path))
-            throw new ArgumentException("XML 配置文件路径不能为空。", nameof(path));
-        using var source = File.OpenRead(path);
-        return FromXmlDocument(source).Import;
+        return FromJsonDocument(ExcelMappingTextReader.ReadLimitedText(reader), modelAliases);
     }
 
     /// <summary>
@@ -249,7 +207,7 @@ public static class ExcelMappingConfigurationLoader
         if (!source.CanRead)
             throw new ArgumentException("XML 配置流不可读取。", nameof(source));
         using var reader = new StreamReader(source, Encoding.UTF8, true, 1024, true);
-        return MigrateV1Xml(ReadLimitedText(reader), direction);
+        return MigrateV1Xml(ExcelMappingTextReader.ReadLimitedText(reader), direction);
     }
     /// <summary>
     /// 从 XML 文本加载文档，并返回非阻断的迁移诊断。
@@ -277,13 +235,17 @@ public static class ExcelMappingConfigurationLoader
         if (Encoding.UTF8.GetByteCount(xml) > MaxDocumentBytes)
             throw new InvalidOperationException($"XML 配置超过最大字节数: {MaxDocumentBytes}");
         var isV2 = IsXmlDocumentRoot(xml);
-        ValidateXmlShape(xml, isV2);
+        using (var shapeReader = XmlReader.Create(new StringReader(xml), CreateXmlReaderSettings()))
+        {
+            var shape = XDocument.Load(shapeReader, LoadOptions.SetLineInfo);
+            ExcelMappingDocumentValidator.ValidateXmlShape(shape.Root, isV2);
+        }
         if (!isV2)
             throw new InvalidOperationException(
                 "检测到 v1 平铺 XML；请调用 MigrateV1Xml(xml, direction) 并显式指定迁移方向。");
         using var reader = XmlReader.Create(new StringReader(xml), CreateXmlReaderSettings());
         var result = DeserializeXml(reader);
-        ValidateDocument(result, modelAliases);
+        ExcelMappingDocumentValidator.ValidateDocument(result, modelAliases);
         return result;
     }
 
@@ -303,7 +265,7 @@ public static class ExcelMappingConfigurationLoader
         if (!source.CanRead)
             throw new ArgumentException("XML 配置流不可读取。", nameof(source));
         using var reader = new StreamReader(source, Encoding.UTF8, true, 1024, true);
-        return FromXmlDocument(ReadLimitedText(reader), modelAliases);
+        return FromXmlDocument(ExcelMappingTextReader.ReadLimitedText(reader), modelAliases);
     }
 
     /// <summary>
@@ -311,7 +273,7 @@ public static class ExcelMappingConfigurationLoader
     /// </summary>
     public static string ToJson(ExcelMappingDocument document)
     {
-        ValidateDocument(document, null);
+        ExcelMappingDocumentValidator.ValidateDocument(document, null);
         return JsonSerializer.Serialize(document, new JsonSerializerOptions
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -325,27 +287,11 @@ public static class ExcelMappingConfigurationLoader
     /// </summary>
     public static string ToXml(ExcelMappingDocument document)
     {
-        ValidateDocument(document, null);
+        ExcelMappingDocumentValidator.ValidateDocument(document, null);
         var serializer = new XmlSerializer(typeof(ExcelMappingDocument));
         using var writer = new Utf8StringWriter();
         serializer.Serialize(writer, document);
         return writer.ToString();
-    }
-
-    private static string ReadLimitedText(TextReader reader)
-    {
-        var buffer = new char[8192];
-        var builder = new StringBuilder();
-        var total = 0;
-        int count;
-        while ((count = reader.Read(buffer, 0, buffer.Length)) > 0)
-        {
-            total += count;
-            if (total > MaxDocumentBytes)
-                throw new InvalidOperationException($"配置超过最大字符数: {MaxDocumentBytes}");
-            builder.Append(buffer, 0, count);
-        }
-        return builder.ToString();
     }
 
     private static ExcelMappingDocument CreateMigratedDocument(ExcelMappingConfiguration configuration,
@@ -367,7 +313,7 @@ public static class ExcelMappingConfigurationLoader
 
     private static ExcelMappingConfiguration DeserializeV1Json(string json)
     {
-        ValidateDocumentText(json, "JSON");
+        ExcelMappingTextReader.ValidateDocumentText(json, "JSON");
         try
         {
             using var document = JsonDocument.Parse(json, new JsonDocumentOptions
@@ -378,7 +324,7 @@ public static class ExcelMappingConfigurationLoader
             });
             if (document.RootElement.ValueKind != JsonValueKind.Object)
                 throw new InvalidOperationException("JSON 配置根节点必须是对象。");
-            ValidateJsonElement(document.RootElement, "$", false);
+            ExcelMappingDocumentValidator.ValidateJsonElement(document.RootElement, "$", false);
             return JsonSerializer.Deserialize<ExcelMappingConfiguration>(json, new JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true,
@@ -393,21 +339,17 @@ public static class ExcelMappingConfigurationLoader
 
     private static ExcelMappingConfiguration DeserializeV1Xml(string xml)
     {
-        ValidateDocumentText(xml, "XML");
-        ValidateXmlShape(xml, false);
+        ExcelMappingTextReader.ValidateDocumentText(xml, "XML");
+        using (var shapeReader = XmlReader.Create(new StringReader(xml), CreateXmlReaderSettings()))
+        {
+            var shape = XDocument.Load(shapeReader, LoadOptions.SetLineInfo);
+            ExcelMappingDocumentValidator.ValidateXmlShape(shape.Root, false);
+        }
         using var reader = XmlReader.Create(new StringReader(xml), CreateXmlReaderSettings());
         var serializer = new XmlSerializer(typeof(ExcelMappingConfiguration));
         AttachXmlValidationHandlers(serializer);
         return (ExcelMappingConfiguration)serializer.Deserialize(reader)
             ?? throw new InvalidOperationException("XML 配置未包含有效映射。");
-    }
-
-    private static void ValidateDocumentText(string text, string format)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-            throw new ArgumentException($"{format} 配置不能为空。", nameof(text));
-        if (Encoding.UTF8.GetByteCount(text) > MaxDocumentBytes)
-            throw new InvalidOperationException($"{format} 配置超过最大字节数: {MaxDocumentBytes}");
     }
 
     private static void ValidateDirection(MappingDirection direction)
@@ -431,143 +373,15 @@ public static class ExcelMappingConfigurationLoader
         return string.Equals(reader.LocalName, nameof(ExcelMappingDocument), StringComparison.Ordinal);
     }
 
-    private static void ValidateXmlShape(string xml, bool isV2)
-    {
-        using var reader = XmlReader.Create(new StringReader(xml), CreateXmlReaderSettings());
-        var document = XDocument.Load(reader, LoadOptions.SetLineInfo);
-        if (document.Root == null)
-            throw new InvalidOperationException("XML 配置根节点不能为空。");
-        var expectedRoot = isV2 ? nameof(ExcelMappingDocument) : nameof(ExcelMappingConfiguration);
-        if (!string.Equals(document.Root.Name.LocalName, expectedRoot, StringComparison.Ordinal))
-            throw new InvalidOperationException($"XML 根节点必须是 /{expectedRoot}。");
-        ValidateXmlElement(document.Root, "/" + expectedRoot);
-    }
-
-    private static void ValidateXmlElement(XElement element, string path)
-    {
-        foreach (var attribute in element.Attributes())
-        {
-            if (attribute.IsNamespaceDeclaration || attribute.Name.NamespaceName == "http://www.w3.org/2001/XMLSchema-instance")
-                continue;
-            throw new InvalidOperationException($"未知 XML 属性: {path}/@{attribute.Name.LocalName}");
-        }
-
-        foreach (var child in element.Elements())
-        {
-            if (!IsKnownXmlElement(element.Name.LocalName, child.Name.LocalName))
-                throw new InvalidOperationException($"未知 XML 字段: {path}/{child.Name.LocalName}");
-            ValidateXmlElement(child, $"{path}/{child.Name.LocalName}");
-        }
-    }
-
-    private static bool IsKnownXmlElement(string parent, string child)
-    {
-        if (parent == nameof(ExcelMappingDocument))
-            return child is nameof(ExcelMappingDocument.Version) or nameof(ExcelMappingDocument.TenantId)
-                or nameof(ExcelMappingDocument.ConfigurationVersion) or nameof(ExcelMappingDocument.Import)
-                or nameof(ExcelMappingDocument.Export);
-        if (parent is nameof(ExcelMappingDocument.Import) or nameof(ExcelMappingDocument.Export)
-            or nameof(ExcelMappingConfiguration))
-            return child is nameof(ExcelMappingConfiguration.SourceKind) or nameof(ExcelMappingConfiguration.Profile)
-                or nameof(ExcelMappingConfiguration.ModelAlias) or nameof(ExcelMappingConfiguration.Columns)
-                or nameof(ExcelMappingConfiguration.DynamicColumns)
-                or nameof(ExcelMappingConfiguration.DynamicColumnKeysToRemove)
-                or nameof(ExcelMappingConfiguration.DynamicColumnMergeMode)
-                or nameof(ExcelMappingConfiguration.Style)
-                or nameof(ExcelMappingConfiguration.Layout) or nameof(ExcelMappingConfiguration.ClearDynamicColumns)
-                or nameof(ExcelMappingConfiguration.ResetStyle) or nameof(ExcelMappingConfiguration.ResetLayout);
-        if (parent == nameof(ExcelMappingConfiguration.Columns))
-            return child == nameof(ExcelColumnConfiguration);
-        if (parent == nameof(ExcelMappingConfiguration.DynamicColumns))
-            return child == nameof(ExcelMappingDynamicColumnConfiguration);
-        if (parent == nameof(ExcelMappingDynamicColumnConfiguration))
-            return child is nameof(ExcelMappingDynamicColumnConfiguration.Key)
-                or nameof(ExcelMappingDynamicColumnConfiguration.Title)
-                or nameof(ExcelMappingDynamicColumnConfiguration.Aliases)
-                or nameof(ExcelMappingDynamicColumnConfiguration.DataTypeName)
-                or nameof(ExcelMappingDynamicColumnConfiguration.Order)
-                or nameof(ExcelMappingDynamicColumnConfiguration.ConverterName)
-                or nameof(ExcelMappingDynamicColumnConfiguration.ValidatorName)
-                or nameof(ExcelMappingDynamicColumnConfiguration.ValidationRuleNames)
-                or nameof(ExcelMappingDynamicColumnConfiguration.ValidationRules)
-                or nameof(ExcelMappingDynamicColumnConfiguration.NumberFormat)
-                or nameof(ExcelMappingDynamicColumnConfiguration.ColumnIndex)
-                or nameof(ExcelMappingDynamicColumnConfiguration.PlacementKey)
-                or nameof(ExcelMappingDynamicColumnConfiguration.ImageMultiplicity);
-        if (parent == nameof(ExcelMappingConfiguration.Style))
-            return child is nameof(ExcelMappingStyleConfiguration.HeaderStyleKey)
-                or nameof(ExcelMappingStyleConfiguration.ClearHeaderStyleKey)
-                or nameof(ExcelMappingStyleConfiguration.BodyStyleKey)
-                or nameof(ExcelMappingStyleConfiguration.ClearBodyStyleKey)
-                or nameof(ExcelMappingStyleConfiguration.NumberFormat)
-                or nameof(ExcelMappingStyleConfiguration.ClearNumberFormat);
-        if (parent == nameof(ExcelMappingConfiguration.Layout))
-            return child is nameof(ExcelMappingLayoutConfiguration.ColumnIndex)
-                or nameof(ExcelMappingLayoutConfiguration.ResetColumnIndex)
-                or nameof(ExcelMappingLayoutConfiguration.PlacementKey)
-                or nameof(ExcelMappingLayoutConfiguration.ClearPlacementKey);
-        if (parent == nameof(ExcelColumnConfiguration))
-            return child is nameof(ExcelColumnConfiguration.PropertyName) or nameof(ExcelColumnConfiguration.Title)
-                or nameof(ExcelColumnConfiguration.Aliases) or nameof(ExcelColumnConfiguration.ColumnIndex)
-                or nameof(ExcelColumnConfiguration.Ignored) or nameof(ExcelColumnConfiguration.Formatter)
-                or nameof(ExcelColumnConfiguration.ClearTitle) or nameof(ExcelColumnConfiguration.ClearAliases)
-                or nameof(ExcelColumnConfiguration.ResetColumnIndex) or nameof(ExcelColumnConfiguration.ResetIgnored)
-                or nameof(ExcelColumnConfiguration.ClearFormatter) or nameof(ExcelColumnConfiguration.ResetDecimalScale)
-                or nameof(ExcelColumnConfiguration.ClearConverterName)
-                or nameof(ExcelColumnConfiguration.ResetImportWhitespace)
-                or nameof(ExcelColumnConfiguration.DecimalScale) or nameof(ExcelColumnConfiguration.ConverterName)
-                or nameof(ExcelColumnConfiguration.ImportWhitespace)
-                or nameof(ExcelColumnConfiguration.ValidationRuleNames)
-                or nameof(ExcelColumnConfiguration.ValidationRuleNamesToRemove)
-                or nameof(ExcelColumnConfiguration.ClearValidationRules)
-                or nameof(ExcelColumnConfiguration.ValidationRuleMergeMode)
-                or nameof(ExcelColumnConfiguration.ValueMappings)
-                or nameof(ExcelColumnConfiguration.ClearValueMappings)
-                or nameof(ExcelColumnConfiguration.ValueMappingMergeMode)
-                or nameof(ExcelColumnConfiguration.ResetImageMultiplicity)
-                or nameof(ExcelColumnConfiguration.ImageMultiplicity);
-        if (parent is nameof(ExcelColumnConfiguration.Aliases)
-            or nameof(ExcelColumnConfiguration.ValidationRuleNames)
-            or nameof(ExcelColumnConfiguration.ValidationRuleNamesToRemove))
-            return child == "string";
-        if (parent == nameof(ExcelMappingDynamicColumnConfiguration.Aliases))
-            return child == "string";
-        if (parent == nameof(ExcelMappingDynamicColumnConfiguration.ValidationRules))
-            return child == nameof(ExcelMappingDynamicValidationConfiguration);
-        if (parent == nameof(ExcelMappingDynamicValidationConfiguration))
-            return child is nameof(ExcelMappingDynamicValidationConfiguration.Name)
-                or nameof(ExcelMappingDynamicValidationConfiguration.Pattern)
-                or nameof(ExcelMappingDynamicValidationConfiguration.Format)
-                or nameof(ExcelMappingDynamicValidationConfiguration.CultureName)
-                or nameof(ExcelMappingDynamicValidationConfiguration.Min)
-                or nameof(ExcelMappingDynamicValidationConfiguration.Max)
-                or nameof(ExcelMappingDynamicValidationConfiguration.MaxValue)
-                or nameof(ExcelMappingDynamicValidationConfiguration.MaxLength)
-                or nameof(ExcelMappingDynamicValidationConfiguration.IgnoreEmpty);
-        if (parent == nameof(ExcelColumnConfiguration.ValueMappings))
-            return child == nameof(ExcelValueMappingConfiguration);
-        if (parent == nameof(ExcelValueMappingConfiguration))
-            return child is nameof(ExcelValueMappingConfiguration.Text) or nameof(ExcelValueMappingConfiguration.Value);
-        return true;
-    }
-
     private static ExcelMappingDocument DeserializeXml(XmlReader reader)
     {
         try
         {
             reader.MoveToContent();
-            if (string.Equals(reader.LocalName, nameof(ExcelMappingDocument), StringComparison.Ordinal))
-            {
-                var serializer = new XmlSerializer(typeof(ExcelMappingDocument));
-                AttachXmlValidationHandlers(serializer);
-                return (ExcelMappingDocument)serializer.Deserialize(reader)
-                    ?? throw new InvalidOperationException("XML 配置未包含有效映射文档。");
-            }
-            var configurationSerializer = new XmlSerializer(typeof(ExcelMappingConfiguration));
-            AttachXmlValidationHandlers(configurationSerializer);
-            _ = configurationSerializer;
-            throw new InvalidOperationException(
-                "v1 XML 只能通过 MigrateV1Xml(xml, direction) 显式迁移。");
+            var serializer = new XmlSerializer(typeof(ExcelMappingDocument));
+            AttachXmlValidationHandlers(serializer);
+            return (ExcelMappingDocument)serializer.Deserialize(reader)
+                ?? throw new InvalidOperationException("XML 配置未包含有效映射文档。");
         }
         catch (InvalidOperationException exception)
         {
@@ -592,176 +406,6 @@ public static class ExcelMappingConfigurationLoader
         return null;
     }
 
-    private static void ValidateDocument(ExcelMappingDocument document, ExcelModelAliasRegistry modelAliases)
-    {
-        if (document == null)
-            throw new InvalidOperationException("映射文档不能为空。");
-        if (document.Version != 2)
-            throw new InvalidOperationException($"不支持的映射文档版本: {document.Version}");
-        ValidateText(document.TenantId, "tenantId");
-        ValidateText(document.ConfigurationVersion, "configurationVersion");
-        ValidateConfiguration(document.Import, "import", modelAliases);
-        ValidateConfiguration(document.Export, "export", modelAliases);
-    }
-
-    private static void ValidateConfiguration(ExcelMappingConfiguration configuration, string path,
-        ExcelModelAliasRegistry modelAliases)
-    {
-        if (configuration == null)
-            return;
-        if (configuration.DynamicColumnMergeMode.HasValue
-            && !Enum.IsDefined(typeof(ExcelDynamicColumnMergeMode), configuration.DynamicColumnMergeMode.Value))
-            throw new InvalidOperationException($"{path}.dynamicColumnMergeMode 无效。");
-        for (var removeIndex = 0; removeIndex < (configuration.DynamicColumnKeysToRemove?.Count ?? 0); removeIndex++)
-            ValidateText(configuration.DynamicColumnKeysToRemove[removeIndex],
-                $"{path}.dynamicColumnKeysToRemove[{removeIndex}]");
-        ValidateBusinessAlias(configuration.Profile, $"{path}.profile");
-        ValidateBusinessAlias(configuration.ModelAlias, $"{path}.modelAlias");
-        if (modelAliases != null && modelAliases.HasRegistrations
-            && !string.IsNullOrWhiteSpace(configuration.ModelAlias)
-            && !modelAliases.Contains(configuration.ModelAlias))
-            throw new InvalidOperationException($"未知 modelAlias: {configuration.ModelAlias}");
-        ValidateText(configuration.Style?.HeaderStyleKey, $"{path}.style.headerStyleKey");
-        ValidateText(configuration.Style?.BodyStyleKey, $"{path}.style.bodyStyleKey");
-        ValidateText(configuration.Style?.NumberFormat, $"{path}.style.numberFormat");
-        ValidatePlacementKey(configuration.Layout?.PlacementKey, $"{path}.layout.placementKey");
-        if (configuration.Layout?.ColumnIndex < 0)
-            throw new InvalidOperationException($"{path}.layout.columnIndex 不能小于 0。");
-        if (configuration.Columns == null)
-            throw new InvalidOperationException($"{path}.columns 不能为空。");
-        if (configuration.Columns.Count > MaxColumns)
-            throw new InvalidOperationException($"{path}.columns 超过最大数量: {MaxColumns}");
-        if ((configuration.DynamicColumns?.Count ?? 0) > MaxColumns)
-            throw new InvalidOperationException($"{path}.dynamicColumns 超过最大数量: {MaxColumns}");
-        for (var dynamicIndex = 0; dynamicIndex < (configuration.DynamicColumns?.Count ?? 0); dynamicIndex++)
-        {
-            var dynamic = configuration.DynamicColumns[dynamicIndex];
-            var dynamicPath = $"{path}.dynamicColumns[{dynamicIndex}]";
-            if (dynamic == null)
-                throw new InvalidOperationException($"{dynamicPath} 不能为 null。");
-            ValidateText(dynamic.Key, $"{dynamicPath}.key");
-            ValidateText(dynamic.Title, $"{dynamicPath}.title");
-            ValidateText(dynamic.DataTypeName, $"{dynamicPath}.dataTypeName");
-            ValidateText(dynamic.ConverterName, $"{dynamicPath}.converterName");
-            ValidateText(dynamic.ValidatorName, $"{dynamicPath}.validatorName");
-            for (var validationIndex = 0; validationIndex < (dynamic.ValidationRules?.Count ?? 0); validationIndex++)
-            {
-                var validation = dynamic.ValidationRules[validationIndex];
-                var validationPath = $"{dynamicPath}.validationRules[{validationIndex}]";
-                if (validation == null)
-                    throw new InvalidOperationException($"{validationPath} 不能为 null。");
-                ValidateText(validation.Name, $"{validationPath}.name");
-                ValidateText(validation.Pattern, $"{validationPath}.pattern");
-                ValidateText(validation.Format, $"{validationPath}.format");
-                ValidateText(validation.CultureName, $"{validationPath}.cultureName");
-                if (validation.MaxLength < 0)
-                    throw new InvalidOperationException($"{validationPath}.maxLength 不能小于 0。");
-            }
-            for (var ruleIndex = 0; ruleIndex < (dynamic.ValidationRuleNames?.Count ?? 0); ruleIndex++)
-                ValidateText(dynamic.ValidationRuleNames[ruleIndex],
-                    $"{dynamicPath}.validationRuleNames[{ruleIndex}]");
-            ValidateText(dynamic.NumberFormat, $"{dynamicPath}.numberFormat");
-            ValidatePlacementKey(dynamic.PlacementKey, $"{dynamicPath}.placementKey");
-            if (dynamic.ColumnIndex < 0)
-                throw new InvalidOperationException($"{dynamicPath}.columnIndex 不能小于 0。");
-            if (dynamic.ColumnIndex.HasValue && !string.IsNullOrWhiteSpace(dynamic.PlacementKey))
-                throw new InvalidOperationException($"{dynamicPath} 不能同时设置 columnIndex 和 placementKey。");
-            for (var aliasIndex = 0; aliasIndex < (dynamic.Aliases?.Count ?? 0); aliasIndex++)
-                ValidateText(dynamic.Aliases[aliasIndex], $"{dynamicPath}.aliases[{aliasIndex}]");
-        }
-        for (var columnIndex = 0; columnIndex < configuration.Columns.Count; columnIndex++)
-        {
-            var column = configuration.Columns[columnIndex];
-            var columnPath = $"{path}.columns[{columnIndex}]";
-            if (column == null)
-                throw new InvalidOperationException($"{columnPath} 不能为 null。");
-            if ((column.Aliases?.Count ?? 0) > MaxAliasesPerColumn)
-                throw new InvalidOperationException($"{columnPath}.aliases 超过最大数量: {MaxAliasesPerColumn}");
-            if ((column.ValidationRuleNames?.Count ?? 0) + (column.ValidationRuleNamesToRemove?.Count ?? 0)
-                > MaxValidationsPerColumn)
-                throw new InvalidOperationException($"{columnPath}.validations 超过最大数量: {MaxValidationsPerColumn}");
-            ValidateText(column.PropertyName, $"{columnPath}.propertyName");
-            ValidateText(column.Title, $"{columnPath}.title");
-            ValidateText(column.Formatter, $"{columnPath}.formatter");
-            ValidateText(column.ConverterName, $"{columnPath}.converterName");
-            if (column.ValidationRuleMergeMode.HasValue
-                && !Enum.IsDefined(typeof(ExcelValidationRuleMergeMode), column.ValidationRuleMergeMode.Value))
-                throw new InvalidOperationException($"{columnPath}.validationRuleMergeMode 无效。");
-            if (column.ValueMappingMergeMode.HasValue
-                && !Enum.IsDefined(typeof(ExcelValueMappingMergeMode), column.ValueMappingMergeMode.Value))
-                throw new InvalidOperationException($"{columnPath}.valueMappingMergeMode 无效。");
-            for (var aliasIndex = 0; aliasIndex < (column.Aliases?.Count ?? 0); aliasIndex++)
-                ValidateText(column.Aliases[aliasIndex], $"{columnPath}.aliases[{aliasIndex}]");
-            for (var ruleIndex = 0; ruleIndex < (column.ValidationRuleNames?.Count ?? 0); ruleIndex++)
-                ValidateText(column.ValidationRuleNames[ruleIndex], $"{columnPath}.validationRuleNames[{ruleIndex}]");
-            for (var ruleIndex = 0; ruleIndex < (column.ValidationRuleNamesToRemove?.Count ?? 0); ruleIndex++)
-                ValidateText(column.ValidationRuleNamesToRemove[ruleIndex], $"{columnPath}.validationRuleNamesToRemove[{ruleIndex}]");
-            for (var mappingIndex = 0; mappingIndex < (column.ValueMappings?.Count ?? 0); mappingIndex++)
-            {
-                var mapping = column.ValueMappings[mappingIndex];
-                ValidateText(mapping?.Text, $"{columnPath}.valueMappings[{mappingIndex}].text");
-                ValidateText(mapping?.Value, $"{columnPath}.valueMappings[{mappingIndex}].value");
-            }
-        }
-    }
-
-    private static void ValidateJsonElement(JsonElement element, string path, bool isV2)
-    {
-        if (element.ValueKind == JsonValueKind.String)
-        {
-            ValidateText(element.GetString(), path);
-            return;
-        }
-        if (element.ValueKind == JsonValueKind.Array)
-        {
-            var index = 0;
-            foreach (var item in element.EnumerateArray())
-                ValidateJsonElement(item, $"{path}[{index++}]", isV2);
-            return;
-        }
-        if (element.ValueKind != JsonValueKind.Object)
-            return;
-
-        foreach (var property in element.EnumerateObject())
-        {
-            var propertyPath = path == "$" ? $"$.{property.Name}" : $"{path}.{property.Name}";
-            if (!IsKnownJsonProperty(path, property.Name, isV2))
-                throw new InvalidOperationException($"未知 JSON 字段: {propertyPath}");
-            ValidateJsonElement(property.Value, propertyPath, isV2);
-        }
-    }
-
-    private static bool IsKnownJsonProperty(string path, string propertyName, bool isV2)
-    {
-        var names = path == "$"
-            ? isV2
-                ? new[] { "version", "tenantId", "configurationVersion", "import", "export" }
-                : new[] { "sourceKind", "profile", "modelAlias", "columns", "dynamicColumns", "dynamicColumnKeysToRemove", "dynamicColumnMergeMode", "style", "layout", "clearDynamicColumns", "resetStyle", "resetLayout" }
-            : path.EndsWith(".import", StringComparison.Ordinal) || path.EndsWith(".export", StringComparison.Ordinal)
-                ? new[] { "sourceKind", "profile", "modelAlias", "columns", "dynamicColumns", "dynamicColumnKeysToRemove", "dynamicColumnMergeMode", "style", "layout", "clearDynamicColumns", "resetStyle", "resetLayout" }
-                : path.EndsWith(".dynamicColumns", StringComparison.Ordinal)
-                    ? new[] { "key", "title", "aliases", "dataTypeName", "order", "converterName", "validatorName", "validationRuleNames", "validationRules", "numberFormat", "columnIndex", "placementKey", "imageMultiplicity" }
-                    : path.EndsWith(".validationRules", StringComparison.Ordinal)
-                        ? new[] { "name", "pattern", "format", "cultureName", "min", "max", "maxValue", "maxLength", "ignoreEmpty" }
-                    : path.Contains(".validationRules[", StringComparison.Ordinal)
-                        ? new[] { "name", "pattern", "format", "cultureName", "min", "max", "maxValue", "maxLength", "ignoreEmpty" }
-                    : path.Contains(".dynamicColumns[", StringComparison.Ordinal)
-                        ? new[] { "key", "title", "aliases", "dataTypeName", "order", "converterName", "validatorName", "validationRuleNames", "validationRules", "numberFormat", "columnIndex", "placementKey", "imageMultiplicity" }
-                        : path.EndsWith(".style", StringComparison.Ordinal)
-                            ? new[] { "headerStyleKey", "clearHeaderStyleKey", "bodyStyleKey", "clearBodyStyleKey", "numberFormat", "clearNumberFormat" }
-                                : path.EndsWith(".layout", StringComparison.Ordinal)
-                                ? new[] { "columnIndex", "resetColumnIndex", "placementKey", "clearPlacementKey" }
-                                    : path.Contains(".dynamicColumns[", StringComparison.Ordinal)
-                                        && path.EndsWith(".aliases", StringComparison.Ordinal)
-                                        ? new[] { "value" }
-                : path.EndsWith(".valueMappings", StringComparison.Ordinal) || path.Contains(".valueMappings[", StringComparison.Ordinal)
-                    ? new[] { "text", "value" }
-                        : path.EndsWith(".columns", StringComparison.Ordinal) || path.Contains(".columns[", StringComparison.Ordinal)
-                        ? new[] { "propertyName", "title", "clearTitle", "aliases", "clearAliases", "columnIndex", "resetColumnIndex", "ignored", "resetIgnored", "formatter", "clearFormatter", "decimalScale", "resetDecimalScale", "converterName", "clearConverterName", "importWhitespace", "resetImportWhitespace", "validationRuleNames", "validationRuleNamesToRemove", "clearValidationRules", "validationRuleMergeMode", "valueMappings", "clearValueMappings", "valueMappingMergeMode", "imageMultiplicity", "resetImageMultiplicity" }
-                        : Array.Empty<string>();
-        return names.Any(name => string.Equals(name, propertyName, StringComparison.OrdinalIgnoreCase));
-    }
-
     private static void AttachXmlValidationHandlers(XmlSerializer serializer)
     {
         serializer.UnknownNode += (_, eventArgs) =>
@@ -777,35 +421,6 @@ public static class ExcelMappingConfigurationLoader
         }
     }
 
-    private static void ValidateText(string value, string path)
-    {
-        if (value != null && value.Length > MaxStringLength)
-            throw new InvalidOperationException($"{path} 字符串长度超过最大值: {MaxStringLength}");
-    }
-
-    private static void ValidatePlacementKey(string value, string path)
-    {
-        ValidateText(value, path);
-        if (string.IsNullOrWhiteSpace(value))
-            return;
-                var valid = value.StartsWith("before:", StringComparison.OrdinalIgnoreCase)
-                                        || value.StartsWith("after:", StringComparison.OrdinalIgnoreCase)
-                                        || value.StartsWith("before-", StringComparison.OrdinalIgnoreCase)
-                                        || value.StartsWith("after-", StringComparison.OrdinalIgnoreCase);
-                var separator = value.IndexOfAny(new[] { ':', '-' });
-                if (!valid || separator == value.Length - 1)
-                        throw new InvalidOperationException($"{path} 必须使用 before:列键 或 after:列键。");
-    }
-
-    private static void ValidateBusinessAlias(string value, string path)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-            return;
-        if (value.Length > 256 || value.IndexOfAny(new[] { '.', ',', '+', '[', ']' }) >= 0
-            || value.IndexOf("::", StringComparison.Ordinal) >= 0)
-            throw new InvalidOperationException($"{path} 必须是稳定业务别名，不能使用 CLR 或程序集限定类型名。");
-    }
-
     private sealed class Utf8StringWriter : StringWriter
     {
         public override Encoding Encoding => Encoding.UTF8;
@@ -818,22 +433,10 @@ public static class ExcelMappingConfigurationLoader
 public sealed class DefaultExcelMappingConfigurationLoader : IExcelMappingConfigurationLoader
 {
     /// <inheritdoc />
-    public ExcelMappingConfiguration FromJson(string json) => ExcelMappingConfigurationLoader.FromJson(json);
-
-    /// <inheritdoc />
-    public ExcelMappingConfiguration FromJson(Stream source) => ExcelMappingConfigurationLoader.FromJson(source);
-
-    /// <inheritdoc />
     public ExcelMappingDocument FromJsonDocument(string json) => ExcelMappingConfigurationLoader.FromJsonDocument(json);
 
     /// <inheritdoc />
     public ExcelMappingDocument FromJsonDocument(Stream source) => ExcelMappingConfigurationLoader.FromJsonDocument(source);
-
-    /// <inheritdoc />
-    public ExcelMappingConfiguration FromXml(string xml) => ExcelMappingConfigurationLoader.FromXml(xml);
-
-    /// <inheritdoc />
-    public ExcelMappingConfiguration FromXml(Stream source) => ExcelMappingConfigurationLoader.FromXml(source);
 
     /// <inheritdoc />
     public ExcelMappingDocument FromXmlDocument(string xml) => ExcelMappingConfigurationLoader.FromXmlDocument(xml);

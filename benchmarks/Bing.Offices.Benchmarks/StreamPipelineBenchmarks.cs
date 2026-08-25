@@ -1,6 +1,8 @@
 ﻿using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Jobs;
 using Bing.Offices.Exports;
 using Bing.Offices.Imports;
+using Bing.Offices.Extensions;
 using Bing.Offices.Npoi.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -10,7 +12,7 @@ namespace Bing.Offices.Benchmarks;
 /// Stream-first 导入与单工作簿导出性能基准。
 /// </summary>
 [MemoryDiagnoser]
-[InProcess]
+[SimpleJob(launchCount: 1, warmupCount: 2, iterationCount: 3)]
 public class StreamPipelineBenchmarks
 {
     /// <summary>
@@ -51,6 +53,11 @@ public class StreamPipelineBenchmarks
     private MemoryStream? _destination;
 
     /// <summary>
+    /// 历史导出路径使用的中间工作簿缓冲流，仅用于对照基准。
+    /// </summary>
+    private MemoryStream? _legacyDestinationBuffer;
+
+    /// <summary>
     /// 初始化基准数据和导入工作簿。
     /// </summary>
     [GlobalSetup]
@@ -78,6 +85,7 @@ public class StreamPipelineBenchmarks
         _exporter.Export(_exportRequest, source);
         _sourceBytes = source.ToArray();
         _destination = new MemoryStream();
+        _legacyDestinationBuffer = new MemoryStream();
     }
 
     /// <summary>
@@ -87,6 +95,7 @@ public class StreamPipelineBenchmarks
     public void Cleanup()
     {
         _destination?.Dispose();
+        _legacyDestinationBuffer?.Dispose();
         (_serviceProvider as IDisposable)?.Dispose();
     }
 
@@ -102,6 +111,20 @@ public class StreamPipelineBenchmarks
     }
 
     /// <summary>
+    /// 对照历史导入路径额外保留一份输入缓冲，再交给当前 NPOI 导入器。
+    /// </summary>
+    /// <returns>成功导入的行数。</returns>
+    [Benchmark]
+    public int ImportWithLegacySourceBuffer()
+    {
+        using var source = new MemoryStream(_sourceBytes, writable: false);
+        using var staging = new MemoryStream();
+        source.CopyTo(staging);
+        staging.Position = 0;
+        return _importer.Import(staging, _importRequest).Workbook.Items.Count;
+    }
+
+    /// <summary>
     /// 测量向 XLSX 目标流导出全部行的成本。
     /// </summary>
     /// <returns>生成工作簿的字节数。</returns>
@@ -111,6 +134,23 @@ public class StreamPipelineBenchmarks
         _destination!.Position = 0;
         _destination.SetLength(0);
         _exporter.Export(_exportRequest, _destination);
+        return _destination.Length;
+    }
+
+    /// <summary>
+    /// 对照历史导出路径先写入中间工作簿缓冲，再复制到调用方目标流。
+    /// </summary>
+    /// <returns>生成工作簿的字节数。</returns>
+    [Benchmark]
+    public long ExportWithLegacyDestinationBuffer()
+    {
+        _legacyDestinationBuffer!.Position = 0;
+        _legacyDestinationBuffer.SetLength(0);
+        _destination!.Position = 0;
+        _destination.SetLength(0);
+        _exporter.Export(_exportRequest, _legacyDestinationBuffer);
+        _legacyDestinationBuffer.Position = 0;
+        _legacyDestinationBuffer.CopyTo(_destination);
         return _destination.Length;
     }
 

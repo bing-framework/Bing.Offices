@@ -5,7 +5,7 @@ using System.Reflection;
 using System.Runtime.ExceptionServices;
 using Bing.Offices.Configurations;
 
-namespace Bing.Offices.Npoi.Extensions;
+namespace Bing.Offices.Extensions;
 
 internal static class ProfileDescriptorFactory
 {
