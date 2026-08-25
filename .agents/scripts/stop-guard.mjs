@@ -472,6 +472,7 @@ function buildNotificationMessage(
     taskId: task.taskId,
     mode: task.mode || 'plan-execution',
     reviewRound: Number.isInteger(task.reviewRound) ? task.reviewRound : 0,
+    fixScope: task.fixScope || undefined,
     agentSource: task.agentSource || 'antigravity',
     modelName: sanitizeNotificationText(context.modelName, 200),
     terminationReason: sanitizeNotificationText(context.terminationReason, 200),
@@ -508,7 +509,10 @@ async function main() {
   }
 
   const guardEnabled = parseBoolean(fileEnv.STOP_GUARD_ENABLED, true);
-  const notifyEnabled = parseBoolean(fileEnv.STOP_GUARD_NOTIFY, true);
+  const notifyEnabled = parseBoolean(
+    fileEnv.AI_WORKFLOW_NOTIFY,
+    parseBoolean(fileEnv.STOP_GUARD_NOTIFY, true),
+  );
   const maxContinues = parseNonNegativeInteger(fileEnv.STOP_GUARD_MAX_CONTINUES, 3);
   const conversationId = context.conversationId || 'unknown-conversation';
   const terminationReason = String(context.terminationReason || '').toLowerCase();

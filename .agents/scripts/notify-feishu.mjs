@@ -118,6 +118,46 @@ function normalizeStatus(status) {
 
 function getStatusPresentation(status) {
   switch (normalizeStatus(status)) {
+    case 'PLAN_CREATED':
+      return {
+        icon: '📋',
+        title: '实施计划已生成',
+        label: 'PLAN_CREATED',
+        template: 'blue',
+      };
+
+    case 'REVIEW_PASS':
+      return {
+        icon: '✅',
+        title: 'Review 已通过',
+        label: 'PASS',
+        template: 'green',
+      };
+
+    case 'REVIEW_PASS_WITH_ISSUES':
+      return {
+        icon: 'ℹ️',
+        title: 'Review 通过但仍有非阻塞项',
+        label: 'PASS_WITH_ISSUES',
+        template: 'blue',
+      };
+
+    case 'REVIEW_NEEDS_FIX':
+      return {
+        icon: '🛠️',
+        title: 'Review 需要继续修复',
+        label: 'NEEDS_FIX',
+        template: 'orange',
+      };
+
+    case 'REVIEW_BLOCKED':
+      return {
+        icon: '⛔',
+        title: 'Review 被阻塞',
+        label: 'BLOCKED',
+        template: 'orange',
+      };
+
     case 'COMPLETED':
       return {
         icon: '✅',
@@ -230,6 +270,14 @@ function getModeLabel(mode) {
     return 'PLAN_EXECUTION';
   }
 
+  if (normalized === 'plan') {
+    return 'PLAN';
+  }
+
+  if (normalized === 'review') {
+    return 'REVIEW';
+  }
+
   return sanitizeNotificationText(mode, 100) || 'UNKNOWN';
 }
 
@@ -240,6 +288,7 @@ export function buildFeishuText({
   taskId,
   mode,
   reviewRound,
+  fixScope,
   agentSource,
   modelName,
   terminationReason,
@@ -263,6 +312,10 @@ export function buildFeishuText({
 
   if (getModeLabel(mode) === 'REVIEW_FIX' && Number.isInteger(reviewRound) && reviewRound > 0) {
     lines.push(`修复轮次：Round ${reviewRound}`);
+  }
+
+  if (fixScope) {
+    lines.push(`修复范围：${String(fixScope).toUpperCase()}`);
   }
 
   if (modelName) {
@@ -304,6 +357,7 @@ export function buildFeishuCard({
   taskId,
   mode,
   reviewRound,
+  fixScope,
   agentSource,
   modelName,
   terminationReason,
@@ -321,6 +375,7 @@ export function buildFeishuCard({
     getModeLabel(mode) === 'REVIEW_FIX' && Number.isInteger(reviewRound) && reviewRound > 0
       ? mdRow('修复轮次', `Round ${reviewRound}`)
       : null,
+    fixScope ? mdRow('修复范围', String(fixScope).toUpperCase()) : null,
     mdRow('状态', `${p.icon} ${p.label}`),
   ].filter(Boolean);
 
@@ -527,6 +582,7 @@ async function runCli() {
       taskId: 'feishu-card-test',
       mode: 'review-fix',
       reviewRound: 1,
+      fixScope: 'recommended',
       agentSource: 'copilot',
       modelName: 'manual-test',
       terminationReason: 'manual_test',

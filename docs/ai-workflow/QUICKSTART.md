@@ -1,51 +1,100 @@
-# Quick Start
+# Universal Agent Workflow V4.1 快速开始
 
-## 1. 安装
+## 1. V4.1 两个关键变化
 
-把本包内容覆盖/合并到项目根目录。
+默认 Review Fix：
 
-保留你自己的：
+```text
+fixScope = recommended
+```
+
+即：
+
+```text
+MUST_FIX       ✅ 修
+SHOULD_FIX     ✅ 修
+OPTIONAL       ⏭ 默认不修
+```
+
+Copilot 增加确定性 Workspace Hooks：
+
+```text
+.github/hooks/ai-workflow.json
+```
+
+用于：
+
+```text
+UserPromptSubmit → 识别当前阶段
+Stop             → 通知 / Finalize / 未完成保护
+```
+
+## 2. 安装
+
+把压缩包内容合并到项目根目录。
+
+保留真实：
 
 ```text
 .agents/.env.local
 ```
 
-不要把真实 Webhook/Secret 提交 Git。
+建议：
 
-将：
-
-```text
-templates/gitignore.snippet
+```dotenv
+AI_WORKFLOW_NOTIFY=true
+FEISHU_ENABLED=true
+FEISHU_MESSAGE_MODE=card
 ```
 
-合并到项目 `.gitignore`。
-
-## 2. 自检
+## 3. 自检
 
 ```bash
 node .agents/scripts/workflow-doctor.mjs
 ```
 
-## 3. Copilot
+Copilot Hook 可以通过 VS Code：
 
-生成计划：
+```text
+Chat: Configure Hooks
+```
+
+或：
+
+```text
+/hooks
+```
+
+确认加载。
+
+## 4. Copilot
 
 ```text
 /create-plan
 ```
 
-执行计划有两种方式：
+完成后：
 
-### 便捷/跨工具 Skill
+```text
+📋 Plan Created
+```
+
+执行：
 
 ```text
 /execute-plan
 ```
 
-### 严格自定义 Agent
+或者严格自定义 Agent：
 
 ```text
 /run-plan
+```
+
+完成后：
+
+```text
+✅ Implementation Completed
 ```
 
 Review：
@@ -54,57 +103,89 @@ Review：
 /review-plan
 ```
 
-NEEDS_FIX 后：
+完成后飞书会显示：
+
+```text
+PASS
+PASS_WITH_ISSUES
+NEEDS_FIX
+BLOCKED
+```
+
+以及：
+
+```text
+MUST_FIX 数量
+SHOULD_FIX 数量
+OPTIONAL 数量
+```
+
+如果 NEEDS_FIX：
 
 ```text
 /fix-review
 ```
 
-或严格 Agent：
+或：
 
 ```text
 /repair-review
 ```
 
-## 4. Antigravity
+默认：
+
+```text
+MUST_FIX + SHOULD_FIX
+```
+
+修完再次：
+
+```text
+/review-plan
+```
+
+## 5. 自定义修复范围
+
+只修 MUST_FIX：
+
+```bash
+node .agents/scripts/task-state.mjs review-fix <taskId> --source copilot --fix-scope must
+```
+
+默认：
+
+```bash
+--fix-scope recommended
+```
+
+全部连 OPTIONAL 都修：
+
+```bash
+--fix-scope all
+```
+
+## 6. Antigravity
+
+仍使用：
 
 ```text
 /execute-plan <taskId>
-```
-
-Review 后若 NEEDS_FIX：
-
-```text
 /fix-review <taskId>
 ```
 
-## 5. Codex
+Antigravity 的 `.agents/hooks.json` 保持原 schema。
+
+不要把 `.github/hooks/ai-workflow.json` 复制成 Antigravity Hook。
+
+## 7. Codex
 
 ```text
 $execute-plan
-```
-
-告诉它：
-
-```text
-taskId=fund-analysis-v2-convergence
-```
-
-Review NEEDS_FIX 后：
-
-```text
 $fix-review
 ```
 
-## 6. 任务结束
-
-所有执行 Harness 都遵守：
+fix-review 默认同样是：
 
 ```text
-execution.md 合法终态
-→ task-finish.mjs
-→ current-task inactive
-→ 飞书（如启用）
+recommended
 ```
-
-Antigravity Stop Hook 额外承担提前停止保护。
