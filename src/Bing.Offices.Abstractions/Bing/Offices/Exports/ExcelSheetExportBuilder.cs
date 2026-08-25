@@ -27,7 +27,6 @@ public sealed class ExcelSheetExportBuilder<T> where T : class, new()
     private Configurations.ExcelMappingConfiguration _documentMappingConfiguration;
     private Configurations.ExcelMappingConfiguration _requestMappingConfiguration;
     private Configurations.ExcelMappingDocument _mappingDocument;
-    private object _mappingProfile;
     private System.Globalization.CultureInfo _culture = System.Globalization.CultureInfo.InvariantCulture;
     private ExcelColumnWidthOptions _columnWidth;
     private ExcelCommentConflictPolicy _commentConflictPolicy = ExcelCommentConflictPolicy.Preserve;
@@ -143,25 +142,6 @@ public sealed class ExcelSheetExportBuilder<T> where T : class, new()
     }
 
     /// <summary>
-    /// 设置 Fluent 映射 Profile。
-    /// </summary>
-    public ExcelSheetExportBuilder<T> Mapping(Configurations.ExcelMappingProfile<T> profile)
-    {
-        _mappingProfile = profile;
-        return this;
-    }
-
-    /// <summary>
-    /// 设置导出方向的双模型 Mapping Profile。
-    /// </summary>
-    public ExcelSheetExportBuilder<T> Mapping<TImport>(Configurations.ExcelMappingProfile<TImport, T> profile)
-        where TImport : class, new()
-    {
-        _mappingProfile = profile;
-        return this;
-    }
-
-    /// <summary>
     /// 设置值转换使用的区域性。
     /// </summary>
     public ExcelSheetExportBuilder<T> Culture(System.Globalization.CultureInfo culture)
@@ -246,7 +226,6 @@ public sealed class ExcelSheetExportBuilder<T> where T : class, new()
             CloneDynamicColumns(_dynamicColumns), _failOnUnknownDynamicValues, _dynamicGetter, _sheetStyle, _headerStyle, _bodyStyle,
             _templateRegion, _hidden, _charts.AsReadOnly(), _headerRows,
             mappingConfiguration, _mappingDocument,
-            _mappingProfile,
             _culture, _columnWidth, _commentConflictPolicy);
     }
 

@@ -59,7 +59,7 @@ public sealed class ExcelSheetImportRequest
         Expression dynamicTarget, bool headerMatch, ValidateMode validateMode,
         System.Globalization.CultureInfo culture, Configurations.ExcelMappingConfiguration mappingConfiguration,
         Configurations.ExcelMappingDocument mappingDocument,
-        object mappingProfile, Func<object, object> dynamicTargetGetter, int maxColumnLength,
+        Func<object, object> dynamicTargetGetter, int maxColumnLength,
         bool failOnUnknownDynamicColumns,
         bool enabledEmptyLine, bool ignoreEmptyLineAfterData, ExcelReadColumnRange readColumnRange,
         ExcelNameComparison headerComparison, ExcelWhitespacePolicy headerWhitespace,
@@ -79,7 +79,6 @@ public sealed class ExcelSheetImportRequest
         MappingConfiguration = mappingConfiguration == null ? null :
             MappingConfigurationCloner.Clone(mappingConfiguration, mappingConfiguration.SourceKind);
         MappingDocument = Configurations.MappingDocumentCloner.Clone(mappingDocument);
-        MappingProfile = mappingProfile;
         DynamicTargetGetter = dynamicTargetGetter;
         MaxColumnLength = maxColumnLength;
         FailOnUnknownDynamicColumns = failOnUnknownDynamicColumns;
@@ -134,8 +133,6 @@ public sealed class ExcelSheetImportRequest
     public Configurations.ExcelMappingConfiguration MappingConfiguration { get; }
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Configurations.ExcelMappingDocument MappingDocument { get; }
-    [EditorBrowsable(EditorBrowsableState.Never)]
-    public object MappingProfile { get; }
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Func<object, object> DynamicTargetGetter { get; }
     [EditorBrowsable(EditorBrowsableState.Never)]

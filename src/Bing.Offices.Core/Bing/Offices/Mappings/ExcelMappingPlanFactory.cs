@@ -5,6 +5,9 @@ using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using System.Collections.ObjectModel;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using Bing.Offices.Attributes;
 using Bing.Offices.Conversions;
 using Bing.Offices.Configurations;
@@ -28,12 +31,12 @@ public sealed class ExcelMappingPlanFactory : IExcelMappingPlanFactory
     private readonly ConcurrentQueue<string> _cacheOrder = new();
 
     /// <summary>初始化计划工厂。</summary>
-    public ExcelMappingPlanFactory(Configurations.IMappingProfileRegistry profileRegistry = null,
-        Configurations.ExcelModelAliasRegistry modelAliases = null,
-        IEnumerable<IExcelValueConverter> valueConverters = null,
+    public ExcelMappingPlanFactory(IEnumerable<IExcelValueConverter> valueConverters = null,
         IEnumerable<IExcelValidationRule> validationRules = null,
         IEnumerable<INamedExcelValidationRule> namedValidationRules = null,
-        int cacheCapacity = 256)
+        int cacheCapacity = 256,
+        Configurations.IMappingProfileRegistry profileRegistry = null,
+        Configurations.ExcelModelAliasRegistry modelAliases = null)
     {
         _profileRegistry = profileRegistry;
         _modelAliases = modelAliases;
@@ -51,10 +54,12 @@ public sealed class ExcelMappingPlanFactory : IExcelMappingPlanFactory
     {
         if (document == null)
             throw new ArgumentNullException(nameof(document));
-        var key = CreateCacheKey<T>(document, direction);
+        var resolved = ResolveDocument<T>(document, direction);
+        var key = CreateCacheKey<T>(document, direction, resolved.Configuration);
         if (_planCache.TryGetValue(key, out var existing))
             return existing.Value;
-        var created = new Lazy<IExcelMappingPlan>(() => CreatePlanFromDocument<T>(document, direction),
+        var created = new Lazy<IExcelMappingPlan>(() => CreatePlan<T>(resolved.Configuration, resolved.ProfileName,
+            resolved.ModelAlias, resolved.AllowImplicitNamedConverters),
             System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
         var cached = _planCache.GetOrAdd(key, created);
         if (ReferenceEquals(cached, created))
@@ -77,58 +82,55 @@ public sealed class ExcelMappingPlanFactory : IExcelMappingPlanFactory
     }
 
     /// <inheritdoc />
-    [Obsolete("请改用 ExcelMappingDocument 重载；此入口仅用于 current-major 兼容迁移。", false)]
-    public IExcelMappingPlan Create<T>(object profile, ExcelMappingConfiguration configuration,
-        MappingDirection direction) where T : class, new()
-    {
-        var document = ExcelMappingDocumentFactory.Create<T>(profile, null, configuration, direction);
-        return Create<T>(document, direction);
-    }
-
-    /// <inheritdoc />
     public IExcelMappingPlan Create<T>(ExcelMappingDocument document, ExcelMappingConfiguration configuration,
         MappingDirection direction) where T : class, new()
     {
         if (document == null)
             throw new ArgumentNullException(nameof(document));
-        return Create<T>(ExcelMappingDocumentFactory.Create<T>(null, document, configuration, direction), direction);
+        return Create<T>(ExcelMappingDocumentFactory.Create<T>(document, configuration, direction), direction);
     }
 
-    private IExcelMappingPlan CreatePlanFromDocument<T>(ExcelMappingDocument document, MappingDirection direction)
+    private ResolvedMapping ResolveDocument<T>(ExcelMappingDocument document, MappingDirection direction)
         where T : class, new()
     {
         if (document == null)
             throw new ArgumentNullException(nameof(document));
+        if (!Enum.IsDefined(typeof(MappingDirection), direction))
+            throw new ArgumentOutOfRangeException(nameof(direction));
+        var normalized = ExcelMappingDocumentFactory.Create<T>(document, null, direction);
+        var directionConfiguration = direction == MappingDirection.Import ? normalized.Import : normalized.Export;
+        var profileName = directionConfiguration?.Profile;
+        var modelAlias = directionConfiguration?.ModelAlias;
         if (_modelAliases != null && _modelAliases.HasRegistrations
-            && !string.IsNullOrWhiteSpace(document.ModelAlias))
+            && !string.IsNullOrWhiteSpace(modelAlias))
         {
-            if (!_modelAliases.TryResolve(document.ModelAlias, out var modelType, out var aliasProfile))
-                throw new InvalidOperationException($"未知 modelAlias: {document.ModelAlias}");
+            if (!_modelAliases.TryResolve(modelAlias, out var modelType, out var aliasProfile))
+                throw new InvalidOperationException($"未知 modelAlias: {modelAlias}");
             if (modelType != null && modelType != typeof(T))
-                throw new InvalidOperationException($"modelAlias 与模型类型不匹配: {document.ModelAlias}");
+                throw new InvalidOperationException($"modelAlias 与模型类型不匹配: {modelAlias}");
+            if (!string.IsNullOrWhiteSpace(aliasProfile) && string.IsNullOrWhiteSpace(profileName))
+                throw new InvalidOperationException($"modelAlias 要求方向配置提供 Profile: {modelAlias}");
             if (!string.IsNullOrWhiteSpace(aliasProfile)
-                && !string.IsNullOrWhiteSpace(document.Profile)
-                && !string.Equals(aliasProfile, document.Profile, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException($"modelAlias 与 Profile 不匹配: {document.ModelAlias}");
+                && !string.IsNullOrWhiteSpace(profileName)
+                && !string.Equals(aliasProfile, profileName, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException($"modelAlias 与 Profile 不匹配: {modelAlias}");
         }
-        IMappingProfileSnapshot profileSnapshot = null;
-        if (_profileRegistry != null && !string.IsNullOrWhiteSpace(document.Profile)
-            && !_profileRegistry.TryGet(document.Profile, direction, typeof(T), out profileSnapshot))
+        ProfileDescriptor profileDescriptor = null;
+        if (_profileRegistry != null && !string.IsNullOrWhiteSpace(profileName)
+            && !_profileRegistry.TryGetDescriptor(profileName, direction, typeof(T), out profileDescriptor))
             throw new InvalidOperationException(
-                $"未找到匹配的 Profile: {document.Profile}，方向: {direction}，模型: {typeof(T).FullName}");
-        var mapped = profileSnapshot == null
-            ? ExcelTypeMapFactory.Get<T>(document, direction)
-            : ExcelTypeMapFactory.Get<T>(profileSnapshot, direction == MappingDirection.Import
-                ? document.Import : document.Export, direction);
-        var configuration = direction == MappingDirection.Import ? document.Import : document.Export;
-        return CreatePlan(mapped, configuration, document.Profile, document.ModelAlias, profileSnapshot == null);
+                $"未找到匹配的 Profile: {profileName}，方向: {direction}，模型: {typeof(T).FullName}");
+        var configuration = profileDescriptor == null
+            ? directionConfiguration
+            : MappingConfigurationMerger.Merge(profileDescriptor.Configuration,
+                directionConfiguration, MappingSourceKind.Document);
+        return new ResolvedMapping(configuration, profileName, modelAlias, profileDescriptor == null);
     }
 
-    private IExcelMappingPlan CreatePlan<T>(ExcelTypeMap<T> map, ExcelMappingConfiguration configuration,
-        string profileName, string modelAlias,
-        bool allowImplicitNamedConverters)
-        where T : class, new()
+    private IExcelMappingPlan CreatePlan<T>(ExcelMappingConfiguration configuration, string profileName,
+        string modelAlias, bool allowImplicitNamedConverters) where T : class, new()
     {
+        var map = ExcelTypeMapFactory.Get<T>(configuration);
         var dynamicColumns = (configuration?.DynamicColumns ?? new List<ExcelMappingDynamicColumnConfiguration>())
             .Select(CreateDynamicColumn).ToArray();
         ValidateDynamicColumns(dynamicColumns);
@@ -299,35 +301,36 @@ public sealed class ExcelMappingPlanFactory : IExcelMappingPlanFactory
         return rule ?? throw new InvalidOperationException($"未找到特性对应的校验规则: {attribute.GetType().FullName}");
     }
 
-    private static string CreateCacheKey<T>(ExcelMappingDocument document, MappingDirection direction)
-        where T : class, new()
+    private static string CreateCacheKey<T>(ExcelMappingDocument document, MappingDirection direction,
+        ExcelMappingConfiguration configuration) where T : class, new()
     {
-        var configuration = direction == MappingDirection.Import ? document.Import : document.Export;
-        var columns = configuration?.Columns ?? new List<ExcelColumnConfiguration>();
-        var columnKey = string.Join(";", columns.Select(column => string.Join(",",
-            column?.PropertyName, column?.Title, column?.Ignored, column?.ConverterName,
-            column?.Formatter, column?.DecimalScale, column?.ImportWhitespace,
-            string.Join("/", column?.Aliases ?? new List<string>()),
-            string.Join("/", column?.ValidationRuleNames ?? new List<string>()),
-            string.Join("/", column?.ValidationRuleNamesToRemove ?? new List<string>()),
-            column?.ClearValidationRules, column?.ValidationRuleMergeMode,
-            string.Join("/", (column?.ValueMappings ?? new List<ExcelValueMappingConfiguration>())
-                .Select(mapping => mapping == null ? string.Empty : $"{mapping.Text}={mapping.Value}")))));
-        var dynamicKey = string.Join(";", (configuration?.DynamicColumns ??
-            new List<ExcelMappingDynamicColumnConfiguration>()).Select(column => string.Join(",",
-            column?.Key, column?.Title, string.Join("/", column?.Aliases ?? new List<string>()),
-            column?.DataTypeName, column?.Order, column?.ConverterName, column?.ValidatorName,
-            string.Join("/", column?.ValidationRuleNames ?? new List<string>()),
-            string.Join("/", (column?.ValidationRules ?? new List<ExcelMappingDynamicValidationConfiguration>())
-                .Select(rule => rule == null ? string.Empty : string.Join(":", rule.Name, rule.Pattern,
-                    rule.Format, rule.CultureName, rule.Min, rule.Max, rule.MaxValue, rule.MaxLength,
-                    rule.IgnoreEmpty))),
-            column?.NumberFormat, column?.ColumnIndex, column?.PlacementKey, column?.ImageMultiplicity)));
-        return string.Join("|", document.TenantId, typeof(T).AssemblyQualifiedName, direction,
-            document.ConfigurationVersion, document.Profile, document.ModelAlias, columnKey, dynamicKey,
-            configuration?.Style?.HeaderStyleKey, configuration?.Style?.BodyStyleKey,
-            configuration?.Style?.NumberFormat, configuration?.Layout?.ColumnIndex,
-            configuration?.Layout?.PlacementKey);
+        var payload = JsonSerializer.Serialize(new
+        {
+            document.TenantId,
+            ModelType = typeof(T).AssemblyQualifiedName,
+            Direction = direction,
+            document.ConfigurationVersion,
+            Configuration = configuration
+        }, new JsonSerializerOptions { IgnoreNullValues = false });
+        using var sha256 = SHA256.Create();
+        return Convert.ToBase64String(sha256.ComputeHash(Encoding.UTF8.GetBytes(payload)));
+    }
+
+    private sealed class ResolvedMapping
+    {
+        public ResolvedMapping(ExcelMappingConfiguration configuration, string profileName,
+            string modelAlias, bool allowImplicitNamedConverters)
+        {
+            Configuration = configuration;
+            ProfileName = profileName;
+            ModelAlias = modelAlias;
+            AllowImplicitNamedConverters = allowImplicitNamedConverters;
+        }
+
+        public ExcelMappingConfiguration Configuration { get; }
+        public string ProfileName { get; }
+        public string ModelAlias { get; }
+        public bool AllowImplicitNamedConverters { get; }
     }
 
     private void TrimCache()

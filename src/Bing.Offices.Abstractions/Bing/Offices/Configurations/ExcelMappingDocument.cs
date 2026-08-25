@@ -13,16 +13,6 @@ public sealed class ExcelMappingDocument
     public int Version { get; set; } = 2;
 
     /// <summary>
-    /// 获取或设置业务 Profile 名称。
-    /// </summary>
-    public string Profile { get; set; }
-
-    /// <summary>
-    /// 获取或设置稳定业务模型别名，不允许使用 CLR 类型名。
-    /// </summary>
-    public string ModelAlias { get; set; }
-
-    /// <summary>
     /// 获取或设置租户缓存隔离键。
     /// </summary>
     public string TenantId { get; set; }

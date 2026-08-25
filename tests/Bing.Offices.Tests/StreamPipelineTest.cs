@@ -444,7 +444,7 @@ public class StreamPipelineTest
         // Arrange
         var profile = ExcelMapping.For<ConfiguredRow>()
             .Property(row => row.Name).HasTitle("Profile 名称").And()
-            .BuildProfile();
+            .Build();
         var request = new ExcelMappingConfiguration
         {
             Columns = new List<ExcelColumnConfiguration>
@@ -454,7 +454,8 @@ public class StreamPipelineTest
         };
 
         // Act
-        var map = ExcelTypeMapFactory.Get(profile, request);
+        var map = ExcelTypeMapFactory.Get<ConfiguredRow>(
+            MappingConfigurationMerger.Merge(profile, request, MappingSourceKind.Request));
 
         // Assert
         Assert.Equal("请求名称", map.Properties.Single(property => property.Name == nameof(ConfiguredRow.Name)).Title);
@@ -470,12 +471,11 @@ public class StreamPipelineTest
         var configuration = ExcelMapping.For<ConfiguredRow>()
             .Property(row => row.Name).HasTitle("固定名称").And()
             .Build();
-        var profile = new ExcelMappingProfile<ConfiguredRow>(configuration);
+        var snapshot = MappingConfigurationCloner.Clone(configuration, MappingSourceKind.Profile);
         configuration.Columns[0].Title = "外部修改";
-        profile.Configuration.Columns[0].Title = "读取结果修改";
 
         // Act
-        var map = ExcelTypeMapFactory.Get(profile, null);
+        var map = ExcelTypeMapFactory.Get<ConfiguredRow>(snapshot);
 
         // Assert
         Assert.Equal("固定名称", map.Properties.Single(property => property.Name == nameof(ConfiguredRow.Name)).Title);
@@ -491,10 +491,12 @@ public class StreamPipelineTest
         var fluent = ExcelMapping.For<EquivalentConfigurationRow>()
             .Property(row => row.Amount).HasTitle("金额").HasFormatter("0.00").HasDecimalScale(2).Map("有效", 1).And()
             .Build();
-        var json = ExcelMappingConfigurationLoader.FromJson(
-            "{\"columns\":[{\"propertyName\":\"Amount\",\"title\":\"金额\",\"formatter\":\"0.00\",\"decimalScale\":2,\"valueMappings\":[{\"text\":\"有效\",\"value\":\"1\"}]}]}");
-        var xml = ExcelMappingConfigurationLoader.FromXml(
-            "<ExcelMappingConfiguration><Columns><ExcelColumnConfiguration><PropertyName>Amount</PropertyName><Title>金额</Title><Formatter>0.00</Formatter><DecimalScale>2</DecimalScale><ValueMappings><ExcelValueMappingConfiguration><Text>有效</Text><Value>1</Value></ExcelValueMappingConfiguration></ValueMappings></ExcelColumnConfiguration></Columns></ExcelMappingConfiguration>");
+        var json = ExcelMappingConfigurationLoader.MigrateV1Json(
+            "{\"columns\":[{\"propertyName\":\"Amount\",\"title\":\"金额\",\"formatter\":\"0.00\",\"decimalScale\":2,\"valueMappings\":[{\"text\":\"有效\",\"value\":\"1\"}]}]}",
+            MappingDirection.Import).Import;
+        var xml = ExcelMappingConfigurationLoader.MigrateV1Xml(
+            "<ExcelMappingConfiguration><Columns><ExcelColumnConfiguration><PropertyName>Amount</PropertyName><Title>金额</Title><Formatter>0.00</Formatter><DecimalScale>2</DecimalScale><ValueMappings><ExcelValueMappingConfiguration><Text>有效</Text><Value>1</Value></ExcelValueMappingConfiguration></ValueMappings></ExcelColumnConfiguration></Columns></ExcelMappingConfiguration>",
+            MappingDirection.Import).Import;
 
         // Act
         var attributeColumn = ExcelTypeMapFactory.Get<EquivalentConfigurationRow>().Properties.Single();
@@ -544,8 +546,8 @@ public class StreamPipelineTest
         const string unsafeXml = "<!DOCTYPE config [<!ENTITY value SYSTEM 'file:///not-allowed'>]><ExcelMappingConfiguration />";
 
         // Act
-        var jsonConfiguration = ExcelMappingConfigurationLoader.FromJson(json);
-        var xmlConfiguration = ExcelMappingConfigurationLoader.FromXml(xml);
+        var jsonConfiguration = ExcelMappingConfigurationLoader.MigrateV1Json(json, MappingDirection.Import).Import;
+        var xmlConfiguration = ExcelMappingConfigurationLoader.MigrateV1Xml(xml, MappingDirection.Import).Import;
 
         // Assert
         Assert.Equal("JSON 名称", Assert.Single(jsonConfiguration.Columns).Title);
@@ -574,10 +576,14 @@ public class StreamPipelineTest
         try
         {
             // Act
-            var jsonFileConfiguration = ExcelMappingConfigurationLoader.FromJsonFile(jsonPath);
-            var xmlFileConfiguration = ExcelMappingConfigurationLoader.FromXmlFile(xmlPath);
-            var jsonStreamConfiguration = ExcelMappingConfigurationLoader.FromJson(jsonStream);
-            var xmlStreamConfiguration = ExcelMappingConfigurationLoader.FromXml(xmlStream);
+            var jsonFileConfiguration = ExcelMappingConfigurationLoader.MigrateV1Json(
+                File.ReadAllText(jsonPath, System.Text.Encoding.UTF8), MappingDirection.Import).Import;
+            var xmlFileConfiguration = ExcelMappingConfigurationLoader.MigrateV1Xml(
+                File.ReadAllText(xmlPath, System.Text.Encoding.UTF8), MappingDirection.Import).Import;
+            var jsonStreamConfiguration = ExcelMappingConfigurationLoader.MigrateV1Json(
+                jsonStream, MappingDirection.Import).Import;
+            var xmlStreamConfiguration = ExcelMappingConfigurationLoader.MigrateV1Xml(
+                xmlStream, MappingDirection.Import).Import;
 
             // Assert
             Assert.Equal("JSON 中文标题", Assert.Single(jsonFileConfiguration.Columns).Title);
@@ -629,10 +635,10 @@ public class StreamPipelineTest
     {
         // Arrange
         const string v1 = "{\"columns\":[{\"propertyName\":\"Name\",\"title\":\"名称\",\"aliases\":[\"旧名称\"]}]}";
-        const string v2 = "{\"version\":2,\"profile\":\"orders\",\"modelAlias\":\"order-row\",\"import\":{\"columns\":[{\"propertyName\":\"Name\",\"title\":\"名称\",\"aliases\":[\"旧名称\"]}]},\"export\":{\"columns\":[{\"propertyName\":\"Name\",\"title\":\"导出名称\"}]}}";
+        const string v2 = "{\"version\":2,\"import\":{\"profile\":\"orders\",\"modelAlias\":\"order-row\",\"columns\":[{\"propertyName\":\"Name\",\"title\":\"名称\",\"aliases\":[\"旧名称\"]}]},\"export\":{\"profile\":\"orders\",\"modelAlias\":\"order-row\",\"columns\":[{\"propertyName\":\"Name\",\"title\":\"导出名称\"}]}}";
 
         // Act
-        var migrated = ExcelMappingConfigurationLoader.FromJsonDocument(v1);
+        var migrated = ExcelMappingConfigurationLoader.MigrateV1Json(v1, MappingDirection.Import);
         var document = ExcelMappingConfigurationLoader.FromJsonDocument(v2);
 
         // Assert
@@ -641,8 +647,8 @@ public class StreamPipelineTest
         Assert.Equal("名称", Assert.Single(document.Import.Columns).Title);
         Assert.Equal("旧名称", Assert.Single(document.Import.Columns).Aliases[0]);
         Assert.Equal("导出名称", Assert.Single(document.Export.Columns).Title);
-        Assert.Equal("orders", document.Profile);
-        Assert.Equal("order-row", document.ModelAlias);
+        Assert.Equal("orders", document.Import.Profile);
+        Assert.Equal("order-row", document.Import.ModelAlias);
     }
 
     /// <summary>
@@ -652,7 +658,7 @@ public class StreamPipelineTest
     public void MappingConfigurationLoader_XmlV2_ShouldNormalizeAndRejectUnknownNodes()
     {
         // Arrange
-        const string xml = "<ExcelMappingDocument><Version>2</Version><Profile>orders</Profile><ModelAlias>order-row</ModelAlias><Import><Columns><ExcelColumnConfiguration><PropertyName>Name</PropertyName><Title>名称</Title><Aliases><string>旧名称</string></Aliases></ExcelColumnConfiguration></Columns></Import><Export><Columns><ExcelColumnConfiguration><PropertyName>Name</PropertyName><Title>导出名称</Title></ExcelColumnConfiguration></Columns></Export></ExcelMappingDocument>";
+        const string xml = "<ExcelMappingDocument><Version>2</Version><Import><Profile>orders</Profile><ModelAlias>order-row</ModelAlias><Columns><ExcelColumnConfiguration><PropertyName>Name</PropertyName><Title>名称</Title><Aliases><string>旧名称</string></Aliases></ExcelColumnConfiguration></Columns></Import><Export><Profile>orders</Profile><ModelAlias>order-row</ModelAlias><Columns><ExcelColumnConfiguration><PropertyName>Name</PropertyName><Title>导出名称</Title></ExcelColumnConfiguration></Columns></Export></ExcelMappingDocument>";
         const string unknownXml = "<ExcelMappingDocument><Version>2</Version><Unknown>value</Unknown></ExcelMappingDocument>";
 
         // Act
@@ -660,7 +666,7 @@ public class StreamPipelineTest
 
         // Assert
         Assert.Equal(2, document.Version);
-        Assert.Equal("orders", document.Profile);
+        Assert.Equal("orders", document.Import.Profile);
         Assert.Equal("名称", Assert.Single(document.Import.Columns).Title);
         Assert.Equal("导出名称", Assert.Single(document.Export.Columns).Title);
         var exception = Assert.Throws<InvalidOperationException>(() =>
@@ -695,8 +701,8 @@ public class StreamPipelineTest
     public void MappingConfigurationLoader_DocumentStreams_ShouldKeepOwnershipAndRejectDtd()
     {
         // Arrange
-        const string json = "{\"version\":2,\"modelAlias\":\"row\",\"import\":{\"columns\":[]},\"export\":{\"columns\":[]}}";
-        const string xml = "<ExcelMappingDocument><Version>2</Version><ModelAlias>row</ModelAlias><Import><Columns /></Import><Export><Columns /></Export></ExcelMappingDocument>";
+        const string json = "{\"version\":2,\"import\":{\"modelAlias\":\"row\",\"columns\":[]},\"export\":{\"columns\":[]}}";
+        const string xml = "<ExcelMappingDocument><Version>2</Version><Import><ModelAlias>row</ModelAlias><Columns /></Import><Export><Columns /></Export></ExcelMappingDocument>";
         const string unsafeXml = "<!DOCTYPE config [<!ENTITY value SYSTEM 'file:///not-allowed'>]><ExcelMappingDocument />";
         using var jsonStream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(json));
         using var xmlStream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(xml));
@@ -706,8 +712,8 @@ public class StreamPipelineTest
         var xmlDocument = ExcelMappingConfigurationLoader.FromXmlDocument(xmlStream);
 
         // Assert
-        Assert.Equal("row", jsonDocument.ModelAlias);
-        Assert.Equal("row", xmlDocument.ModelAlias);
+        Assert.Equal("row", jsonDocument.Import.ModelAlias);
+        Assert.Equal("row", xmlDocument.Import.ModelAlias);
         Assert.True(jsonStream.CanRead);
         Assert.True(xmlStream.CanRead);
         Assert.Throws<System.Xml.XmlException>(() => ExcelMappingConfigurationLoader.FromXmlDocument(unsafeXml));
@@ -746,8 +752,9 @@ public class StreamPipelineTest
     public void StreamPipeline_JsonNamedConverter_ShouldRoundTripDomainValue()
     {
         // Arrange
-        var configuration = ExcelMappingConfigurationLoader.FromJson(
-            "{\"columns\":[{\"propertyName\":\"Code\",\"converterName\":\"order-code\"}]}");
+        var configuration = ExcelMappingConfigurationLoader.MigrateV1Json(
+            "{\"columns\":[{\"propertyName\":\"Code\",\"converterName\":\"order-code\"}]}",
+            MappingDirection.Import).Import;
         var converter = new OrderCodeExcelValueConverter();
         using var destination = new MemoryStream();
         var exporter = new NpoiExcelExporter(new IExcelValueConverter[] { converter });
@@ -772,8 +779,9 @@ public class StreamPipelineTest
     public void StreamPipeline_JsonNamedValidationRule_ShouldReturnValidationError()
     {
         // Arrange
-        var configuration = ExcelMappingConfigurationLoader.FromJson(
-            "{\"columns\":[{\"propertyName\":\"Name\",\"validationRuleNames\":[\"starts-with-ok\"]}]}");
+        var configuration = ExcelMappingConfigurationLoader.MigrateV1Json(
+            "{\"columns\":[{\"propertyName\":\"Name\",\"validationRuleNames\":[\"starts-with-ok\"]}]}",
+            MappingDirection.Import).Import;
         using var source = new MemoryStream(CreateWorkbook(workbook =>
         {
             var sheet = workbook.CreateSheet("Data");
@@ -806,8 +814,9 @@ public class StreamPipelineTest
         var fluent = ExcelMapping.For<StreamRow>()
             .Property(row => row.Name).HasValidationRule("starts-with-ok").And()
             .Build();
-        var xml = ExcelMappingConfigurationLoader.FromXml(
-            "<ExcelMappingConfiguration><Columns><ExcelColumnConfiguration><PropertyName>Name</PropertyName><ValidationRuleNames><string>starts-with-ok</string></ValidationRuleNames></ExcelColumnConfiguration></Columns></ExcelMappingConfiguration>");
+        var xml = ExcelMappingConfigurationLoader.MigrateV1Xml(
+            "<ExcelMappingConfiguration><Columns><ExcelColumnConfiguration><PropertyName>Name</PropertyName><ValidationRuleNames><string>starts-with-ok</string></ValidationRuleNames></ExcelColumnConfiguration></Columns></ExcelMappingConfiguration>",
+            MappingDirection.Import).Import;
         var importer = new NpoiExcelImporter(namedValidationRules: new INamedExcelValidationRule[]
         {
             new StartsWithOkValidationRule()
@@ -840,8 +849,9 @@ public class StreamPipelineTest
     public void Import_NamedValidationRule_ShouldExposeFullValidationContext()
     {
         // Arrange
-        var configuration = ExcelMappingConfigurationLoader.FromJson(
-            "{\"columns\":[{\"propertyName\":\"Name\",\"validationRuleNames\":[\"context\"]}]}");
+        var configuration = ExcelMappingConfigurationLoader.MigrateV1Json(
+            "{\"columns\":[{\"propertyName\":\"Name\",\"validationRuleNames\":[\"context\"]}]}",
+            MappingDirection.Import).Import;
         var rule = new ContextCapturingValidationRule();
         using var source = new MemoryStream(CreateWorkbook(workbook =>
         {

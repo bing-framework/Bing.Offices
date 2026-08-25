@@ -113,7 +113,7 @@ public class ExcelImporterIntegrationTest
         using var provider = services.BuildServiceProvider();
         using var source = new MemoryStream(CreateWorkbook());
         var configuration = ExcelMappingConfigurationLoader.FromJson(
-            "{\"columns\":[{\"propertyName\":\"Code\",\"validationRuleNames\":[\"starts-with-ok\"]}]}");
+            "{\"version\":2,\"import\":{\"columns\":[{\"propertyName\":\"Code\",\"validationRuleNames\":[\"starts-with-ok\"]}]}}");
 
         // Act
         var result = provider.GetRequiredService<IExcelImporter>().Import(source,
@@ -225,10 +225,10 @@ public class ExcelImporterIntegrationTest
     }
 
     /// <summary>
-    /// 测试 - Fluent Profile 与 XML 映射配置应在真实 XLSX 导入导出中使用相同的列定义。
+    /// 测试 - Fluent 配置与 XML 映射配置应在真实 XLSX 导入导出中使用相同的列定义。
     /// </summary>
     [Fact]
-    public void AddNpoi_FluentProfileAndXmlConfiguration_ShouldRoundTripRealWorkbook()
+    public void AddNpoi_FluentConfigurationAndXmlConfiguration_ShouldRoundTripRealWorkbook()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -237,9 +237,9 @@ public class ExcelImporterIntegrationTest
         using var destination = new MemoryStream();
         var profile = ExcelMapping.For<MappingIntegrationRow>()
             .Property(row => row.Code).HasTitle("业务编码").And()
-            .BuildProfile();
+            .Build();
         var xmlConfiguration = ExcelMappingConfigurationLoader.FromXml(
-            "<ExcelMappingConfiguration><Columns><ExcelColumnConfiguration><PropertyName>Code</PropertyName><Title>业务编码</Title></ExcelColumnConfiguration></Columns></ExcelMappingConfiguration>");
+            "<ExcelMappingDocument><Version>2</Version><Import><Columns><ExcelColumnConfiguration><PropertyName>Code</PropertyName><Title>业务编码</Title></ExcelColumnConfiguration></Columns></Import></ExcelMappingDocument>");
 
         // Act
         provider.GetRequiredService<IExcelExporter>().Export(ExcelExport.Workbook(builder => builder.AddSheet("Data",
@@ -269,7 +269,7 @@ public class ExcelImporterIntegrationTest
 
         // Act
         var configuration = provider.GetRequiredService<IExcelMappingConfigurationLoader>().FromJson(
-            "{\"columns\":[{\"propertyName\":\"Code\",\"converterName\":\"integration-code\"}]}");
+            "{\"version\":2,\"import\":{\"columns\":[{\"propertyName\":\"Code\",\"converterName\":\"integration-code\"}]},\"export\":{\"columns\":[]}}");
         provider.GetRequiredService<ICsvExporter>().Export(new[]
         {
             new ConvertedIntegrationRow { Code = new IntegrationCode("42") }

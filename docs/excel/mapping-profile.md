@@ -1,6 +1,6 @@
 # Mapping Profile
 
-`ExcelMappingProfile<TImport, TExport>` 将 Import 和 Export 配置分开保存。两边可以使用不同 DTO，也可以使用同一个 DTO。
+Mapping Profile 直接表达方向：`IImportMappingProfile<TImport>`、`IExportMappingProfile<TExport>`、同模型 `IMappingProfile<TModel>` 或异模型 `IMappingProfile<TImport, TExport>`。双向 Profile 的两个方向仍使用独立配置快照。
 
 ```csharp
 public sealed class OrderProfile : IMappingProfile<OrderImport, OrderExport>
@@ -16,7 +16,6 @@ public sealed class OrderProfile : IMappingProfile<OrderImport, OrderExport>
     }
 }
 
-var profile = new ExcelMappingProfile<OrderImport, OrderExport>(new OrderProfile());
 ```
 
 配置优先级为 `Convention/Default < Attribute < Profile < JSON/XML Document < Request`。构建后的配置是独立快照，修改输入集合不会改变已构建映射。
@@ -24,9 +23,10 @@ var profile = new ExcelMappingProfile<OrderImport, OrderExport>(new OrderProfile
 Registry 支持显式注册和程序集扫描。重复的 `(ProfileName, Direction, ModelType)` 注册会失败，不由 DI 注册顺序覆盖：
 
 ```csharp
-services.AddSingleton<OrderProfile>();
-services.AddMappingProfile<OrderProfile, OrderImport, OrderExport>("orders");
-services.AddMappingProfilesFromAssembly(typeof(OrderProfile).Assembly);
+var explicitServices = new ServiceCollection();
+explicitServices.AddMappingProfile<OrderProfile>();
+var scannedServices = new ServiceCollection();
+scannedServices.AddMappingProfiles(typeof(OrderProfile).Assembly);
 ```
 
-旧版 `ExcelMappingProfile<T>` 在当前 major 保留并标记为 Obsolete，迁移期间仍可读取。
+Registry 的唯一键是 `(ProfileName, Direction, ModelType)`。Profile 名称默认使用具体类型的 `FullName`；需要读取配置时通过 `TryGetDescriptor` 指定方向和模型，不能用一个双向 snapshot 代替单方向 descriptor。

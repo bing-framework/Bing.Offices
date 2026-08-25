@@ -49,7 +49,6 @@ public sealed class CsvEntityExporter : ICsvExporter
         ValidateOptions(options.Delimiter, options.Quote, options.NewLine, options.Encoding, options.Culture,
             options.FormulaInjectionPolicy);
         var document = ExcelMappingDocumentFactory.Create<T>(
-            options.DirectionalMappingProfile ?? options.MappingProfile,
             options.MappingDocument, options.MappingConfiguration, MappingDirection.Export);
         var map = _mappingPlanFactory.Create<T>(document, MappingDirection.Export);
         var columns = CreateColumns<T>(map,
@@ -300,7 +299,6 @@ public sealed class CsvEntityImporter : ICsvImporter
             throw new ArgumentNullException(nameof(options.Culture));
 
         var document = ExcelMappingDocumentFactory.Create<T>(
-            options.DirectionalMappingProfile ?? options.MappingProfile,
             options.MappingDocument, options.MappingConfiguration, MappingDirection.Import);
         var map = _mappingPlanFactory.Create<T>(document, MappingDirection.Import);
         var properties = map.Columns.Where(property => !property.Ignored && !property.IsDynamicColumn)

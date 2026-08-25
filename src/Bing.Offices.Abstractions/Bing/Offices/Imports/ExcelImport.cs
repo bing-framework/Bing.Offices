@@ -173,7 +173,6 @@ public sealed class ExcelSheetImportBuilder<TItem> where TItem : class, new()
     private Configurations.ExcelMappingConfiguration _documentMappingConfiguration;
     private Configurations.ExcelMappingConfiguration _requestMappingConfiguration;
     private Configurations.ExcelMappingDocument _mappingDocument;
-    private object _mappingProfile;
     private Expression<Func<TItem, IDictionary<string, object>>> _dynamicTarget;
     private int _maxColumnLength = 100;
     private ExcelReadColumnRange _readColumnRange;
@@ -345,25 +344,6 @@ public sealed class ExcelSheetImportBuilder<TItem> where TItem : class, new()
         return this;
     }
 
-    /// <summary>
-    /// 设置 Fluent 映射 Profile。
-    /// </summary>
-    public ExcelSheetImportBuilder<TItem> Mapping(Configurations.ExcelMappingProfile<TItem> profile)
-    {
-        _mappingProfile = profile;
-        return this;
-    }
-
-    /// <summary>
-    /// 设置导入方向的双模型 Mapping Profile。
-    /// </summary>
-    public ExcelSheetImportBuilder<TItem> Mapping<TExport>(Configurations.ExcelMappingProfile<TItem, TExport> profile)
-        where TExport : class, new()
-    {
-        _mappingProfile = profile;
-        return this;
-    }
-
     internal ExcelSheetImportRequest Build()
     {
         if (_maxColumnLength <= 0)
@@ -395,7 +375,7 @@ public sealed class ExcelSheetImportBuilder<TItem> where TItem : class, new()
         return new ExcelSheetImportRequest(_name, _selector, typeof(TItem), targetGetter,
         _headerRowIndex, _dataRowStartIndex, Exports.ExcelDynamicColumnCloner.Clone(_dynamicColumns), _dynamicTarget, _headerMatch, _validateMode, _culture,
         mappingConfiguration, _mappingDocument,
-        _mappingProfile, dynamicGetter,
+        dynamicGetter,
         _maxColumnLength,
         _failOnUnknownDynamicColumns, _enabledEmptyLine, _ignoreEmptyLineAfterData, _readColumnRange,
         _headerComparison, _headerWhitespace, _bodyWhitespace);

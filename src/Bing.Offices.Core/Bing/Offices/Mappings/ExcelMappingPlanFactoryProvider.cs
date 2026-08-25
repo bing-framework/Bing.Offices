@@ -14,24 +14,35 @@ namespace Bing.Offices.Mappings;
 public static class ExcelMappingPlanFactoryProvider
 {
     /// <summary>创建默认的 Plan 工厂。</summary>
+    /// <param name="valueConverters">值转换器集合。</param>
+    /// <param name="validationRules">校验规则集合。</param>
+    /// <param name="namedValidationRules">命名校验规则集合。</param>
+    /// <param name="profileRegistry">可选的方向 Profile 注册表。</param>
+    /// <param name="modelAliases">可选的模型别名注册表。</param>
     public static IExcelMappingPlanFactory CreateDefault(
         IEnumerable<IExcelValueConverter> valueConverters = null,
         IEnumerable<IExcelValidationRule> validationRules = null,
-        IEnumerable<INamedExcelValidationRule> namedValidationRules = null) =>
-        new ExcelMappingPlanFactory(valueConverters: valueConverters,
-            validationRules: validationRules, namedValidationRules: namedValidationRules);
+        IEnumerable<INamedExcelValidationRule> namedValidationRules = null,
+        Configurations.IMappingProfileRegistry profileRegistry = null,
+        Configurations.ExcelModelAliasRegistry modelAliases = null) =>
+        new ExcelMappingPlanFactory(valueConverters, validationRules, namedValidationRules,
+            profileRegistry: profileRegistry, modelAliases: modelAliases);
 
     /// <summary>
     /// 由 Core 注册默认映射计划工厂；已预注册的实现保持优先。
     /// </summary>
+    /// <param name="services">服务集合。</param>
     public static IServiceCollection RegisterDefault(IServiceCollection services)
     {
         if (services == null)
             throw new ArgumentNullException(nameof(services));
         services.TryAddSingleton<IExcelMappingPlanFactory>(provider =>
-            CreateDefault(provider.GetServices<IExcelValueConverter>(),
+            CreateDefault(
+                provider.GetServices<IExcelValueConverter>(),
                 provider.GetServices<IExcelValidationRule>(),
-                provider.GetServices<INamedExcelValidationRule>()));
+                provider.GetServices<INamedExcelValidationRule>(),
+                provider.GetService<Configurations.IMappingProfileRegistry>(),
+                provider.GetService<Configurations.ExcelModelAliasRegistry>()));
         return services;
     }
 }

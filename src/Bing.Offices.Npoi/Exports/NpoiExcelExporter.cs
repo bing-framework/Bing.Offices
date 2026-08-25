@@ -132,7 +132,7 @@ internal sealed class NpoiExcelExporter : IExcelExporter
 
     private static ExcelMappingDocument CreateNormalizedDocument<T>(ExcelSheetExportRequest request)
         where T : class, new() =>
-        ExcelMappingDocumentFactory.Create<T>(request.MappingProfile, request.MappingDocument,
+        ExcelMappingDocumentFactory.Create<T>(request.MappingDocument,
             request.MappingConfiguration, MappingDirection.Export);
 
     private IExcelMappingWorkbookPlan CreateWorkbookPlan(ExcelSheetExportRequest request,

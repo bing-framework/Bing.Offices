@@ -18,20 +18,20 @@ public class MappingProfileV2Test
     public void DirectionalProfile_DifferentModels_ShouldBuildIndependentPlans()
     {
         // Arrange
-        var profile = new ExcelMappingProfile<ImportModel, ExportModel>(setting =>
-        {
-            setting.Import.Property(model => model.Name)
-                .HasHeader("导入名称")
-                .HasAlias("旧名称")
-                .HasImageMultiplicity(ExcelImageMultiplicityPolicy.All);
-            setting.Export.Property(model => model.Label)
-                .HasHeader("导出标签")
-                .HasFormatter("@");
-        });
+        var import = new ImportMappingBuilder<ImportModel>();
+        import.Property(model => model.Name)
+            .HasHeader("导入名称")
+            .HasAlias("旧名称")
+            .HasImageMultiplicity(ExcelImageMultiplicityPolicy.All);
+        var export = new ExportMappingBuilder<ExportModel>();
+        export.Property(model => model.Label)
+            .HasHeader("导出标签")
+            .HasFormatter("@");
+        var document = new ExcelMappingDocument { Import = import.Build(), Export = export.Build() };
 
         // Act
-        var importMap = ExcelTypeMapFactory.Get<ImportModel>(profile, null, MappingDirection.Import);
-        var exportMap = ExcelTypeMapFactory.Get<ExportModel>(profile, null, MappingDirection.Export);
+        var importMap = ExcelTypeMapFactory.Get<ImportModel>(document, MappingDirection.Import);
+        var exportMap = ExcelTypeMapFactory.Get<ExportModel>(document, MappingDirection.Export);
 
         // Assert
         var importProperty = Assert.Single(importMap.Properties.Where(property => property.Name == nameof(ImportModel.Name)));
@@ -50,15 +50,15 @@ public class MappingProfileV2Test
     public void SameModelProfile_ShouldSupportImportAndExportDirections()
     {
         // Arrange
-        var profile = new ExcelMappingProfile<ImportModel, ImportModel>(setting =>
-        {
-            setting.Import.Property(model => model.Name).HasHeader("导入名称");
-            setting.Export.Property(model => model.Name).HasHeader("导出名称");
-        });
+        var import = new ImportMappingBuilder<ImportModel>();
+        import.Property(model => model.Name).HasHeader("导入名称");
+        var export = new ExportMappingBuilder<ImportModel>();
+        export.Property(model => model.Name).HasHeader("导出名称");
+        var document = new ExcelMappingDocument { Import = import.Build(), Export = export.Build() };
 
         // Act
-        var importMap = ExcelTypeMapFactory.Get<ImportModel>(profile, null, MappingDirection.Import);
-        var exportMap = ExcelTypeMapFactory.Get<ImportModel>(profile, null, MappingDirection.Export);
+        var importMap = ExcelTypeMapFactory.Get<ImportModel>(document, MappingDirection.Import);
+        var exportMap = ExcelTypeMapFactory.Get<ImportModel>(document, MappingDirection.Export);
 
         // Assert
         Assert.Equal("导入名称", importMap.Properties.Single(property => property.Name == nameof(ImportModel.Name)).Title);
@@ -72,21 +72,20 @@ public class MappingProfileV2Test
     public void DirectionalProfile_Snapshot_ShouldBeImmutable()
     {
         // Arrange
-        var profile = new ExcelMappingProfile<ImportModel, ExportModel>(setting =>
-        {
-            setting.Import.Property(model => model.Name).HasHeader("稳定名称");
-        });
-        var first = profile.ImportConfiguration;
+        var builder = new ImportMappingBuilder<ImportModel>();
+        builder.Property(model => model.Name).HasHeader("稳定名称");
+        var first = builder.Build();
 
         // Act
         first.Columns[0].Title = "外部修改";
         first.Columns[0].Aliases.Add("外部别名");
-        var second = profile.ImportConfiguration;
+        var second = builder.Build();
 
         // Assert
         Assert.Equal("稳定名称", second.Columns[0].Title);
         Assert.Empty(second.Columns[0].Aliases);
-        Assert.Equal("稳定名称", ExcelTypeMapFactory.Get<ImportModel>(profile, null,
+        var document = new ExcelMappingDocument { Import = second };
+        Assert.Equal("稳定名称", ExcelTypeMapFactory.Get<ImportModel>(document,
             MappingDirection.Import).Properties.Single(property => property.Name == nameof(ImportModel.Name)).Title);
     }
 

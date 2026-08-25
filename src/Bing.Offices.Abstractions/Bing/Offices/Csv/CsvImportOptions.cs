@@ -51,16 +51,6 @@ public sealed class CsvImportOptions<T> where T : class, new()
     public ExcelMappingDocument MappingDocument { get; set; }
 
     /// <summary>
-    /// 获取或设置本次导入使用的 Fluent 映射 Profile。
-    /// </summary>
-    public ExcelMappingProfile<T> MappingProfile { get; set; }
-
-    /// <summary>
-    /// 获取或设置方向化 Mapping Profile 快照。
-    /// </summary>
-    public object DirectionalMappingProfile { get; set; }
-
-    /// <summary>
     /// 获取或设置唯一值跟踪上限；为空表示不额外限制。
     /// </summary>
     public int? MaxTrackedUniqueValues { get; set; }

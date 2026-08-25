@@ -52,11 +52,6 @@ public sealed class ExcelMappingBuilder<T> where T : class, new()
         Columns = _configuration.Columns.Select(CloneColumn).ToList()
     };
 
-    /// <summary>
-    /// 创建当前 Fluent 配置的不可变 Profile。
-    /// </summary>
-    public ExcelMappingProfile<T> BuildProfile() => new(Build());
-
     private static ExcelColumnConfiguration CloneColumn(ExcelColumnConfiguration source) => new()
     {
         PropertyName = source.PropertyName,

@@ -11,8 +11,6 @@ internal static class MappingDocumentCloner
         return new ExcelMappingDocument
         {
             Version = document.Version,
-            Profile = document.Profile,
-            ModelAlias = document.ModelAlias,
             TenantId = document.TenantId,
             ConfigurationVersion = document.ConfigurationVersion,
             Import = document.Import == null

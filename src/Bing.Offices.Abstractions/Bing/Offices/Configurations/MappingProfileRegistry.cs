@@ -5,53 +5,40 @@
 /// </summary>
 public sealed class MappingProfileRegistry : IMappingProfileRegistry
 {
-    private readonly Dictionary<MappingProfileKey, IMappingProfileSnapshot> _profiles =
-        new Dictionary<MappingProfileKey, IMappingProfileSnapshot>();
+    private readonly Dictionary<MappingProfileKey, ProfileDescriptor> _descriptors =
+        new Dictionary<MappingProfileKey, ProfileDescriptor>();
     private readonly object _sync = new object();
 
-    /// <summary>
-    /// 注册一个双向 Profile 快照。
-    /// </summary>
-    public void Register(string profileName, IMappingProfileSnapshot snapshot)
+    /// <inheritdoc />
+    public void Register(ProfileDescriptor descriptor)
     {
-        if (string.IsNullOrWhiteSpace(profileName))
-            throw new ArgumentException("Profile 名称不能为空。", nameof(profileName));
-        if (snapshot == null)
-            throw new ArgumentNullException(nameof(snapshot));
-        var importKey = new MappingProfileKey(profileName, MappingDirection.Import, snapshot.ImportType);
-        var exportKey = new MappingProfileKey(profileName, MappingDirection.Export, snapshot.ExportType);
+        if (descriptor == null)
+            throw new ArgumentNullException(nameof(descriptor));
+        var key = new MappingProfileKey(descriptor.Name, descriptor.Direction, descriptor.ModelType);
         lock (_sync)
         {
-            if (_profiles.ContainsKey(importKey) || _profiles.ContainsKey(exportKey))
-                throw new InvalidOperationException($"Profile 注册键重复: {profileName}");
-            _profiles.Add(importKey, snapshot);
-            _profiles.Add(exportKey, snapshot);
+            if (_descriptors.ContainsKey(key))
+                throw new InvalidOperationException($"Profile 注册键重复: {descriptor.Name}, {descriptor.Direction}, {descriptor.ModelType.FullName}");
+            _descriptors.Add(key, descriptor);
         }
     }
 
     /// <inheritdoc />
-    public ExcelMappingProfile<TImport, TExport> Get<TImport, TExport>(string profileName)
-        where TImport : class, new()
-        where TExport : class, new()
+    public bool TryGetDescriptor(string profileName, MappingDirection direction, Type modelType,
+        out ProfileDescriptor descriptor)
     {
-        if (!TryGet(profileName, MappingDirection.Import, typeof(TImport), out var importSnapshot)
-            || !TryGet(profileName, MappingDirection.Export, typeof(TExport), out var exportSnapshot)
-            || !ReferenceEquals(importSnapshot, exportSnapshot))
-            throw new KeyNotFoundException($"未找到 Profile: {profileName}");
-        return new ExcelMappingProfile<TImport, TExport>(importSnapshot.ImportConfiguration,
-            exportSnapshot.ExportConfiguration);
+        ValidateKey(profileName, modelType);
+        lock (_sync)
+            return _descriptors.TryGetValue(new MappingProfileKey(profileName, direction, modelType),
+                out descriptor);
     }
 
-    /// <inheritdoc />
-    public bool TryGet(string profileName, MappingDirection direction, Type modelType,
-        out IMappingProfileSnapshot snapshot)
+    private static void ValidateKey(string profileName, Type modelType)
     {
         if (string.IsNullOrWhiteSpace(profileName))
             throw new ArgumentException("Profile 名称不能为空。", nameof(profileName));
         if (modelType == null)
             throw new ArgumentNullException(nameof(modelType));
-        lock (_sync)
-            return _profiles.TryGetValue(new MappingProfileKey(profileName, direction, modelType), out snapshot);
     }
 
     private readonly struct MappingProfileKey : IEquatable<MappingProfileKey>

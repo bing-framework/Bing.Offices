@@ -1,4 +1,6 @@
-﻿using System.Reflection;
+﻿using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
 using System.Runtime.ExceptionServices;
 using Bing.Offices.Configurations;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,70 +14,70 @@ namespace Bing.Offices.Npoi.Extensions;
 public static class MappingProfileServiceCollectionExtensions
 {
     /// <summary>
-    /// 显式注册一个双模型 Profile。
+    /// 注册一个包含受支持 Profile 契约的具体类型。
     /// </summary>
-    public static IServiceCollection AddMappingProfile<TProfile, TImport, TExport>(
-        this IServiceCollection services, string profileName = null)
-        where TProfile : class, IMappingProfile<TImport, TExport>
-        where TImport : class, new()
-        where TExport : class, new()
+    /// <typeparam name="TProfile">Profile 实现类型。</typeparam>
+    /// <param name="services">DI 服务集合。</param>
+    public static IServiceCollection AddMappingProfile<TProfile>(this IServiceCollection services)
+        where TProfile : class
     {
         if (services == null)
             throw new ArgumentNullException(nameof(services));
-        var name = profileName ?? typeof(TProfile).FullName;
-        ValidateUniqueRegistration(services, name, typeof(TImport), typeof(TExport));
-        services.TryAddSingleton<TProfile>();
-        services.AddSingleton(new MappingProfileRegistration(name, typeof(TImport), typeof(TExport), provider =>
-            new ExcelMappingProfile<TImport, TExport>(provider.GetRequiredService<TProfile>())));
-        AddRegistry(services);
+        ValidateProfileType(typeof(TProfile));
+        if (!ProfileDescriptorFactory.HasSupportedContract(typeof(TProfile)))
+            throw new ArgumentException($"Profile 类型未实现受支持契约: {typeof(TProfile).FullName}", nameof(TProfile));
+        AddMappingProfilesCore(services, new[] { typeof(TProfile) });
         return services;
     }
 
     /// <summary>
-    /// 扫描一个程序集并注册其中的非抽象 Profile 类型。
+    /// 扫描程序集并注册其中所有受支持的具体 Profile 类型。
     /// </summary>
-    public static IServiceCollection AddMappingProfilesFromAssembly(this IServiceCollection services,
-        Assembly assembly)
+    /// <param name="services">DI 服务集合。</param>
+    /// <param name="assembly">待扫描程序集。</param>
+    public static IServiceCollection AddMappingProfiles(this IServiceCollection services, Assembly assembly)
     {
+        if (services == null)
+            throw new ArgumentNullException(nameof(services));
         if (assembly == null)
             throw new ArgumentNullException(nameof(assembly));
-        foreach (var type in assembly.GetTypes()
-                 .Where(type => !type.IsAbstract && !type.IsInterface && !type.ContainsGenericParameters)
-                 .OrderBy(type => type.FullName, StringComparer.Ordinal))
-        {
-            var contract = type.GetInterfaces().FirstOrDefault(item =>
-                item.IsGenericType && item.GetGenericTypeDefinition() == typeof(IMappingProfile<,>));
-            if (contract == null)
-                continue;
-            var arguments = contract.GetGenericArguments();
-            var method = typeof(MappingProfileServiceCollectionExtensions).GetMethod(
-                nameof(AddMappingProfile), BindingFlags.Public | BindingFlags.Static);
-            try
-            {
-                method.MakeGenericMethod(type, arguments[0], arguments[1]).Invoke(null,
-                    new object[] { services, type.FullName });
-            }
-            catch (TargetInvocationException exception) when (exception.InnerException != null)
-            {
-                ExceptionDispatchInfo.Capture(exception.InnerException).Throw();
-                throw;
-            }
-        }
+        var profileTypes = assembly.GetTypes()
+                     .Where(type => !type.IsAbstract && !type.IsInterface && !type.ContainsGenericParameters)
+                     .Where(type => ProfileDescriptorFactory.HasSupportedContract(type))
+                     .OrderBy(type => type.FullName, StringComparer.Ordinal)
+                     .ToArray();
+        AddMappingProfilesCore(services, profileTypes);
         return services;
     }
 
-    /// <summary>
-    /// 扫描多个程序集并注册其中的 Profile 类型。
-    /// </summary>
-    public static IServiceCollection AddMappingProfilesFromAssemblies(this IServiceCollection services,
-        params Assembly[] assemblies)
+    private static void AddMappingProfilesCore(IServiceCollection services, IReadOnlyList<Type> profileTypes)
     {
-        if (assemblies == null)
-            throw new ArgumentNullException(nameof(assemblies));
-        foreach (var assembly in assemblies.Where(assembly => assembly != null)
-                     .OrderBy(assembly => assembly.FullName, StringComparer.Ordinal))
-            AddMappingProfilesFromAssembly(services, assembly);
-        return services;
+        var registrations = profileTypes.Select(type => new MappingProfileRegistration(type)).ToArray();
+        var existingRegistrations = services
+            .Where(descriptor => descriptor.ServiceType == typeof(MappingProfileRegistration)
+                && descriptor.ImplementationInstance is MappingProfileRegistration)
+            .Select(descriptor => (MappingProfileRegistration)descriptor.ImplementationInstance)
+            .ToArray();
+        var names = new HashSet<string>(existingRegistrations.Select(item => item.ProfileName),
+            StringComparer.OrdinalIgnoreCase);
+        var keys = new HashSet<string>(existingRegistrations.SelectMany(item => item.Keys),
+            StringComparer.OrdinalIgnoreCase);
+        foreach (var registration in registrations)
+        {
+            if (!names.Add(registration.ProfileName))
+                throw new InvalidOperationException($"Profile 注册名称重复: {registration.ProfileName}");
+            foreach (var key in registration.Keys)
+            {
+                if (!keys.Add(key))
+                    throw new InvalidOperationException($"Profile 注册键重复: {key}");
+            }
+        }
+        foreach (var registration in registrations)
+        {
+            services.TryAdd(ServiceDescriptor.Singleton(registration.ProfileType, registration.ProfileType));
+            services.AddSingleton(registration);
+        }
+        AddRegistry(services);
     }
 
     private static void AddRegistry(IServiceCollection services)
@@ -84,48 +86,38 @@ public static class MappingProfileServiceCollectionExtensions
         {
             var registry = new MappingProfileRegistry();
             foreach (var registration in provider.GetServices<MappingProfileRegistration>())
-                registration.Apply(registry, provider);
+            {
+                foreach (var descriptor in registration.Create(provider))
+                    registry.Register(descriptor);
+            }
             return registry;
         });
         services.TryAddSingleton<IMappingProfileRegistry>(provider =>
             provider.GetRequiredService<MappingProfileRegistry>());
     }
 
-    private static void ValidateUniqueRegistration(IServiceCollection services, string name,
-        Type importType, Type exportType)
+    private static void ValidateProfileType(Type profileType)
     {
-        if (string.IsNullOrWhiteSpace(name))
-            throw new ArgumentException("Profile 名称不能为空。", nameof(name));
-        if (services.Any(descriptor => descriptor.ServiceType == typeof(MappingProfileRegistration)
-            && descriptor.ImplementationInstance is MappingProfileRegistration registration
-            && registration.Conflicts(name, importType, exportType)))
-            throw new InvalidOperationException($"Profile 注册键重复: {name}");
+        if (profileType.IsAbstract || profileType.IsInterface || profileType.ContainsGenericParameters)
+            throw new ArgumentException($"Profile 类型必须是封闭的具体类型: {profileType.FullName}", nameof(profileType));
     }
 
     private sealed class MappingProfileRegistration
     {
-        private readonly string _name;
-        private readonly Type _importType;
-        private readonly Type _exportType;
-        private readonly Func<IServiceProvider, IMappingProfileSnapshot> _factory;
+        private readonly Type _profileType;
 
-        public MappingProfileRegistration(string name, Type importType, Type exportType,
-            Func<IServiceProvider, IMappingProfileSnapshot> factory)
+        public MappingProfileRegistration(Type profileType)
         {
-            _name = name;
-            _factory = factory;
-            _importType = importType;
-            _exportType = exportType;
+            _profileType = profileType;
+            Keys = ProfileDescriptorFactory.GetKeys(profileType, ProfileName);
         }
 
-        public bool Conflicts(string name, Type importType, Type exportType) =>
-            string.Equals(_name, name, StringComparison.OrdinalIgnoreCase)
-            && (_importType == importType || _exportType == exportType);
+        public Type ProfileType => _profileType;
+        public string ProfileName => _profileType.FullName;
+        public IReadOnlyList<string> Keys { get; }
 
-        public void Apply(MappingProfileRegistry registry, IServiceProvider provider)
-        {
-            var snapshot = _factory(provider);
-            registry.Register(_name, snapshot);
-        }
+        public IReadOnlyList<ProfileDescriptor> Create(IServiceProvider provider) =>
+            ProfileDescriptorFactory.Create(provider.GetRequiredService(_profileType), _profileType,
+                ProfileName);
     }
 }

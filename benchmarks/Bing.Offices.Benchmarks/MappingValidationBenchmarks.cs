@@ -27,7 +27,7 @@ public class MappingValidationBenchmarks
     private string _jsonV1 = string.Empty;
     private string _xmlV1 = string.Empty;
     private ExcelMappingConfiguration _multiRuleConfiguration = null!;
-    private ExcelMappingProfile<BenchmarkRow, BenchmarkRow> _profile = null!;
+    private ExcelMappingConfiguration _profileConfiguration = null!;
     private List<byte[]> _resourcePayload = new();
 
     /// <summary>动态计划构建次数。</summary>
@@ -60,13 +60,16 @@ public class MappingValidationBenchmarks
                 new ExcelColumnConfiguration { PropertyName = nameof(BenchmarkRow.Amount), Title = "金额" }
             }
         };
-        _profile = new ExcelMappingProfile<BenchmarkRow, BenchmarkRow>(setting =>
-            setting.Import.Property(row => row.Code).HasHeader("编码"));
+        var profileBuilder = new ImportMappingBuilder<BenchmarkRow>();
+        profileBuilder.Property(row => row.Code).HasHeader("编码");
+        _profileConfiguration = profileBuilder.Build();
         _document = new ExcelMappingDocument
         {
-            Profile = "benchmarks",
-            ModelAlias = "benchmark-row",
-            Import = _configuration,
+            Import = new ExcelMappingConfiguration
+            {
+                Profile = "benchmarks",
+                ModelAlias = "benchmark-row"
+            },
             Export = new ExcelMappingConfiguration()
         };
         _json = ExcelMappingConfigurationLoader.ToJson(_document);
@@ -92,7 +95,14 @@ public class MappingValidationBenchmarks
     {
         var count = 0;
         for (var index = 0; index < PlanBuildCount; index++)
-            count += _planFactory.Create<BenchmarkRow>(_profile, _configuration, MappingDirection.Import).Columns.Count;
+            count += _planFactory.Create<BenchmarkRow>(new ExcelMappingDocument
+            {
+                Import = new ExcelMappingConfiguration
+                {
+                    Profile = "benchmarks",
+                    Columns = _profileConfiguration.Columns
+                }
+            }, MappingDirection.Import).Columns.Count;
         return count;
     }
 
@@ -120,15 +130,18 @@ public class MappingValidationBenchmarks
 
     /// <summary>测量 JSON v1 迁移解析。</summary>
     [Benchmark]
-    public int ParseJsonV1() => ExcelMappingConfigurationLoader.FromJsonDocument(_jsonV1).Import.Columns.Count;
+    public int ParseJsonV1() => ExcelMappingConfigurationLoader.MigrateV1Json(_jsonV1,
+        MappingDirection.Import).Import.Columns.Count;
 
     /// <summary>测量 XML v1 迁移解析。</summary>
     [Benchmark]
-    public int ParseXmlV1() => ExcelMappingConfigurationLoader.FromXmlDocument(_xmlV1).Import.Columns.Count;
+    public int ParseXmlV1() => ExcelMappingConfigurationLoader.MigrateV1Xml(_xmlV1,
+        MappingDirection.Import).Import.Columns.Count;
 
     /// <summary>测量 10K 命名规则配置的不可变计划构建。</summary>
     [Benchmark]
-    public int MultiRulePlanBuild() => _planFactory.Create<BenchmarkRow>(_profile, _multiRuleConfiguration,
+    public int MultiRulePlanBuild() => _planFactory.Create<BenchmarkRow>(
+        ExcelMappingDocumentFactory.Create<BenchmarkRow>(_multiRuleConfiguration, MappingDirection.Import),
         MappingDirection.Import).Columns.Count;
 
     /// <summary>
@@ -207,8 +220,10 @@ public class MappingValidationBenchmarks
     public int ExplicitRegistration()
     {
         var registry = new MappingProfileRegistry();
-        registry.Register("benchmarks", _profile);
-        return registry.TryGet("benchmarks", MappingDirection.Import, typeof(BenchmarkRow), out _) ? 1 : 0;
+        registry.Register(new ProfileDescriptor("benchmarks", MappingDirection.Import,
+            typeof(BenchmarkRow), _profileConfiguration));
+        return registry.TryGetDescriptor("benchmarks", MappingDirection.Import, typeof(BenchmarkRow), out _)
+            ? 1 : 0;
     }
 
     /// <summary>测量程序集扫描注册入口。</summary>
@@ -216,7 +231,7 @@ public class MappingValidationBenchmarks
     public int AssemblyScanRegistration()
     {
         var services = new ServiceCollection();
-        services.AddMappingProfilesFromAssembly(typeof(MappingValidationBenchmarks).Assembly);
+        services.AddMappingProfiles(typeof(MappingValidationBenchmarks).Assembly);
         return services.Count;
     }
 
@@ -224,11 +239,21 @@ public class MappingValidationBenchmarks
     {
         Version = _document.Version,
         TenantId = $"tenant-{index}",
-        Profile = _document.Profile,
-        ModelAlias = _document.ModelAlias,
-        Import = _configuration,
+        Import = new ExcelMappingConfiguration
+        {
+            Profile = _document.Import.Profile,
+            ModelAlias = _document.Import.ModelAlias
+        },
         Export = _document.Export
     };
+
+    private sealed class BenchmarkProfile : IImportMappingProfile<BenchmarkRow>
+    {
+        public void Configure(ImportMappingBuilder<BenchmarkRow> setting)
+        {
+            setting.Property(row => row.Code).HasHeader("编码");
+        }
+    }
 
     private sealed class BenchmarkRow
     {

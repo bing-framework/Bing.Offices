@@ -51,7 +51,7 @@ public sealed class ExcelSheetExportRequest
         Styles.ExcelCellStyle sheetStyle, Styles.ExcelCellStyle headerStyle, Styles.ExcelCellStyle bodyStyle,
         string templateRegion, bool hidden, IReadOnlyList<ExcelChartDefinition> charts,
         IReadOnlyList<ExcelHeaderRow> headerRows, Configurations.ExcelMappingConfiguration mappingConfiguration,
-        Configurations.ExcelMappingDocument mappingDocument, object mappingProfile,
+        Configurations.ExcelMappingDocument mappingDocument,
         System.Globalization.CultureInfo culture, ExcelColumnWidthOptions columnWidth,
         ExcelCommentConflictPolicy commentConflictPolicy)
     {
@@ -89,7 +89,6 @@ public sealed class ExcelSheetExportRequest
         MappingConfiguration = mappingConfiguration == null ? null :
             MappingConfigurationCloner.Clone(mappingConfiguration, mappingConfiguration.SourceKind);
         MappingDocument = Configurations.MappingDocumentCloner.Clone(mappingDocument);
-        MappingProfile = mappingProfile;
         Culture = culture;
         ColumnWidth = columnWidth;
         CommentConflictPolicy = commentConflictPolicy;
@@ -146,8 +145,6 @@ public sealed class ExcelSheetExportRequest
     public Configurations.ExcelMappingConfiguration MappingConfiguration { get; }
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Configurations.ExcelMappingDocument MappingDocument { get; }
-    [EditorBrowsable(EditorBrowsableState.Never)]
-    public object MappingProfile { get; }
     [EditorBrowsable(EditorBrowsableState.Never)]
     public System.Globalization.CultureInfo Culture { get; }
     [EditorBrowsable(EditorBrowsableState.Never)]

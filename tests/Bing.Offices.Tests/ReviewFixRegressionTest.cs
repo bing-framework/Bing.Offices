@@ -53,11 +53,13 @@ public sealed class ReviewFixRegressionTest
         // Arrange
         var document = new ExcelMappingDocument
         {
-            Profile = "orders",
-            ModelAlias = "order-row",
             Import = Configuration("输入"),
             Export = Configuration("输出")
         };
+        document.Import.Profile = "orders";
+        document.Import.ModelAlias = "order-row";
+        document.Export.Profile = "orders";
+        document.Export.ModelAlias = "order-row";
 
         // Act
         var json = ExcelMappingConfigurationLoader.ToJson(document);
@@ -66,7 +68,7 @@ public sealed class ReviewFixRegressionTest
         var xmlRoundTrip = ExcelMappingConfigurationLoader.FromXmlDocument(xml);
 
         // Assert
-        Assert.Equal("order-row", jsonRoundTrip.ModelAlias);
+        Assert.Equal("order-row", jsonRoundTrip.Import.ModelAlias);
         Assert.Equal("输入", jsonRoundTrip.Import.Columns[0].Title);
         Assert.Equal("输出", xmlRoundTrip.Export.Columns[0].Title);
     }
@@ -145,9 +147,9 @@ public sealed class ReviewFixRegressionTest
     public void MappingDocument_AliasValidation_ShouldRejectClrAndUnknownAliases()
     {
         // Arrange
-        const string clr = "{\"version\":2,\"modelAlias\":\"System.String, System.Private.CoreLib\",\"import\":{\"columns\":[]},\"export\":{\"columns\":[]}}";
+        const string clr = "{\"version\":2,\"import\":{\"modelAlias\":\"System.String, System.Private.CoreLib\",\"columns\":[]},\"export\":{\"columns\":[]}}";
         var aliases = new ExcelModelAliasRegistry().Register("known-row");
-        const string unknown = "{\"version\":2,\"modelAlias\":\"unknown-row\",\"import\":{\"columns\":[]},\"export\":{\"columns\":[]}}";
+        const string unknown = "{\"version\":2,\"import\":{\"modelAlias\":\"unknown-row\",\"columns\":[]},\"export\":{\"columns\":[]}}";
 
         // Act / Assert
         Assert.Throws<InvalidOperationException>(() => ExcelMappingConfigurationLoader.FromJsonDocument(clr));
@@ -164,10 +166,10 @@ public sealed class ReviewFixRegressionTest
         var aliases = new ExcelModelAliasRegistry().Register("review-row", typeof(ReviewRow), "review");
         var document = new ExcelMappingDocument
         {
-            Profile = "review",
-            ModelAlias = "review-row",
             Import = Configuration("输入")
         };
+        document.Import.Profile = "review";
+        document.Import.ModelAlias = "review-row";
         var factory = new ExcelMappingPlanFactory(modelAliases: aliases);
 
         // Act
@@ -178,6 +180,77 @@ public sealed class ReviewFixRegressionTest
         Assert.Equal("review-row", plan.ModelAlias);
         Assert.Throws<InvalidOperationException>(() =>
             factory.Create<InvalidRegexRow>(document, null, MappingDirection.Import));
+
+        var missingProfile = new ExcelMappingDocument
+        {
+            Import = new ExcelMappingConfiguration { ModelAlias = "review-row" }
+        };
+        Assert.Throws<InvalidOperationException>(() =>
+            factory.Create<ReviewRow>(missingProfile, MappingDirection.Import));
+    }
+
+    /// <summary>
+    /// 测试 - 影响最终列计划的不同 Patch 状态不得共享缓存实例。
+    /// </summary>
+    [Fact]
+    public void MappingPlan_CacheKey_ShouldIncludeColumnPatchState()
+    {
+        // Arrange
+        var factory = new ExcelMappingPlanFactory();
+        var replace = new ExcelMappingDocument
+        {
+            Import = new ExcelMappingConfiguration
+            {
+                Columns = new List<ExcelColumnConfiguration>
+                {
+                    new()
+                    {
+                        PropertyName = nameof(CacheKeyRow.Code),
+                        ValueMappingMergeMode = ExcelValueMappingMergeMode.Replace
+                    }
+                }
+            }
+        };
+        var append = new ExcelMappingDocument
+        {
+            Import = new ExcelMappingConfiguration
+            {
+                Columns = new List<ExcelColumnConfiguration>
+                {
+                    new()
+                    {
+                        PropertyName = nameof(CacheKeyRow.Code),
+                        ValueMappingMergeMode = ExcelValueMappingMergeMode.Append
+                    }
+                }
+            }
+        };
+        var allImages = new ExcelMappingDocument
+        {
+            Import = new ExcelMappingConfiguration
+            {
+                Columns = new List<ExcelColumnConfiguration>
+                {
+                    new()
+                    {
+                        PropertyName = nameof(CacheKeyRow.Code),
+                        ImageMultiplicity = ExcelImageMultiplicityPolicy.All
+                    }
+                }
+            }
+        };
+
+        // Act
+        var replacePlan = factory.Create<CacheKeyRow>(replace, MappingDirection.Import);
+        var appendPlan = factory.Create<CacheKeyRow>(append, MappingDirection.Import);
+        var allImagesPlan = factory.Create<CacheKeyRow>(allImages, MappingDirection.Import);
+
+        // Assert
+        Assert.NotSame(replacePlan, appendPlan);
+        Assert.Empty(Assert.Single(replacePlan.Columns).ValueMap);
+        Assert.Contains("有效", Assert.Single(appendPlan.Columns).ValueMap.Keys);
+        Assert.NotSame(appendPlan, allImagesPlan);
+        Assert.Equal(ExcelImageMultiplicityPolicy.All, Assert.Single(allImagesPlan.Columns).ImageMultiplicity);
     }
 
     /// <summary>
@@ -303,12 +376,16 @@ public sealed class ReviewFixRegressionTest
         const string xml = "<ExcelMappingConfiguration><Columns /></ExcelMappingConfiguration>";
 
         // Act
-        var jsonDocument = ExcelMappingConfigurationLoader.FromJsonDocument(json, out var jsonDiagnostics);
-        var xmlDocument = ExcelMappingConfigurationLoader.FromXmlDocument(xml, out var xmlDiagnostics);
+        var jsonDocument = ExcelMappingConfigurationLoader.MigrateV1Json(json, MappingDirection.Import,
+            out var jsonDiagnostics);
+        var xmlDocument = ExcelMappingConfigurationLoader.MigrateV1Xml(xml, MappingDirection.Export,
+            out var xmlDiagnostics);
 
         // Assert
         Assert.Equal(2, jsonDocument.Version);
         Assert.Equal(2, xmlDocument.Version);
+        Assert.NotNull(jsonDocument.Import);
+        Assert.NotNull(xmlDocument.Export);
         Assert.Contains(jsonDiagnostics, diagnostic => diagnostic.Code == "V1_MIGRATED"
             && diagnostic.Path == "$");
         Assert.Contains(xmlDiagnostics, diagnostic => diagnostic.Code == "V1_MIGRATED"
@@ -465,7 +542,7 @@ public sealed class ReviewFixRegressionTest
     }
 
     /// <summary>
-    /// 测试 - Provider SPI 应隐藏于 IntelliSense，旧 object-profile 入口应有迁移标记。
+    /// 测试 - Provider SPI 应隐藏于 IntelliSense，旧 object-profile 入口不应继续公开。
     /// </summary>
     [Fact]
     public void ProviderSpiAndCompatibilityOverloads_ShouldHaveMigrationMetadata()
@@ -486,12 +563,11 @@ public sealed class ReviewFixRegressionTest
             Assert.NotNull(attribute);
             Assert.Equal(System.ComponentModel.EditorBrowsableState.Never, attribute.State);
         });
-        Assert.NotNull(typeof(ExcelMappingDocumentFactory).GetMethod("Create",
+        Assert.Null(typeof(ExcelMappingDocumentFactory).GetMethod("Create",
             new[] { typeof(object), typeof(ExcelMappingDocument), typeof(ExcelMappingConfiguration),
-                typeof(MappingDirection) }).GetCustomAttributes(typeof(ObsoleteAttribute), false).SingleOrDefault());
-        Assert.NotNull(typeof(ExcelMappingPlanFactory).GetMethod("Create",
-            new[] { typeof(object), typeof(ExcelMappingConfiguration), typeof(MappingDirection) })
-            .GetCustomAttributes(typeof(ObsoleteAttribute), false).SingleOrDefault());
+                typeof(MappingDirection) }));
+        Assert.Null(typeof(ExcelMappingPlanFactory).GetMethod("Create",
+            new[] { typeof(object), typeof(ExcelMappingConfiguration), typeof(MappingDirection) }));
     }
 
     /// <summary>
@@ -545,6 +621,12 @@ public sealed class ReviewFixRegressionTest
     {
         [Bing.Offices.Attributes.DynamicColumn]
         public IDictionary<string, object> Values { get; set; }
+    }
+
+    private sealed class CacheKeyRow
+    {
+        [ValueMapping("有效", "yes")]
+        public string Code { get; set; }
     }
 
     private sealed class TestNamedRule : INamedExcelValidationRule

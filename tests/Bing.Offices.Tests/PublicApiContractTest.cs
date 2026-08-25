@@ -29,13 +29,14 @@ public class PublicApiContractTest
             "Bing.Offices.Abstractions:Bing.Offices.Attributes.BindFilterAttribute",
             "Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelColumnConfiguration",
             "Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelMappingConfiguration",
+            "Bing.Offices.Abstractions:Bing.Offices.Configurations.MappingConfigurationMerger",
             "Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelMappingDiagnostic",
             "Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelMappingDocument",
             "Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelMappingDocumentFactory",
             "Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelMappingDynamicColumnConfiguration",
             "Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelMappingDynamicValidationConfiguration",
+            "Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelDynamicColumnMergeMode",
             "Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelMappingLayoutConfiguration",
-            "Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelMappingProfile`2",
             "Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelMappingStyleConfiguration",
             "Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelValidationRuleMergeMode",
             "Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelValueMappingMergeMode",
@@ -44,15 +45,17 @@ public class PublicApiContractTest
             "Bing.Offices.Abstractions:Bing.Offices.Configurations.ExportMappingBuilder`1",
             "Bing.Offices.Abstractions:Bing.Offices.Configurations.FluentSetting`2",
             "Bing.Offices.Abstractions:Bing.Offices.Configurations.IMappingProfile`1",
+            "Bing.Offices.Abstractions:Bing.Offices.Configurations.IImportMappingProfile`1",
+            "Bing.Offices.Abstractions:Bing.Offices.Configurations.IExportMappingProfile`1",
             "Bing.Offices.Abstractions:Bing.Offices.Configurations.IMappingProfile`2",
             "Bing.Offices.Abstractions:Bing.Offices.Configurations.IMappingProfileRegistry",
-            "Bing.Offices.Abstractions:Bing.Offices.Configurations.IMappingProfileSnapshot",
             "Bing.Offices.Abstractions:Bing.Offices.Configurations.ImportColumnMappingBuilder`2",
             "Bing.Offices.Abstractions:Bing.Offices.Configurations.ImportMappingBuilder`1",
             "Bing.Offices.Abstractions:Bing.Offices.Configurations.MappingDirection",
             "Bing.Offices.Abstractions:Bing.Offices.Configurations.MappingProfileRegistry",
             "Bing.Offices.Abstractions:Bing.Offices.Configurations.MappingSourceKind",
             "Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelModelAliasRegistry",
+            "Bing.Offices.Abstractions:Bing.Offices.Configurations.ProfileDescriptor",
             "Bing.Offices.Abstractions:Bing.Offices.Conversions.ExcelCellKind",
             "Bing.Offices.Abstractions:Bing.Offices.Conversions.ExcelCellValue",
             "Bing.Offices.Abstractions:Bing.Offices.Conversions.ExcelConversionContext",
@@ -62,7 +65,6 @@ public class PublicApiContractTest
             "Bing.Offices.Abstractions:Bing.Offices.Conversions.INamedExcelValueConverter",
             "Bing.Offices.Abstractions:Bing.Offices.Csv.CsvExportOptions`1",
             "Bing.Offices.Abstractions:Bing.Offices.Csv.CsvFormulaInjectionPolicy",
-            "Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelMappingProfile`1",
             "Bing.Offices.Abstractions:Bing.Offices.Csv.CsvImportError",
             "Bing.Offices.Abstractions:Bing.Offices.Csv.CsvImportOptions`1",
             "Bing.Offices.Abstractions:Bing.Offices.Csv.CsvImportResult`1",
@@ -307,9 +309,8 @@ public class PublicApiContractTest
             "type|Bing.Offices.Npoi.Extensions.ExcelNpoiServiceCollectionExtensions|generic=0",
             "method|Bing.Offices.Npoi.Extensions.ExcelNpoiServiceCollectionExtensions.AddNpoi|static|System.Void|Microsoft.Extensions.DependencyInjection.IServiceCollection|generic=0",
             "type|Bing.Offices.Npoi.Extensions.MappingProfileServiceCollectionExtensions|generic=0",
-            "method|Bing.Offices.Npoi.Extensions.MappingProfileServiceCollectionExtensions.AddMappingProfile|static|Microsoft.Extensions.DependencyInjection.IServiceCollection|Microsoft.Extensions.DependencyInjection.IServiceCollection,System.String|generic=3",
-            "method|Bing.Offices.Npoi.Extensions.MappingProfileServiceCollectionExtensions.AddMappingProfilesFromAssemblies|static|Microsoft.Extensions.DependencyInjection.IServiceCollection|Microsoft.Extensions.DependencyInjection.IServiceCollection,System.Reflection.Assembly[]|generic=0",
-            "method|Bing.Offices.Npoi.Extensions.MappingProfileServiceCollectionExtensions.AddMappingProfilesFromAssembly|static|Microsoft.Extensions.DependencyInjection.IServiceCollection|Microsoft.Extensions.DependencyInjection.IServiceCollection,System.Reflection.Assembly|generic=0"
+            "method|Bing.Offices.Npoi.Extensions.MappingProfileServiceCollectionExtensions.AddMappingProfile|static|Microsoft.Extensions.DependencyInjection.IServiceCollection|Microsoft.Extensions.DependencyInjection.IServiceCollection|generic=1",
+            "method|Bing.Offices.Npoi.Extensions.MappingProfileServiceCollectionExtensions.AddMappingProfiles|static|Microsoft.Extensions.DependencyInjection.IServiceCollection|Microsoft.Extensions.DependencyInjection.IServiceCollection,System.Reflection.Assembly|generic=0",
         };
         var assembly = typeof(NpoiExcelImporter).Assembly;
 
@@ -355,9 +356,9 @@ public class PublicApiContractTest
         // Arrange
         var expected = new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["Bing.Offices.Abstractions"] = "7A6023B42034BA06CEB5D266D47ACE8FF587F5EF5B3B1A66F5BB6847007FC836",
-            ["Bing.Offices.Core"] = "3F8161A5788931096136D82DA89D9FF2DDEA9B6EB141C7701079606A51C4E862",
-            ["Bing.Offices.Npoi"] = "489916813420B04CD646319158AC204F8B4490C60C58E86694BBD5E41C74CC2B"
+            ["Bing.Offices.Abstractions"] = "EB1A5245AF64678F0941E21805B92EE34DC3E5E9406B6443342BD89526A1A57E",
+            ["Bing.Offices.Core"] = "00A020CCDACBA24AB9E94971E858F5F3CE3E58EDD7D70756C6A41012B79B0AA6",
+            ["Bing.Offices.Npoi"] = "76948C1069B3F733E015CEBBF2B18F0F589B06734F0276491316C6EC04A5B16D"
         };
         var assemblies = new[]
         {

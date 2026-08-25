@@ -33,7 +33,6 @@ internal sealed class ExcelImportExecutionOptions<T> where T : class, new()
     internal bool IgnoreEmptyLineAfterData { get; set; }
     internal ExcelMappingConfiguration MappingConfiguration { get; set; }
     internal ExcelMappingDocument MappingDocument { get; set; }
-    internal object MappingProfile { get; set; }
     internal IExcelMappingPlan MappingPlan { get; set; }
     internal int? MaxTrackedUniqueValues { get; set; }
     internal StringComparison UniqueComparison { get; set; } = StringComparison.OrdinalIgnoreCase;

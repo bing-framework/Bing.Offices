@@ -3,16 +3,16 @@
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <IsPackable>false</IsPackable>
-    <RestoreAdditionalProjectSources>$(RestoreAdditionalProjectSources);$(MSBuildThisFileDirectory)..\..\artifacts\packages-1.0.4</RestoreAdditionalProjectSources>
+    <RestoreAdditionalProjectSources>$(RestoreAdditionalProjectSources);$(MSBuildThisFileDirectory)..\..\artifacts\packages-vnext</RestoreAdditionalProjectSources>
   </PropertyGroup>
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.7.0" PrivateAssets="all" />
-    <PackageReference Include="Bing.Offices.Abstractions" Version="1.0.4" />
-    <PackageReference Include="Bing.Offices.Core" Version="1.0.4" />
-    <PackageReference Include="Bing.Offices.Npoi" Version="1.0.4" />
+    <PackageReference Include="Bing.Offices.Abstractions" Version="2.0.0" />
+    <PackageReference Include="Bing.Offices.Core" Version="2.0.0" />
+    <PackageReference Include="Bing.Offices.Npoi" Version="2.0.0" />
   </ItemGroup>
 
   <ItemGroup>

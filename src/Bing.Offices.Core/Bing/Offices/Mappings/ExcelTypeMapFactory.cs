@@ -9,6 +9,7 @@ using Bing.Offices.Attributes;
 using Bing.Offices.Configurations;
 using Bing.Offices.Exceptions;
 using Bing.Offices.Extensions;
+using Bing.Offices.Imports;
 using Bing.Reflection;
 
 namespace Bing.Offices.Mappings;
@@ -100,17 +101,23 @@ public static class ExcelTypeMapFactory
             }
             if (property.IsDynamicColumn)
                 throw new InvalidOperationException($"动态列属性不支持请求级固定列映射: {property.Name}");
-            var title = string.IsNullOrWhiteSpace(configurationColumn.Title) ? property.Title : configurationColumn.Title;
+            var title = configurationColumn.ClearTitle
+                ? null
+                : string.IsNullOrWhiteSpace(configurationColumn.Title) ? property.Title : configurationColumn.Title;
             var values = CreateConfiguredValueMap(property, configurationColumn);
             var aliases = CreateAliases(configurationColumn, property.Aliases);
             var configuredProperty = new ExcelPropertyMap(property.Property, title,
-                configurationColumn.Formatter ?? property.Formatter, configurationColumn.Ignored ?? property.Ignored,
-                property.IsDynamicColumn, configurationColumn.ImportWhitespace ?? property.ImportWhitespace,
-                configurationColumn.DecimalScale ?? property.DecimalScale,
-                configurationColumn.ConverterName ?? property.ConverterName,
+                configurationColumn.ClearFormatter ? null : configurationColumn.Formatter ?? property.Formatter,
+                configurationColumn.ResetIgnored ? false : configurationColumn.Ignored ?? property.Ignored,
+                property.IsDynamicColumn,
+                configurationColumn.ResetImportWhitespace ? null : configurationColumn.ImportWhitespace ?? property.ImportWhitespace,
+                configurationColumn.ResetDecimalScale ? null : configurationColumn.DecimalScale ?? property.DecimalScale,
+                configurationColumn.ClearConverterName ? null : configurationColumn.ConverterName ?? property.ConverterName,
                 CreateValidationRuleNames(configurationColumn, property.ValidationRuleNames), values, aliases,
                 property.Getter,
-                property.Setter, configurationColumn.ImageMultiplicity ?? property.ImageMultiplicity);
+                property.Setter, configurationColumn.ResetImageMultiplicity
+                    ? ExcelImageMultiplicityPolicy.First
+                    : configurationColumn.ImageMultiplicity ?? property.ImageMultiplicity);
             properties.Add((configuredProperty, configurationColumn.ColumnIndex ?? int.MaxValue - source.Properties.Count + defaultOrder++));
         }
         var unknownProperty = configuredColumns.Keys.FirstOrDefault(name =>
@@ -123,40 +130,6 @@ public static class ExcelTypeMapFactory
             .ToList();
         ValidateTitles(mappedProperties, configuration);
         return new ExcelTypeMap<T>(new ReadOnlyCollection<ExcelPropertyMap>(mappedProperties));
-    }
-
-    /// <summary>
-    /// 获取依次应用 Fluent Profile 与请求配置后的类型映射。
-    /// </summary>
-    /// <typeparam name="T">实体类型。</typeparam>
-    /// <param name="profile">优先级低于请求配置的 Fluent Profile。</param>
-    /// <param name="configuration">优先级最高的请求配置。</param>
-    public static ExcelTypeMap<T> Get<T>(ExcelMappingProfile<T> profile, ExcelMappingConfiguration configuration)
-        where T : class, new() =>
-        Get<T>(configuration, profile == null ? Get<T>() : Get<T>(profile.Configuration));
-
-    /// <summary>
-    /// 获取指定方向的双模型 Profile 映射，并按请求配置继续覆盖。
-    /// </summary>
-    [Obsolete("请改用 ExcelMappingDocument 和 IExcelMappingPlanFactory。", false)]
-    public static ExcelTypeMap<T> Get<T>(object profile, ExcelMappingConfiguration configuration,
-        MappingDirection direction) where T : class, new()
-    {
-        if (profile == null)
-            return Get<T>(configuration);
-        if (profile is ExcelMappingProfile<T> legacy)
-            return Get(legacy, configuration);
-        if (!(profile is IMappingProfileSnapshot snapshot))
-            throw new ArgumentException("映射 Profile 类型不受支持。", nameof(profile));
-        var expectedType = direction == MappingDirection.Import ? snapshot.ImportType : snapshot.ExportType;
-        if (expectedType != typeof(T))
-            throw new ArgumentException($"映射 Profile 的{(direction == MappingDirection.Import ? "导入" : "导出")}模型类型不匹配: {typeof(T).FullName}",
-                nameof(profile));
-        var profileConfiguration = direction == MappingDirection.Import
-            ? snapshot.ImportConfiguration
-            : snapshot.ExportConfiguration;
-        var mapped = Get<T>(profileConfiguration);
-        return Get<T>(configuration, mapped);
     }
 
     private static ExcelTypeMap<T> Get<T>(ExcelMappingConfiguration configuration, ExcelTypeMap<T> source)
@@ -288,9 +261,13 @@ public static class ExcelTypeMapFactory
         ExcelColumnConfiguration configuration)
     {
         if (configuration.ValueMappings == null || configuration.ValueMappings.Count == 0)
-            return property.ValueMap;
+            return configuration.ClearValueMappings
+                || configuration.ValueMappingMergeMode == ExcelValueMappingMergeMode.Replace
+                ? new ReadOnlyDictionary<string, object>(new Dictionary<string, object>(StringComparer.Ordinal))
+                : property.ValueMap;
         var values = new Dictionary<string, object>(StringComparer.Ordinal);
-        if (configuration.ValueMappingMergeMode == ExcelValueMappingMergeMode.Append)
+        if (configuration.ValueMappingMergeMode == ExcelValueMappingMergeMode.Append
+            && !configuration.ClearValueMappings)
             foreach (var pair in property.ValueMap)
                 values.Add(pair.Key, pair.Value);
         foreach (var mapping in configuration.ValueMappings)
@@ -306,6 +283,8 @@ public static class ExcelTypeMapFactory
     private static IReadOnlyList<string> CreateAliases(ExcelColumnConfiguration configuration,
         IReadOnlyList<string> defaults)
     {
+        if (configuration.ClearAliases)
+            return Array.Empty<string>();
         if (configuration.Aliases == null || configuration.Aliases.Count == 0)
             return defaults ?? Array.Empty<string>();
         var aliases = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

@@ -67,11 +67,10 @@ public sealed class DocsConsumerTest
     public void MappingV2_ExternalConsumer_ShouldBuildDirectionalRequests()
     {
         // Arrange
-        const string json = "{\"version\":2,\"profile\":\"docs\",\"modelAlias\":\"docs-row\",\"import\":{\"columns\":[{\"propertyName\":\"Name\",\"title\":\"输入名称\"}]},\"export\":{\"columns\":[{\"propertyName\":\"Label\",\"title\":\"输出标签\"}]}}";
+        const string json = "{\"version\":2,\"import\":{\"profile\":\"docs\",\"modelAlias\":\"docs-row\",\"columns\":[{\"propertyName\":\"Name\",\"title\":\"输入名称\"}]},\"export\":{\"profile\":\"docs\",\"modelAlias\":\"docs-row\",\"columns\":[{\"propertyName\":\"Label\",\"title\":\"输出标签\"}]}}";
         var document = ExcelMappingConfigurationLoader.FromJsonDocument(json);
         var services = new ServiceCollection();
-        services.AddSingleton<DocsProfile>();
-        services.AddMappingProfile<DocsProfile, DocsImportRow, DocsExportRow>("docs");
+        services.AddMappingProfile<DocsProfile>();
 
         // Act
         var request = ExcelImport.Workbook<DocsWorkbook>(builder =>
@@ -80,15 +79,18 @@ public sealed class DocsConsumerTest
             builder.AddSheet("Data", new[] { new DocsExportRow { Label = "consumer" } }, sheet => sheet.Mapping(document)));
         using var provider = services.BuildServiceProvider();
         var registry = provider.GetRequiredService<IMappingProfileRegistry>();
-        var profile = registry.Get<DocsImportRow, DocsExportRow>("docs");
+        Assert.True(registry.TryGetDescriptor(typeof(DocsProfile).FullName, MappingDirection.Import,
+            typeof(DocsImportRow), out var importProfile));
+        Assert.True(registry.TryGetDescriptor(typeof(DocsProfile).FullName, MappingDirection.Export,
+            typeof(DocsExportRow), out var exportProfile));
 
         // Assert
         Assert.Equal("输入名称", Assert.Single(document.Import.Columns).Title);
         Assert.Equal("输出标签", Assert.Single(document.Export.Columns).Title);
         Assert.Equal(1, request.SheetCount);
         Assert.Equal(1, export.SheetCount);
-        Assert.Equal("导入名称", Assert.Single(profile.ImportConfiguration.Columns).Title);
-        Assert.Equal("导出标签", Assert.Single(profile.ExportConfiguration.Columns).Title);
+        Assert.Equal("导入名称", Assert.Single(importProfile.Configuration.Columns).Title);
+        Assert.Equal("导出标签", Assert.Single(exportProfile.Configuration.Columns).Title);
     }
 
     /// <summary>
@@ -103,8 +105,9 @@ public sealed class DocsConsumerTest
             "<ExcelMappingDocument><Version>2</Version><Import><Columns /></Import><Export><Columns /></Export></ExcelMappingDocument>"));
 
         // Act
-        var json = ExcelMappingConfigurationLoader.FromJsonDocument(jsonStream);
-        _ = ExcelMappingConfigurationLoader.FromJsonDocument("{\"columns\":[]}", out var diagnostics);
+        var json = ExcelMappingConfigurationLoader.MigrateV1Json(jsonStream, MappingDirection.Import);
+        _ = ExcelMappingConfigurationLoader.MigrateV1Json("{\"columns\":[]}", MappingDirection.Export,
+            out var diagnostics);
         var xml = ExcelMappingConfigurationLoader.FromXmlDocument(xmlStream);
 
         // Assert

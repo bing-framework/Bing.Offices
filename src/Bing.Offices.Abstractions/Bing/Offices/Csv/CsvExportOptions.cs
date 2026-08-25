@@ -56,16 +56,6 @@ public sealed class CsvExportOptions<T> where T : class, new()
     public ExcelMappingDocument MappingDocument { get; set; }
 
     /// <summary>
-    /// 获取或设置本次导出使用的 Fluent 映射 Profile。
-    /// </summary>
-    public ExcelMappingProfile<T> MappingProfile { get; set; }
-
-    /// <summary>
-    /// 获取或设置方向化 Mapping Profile 快照。
-    /// </summary>
-    public object DirectionalMappingProfile { get; set; }
-
-    /// <summary>
     /// 获取或设置动态列名称。
     /// </summary>
     public IReadOnlyList<string> DynamicColumns { get; set; } = Array.Empty<string>();

@@ -12,6 +12,13 @@ internal static class MappingConfigurationCloner
         return new ExcelMappingConfiguration
         {
             SourceKind = sourceKind,
+            Profile = configuration.Profile,
+            ModelAlias = configuration.ModelAlias,
+            ClearDynamicColumns = configuration.ClearDynamicColumns,
+            DynamicColumnKeysToRemove = (configuration.DynamicColumnKeysToRemove ?? new List<string>()).ToList(),
+            DynamicColumnMergeMode = configuration.DynamicColumnMergeMode,
+            ResetStyle = configuration.ResetStyle,
+            ResetLayout = configuration.ResetLayout,
             Columns = (configuration.Columns ?? new List<ExcelColumnConfiguration>()).Select(Clone).ToList(),
             DynamicColumns = (configuration.DynamicColumns ?? new List<ExcelMappingDynamicColumnConfiguration>())
                 .Select(Clone).ToList(),
@@ -28,13 +35,21 @@ internal static class MappingConfigurationCloner
         {
             PropertyName = column.PropertyName,
             Title = column.Title,
+            ClearTitle = column.ClearTitle,
             Aliases = (column.Aliases ?? new List<string>()).ToList(),
+            ClearAliases = column.ClearAliases,
             ColumnIndex = column.ColumnIndex,
+            ResetColumnIndex = column.ResetColumnIndex,
             Ignored = column.Ignored,
+            ResetIgnored = column.ResetIgnored,
             Formatter = column.Formatter,
+            ClearFormatter = column.ClearFormatter,
             DecimalScale = column.DecimalScale,
+            ResetDecimalScale = column.ResetDecimalScale,
             ConverterName = column.ConverterName,
+            ClearConverterName = column.ClearConverterName,
             ImportWhitespace = column.ImportWhitespace,
+            ResetImportWhitespace = column.ResetImportWhitespace,
             ValidationRuleNames = (column.ValidationRuleNames ?? new List<string>()).ToList(),
             ValidationRuleNamesToRemove = (column.ValidationRuleNamesToRemove ?? new List<string>()).ToList(),
             ClearValidationRules = column.ClearValidationRules,
@@ -42,8 +57,10 @@ internal static class MappingConfigurationCloner
             ValueMappings = (column.ValueMappings ?? new List<ExcelValueMappingConfiguration>()).Select(mapping =>
                 mapping == null ? null : new ExcelValueMappingConfiguration { Text = mapping.Text, Value = mapping.Value })
                 .ToList(),
+            ClearValueMappings = column.ClearValueMappings,
             ValueMappingMergeMode = column.ValueMappingMergeMode,
-            ImageMultiplicity = column.ImageMultiplicity
+            ImageMultiplicity = column.ImageMultiplicity,
+            ResetImageMultiplicity = column.ResetImageMultiplicity
         };
     }
 
@@ -81,14 +98,19 @@ internal static class MappingConfigurationCloner
         style == null ? null : new ExcelMappingStyleConfiguration
         {
             HeaderStyleKey = style.HeaderStyleKey,
+            ClearHeaderStyleKey = style.ClearHeaderStyleKey,
             BodyStyleKey = style.BodyStyleKey,
-            NumberFormat = style.NumberFormat
+            ClearBodyStyleKey = style.ClearBodyStyleKey,
+            NumberFormat = style.NumberFormat,
+            ClearNumberFormat = style.ClearNumberFormat
         };
 
     internal static ExcelMappingLayoutConfiguration Clone(ExcelMappingLayoutConfiguration layout) =>
         layout == null ? null : new ExcelMappingLayoutConfiguration
         {
             ColumnIndex = layout.ColumnIndex,
-            PlacementKey = layout.PlacementKey
+            ResetColumnIndex = layout.ResetColumnIndex,
+            PlacementKey = layout.PlacementKey,
+            ClearPlacementKey = layout.ClearPlacementKey
         };
 }

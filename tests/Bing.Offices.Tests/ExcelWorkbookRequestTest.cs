@@ -241,7 +241,7 @@ public sealed class ExcelWorkbookRequestTest
     public void ColumnPlan_FixedAndDynamic_ShouldShareCompiledExecutionMetadata()
     {
         // Arrange
-        var map = new Bing.Offices.Mappings.ExcelMappingPlanFactory().Create<ImportOrder>((object)null, null,
+        var map = new Bing.Offices.Mappings.ExcelMappingPlanFactory().Create<ImportOrder>(new ExcelMappingDocument(), null,
             MappingDirection.Import);
         var fixedProperty = map.Columns.Single(property => property.Name == nameof(ImportOrder.OrderNo));
         var dynamicProperty = map.Columns.Single(property => property.Name == nameof(ImportOrder.CustomFields));

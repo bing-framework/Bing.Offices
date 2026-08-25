@@ -22,14 +22,16 @@ internal static class DocsExamples
         exporter.Export(request, stream);
     }
 
-    internal static ExcelMappingProfile<OrderImport, OrderExport> Profile()
+    internal static ProfileDescriptor Profile()
     {
-        var profile = new ExcelMappingProfile<OrderImport, OrderExport>(new OrderProfile());
         var services = new ServiceCollection();
-        services.AddSingleton<OrderProfile>();
-        services.AddMappingProfile<OrderProfile, OrderImport, OrderExport>("orders");
-        services.AddMappingProfilesFromAssembly(typeof(OrderProfile).Assembly);
-        return profile;
+        services.AddMappingProfile<OrderProfile>();
+        using var provider = services.BuildServiceProvider();
+        var registry = provider.GetRequiredService<IMappingProfileRegistry>();
+        if (!registry.TryGetDescriptor(typeof(OrderProfile).FullName, MappingDirection.Import,
+                typeof(OrderImport), out var descriptor))
+            throw new InvalidOperationException("Profile descriptor missing");
+        return descriptor;
     }
 
     internal static ExcelMappingDocument JsonXml(string json)
@@ -38,8 +40,9 @@ internal static class DocsExamples
         var importRequest = ExcelImport.Workbook<OrdersWorkbook>(builder =>
             builder.Sheet("订单", workbook => workbook.Items, sheet => sheet.Mapping(document)));
         _ = importRequest;
-        var migrated = ExcelMappingConfigurationLoader.FromJsonDocument(
-            "{\"columns\":[{\"propertyName\":\"Code\",\"title\":\"编码\"}]}", out var diagnostics);
+        var migrated = ExcelMappingConfigurationLoader.MigrateV1Json(
+            "{\"columns\":[{\"propertyName\":\"Code\",\"title\":\"编码\"}]}",
+            MappingDirection.Import, out var diagnostics);
         if (!diagnostics.Any(item => item.Code == "V1_MIGRATED"))
             throw new InvalidOperationException("v1 migration diagnostic missing");
         return migrated;

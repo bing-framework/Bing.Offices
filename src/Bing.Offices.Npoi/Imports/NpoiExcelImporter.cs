@@ -188,7 +188,7 @@ internal sealed class NpoiExcelImporter : IExcelImporter
 
     private static ExcelMappingDocument CreateNormalizedDocument<T>(ExcelSheetImportRequest request)
         where T : class, new() =>
-        ExcelMappingDocumentFactory.Create<T>(request.MappingProfile, request.MappingDocument,
+        ExcelMappingDocumentFactory.Create<T>(request.MappingDocument,
             request.MappingConfiguration, MappingDirection.Import);
 
     private IExcelMappingWorkbookPlan CreateWorkbookPlan(ExcelSheetImportRequest request,
@@ -274,7 +274,6 @@ internal sealed class NpoiExcelImporter : IExcelImporter
             IgnoreEmptyLineAfterData = request.IgnoreEmptyLineAfterData,
             MappingConfiguration = request.MappingConfiguration,
             MappingDocument = request.MappingDocument,
-            MappingProfile = request.MappingProfile,
             MappingPlan = mappingPlan,
             MaxTrackedUniqueValues = resourceLimits?.MaxTrackedUniqueValues,
             UniqueComparison = resourceLimits?.UniqueComparison ?? StringComparison.OrdinalIgnoreCase
@@ -1073,7 +1072,7 @@ internal sealed class NpoiExcelImporter : IExcelImporter
         var map = options.MappingPlan;
         if (map == null)
         {
-            var document = ExcelMappingDocumentFactory.Create<T>(options.MappingProfile, options.MappingDocument,
+            var document = ExcelMappingDocumentFactory.Create<T>(options.MappingDocument,
                 options.MappingConfiguration, MappingDirection.Import);
             map = _mappingPlanFactory.CreateWorkbook<T>(document, MappingDirection.Import,
                 new[] { header.Sheet.SheetName }).Sheets[0].Mapping;

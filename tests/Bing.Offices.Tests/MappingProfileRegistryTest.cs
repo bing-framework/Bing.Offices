@@ -23,16 +23,102 @@ public class MappingProfileRegistryTest
     {
         // Arrange
         var services = new ServiceCollection();
-        services.AddMappingProfile<ExplicitProfile, ImportModel, ExportModel>("orders");
+        services.AddMappingProfile<ExplicitProfile>();
 
         // Act
         using var provider = services.BuildServiceProvider();
         var registry = provider.GetRequiredService<IMappingProfileRegistry>();
-        var profile = registry.Get<ImportModel, ExportModel>("orders");
+        Assert.True(registry.TryGetDescriptor(typeof(ExplicitProfile).FullName, MappingDirection.Import,
+            typeof(ImportModel), out var import));
+        Assert.True(registry.TryGetDescriptor(typeof(ExplicitProfile).FullName, MappingDirection.Export,
+            typeof(ExportModel), out var export));
 
         // Assert
-        Assert.Equal("导入", profile.ImportConfiguration.Columns[0].Title);
-        Assert.Equal("导出", profile.ExportConfiguration.Columns[0].Title);
+        Assert.Equal("导入", import.Configuration.Columns[0].Title);
+        Assert.Equal("导出", export.Configuration.Columns[0].Title);
+    }
+
+    /// <summary>
+    /// 测试 - 四种 Profile 形状均应生成对应的方向 descriptor，且单向 Profile 不伪造另一方向。
+    /// </summary>
+    [Fact]
+    public void ExplicitRegistration_AllProfileShapes_ShouldResolveExpectedDirections()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        services.AddMappingProfile<ImportOnlyProfile>();
+        services.AddMappingProfile<ExportOnlyProfile>();
+        services.AddMappingProfile<SameModelProfile>();
+        services.AddMappingProfile<ExplicitProfile>();
+
+        // Act
+        using var provider = services.BuildServiceProvider();
+        var registry = provider.GetRequiredService<IMappingProfileRegistry>();
+
+        // Assert
+        Assert.True(registry.TryGetDescriptor(typeof(ImportOnlyProfile).FullName, MappingDirection.Import,
+            typeof(ImportModel), out _));
+        Assert.False(registry.TryGetDescriptor(typeof(ImportOnlyProfile).FullName, MappingDirection.Export,
+            typeof(ImportModel), out _));
+        Assert.True(registry.TryGetDescriptor(typeof(ExportOnlyProfile).FullName, MappingDirection.Export,
+            typeof(ExportModel), out _));
+        Assert.False(registry.TryGetDescriptor(typeof(ExportOnlyProfile).FullName, MappingDirection.Import,
+            typeof(ExportModel), out _));
+        Assert.True(registry.TryGetDescriptor(typeof(SameModelProfile).FullName, MappingDirection.Import,
+            typeof(ImportModel), out _));
+        Assert.True(registry.TryGetDescriptor(typeof(SameModelProfile).FullName, MappingDirection.Export,
+            typeof(ImportModel), out _));
+        Assert.True(registry.TryGetDescriptor(typeof(ExplicitProfile).FullName, MappingDirection.Import,
+            typeof(ImportModel), out _));
+        Assert.True(registry.TryGetDescriptor(typeof(ExplicitProfile).FullName, MappingDirection.Export,
+            typeof(ExportModel), out _));
+    }
+
+    /// <summary>
+    /// 测试 - DI 注册的方向 Profile 应进入默认 Plan Factory 主链并生成对应计划。
+    /// </summary>
+    [Fact]
+    public void DiProfileRegistry_DefaultPlanFactory_ShouldCreateDirectionalPlan()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        services.AddMappingProfile<ExplicitProfile>();
+        services.AddNpoi();
+        using var provider = services.BuildServiceProvider();
+        var document = new ExcelMappingDocument
+        {
+            Import = new ExcelMappingConfiguration
+            {
+                Profile = typeof(ExplicitProfile).FullName
+            }
+        };
+
+        // Act
+        var factory = provider.GetRequiredService<Bing.Offices.Providers.IExcelMappingPlanFactory>();
+        var plan = factory.Create<ImportModel>(document, MappingDirection.Import);
+
+        // Assert
+        Assert.Equal("导入", plan.Columns.Single(column => column.Name == nameof(ImportModel.Name)).Title);
+    }
+
+    /// <summary>
+    /// 测试 - 一个 Profile 通过多个契约产生相同方向和模型时应报告确定性冲突。
+    /// </summary>
+    [Fact]
+    public void MultipleContracts_SameDirectionAndModel_ShouldFailDeterministically()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        var count = services.Count;
+
+        // Act
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            services.AddMappingProfile<ConflictingProfile<ImportModel>>());
+
+        // Assert
+        Assert.Contains("重复方向 descriptor", exception.Message);
+        Assert.Equal(count, services.Count);
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(ConflictingProfile<ImportModel>));
     }
 
     /// <summary>
@@ -43,10 +129,10 @@ public class MappingProfileRegistryTest
     {
         // Arrange
         var services = new ServiceCollection();
-        services.AddMappingProfile<ExplicitProfile, ImportModel, ExportModel>("orders");
+        services.AddMappingProfile<ExplicitProfile>();
 
         // Act
-        var action = () => services.AddMappingProfile<SecondExplicitProfile, ImportModel, ExportModel>("orders");
+        var action = () => services.AddMappingProfile<ExplicitProfile>();
 
         // Assert
         Assert.Throws<InvalidOperationException>(action);
@@ -60,20 +146,20 @@ public class MappingProfileRegistryTest
     {
         // Arrange
         var services = new ServiceCollection();
-        services.AddMappingProfilesFromAssembly(typeof(ScannedProfile).Assembly);
+        services.AddMappingProfiles(typeof(ScannedProfile).Assembly);
 
         // Act
         using var provider = services.BuildServiceProvider();
         var registry = provider.GetRequiredService<IMappingProfileRegistry>();
 
         // Assert
-        Assert.True(registry.TryGet(typeof(ScannedProfile).FullName, MappingDirection.Import,
+        Assert.True(registry.TryGetDescriptor(typeof(ScannedProfile).FullName, MappingDirection.Import,
             typeof(ImportModel), out _));
-        Assert.False(registry.TryGet(typeof(IgnoredAbstractProfile).FullName, MappingDirection.Import,
+        Assert.False(registry.TryGetDescriptor(typeof(IgnoredAbstractProfile).FullName, MappingDirection.Import,
             typeof(ImportModel), out _));
-        Assert.False(registry.TryGet(typeof(IgnoredOpenGenericProfile<>).FullName, MappingDirection.Import,
+        Assert.False(registry.TryGetDescriptor(typeof(IgnoredOpenGenericProfile<>).FullName, MappingDirection.Import,
             typeof(ImportModel), out _));
-        Assert.Throws<KeyNotFoundException>(() => registry.Get<ImportModel, ExportModel>("missing"));
+        Assert.False(registry.TryGetDescriptor("missing", MappingDirection.Import, typeof(ImportModel), out _));
     }
 
     /// <summary>
@@ -86,8 +172,8 @@ public class MappingProfileRegistryTest
         var services = new ServiceCollection();
 
         // Act
-        var action = () => services.AddMappingProfilesFromAssemblies(
-            typeof(ScannedProfile).Assembly, typeof(ScannedProfile).Assembly);
+        services.AddMappingProfiles(typeof(ScannedProfile).Assembly);
+        var action = () => services.AddMappingProfiles(typeof(ScannedProfile).Assembly);
 
         // Assert
         Assert.Throws<InvalidOperationException>(action);
@@ -101,13 +187,13 @@ public class MappingProfileRegistryTest
     {
         // Arrange
         var registry = new MappingProfileRegistry();
-        var snapshot = new ExcelMappingProfile<ImportModel, ExportModel>(_ => { });
-        registry.Register("concurrent", snapshot);
+        registry.Register(new ProfileDescriptor("concurrent", MappingDirection.Import,
+            typeof(ImportModel), new ExcelMappingConfiguration()));
 
         // Act
-        var profiles = new IMappingProfileSnapshot[64];
+        var profiles = new ProfileDescriptor[64];
         Parallel.For(0, profiles.Length, index =>
-            registry.TryGet("concurrent", MappingDirection.Import, typeof(ImportModel), out profiles[index]));
+            registry.TryGetDescriptor("concurrent", MappingDirection.Import, typeof(ImportModel), out profiles[index]));
 
         // Assert
         Assert.All(profiles, profile => Assert.NotNull(profile));
@@ -131,18 +217,18 @@ public class MappingProfileRegistryTest
         var second = secondProvider.GetRequiredService<IMappingProfileRegistry>();
 
         // Assert
-        Assert.True(first.TryGet(typeof(ScannedProfile).FullName, MappingDirection.Import,
+        Assert.True(first.TryGetDescriptor(typeof(ScannedProfile).FullName, MappingDirection.Import,
             typeof(ImportModel), out var firstSnapshot));
-        Assert.True(second.TryGet(typeof(ScannedProfile).FullName, MappingDirection.Import,
+        Assert.True(second.TryGetDescriptor(typeof(ScannedProfile).FullName, MappingDirection.Import,
             typeof(ImportModel), out var secondSnapshot));
-        Assert.Equal(firstSnapshot.ImportType, secondSnapshot.ImportType);
-        Assert.Equal(firstSnapshot.ExportType, secondSnapshot.ExportType);
-        Assert.True(first.TryGet(typeof(ExternalMappingProfile).FullName, MappingDirection.Import,
+        Assert.Equal(firstSnapshot.ModelType, secondSnapshot.ModelType);
+        Assert.Equal(firstSnapshot.Direction, secondSnapshot.Direction);
+        Assert.True(first.TryGetDescriptor(typeof(ExternalMappingProfile).FullName, MappingDirection.Import,
             typeof(ExternalImportModel), out var firstExternal));
-        Assert.True(second.TryGet(typeof(ExternalMappingProfile).FullName, MappingDirection.Import,
+        Assert.True(second.TryGetDescriptor(typeof(ExternalMappingProfile).FullName, MappingDirection.Import,
             typeof(ExternalImportModel), out var secondExternal));
-        Assert.Equal(firstExternal.ImportType, secondExternal.ImportType);
-        Assert.Equal(firstExternal.ExportType, secondExternal.ExportType);
+        Assert.Equal(firstExternal.ModelType, secondExternal.ModelType);
+        Assert.Equal(firstExternal.Direction, secondExternal.Direction);
     }
 
     /// <summary>
@@ -153,11 +239,10 @@ public class MappingProfileRegistryTest
     {
         // Arrange
         var services = new ServiceCollection();
-        services.AddMappingProfilesFromAssembly(typeof(ExternalMappingProfile).Assembly);
+        services.AddMappingProfile<ExternalMappingProfile>();
 
         // Act
-        var action = () => services.AddMappingProfile<ExternalDuplicateProfile, ExternalImportModel,
-            ExternalExportModel>(typeof(ExternalMappingProfile).FullName);
+        var action = () => services.AddMappingProfile<ExternalMappingProfile>();
 
         // Assert
         Assert.Throws<InvalidOperationException>(action);
@@ -166,7 +251,8 @@ public class MappingProfileRegistryTest
     private static ServiceProvider BuildProvider(params System.Reflection.Assembly[] assemblies)
     {
         var services = new ServiceCollection();
-        services.AddMappingProfilesFromAssemblies(assemblies);
+        foreach (var assembly in assemblies)
+            services.AddMappingProfiles(assembly);
         return services.BuildServiceProvider();
     }
 
@@ -176,6 +262,18 @@ public class MappingProfileRegistryTest
         {
             setting.Import.Property(model => model.Name).HasHeader("导入");
             setting.Export.Property(model => model.Label).HasHeader("导出");
+        }
+    }
+
+    public sealed class ConflictingProfile<T> : IImportMappingProfile<T>,
+        IMappingProfile<T, ExportModel> where T : class, new()
+    {
+        public void Configure(ImportMappingBuilder<T> setting)
+        {
+        }
+
+        public void Configure(FluentSetting<T, ExportModel> setting)
+        {
         }
     }
 
@@ -193,10 +291,28 @@ public class MappingProfileRegistryTest
         }
     }
 
-    public sealed class ExternalDuplicateProfile : IMappingProfile<ExternalImportModel, ExternalExportModel>
+    public sealed class ImportOnlyProfile : IImportMappingProfile<ImportModel>
     {
-        public void Configure(FluentSetting<ExternalImportModel, ExternalExportModel> setting)
+        public void Configure(ImportMappingBuilder<ImportModel> setting)
         {
+            setting.Property(model => model.Name).HasHeader("仅导入");
+        }
+    }
+
+    public sealed class ExportOnlyProfile : IExportMappingProfile<ExportModel>
+    {
+        public void Configure(ExportMappingBuilder<ExportModel> setting)
+        {
+            setting.Property(model => model.Label).HasHeader("仅导出");
+        }
+    }
+
+    public sealed class SameModelProfile : IMappingProfile<ImportModel>
+    {
+        public void Configure(FluentSetting<ImportModel, ImportModel> setting)
+        {
+            setting.Import.Property(model => model.Name).HasHeader("同模型导入");
+            setting.Export.Property(model => model.Name).HasHeader("同模型导出");
         }
     }
 

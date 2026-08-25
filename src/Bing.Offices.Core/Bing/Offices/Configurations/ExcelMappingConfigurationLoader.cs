@@ -23,7 +23,7 @@ public static class ExcelMappingConfigurationLoader
     private const int MaxStringLength = 4096;
 
     /// <summary>
-    /// 从 JSON 文本加载兼容映射配置；v2 文档返回 Import 方向配置，v1 平铺文档原样迁移。
+    /// 从 JSON 文本加载 v2 映射配置；v1 平铺配置必须通过显式迁移入口处理。
     /// </summary>
     public static ExcelMappingConfiguration FromJson(string json) => FromJsonDocument(json).Import;
 
@@ -49,6 +49,51 @@ public static class ExcelMappingConfigurationLoader
     public static ExcelMappingDocument FromJsonDocument(string json)
         => LoadJsonDocument(json, null, null);
 
+
+    /// <summary>
+    /// 将 v1 平铺 JSON 映射配置迁移到指定方向的 v2 文档。
+    /// </summary>
+    /// <param name="json">v1 JSON 配置。</param>
+    /// <param name="direction">迁移目标方向。</param>
+    public static ExcelMappingDocument MigrateV1Json(string json, MappingDirection direction)
+    {
+        IReadOnlyList<ExcelMappingDiagnostic> diagnostics;
+        return MigrateV1Json(json, direction, out diagnostics);
+    }
+
+    /// <summary>
+    /// 将 v1 平铺 JSON 映射配置迁移到指定方向的 v2 文档，并返回诊断信息。
+    /// </summary>
+    /// <param name="json">v1 JSON 配置。</param>
+    /// <param name="direction">迁移目标方向。</param>
+    /// <param name="diagnostics">迁移诊断信息。</param>
+    public static ExcelMappingDocument MigrateV1Json(string json, MappingDirection direction,
+        out IReadOnlyList<ExcelMappingDiagnostic> diagnostics)
+    {
+        ValidateDirection(direction);
+        var items = new List<ExcelMappingDiagnostic>();
+        var configuration = DeserializeV1Json(json);
+        var result = CreateMigratedDocument(configuration, direction);
+        items.Add(new ExcelMappingDiagnostic("V1_MIGRATED", "$",
+            $"检测到 v1 平铺 JSON，已显式迁移为 v2 {direction} 方向文档。"));
+        diagnostics = items;
+        return result;
+    }
+
+    /// <summary>
+    /// 从调用方拥有的流迁移 v1 JSON，并保留调用方流所有权。
+    /// </summary>
+    /// <param name="source">v1 JSON 流。</param>
+    /// <param name="direction">迁移目标方向。</param>
+    public static ExcelMappingDocument MigrateV1Json(Stream source, MappingDirection direction)
+    {
+        if (source == null)
+            throw new ArgumentNullException(nameof(source));
+        if (!source.CanRead)
+            throw new ArgumentException("JSON 配置流不可读取。", nameof(source));
+        using var reader = new StreamReader(source, Encoding.UTF8, true, 1024, true);
+        return MigrateV1Json(ReadLimitedText(reader), direction);
+    }
     /// <summary>
     /// 从 JSON 文本加载文档，并返回非阻断的迁移诊断。
     /// </summary>
@@ -103,11 +148,8 @@ public static class ExcelMappingConfigurationLoader
             }
             else
             {
-                var configuration = JsonSerializer.Deserialize<ExcelMappingConfiguration>(json, options)
-                    ?? throw new InvalidOperationException("JSON 配置未包含有效映射。");
-                result = CreateV1Document(configuration);
-                diagnostics?.Add(new ExcelMappingDiagnostic("V1_MIGRATED", "$",
-                    "检测到 v1 平铺 JSON，已归一化为 v2 文档。"));
+                throw new InvalidOperationException(
+                    "检测到 v1 平铺 JSON；请调用 MigrateV1Json(json, direction) 并显式指定迁移方向。");
             }
             ValidateDocument(result, modelAliases);
             return result;
@@ -164,6 +206,51 @@ public static class ExcelMappingConfigurationLoader
     public static ExcelMappingDocument FromXmlDocument(string xml)
         => LoadXmlDocument(xml, null, null);
 
+
+    /// <summary>
+    /// 将 v1 平铺 XML 映射配置迁移到指定方向的 v2 文档。
+    /// </summary>
+    /// <param name="xml">v1 XML 配置。</param>
+    /// <param name="direction">迁移目标方向。</param>
+    public static ExcelMappingDocument MigrateV1Xml(string xml, MappingDirection direction)
+    {
+        IReadOnlyList<ExcelMappingDiagnostic> diagnostics;
+        return MigrateV1Xml(xml, direction, out diagnostics);
+    }
+
+    /// <summary>
+    /// 将 v1 平铺 XML 映射配置迁移到指定方向的 v2 文档，并返回诊断信息。
+    /// </summary>
+    /// <param name="xml">v1 XML 配置。</param>
+    /// <param name="direction">迁移目标方向。</param>
+    /// <param name="diagnostics">迁移诊断信息。</param>
+    public static ExcelMappingDocument MigrateV1Xml(string xml, MappingDirection direction,
+        out IReadOnlyList<ExcelMappingDiagnostic> diagnostics)
+    {
+        ValidateDirection(direction);
+        var items = new List<ExcelMappingDiagnostic>();
+        var configuration = DeserializeV1Xml(xml);
+        var result = CreateMigratedDocument(configuration, direction);
+        items.Add(new ExcelMappingDiagnostic("V1_MIGRATED", "/ExcelMappingConfiguration",
+            $"检测到 v1 平铺 XML，已显式迁移为 v2 {direction} 方向文档。"));
+        diagnostics = items;
+        return result;
+    }
+
+    /// <summary>
+    /// 从调用方拥有的流迁移 v1 XML，并保留调用方流所有权。
+    /// </summary>
+    /// <param name="source">v1 XML 流。</param>
+    /// <param name="direction">迁移目标方向。</param>
+    public static ExcelMappingDocument MigrateV1Xml(Stream source, MappingDirection direction)
+    {
+        if (source == null)
+            throw new ArgumentNullException(nameof(source));
+        if (!source.CanRead)
+            throw new ArgumentException("XML 配置流不可读取。", nameof(source));
+        using var reader = new StreamReader(source, Encoding.UTF8, true, 1024, true);
+        return MigrateV1Xml(ReadLimitedText(reader), direction);
+    }
     /// <summary>
     /// 从 XML 文本加载文档，并返回非阻断的迁移诊断。
     /// </summary>
@@ -191,11 +278,11 @@ public static class ExcelMappingConfigurationLoader
             throw new InvalidOperationException($"XML 配置超过最大字节数: {MaxDocumentBytes}");
         var isV2 = IsXmlDocumentRoot(xml);
         ValidateXmlShape(xml, isV2);
+        if (!isV2)
+            throw new InvalidOperationException(
+                "检测到 v1 平铺 XML；请调用 MigrateV1Xml(xml, direction) 并显式指定迁移方向。");
         using var reader = XmlReader.Create(new StringReader(xml), CreateXmlReaderSettings());
         var result = DeserializeXml(reader);
-        if (!isV2)
-            diagnostics?.Add(new ExcelMappingDiagnostic("V1_MIGRATED", "/ExcelMappingConfiguration",
-                "检测到 v1 平铺 XML，已归一化为 v2 文档。"));
         ValidateDocument(result, modelAliases);
         return result;
     }
@@ -261,12 +348,73 @@ public static class ExcelMappingConfigurationLoader
         return builder.ToString();
     }
 
-    private static ExcelMappingDocument CreateV1Document(ExcelMappingConfiguration configuration) => new()
+    private static ExcelMappingDocument CreateMigratedDocument(ExcelMappingConfiguration configuration,
+        MappingDirection direction)
     {
-        Version = 2,
-        Import = configuration ?? throw new InvalidOperationException("JSON 配置未包含有效映射。"),
-        Export = new ExcelMappingConfiguration()
-    };
+        if (configuration == null)
+            throw new InvalidOperationException("v1 配置未包含有效映射。");
+        return new ExcelMappingDocument
+        {
+            Version = 2,
+            Import = direction == MappingDirection.Import
+                ? MappingConfigurationMerger.Merge(null, configuration, MappingSourceKind.Document)
+                : new ExcelMappingConfiguration(),
+            Export = direction == MappingDirection.Export
+                ? MappingConfigurationMerger.Merge(null, configuration, MappingSourceKind.Document)
+                : new ExcelMappingConfiguration()
+        };
+    }
+
+    private static ExcelMappingConfiguration DeserializeV1Json(string json)
+    {
+        ValidateDocumentText(json, "JSON");
+        try
+        {
+            using var document = JsonDocument.Parse(json, new JsonDocumentOptions
+            {
+                MaxDepth = MaxDepth,
+                CommentHandling = JsonCommentHandling.Disallow,
+                AllowTrailingCommas = false
+            });
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+                throw new InvalidOperationException("JSON 配置根节点必须是对象。");
+            ValidateJsonElement(document.RootElement, "$", false);
+            return JsonSerializer.Deserialize<ExcelMappingConfiguration>(json, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true,
+                MaxDepth = MaxDepth
+            }) ?? throw new InvalidOperationException("JSON 配置未包含有效映射。");
+        }
+        catch (JsonException exception)
+        {
+            throw new InvalidOperationException($"JSON 映射配置无效: {exception.Message}", exception);
+        }
+    }
+
+    private static ExcelMappingConfiguration DeserializeV1Xml(string xml)
+    {
+        ValidateDocumentText(xml, "XML");
+        ValidateXmlShape(xml, false);
+        using var reader = XmlReader.Create(new StringReader(xml), CreateXmlReaderSettings());
+        var serializer = new XmlSerializer(typeof(ExcelMappingConfiguration));
+        AttachXmlValidationHandlers(serializer);
+        return (ExcelMappingConfiguration)serializer.Deserialize(reader)
+            ?? throw new InvalidOperationException("XML 配置未包含有效映射。");
+    }
+
+    private static void ValidateDocumentText(string text, string format)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            throw new ArgumentException($"{format} 配置不能为空。", nameof(text));
+        if (Encoding.UTF8.GetByteCount(text) > MaxDocumentBytes)
+            throw new InvalidOperationException($"{format} 配置超过最大字节数: {MaxDocumentBytes}");
+    }
+
+    private static void ValidateDirection(MappingDirection direction)
+    {
+        if (!Enum.IsDefined(typeof(MappingDirection), direction))
+            throw new ArgumentOutOfRangeException(nameof(direction));
+    }
 
     private static XmlReaderSettings CreateXmlReaderSettings() => new()
     {
@@ -315,15 +463,19 @@ public static class ExcelMappingConfigurationLoader
     private static bool IsKnownXmlElement(string parent, string child)
     {
         if (parent == nameof(ExcelMappingDocument))
-            return child is nameof(ExcelMappingDocument.Version) or nameof(ExcelMappingDocument.Profile)
-                or nameof(ExcelMappingDocument.ModelAlias) or nameof(ExcelMappingDocument.TenantId)
+            return child is nameof(ExcelMappingDocument.Version) or nameof(ExcelMappingDocument.TenantId)
                 or nameof(ExcelMappingDocument.ConfigurationVersion) or nameof(ExcelMappingDocument.Import)
                 or nameof(ExcelMappingDocument.Export);
         if (parent is nameof(ExcelMappingDocument.Import) or nameof(ExcelMappingDocument.Export)
             or nameof(ExcelMappingConfiguration))
-            return child is nameof(ExcelMappingConfiguration.SourceKind) or nameof(ExcelMappingConfiguration.Columns)
-                or nameof(ExcelMappingConfiguration.DynamicColumns) or nameof(ExcelMappingConfiguration.Style)
-                or nameof(ExcelMappingConfiguration.Layout);
+            return child is nameof(ExcelMappingConfiguration.SourceKind) or nameof(ExcelMappingConfiguration.Profile)
+                or nameof(ExcelMappingConfiguration.ModelAlias) or nameof(ExcelMappingConfiguration.Columns)
+                or nameof(ExcelMappingConfiguration.DynamicColumns)
+                or nameof(ExcelMappingConfiguration.DynamicColumnKeysToRemove)
+                or nameof(ExcelMappingConfiguration.DynamicColumnMergeMode)
+                or nameof(ExcelMappingConfiguration.Style)
+                or nameof(ExcelMappingConfiguration.Layout) or nameof(ExcelMappingConfiguration.ClearDynamicColumns)
+                or nameof(ExcelMappingConfiguration.ResetStyle) or nameof(ExcelMappingConfiguration.ResetLayout);
         if (parent == nameof(ExcelMappingConfiguration.Columns))
             return child == nameof(ExcelColumnConfiguration);
         if (parent == nameof(ExcelMappingConfiguration.DynamicColumns))
@@ -344,15 +496,25 @@ public static class ExcelMappingConfigurationLoader
                 or nameof(ExcelMappingDynamicColumnConfiguration.ImageMultiplicity);
         if (parent == nameof(ExcelMappingConfiguration.Style))
             return child is nameof(ExcelMappingStyleConfiguration.HeaderStyleKey)
+                or nameof(ExcelMappingStyleConfiguration.ClearHeaderStyleKey)
                 or nameof(ExcelMappingStyleConfiguration.BodyStyleKey)
-                or nameof(ExcelMappingStyleConfiguration.NumberFormat);
+                or nameof(ExcelMappingStyleConfiguration.ClearBodyStyleKey)
+                or nameof(ExcelMappingStyleConfiguration.NumberFormat)
+                or nameof(ExcelMappingStyleConfiguration.ClearNumberFormat);
         if (parent == nameof(ExcelMappingConfiguration.Layout))
             return child is nameof(ExcelMappingLayoutConfiguration.ColumnIndex)
-                or nameof(ExcelMappingLayoutConfiguration.PlacementKey);
+                or nameof(ExcelMappingLayoutConfiguration.ResetColumnIndex)
+                or nameof(ExcelMappingLayoutConfiguration.PlacementKey)
+                or nameof(ExcelMappingLayoutConfiguration.ClearPlacementKey);
         if (parent == nameof(ExcelColumnConfiguration))
             return child is nameof(ExcelColumnConfiguration.PropertyName) or nameof(ExcelColumnConfiguration.Title)
                 or nameof(ExcelColumnConfiguration.Aliases) or nameof(ExcelColumnConfiguration.ColumnIndex)
                 or nameof(ExcelColumnConfiguration.Ignored) or nameof(ExcelColumnConfiguration.Formatter)
+                or nameof(ExcelColumnConfiguration.ClearTitle) or nameof(ExcelColumnConfiguration.ClearAliases)
+                or nameof(ExcelColumnConfiguration.ResetColumnIndex) or nameof(ExcelColumnConfiguration.ResetIgnored)
+                or nameof(ExcelColumnConfiguration.ClearFormatter) or nameof(ExcelColumnConfiguration.ResetDecimalScale)
+                or nameof(ExcelColumnConfiguration.ClearConverterName)
+                or nameof(ExcelColumnConfiguration.ResetImportWhitespace)
                 or nameof(ExcelColumnConfiguration.DecimalScale) or nameof(ExcelColumnConfiguration.ConverterName)
                 or nameof(ExcelColumnConfiguration.ImportWhitespace)
                 or nameof(ExcelColumnConfiguration.ValidationRuleNames)
@@ -360,7 +522,9 @@ public static class ExcelMappingConfigurationLoader
                 or nameof(ExcelColumnConfiguration.ClearValidationRules)
                 or nameof(ExcelColumnConfiguration.ValidationRuleMergeMode)
                 or nameof(ExcelColumnConfiguration.ValueMappings)
+                or nameof(ExcelColumnConfiguration.ClearValueMappings)
                 or nameof(ExcelColumnConfiguration.ValueMappingMergeMode)
+                or nameof(ExcelColumnConfiguration.ResetImageMultiplicity)
                 or nameof(ExcelColumnConfiguration.ImageMultiplicity);
         if (parent is nameof(ExcelColumnConfiguration.Aliases)
             or nameof(ExcelColumnConfiguration.ValidationRuleNames)
@@ -401,8 +565,9 @@ public static class ExcelMappingConfigurationLoader
             }
             var configurationSerializer = new XmlSerializer(typeof(ExcelMappingConfiguration));
             AttachXmlValidationHandlers(configurationSerializer);
-            var configuration = (ExcelMappingConfiguration)configurationSerializer.Deserialize(reader);
-            return CreateV1Document(configuration);
+            _ = configurationSerializer;
+            throw new InvalidOperationException(
+                "v1 XML 只能通过 MigrateV1Xml(xml, direction) 显式迁移。");
         }
         catch (InvalidOperationException exception)
         {
@@ -433,23 +598,29 @@ public static class ExcelMappingConfigurationLoader
             throw new InvalidOperationException("映射文档不能为空。");
         if (document.Version != 2)
             throw new InvalidOperationException($"不支持的映射文档版本: {document.Version}");
-        ValidateBusinessAlias(document.Profile, "profile");
-        ValidateBusinessAlias(document.ModelAlias, "modelAlias");
         ValidateText(document.TenantId, "tenantId");
         ValidateText(document.ConfigurationVersion, "configurationVersion");
-        if (modelAliases != null && modelAliases.HasRegistrations
-            && !string.IsNullOrWhiteSpace(document.ModelAlias)
-            && !modelAliases.Contains(document.ModelAlias))
-            throw new InvalidOperationException($"未知 modelAlias: {document.ModelAlias}");
-        ValidateConfiguration(document.Import, "import");
-        ValidateConfiguration(document.Export, "export");
-        ValidateText(document.ModelAlias, "modelAlias");
+        ValidateConfiguration(document.Import, "import", modelAliases);
+        ValidateConfiguration(document.Export, "export", modelAliases);
     }
 
-    private static void ValidateConfiguration(ExcelMappingConfiguration configuration, string path)
+    private static void ValidateConfiguration(ExcelMappingConfiguration configuration, string path,
+        ExcelModelAliasRegistry modelAliases)
     {
         if (configuration == null)
             return;
+        if (configuration.DynamicColumnMergeMode.HasValue
+            && !Enum.IsDefined(typeof(ExcelDynamicColumnMergeMode), configuration.DynamicColumnMergeMode.Value))
+            throw new InvalidOperationException($"{path}.dynamicColumnMergeMode 无效。");
+        for (var removeIndex = 0; removeIndex < (configuration.DynamicColumnKeysToRemove?.Count ?? 0); removeIndex++)
+            ValidateText(configuration.DynamicColumnKeysToRemove[removeIndex],
+                $"{path}.dynamicColumnKeysToRemove[{removeIndex}]");
+        ValidateBusinessAlias(configuration.Profile, $"{path}.profile");
+        ValidateBusinessAlias(configuration.ModelAlias, $"{path}.modelAlias");
+        if (modelAliases != null && modelAliases.HasRegistrations
+            && !string.IsNullOrWhiteSpace(configuration.ModelAlias)
+            && !modelAliases.Contains(configuration.ModelAlias))
+            throw new InvalidOperationException($"未知 modelAlias: {configuration.ModelAlias}");
         ValidateText(configuration.Style?.HeaderStyleKey, $"{path}.style.headerStyleKey");
         ValidateText(configuration.Style?.BodyStyleKey, $"{path}.style.bodyStyleKey");
         ValidateText(configuration.Style?.NumberFormat, $"{path}.style.numberFormat");
@@ -513,6 +684,12 @@ public static class ExcelMappingConfigurationLoader
             ValidateText(column.Title, $"{columnPath}.title");
             ValidateText(column.Formatter, $"{columnPath}.formatter");
             ValidateText(column.ConverterName, $"{columnPath}.converterName");
+            if (column.ValidationRuleMergeMode.HasValue
+                && !Enum.IsDefined(typeof(ExcelValidationRuleMergeMode), column.ValidationRuleMergeMode.Value))
+                throw new InvalidOperationException($"{columnPath}.validationRuleMergeMode 无效。");
+            if (column.ValueMappingMergeMode.HasValue
+                && !Enum.IsDefined(typeof(ExcelValueMappingMergeMode), column.ValueMappingMergeMode.Value))
+                throw new InvalidOperationException($"{columnPath}.valueMappingMergeMode 无效。");
             for (var aliasIndex = 0; aliasIndex < (column.Aliases?.Count ?? 0); aliasIndex++)
                 ValidateText(column.Aliases[aliasIndex], $"{columnPath}.aliases[{aliasIndex}]");
             for (var ruleIndex = 0; ruleIndex < (column.ValidationRuleNames?.Count ?? 0); ruleIndex++)
@@ -558,10 +735,10 @@ public static class ExcelMappingConfigurationLoader
     {
         var names = path == "$"
             ? isV2
-                ? new[] { "version", "profile", "modelAlias", "tenantId", "configurationVersion", "import", "export" }
-                : new[] { "sourceKind", "columns" }
+                ? new[] { "version", "tenantId", "configurationVersion", "import", "export" }
+                : new[] { "sourceKind", "profile", "modelAlias", "columns", "dynamicColumns", "dynamicColumnKeysToRemove", "dynamicColumnMergeMode", "style", "layout", "clearDynamicColumns", "resetStyle", "resetLayout" }
             : path.EndsWith(".import", StringComparison.Ordinal) || path.EndsWith(".export", StringComparison.Ordinal)
-                ? new[] { "sourceKind", "columns", "dynamicColumns", "style", "layout" }
+                ? new[] { "sourceKind", "profile", "modelAlias", "columns", "dynamicColumns", "dynamicColumnKeysToRemove", "dynamicColumnMergeMode", "style", "layout", "clearDynamicColumns", "resetStyle", "resetLayout" }
                 : path.EndsWith(".dynamicColumns", StringComparison.Ordinal)
                     ? new[] { "key", "title", "aliases", "dataTypeName", "order", "converterName", "validatorName", "validationRuleNames", "validationRules", "numberFormat", "columnIndex", "placementKey", "imageMultiplicity" }
                     : path.EndsWith(".validationRules", StringComparison.Ordinal)
@@ -571,16 +748,16 @@ public static class ExcelMappingConfigurationLoader
                     : path.Contains(".dynamicColumns[", StringComparison.Ordinal)
                         ? new[] { "key", "title", "aliases", "dataTypeName", "order", "converterName", "validatorName", "validationRuleNames", "validationRules", "numberFormat", "columnIndex", "placementKey", "imageMultiplicity" }
                         : path.EndsWith(".style", StringComparison.Ordinal)
-                            ? new[] { "headerStyleKey", "bodyStyleKey", "numberFormat" }
-                            : path.EndsWith(".layout", StringComparison.Ordinal)
-                                ? new[] { "columnIndex", "placementKey" }
+                            ? new[] { "headerStyleKey", "clearHeaderStyleKey", "bodyStyleKey", "clearBodyStyleKey", "numberFormat", "clearNumberFormat" }
+                                : path.EndsWith(".layout", StringComparison.Ordinal)
+                                ? new[] { "columnIndex", "resetColumnIndex", "placementKey", "clearPlacementKey" }
                                     : path.Contains(".dynamicColumns[", StringComparison.Ordinal)
                                         && path.EndsWith(".aliases", StringComparison.Ordinal)
                                         ? new[] { "value" }
                 : path.EndsWith(".valueMappings", StringComparison.Ordinal) || path.Contains(".valueMappings[", StringComparison.Ordinal)
                     ? new[] { "text", "value" }
-                    : path.EndsWith(".columns", StringComparison.Ordinal) || path.Contains(".columns[", StringComparison.Ordinal)
-                        ? new[] { "propertyName", "title", "aliases", "columnIndex", "ignored", "formatter", "decimalScale", "converterName", "importWhitespace", "validationRuleNames", "validationRuleNamesToRemove", "clearValidationRules", "validationRuleMergeMode", "valueMappings", "valueMappingMergeMode", "imageMultiplicity" }
+                        : path.EndsWith(".columns", StringComparison.Ordinal) || path.Contains(".columns[", StringComparison.Ordinal)
+                        ? new[] { "propertyName", "title", "clearTitle", "aliases", "clearAliases", "columnIndex", "resetColumnIndex", "ignored", "resetIgnored", "formatter", "clearFormatter", "decimalScale", "resetDecimalScale", "converterName", "clearConverterName", "importWhitespace", "resetImportWhitespace", "validationRuleNames", "validationRuleNamesToRemove", "clearValidationRules", "validationRuleMergeMode", "valueMappings", "clearValueMappings", "valueMappingMergeMode", "imageMultiplicity", "resetImageMultiplicity" }
                         : Array.Empty<string>();
         return names.Any(name => string.Equals(name, propertyName, StringComparison.OrdinalIgnoreCase));
     }
