@@ -17,6 +17,7 @@ public sealed class UniqueTracker
     private readonly int? _maxTrackedValues;
     private readonly IEqualityComparer<string> _comparer;
     private int _trackedValueCount;
+    private int _pendingValueCount;
 
     /// <summary>
     /// 初始化唯一值跟踪器。
@@ -59,6 +60,7 @@ public sealed class UniqueTracker
     {
         _pending.Clear();
         _pendingFirstRows.Clear();
+        _pendingValueCount = 0;
     }
 
     /// <summary>
@@ -81,9 +83,10 @@ public sealed class UniqueTracker
             return false;
         if (!_pending.TryGetValue(key, out pendingValues))
             _pending[key] = pendingValues = new HashSet<string>(_comparer);
-        if (_maxTrackedValues.HasValue && _trackedValueCount + PendingCount() >= _maxTrackedValues.Value)
+        if (_maxTrackedValues.HasValue && _trackedValueCount + _pendingValueCount >= _maxTrackedValues.Value)
             throw new InvalidOperationException($"Unique 跟踪值超过最大数量: {_maxTrackedValues.Value}");
-        pendingValues.Add(value);
+        if (pendingValues.Add(value))
+            _pendingValueCount++;
         if (rowNumber > 0 && value != null)
         {
             if (!_pendingFirstRows.TryGetValue(key, out var rows))
@@ -119,6 +122,7 @@ public sealed class UniqueTracker
         }
         _pending.Clear();
         _pendingFirstRows.Clear();
+        _pendingValueCount = 0;
     }
 
     /// <summary>
@@ -128,13 +132,6 @@ public sealed class UniqueTracker
     {
         _pending.Clear();
         _pendingFirstRows.Clear();
-    }
-
-    private int PendingCount()
-    {
-        var count = 0;
-        foreach (var values in _pending.Values)
-            count += values.Count;
-        return count;
+        _pendingValueCount = 0;
     }
 }

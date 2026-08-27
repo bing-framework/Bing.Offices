@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
+using System.Text.RegularExpressions;
 using Bing.Offices.Attributes;
 using Bing.Offices.Configurations;
 using Bing.Offices.Exports;
@@ -404,6 +406,95 @@ public sealed class ReviewFixRegressionTest
 
         // Assert
         Assert.ThrowsAny<ArgumentException>(action);
+    }
+
+    /// <summary>
+    /// 测试 - Regex 缓存达到容量后应按 FIFO 淘汰，命中旧项不应改变淘汰顺序。
+    /// </summary>
+    [Fact]
+    public void RegexCache_ShouldEnforceCapacityAndFifoEviction()
+    {
+        // Arrange
+        var ruleType = typeof(RegexExcelValidationRule);
+        var lockObject = ruleType.GetField("RegexCacheLock", BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null)!;
+        var cache = (System.Collections.IDictionary)ruleType
+            .GetField("RegexCache", BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null)!;
+        var order = (System.Collections.ICollection)ruleType
+            .GetField("RegexCacheOrder", BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null)!;
+        var getRegex = ruleType.GetMethod("GetRegex", BindingFlags.NonPublic | BindingFlags.Static)!;
+        Regex Resolve(string pattern) => (Regex)getRegex.Invoke(null, new object[] { pattern })!;
+        lock (lockObject)
+        {
+            cache.Clear();
+            order.GetType().GetMethod("Clear")!.Invoke(order, null);
+        }
+        var first = Resolve("^cache-0$");
+        var second = Resolve("^cache-1$");
+        for (var index = 2; index < 256; index++)
+            Resolve($"^cache-{index}$");
+        Assert.Same(second, Resolve("^cache-1$"));
+
+        // Act
+        Resolve("^cache-256$");
+        Resolve("^cache-257$");
+
+        // Assert
+        Assert.NotSame(first, Resolve("^cache-0$"));
+        Assert.NotSame(second, Resolve("^cache-1$"));
+        lock (lockObject)
+        {
+            Assert.True(cache.Count <= 256);
+            Assert.True(order.Count <= 256);
+        }
+    }
+
+    /// <summary>
+    /// 测试 - Regex timeout 应阻断灾难性回溯，并发建立不同模式时缓存不得超出容量。
+    /// </summary>
+    [Fact]
+    public void RegexCache_ShouldTimeoutAndRemainBoundedUnderConcurrency()
+    {
+        // Arrange
+        var ruleType = typeof(RegexExcelValidationRule);
+        var lockObject = ruleType.GetField("RegexCacheLock", BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null)!;
+        var cache = (System.Collections.IDictionary)ruleType
+            .GetField("RegexCache", BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null)!;
+        var order = (System.Collections.ICollection)ruleType
+            .GetField("RegexCacheOrder", BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null)!;
+        var getRegex = ruleType.GetMethod("GetRegex", BindingFlags.NonPublic | BindingFlags.Static)!;
+        Regex Resolve(string pattern) => (Regex)getRegex.Invoke(null, new object[] { pattern })!;
+        lock (lockObject)
+        {
+            cache.Clear();
+            order.GetType().GetMethod("Clear")!.Invoke(order, null);
+        }
+        var regex = Resolve("^(a+)+$");
+
+        // Act
+        var timeout = Assert.Throws<RegexMatchTimeoutException>(() => regex.IsMatch(new string('a', 20000) + "!"));
+        var errors = new System.Collections.Concurrent.ConcurrentQueue<Exception>();
+        System.Threading.Tasks.Parallel.For(0, 512, index =>
+        {
+            try
+            {
+                var current = Resolve($"^parallel-{index}$");
+                if (!current.IsMatch($"parallel-{index}"))
+                    errors.Enqueue(new InvalidOperationException("并发 Regex 结果不匹配。"));
+            }
+            catch (Exception exception)
+            {
+                errors.Enqueue(exception);
+            }
+        });
+
+        // Assert
+        Assert.NotNull(timeout);
+        Assert.Empty(errors);
+        lock (lockObject)
+        {
+            Assert.True(cache.Count <= 256);
+            Assert.True(order.Count <= 256);
+        }
     }
 
     /// <summary>

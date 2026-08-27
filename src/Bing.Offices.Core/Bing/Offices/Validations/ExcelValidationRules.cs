@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+﻿using System.Collections.Generic;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Bing.Offices.Attributes;
@@ -44,7 +44,10 @@ public sealed class RequiredExcelValidationRule : IExcelValidationRule
 /// </summary>
 public sealed class RegexExcelValidationRule : IExcelValidationRule
 {
-    private static readonly ConcurrentDictionary<string, Regex> RegexCache = new(StringComparer.Ordinal);
+    internal const int RegexCacheCapacity = 256;
+    private static readonly object RegexCacheLock = new object();
+    private static readonly Dictionary<string, Regex> RegexCache = new Dictionary<string, Regex>(StringComparer.Ordinal);
+    private static readonly Queue<string> RegexCacheOrder = new Queue<string>();
 
     /// <inheritdoc />
     public bool CanValidate(FilterAttributeBase attribute) => attribute is RegexAttribute
@@ -54,9 +57,28 @@ public sealed class RegexExcelValidationRule : IExcelValidationRule
     public bool Validate(FilterAttributeBase attribute, ExcelValidationContext context)
     {
         var pattern = attribute is RegexAttribute legacy ? legacy.RegexString : ((ExcelRegexAttribute)attribute).Pattern;
-        var regex = RegexCache.GetOrAdd(pattern, value => new Regex(value, RegexOptions.Compiled,
-            TimeSpan.FromSeconds(1)));
+        var regex = GetRegex(pattern);
         return regex.IsMatch(context.Value);
+    }
+
+    /// <summary>
+    /// 获取带容量上限的正则表达式实例，避免用户输入大量不同模式导致进程级缓存无界增长。
+    /// </summary>
+    /// <param name="pattern">正则表达式模式。</param>
+    /// <returns>可复用的正则表达式实例。</returns>
+    private static Regex GetRegex(string pattern)
+    {
+        lock (RegexCacheLock)
+        {
+            if (RegexCache.TryGetValue(pattern, out var regex))
+                return regex;
+            regex = new Regex(pattern, RegexOptions.Compiled, TimeSpan.FromSeconds(1));
+            RegexCache[pattern] = regex;
+            RegexCacheOrder.Enqueue(pattern);
+            while (RegexCache.Count > RegexCacheCapacity)
+                RegexCache.Remove(RegexCacheOrder.Dequeue());
+            return regex;
+        }
     }
 }
 
@@ -130,6 +152,12 @@ public sealed class DateTimeExcelValidationRule : IExcelValidationRule
     /// <inheritdoc />
     public bool Validate(FilterAttributeBase attribute, ExcelValidationContext context)
     {
+        var v2 = attribute as ExcelDateAttribute;
+        var culture = context.Culture;
+        if (!string.IsNullOrWhiteSpace(v2?.CultureName))
+            culture = CultureInfo.GetCultureInfo(v2.CultureName);
+        if (!string.IsNullOrWhiteSpace(v2?.Format))
+            return DateTime.TryParseExact(context.Value, v2.Format, culture, DateTimeStyles.None, out _);
         if (context.ConvertedValue is DateTime || context.ConvertedValue is DateTimeOffset)
             return true;
         if (context.Cell?.Value is DateTime || context.Cell?.Value is DateTimeOffset)
@@ -146,13 +174,7 @@ public sealed class DateTimeExcelValidationRule : IExcelValidationRule
                 return false;
             }
         }
-        var v2 = attribute as ExcelDateAttribute;
-        var culture = context.Culture;
-        if (!string.IsNullOrWhiteSpace(v2?.CultureName))
-            culture = CultureInfo.GetCultureInfo(v2.CultureName);
-        return !string.IsNullOrWhiteSpace(v2?.Format)
-            ? DateTime.TryParseExact(context.Value, v2.Format, culture, DateTimeStyles.None, out _)
-            : DateTime.TryParse(context.Value, culture, DateTimeStyles.AllowWhiteSpaces, out _);
+        return DateTime.TryParse(context.Value, culture, DateTimeStyles.AllowWhiteSpaces, out _);
     }
 }
 

@@ -15,6 +15,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Bing.Offices.Validations;
 using NPOI.SS.UserModel;
 using NPOI.SS.Util;
+using NPOI.HSSF.UserModel;
 using NPOI.XSSF.UserModel;
 using Xunit;
 
@@ -93,6 +94,344 @@ public sealed class ExcelP0RegressionTest
         Assert.Empty(result.Workbook.Rows);
         var error = Assert.Single(result.Errors);
         Assert.Equal(ExcelImportErrorCode.WorkbookValidation, error.Code);
+    }
+
+    /// <summary>
+    /// 测试 - Workbook 小于等于校验只应读取 Formula1，不应因 Formula2 为空拒绝合法边界值。
+    /// </summary>
+    [Fact]
+    public void Import_WorkbookLessOrEqual_ShouldUseFormula1Only()
+    {
+        // Arrange
+        using var source = new MemoryStream(CreateWorkbook(workbook =>
+        {
+            var sheet = workbook.CreateSheet("Data");
+            sheet.CreateRow(0).CreateCell(0).SetCellValue("Amount");
+            sheet.CreateRow(1).CreateCell(0).SetCellValue(10);
+            sheet.CreateRow(2).CreateCell(0).SetCellValue(11);
+            var helper = sheet.GetDataValidationHelper();
+            var constraint = helper.CreateintConstraint(7, "10", null);
+            sheet.AddValidationData(helper.CreateValidation(constraint,
+                new CellRangeAddressList(1, 2, 0, 0)));
+        }));
+        var request = ExcelImport.Workbook<RowsWorkbook<ValidationModeRow>>(builder => builder
+            .ValidationMode(ExcelImportValidationMode.WorkbookRules)
+            .Sheet("Data", root => root.Rows));
+
+        // Act
+        var result = new NpoiExcelImporter().Import(source, request);
+
+        // Assert
+        Assert.Single(result.Workbook.Rows);
+        var error = Assert.Single(result.Errors);
+        Assert.Equal(ExcelImportErrorCode.WorkbookValidation, error.Code);
+        Assert.Equal(3, error.RowIndex);
+    }
+
+    /// <summary>
+    /// 测试 - Workbook 原生规则应尊重允许空单元格设置，并在禁止空值时报告错误。
+    /// </summary>
+    [Theory]
+    [InlineData(true, 0)]
+    [InlineData(false, 1)]
+    public void Import_WorkbookValidation_EmptyCellAllowed_ShouldControlEmptyValue(
+        bool emptyCellAllowed, int expectedErrorCount)
+    {
+        // Arrange
+        using var source = new MemoryStream(CreateWorkbook(workbook =>
+        {
+            var sheet = workbook.CreateSheet("Data");
+            sheet.CreateRow(0).CreateCell(0).SetCellValue("Amount");
+            sheet.CreateRow(1).CreateCell(0).SetCellType(CellType.Blank);
+            sheet.GetRow(1).CreateCell(1).SetCellValue("present");
+            var helper = sheet.GetDataValidationHelper();
+            var constraint = helper.CreateintConstraint(6, "1", null);
+            var validation = helper.CreateValidation(constraint, new CellRangeAddressList(1, 1, 0, 0));
+            validation.EmptyCellAllowed = emptyCellAllowed;
+            sheet.AddValidationData(validation);
+        }));
+        var request = ExcelImport.Workbook<RowsWorkbook<ValidationModeRow>>(builder => builder
+            .ValidationMode(ExcelImportValidationMode.WorkbookRules)
+            .Sheet("Data", root => root.Rows));
+
+        // Act
+        var result = new NpoiExcelImporter().Import(source, request);
+
+        // Assert
+        Assert.Equal(expectedErrorCount, result.Errors.Count);
+        Assert.Equal(expectedErrorCount == 0, result.IsSuccess);
+    }
+
+    /// <summary>
+    /// 测试 - XSSF 和 HSSF 的数值 Workbook 校验应共同支持八种比较操作符。
+    /// </summary>
+    [Theory]
+    [InlineData(0, "5", "10", "7", true)]
+    [InlineData(1, "5", "10", "11", true)]
+    [InlineData(2, "7", null, "7", true)]
+    [InlineData(3, "7", null, "8", true)]
+    [InlineData(4, "7", null, "8", true)]
+    [InlineData(5, "7", null, "6", true)]
+    [InlineData(6, "7", null, "7", true)]
+    [InlineData(7, "7", null, "7", true)]
+    [InlineData(0, "5", "10", "11", false)]
+    [InlineData(1, "5", "10", "7", false)]
+    [InlineData(2, "7", null, "8", false)]
+    [InlineData(3, "7", null, "7", false)]
+    [InlineData(4, "7", null, "7", false)]
+    [InlineData(5, "7", null, "7", false)]
+    [InlineData(6, "7", null, "6", false)]
+    [InlineData(7, "7", null, "8", false)]
+    public void Import_WorkbookNumericValidation_ShouldSupportAllOperators(
+        int operation, string first, string second, string value, bool expectedValid)
+    {
+        // Arrange
+        var results = new List<bool>();
+        foreach (var workbookType in new[] { "xlsx", "xls" })
+        {
+            using var source = new MemoryStream(CreateValidationWorkbook(workbookType, operation, first, second, value));
+            var request = ExcelImport.Workbook<RowsWorkbook<ValidationTypedRow>>(builder => builder
+                .ValidationMode(ExcelImportValidationMode.WorkbookRules)
+                .Sheet("Data", root => root.Rows));
+
+            // Act
+            var result = new NpoiExcelImporter().Import(source, request);
+            if (result.IsSuccess != expectedValid)
+            {
+                source.Position = 0;
+                using var reopened = WorkbookFactory.Create(source);
+                var validation = Assert.Single(reopened.GetSheet("Data").GetDataValidations());
+                throw new Xunit.Sdk.XunitException($"{workbookType}: operator={validation.ValidationConstraint.Operator}, "
+                    + $"formula1=[{validation.ValidationConstraint.Formula1}], formula2=[{validation.ValidationConstraint.Formula2}], "
+                    + string.Join("; ", result.Errors.Select(error => error.Message)));
+            }
+            results.Add(result.IsSuccess);
+        }
+
+        // Assert
+        Assert.Equal(new[] { expectedValid, expectedValid }, results);
+    }
+
+    /// <summary>
+    /// 测试 - XSSF 和 HSSF 的 Decimal Workbook 校验应支持八种比较操作符。
+    /// </summary>
+    [Theory]
+    [InlineData(OperatorType.BETWEEN, "1.5", "2.5", "2.0", true)]
+    [InlineData(OperatorType.NOT_BETWEEN, "1.5", "2.5", "3.0", true)]
+    [InlineData(OperatorType.EQUAL, "2.5", null, "2.5", true)]
+    [InlineData(OperatorType.NOT_EQUAL, "2.5", null, "2.0", true)]
+    [InlineData(OperatorType.GREATER_THAN, "2.5", null, "3.0", true)]
+    [InlineData(OperatorType.LESS_THAN, "2.5", null, "2.0", true)]
+    [InlineData(OperatorType.GREATER_OR_EQUAL, "2.5", null, "2.5", true)]
+    [InlineData(OperatorType.LESS_OR_EQUAL, "2.5", null, "2.5", true)]
+    [InlineData(OperatorType.BETWEEN, "1.5", "2.5", "3.0", false)]
+    public void Import_WorkbookDecimalValidation_ShouldSupportAllOperators(
+        int operation, string first, string second, string value, bool expectedValid)
+    {
+        // Arrange
+        var results = new List<bool>();
+        foreach (var workbookType in new[] { "xlsx", "xls" })
+        {
+            using var source = new MemoryStream(CreateTypedValidationWorkbook(workbookType, "decimal",
+                operation, first, second, value));
+            var request = ExcelImport.Workbook<RowsWorkbook<ValidationTypedRow>>(builder => builder
+                .ValidationMode(ExcelImportValidationMode.WorkbookRules)
+                .Sheet("Data", root => root.Rows));
+
+            // Act
+            var result = new NpoiExcelImporter().Import(source, request);
+
+            // Assert
+            Assert.Equal(expectedValid, result.IsSuccess);
+            results.Add(result.IsSuccess);
+        }
+        Assert.Equal(new[] { expectedValid, expectedValid }, results);
+    }
+
+    /// <summary>
+    /// 测试 - 日期、时间和文本长度校验应支持单边操作符及区间边界，并在 XLS/XLSX 中一致。
+    /// </summary>
+    [Theory]
+    [InlineData("date", OperatorType.LESS_OR_EQUAL, "2026-08-25", null, "2026-08-25", true)]
+    [InlineData("date", OperatorType.LESS_OR_EQUAL, "2026-08-25", null, "2026-08-26", false)]
+    [InlineData("time", OperatorType.GREATER_OR_EQUAL, "09:00:00", null, "09:00:00", true)]
+    [InlineData("time", OperatorType.GREATER_OR_EQUAL, "09:00:00", null, "08:59:59", false)]
+    [InlineData("text-length", OperatorType.BETWEEN, "3", "5", "abcd", true)]
+    [InlineData("text-length", OperatorType.BETWEEN, "3", "5", "abcdef", false)]
+    public void Import_WorkbookTypedValidation_ShouldSupportSingleBoundAndRange(
+        string validationType, int operation, string first, string second, string value, bool expectedValid)
+    {
+        // Arrange
+        var results = new List<bool>();
+        foreach (var workbookType in new[] { "xlsx", "xls" })
+        {
+            using var source = new MemoryStream(CreateTypedValidationWorkbook(workbookType, validationType,
+                operation, first, second, value));
+            var request = ExcelImport.Workbook<RowsWorkbook<ValidationTypedRow>>(builder => builder
+                .ValidationMode(ExcelImportValidationMode.WorkbookRules)
+                .Sheet("Data", root => root.Rows));
+
+            // Act
+            var result = new NpoiExcelImporter().Import(source, request);
+
+            // Assert
+            if (result.IsSuccess != expectedValid)
+            {
+                source.Position = 0;
+                using var reopened = WorkbookFactory.Create(source);
+                var validation = Assert.Single(reopened.GetSheet("Data").GetDataValidations());
+                var cell = reopened.GetSheet("Data").GetRow(1).GetCell(0);
+                throw new Xunit.Sdk.XunitException($"{workbookType}: cellType={cell.CellType}, "
+                    + $"cellValue={cell.ToString()}, formula1=[{validation.ValidationConstraint.Formula1}], "
+                    + $"formula2=[{validation.ValidationConstraint.Formula2}], "
+                    + $"value1=[{(validation.ValidationConstraint as NPOI.HSSF.UserModel.DVConstraint)?.Value1}], "
+                    + $"value2=[{(validation.ValidationConstraint as NPOI.HSSF.UserModel.DVConstraint)?.Value2}], "
+                    + string.Join("; ", result.Errors.Select(error => error.Message)));
+            }
+            results.Add(result.IsSuccess);
+        }
+        Assert.Equal(new[] { expectedValid, expectedValid }, results);
+    }
+
+    /// <summary>
+    /// 测试 - 日期、时间和文本长度校验的八种比较操作符应在 XLSX/XLS 中保持一致。
+    /// </summary>
+    [Theory]
+    [InlineData("date", OperatorType.BETWEEN, "2026-08-25", "2026-08-26", "2026-08-25", true)]
+    [InlineData("date", OperatorType.BETWEEN, "2026-08-25", "2026-08-26", "2026-08-27", false)]
+    [InlineData("date", OperatorType.NOT_BETWEEN, "2026-08-25", "2026-08-26", "2026-08-27", true)]
+    [InlineData("date", OperatorType.NOT_BETWEEN, "2026-08-25", "2026-08-26", "2026-08-26", false)]
+    [InlineData("date", OperatorType.EQUAL, "2026-08-25", null, "2026-08-25", true)]
+    [InlineData("date", OperatorType.EQUAL, "2026-08-25", null, "2026-08-26", false)]
+    [InlineData("date", OperatorType.NOT_EQUAL, "2026-08-25", null, "2026-08-26", true)]
+    [InlineData("date", OperatorType.NOT_EQUAL, "2026-08-25", null, "2026-08-25", false)]
+    [InlineData("date", OperatorType.GREATER_THAN, "2026-08-25", null, "2026-08-26", true)]
+    [InlineData("date", OperatorType.GREATER_THAN, "2026-08-25", null, "2026-08-25", false)]
+    [InlineData("date", OperatorType.LESS_THAN, "2026-08-25", null, "2026-08-24", true)]
+    [InlineData("date", OperatorType.LESS_THAN, "2026-08-25", null, "2026-08-25", false)]
+    [InlineData("date", OperatorType.GREATER_OR_EQUAL, "2026-08-25", null, "2026-08-25", true)]
+    [InlineData("date", OperatorType.GREATER_OR_EQUAL, "2026-08-25", null, "2026-08-24", false)]
+    [InlineData("date", OperatorType.LESS_OR_EQUAL, "2026-08-25", null, "2026-08-25", true)]
+    [InlineData("date", OperatorType.LESS_OR_EQUAL, "2026-08-25", null, "2026-08-26", false)]
+    [InlineData("time", OperatorType.BETWEEN, "09:00:00", "10:00:00", "09:00:00", true)]
+    [InlineData("time", OperatorType.BETWEEN, "09:00:00", "10:00:00", "10:00:01", false)]
+    [InlineData("time", OperatorType.NOT_BETWEEN, "09:00:00", "10:00:00", "10:00:01", true)]
+    [InlineData("time", OperatorType.NOT_BETWEEN, "09:00:00", "10:00:00", "10:00:00", false)]
+    [InlineData("time", OperatorType.EQUAL, "09:00:00", null, "09:00:00", true)]
+    [InlineData("time", OperatorType.EQUAL, "09:00:00", null, "09:00:01", false)]
+    [InlineData("time", OperatorType.NOT_EQUAL, "09:00:00", null, "09:00:01", true)]
+    [InlineData("time", OperatorType.NOT_EQUAL, "09:00:00", null, "09:00:00", false)]
+    [InlineData("time", OperatorType.GREATER_THAN, "09:00:00", null, "09:00:01", true)]
+    [InlineData("time", OperatorType.GREATER_THAN, "09:00:00", null, "09:00:00", false)]
+    [InlineData("time", OperatorType.LESS_THAN, "09:00:00", null, "08:59:59", true)]
+    [InlineData("time", OperatorType.LESS_THAN, "09:00:00", null, "09:00:00", false)]
+    [InlineData("time", OperatorType.GREATER_OR_EQUAL, "09:00:00", null, "09:00:00", true)]
+    [InlineData("time", OperatorType.GREATER_OR_EQUAL, "09:00:00", null, "08:59:59", false)]
+    [InlineData("time", OperatorType.LESS_OR_EQUAL, "09:00:00", null, "09:00:00", true)]
+    [InlineData("time", OperatorType.LESS_OR_EQUAL, "09:00:00", null, "09:00:01", false)]
+    [InlineData("text-length", OperatorType.BETWEEN, "3", "5", "abc", true)]
+    [InlineData("text-length", OperatorType.BETWEEN, "3", "5", "abcdef", false)]
+    [InlineData("text-length", OperatorType.NOT_BETWEEN, "3", "5", "abcdef", true)]
+    [InlineData("text-length", OperatorType.NOT_BETWEEN, "3", "5", "abcde", false)]
+    [InlineData("text-length", OperatorType.EQUAL, "3", null, "abc", true)]
+    [InlineData("text-length", OperatorType.EQUAL, "3", null, "ab", false)]
+    [InlineData("text-length", OperatorType.NOT_EQUAL, "3", null, "ab", true)]
+    [InlineData("text-length", OperatorType.NOT_EQUAL, "3", null, "abc", false)]
+    [InlineData("text-length", OperatorType.GREATER_THAN, "3", null, "abcd", true)]
+    [InlineData("text-length", OperatorType.GREATER_THAN, "3", null, "abc", false)]
+    [InlineData("text-length", OperatorType.LESS_THAN, "3", null, "ab", true)]
+    [InlineData("text-length", OperatorType.LESS_THAN, "3", null, "abc", false)]
+    [InlineData("text-length", OperatorType.GREATER_OR_EQUAL, "3", null, "abc", true)]
+    [InlineData("text-length", OperatorType.GREATER_OR_EQUAL, "3", null, "ab", false)]
+    [InlineData("text-length", OperatorType.LESS_OR_EQUAL, "3", null, "abc", true)]
+    [InlineData("text-length", OperatorType.LESS_OR_EQUAL, "3", null, "abcd", false)]
+    public void Import_WorkbookTypedValidation_ShouldSupportAllOperators(
+        string validationType, int operation, string first, string second, string value, bool expectedValid)
+    {
+        var results = new List<bool>();
+        foreach (var workbookType in new[] { "xlsx", "xls" })
+        {
+            using var source = new MemoryStream(CreateTypedValidationWorkbook(workbookType, validationType,
+                operation, first, second, value));
+            var request = ExcelImport.Workbook<RowsWorkbook<ValidationTypedRow>>(builder => builder
+                .ValidationMode(ExcelImportValidationMode.WorkbookRules)
+                .Sheet("Data", root => root.Rows));
+
+            var result = new NpoiExcelImporter().Import(source, request);
+
+            Assert.Equal(expectedValid, result.IsSuccess);
+            if (operation != OperatorType.BETWEEN && operation != OperatorType.NOT_BETWEEN)
+            {
+                source.Position = 0;
+                using var reopened = WorkbookFactory.Create(source);
+                var validation = Assert.Single(reopened.GetSheet("Data").GetDataValidations());
+                Assert.True(string.IsNullOrWhiteSpace(validation.ValidationConstraint.Formula2),
+                    $"{workbookType} 单边操作符不应写入 Formula2。");
+            }
+            results.Add(result.IsSuccess);
+        }
+        Assert.Equal(new[] { expectedValid, expectedValid }, results);
+    }
+
+    /// <summary>
+    /// 测试 - Continue 收集同一行多个 Workbook 错误，StopOnFirstFailure 只报告首个错误。
+    /// </summary>
+    [Theory]
+    [InlineData(ValidateMode.Continue, 2)]
+    [InlineData(ValidateMode.StopOnFirstFailure, 1)]
+    public void Import_WorkbookValidation_ShouldRespectContinueAndStop(
+        ValidateMode validateMode, int expectedErrorCount)
+    {
+        // Arrange
+        using var source = new MemoryStream(CreateWorkbook(workbook =>
+        {
+            var sheet = workbook.CreateSheet("Data");
+            sheet.CreateRow(0).CreateCell(0).SetCellValue(nameof(ValidationStopRow.Amount));
+            sheet.GetRow(0).CreateCell(1).SetCellValue(nameof(ValidationStopRow.Second));
+            sheet.CreateRow(1).CreateCell(0).SetCellValue("bad-1");
+            sheet.GetRow(1).CreateCell(1).SetCellValue("bad-2");
+            var helper = sheet.GetDataValidationHelper();
+            sheet.AddValidationData(helper.CreateValidation(
+                helper.CreateExplicitListConstraint(new[] { "good-1" }),
+                new CellRangeAddressList(1, 1, 0, 0)));
+            sheet.AddValidationData(helper.CreateValidation(
+                helper.CreateExplicitListConstraint(new[] { "good-2" }),
+                new CellRangeAddressList(1, 1, 1, 1)));
+        }));
+        var request = ExcelImport.Workbook<RowsWorkbook<ValidationStopRow>>(builder => builder
+            .ValidationMode(ExcelImportValidationMode.WorkbookRules)
+            .Sheet("Data", root => root.Rows, sheet => sheet.Validate(validateMode)));
+
+        // Act
+        var result = new NpoiExcelImporter().Import(source, request);
+
+        // Assert
+        Assert.Equal(expectedErrorCount, result.Errors.Count);
+        Assert.Empty(result.Workbook.Rows);
+    }
+
+    /// <summary>
+    /// 测试 - 日期指定精确格式时应校验原始文本，不能被已转换的 DateTime 值绕过。
+    /// </summary>
+    [Fact]
+    public void DateValidation_WithExactFormat_ShouldValidateRawTextBeforeConvertedValue()
+    {
+        // Arrange
+        var rule = new DateTimeExcelValidationRule();
+        var attribute = new ExcelDateAttribute("yyyy-MM-dd");
+        var converted = new DateTime(2026, 8, 25);
+        var invalidText = new ExcelValidationContext("2026/08/25", "Data", 2, 1, "Date",
+            converted, typeof(DateTime));
+        var validText = new ExcelValidationContext("2026-08-25", "Data", 2, 1, "Date",
+            converted, typeof(DateTime));
+
+        // Act
+        var invalidResult = rule.Validate(attribute, invalidText);
+        var validResult = rule.Validate(attribute, validText);
+
+        // Assert
+        Assert.False(invalidResult);
+        Assert.True(validResult);
     }
 
     /// <summary>
@@ -369,6 +708,126 @@ public sealed class ExcelP0RegressionTest
     }
 
     /// <summary>
+    /// 测试 - 失败批注的 Preserve、Append、Replace、Fail 策略应分别遵守冲突契约。
+    /// </summary>
+    [Theory]
+    [InlineData(ExcelImportCommentConflictPolicy.Preserve, "原批注", "source", false)]
+    [InlineData(ExcelImportCommentConflictPolicy.Append, "correct format", "source", false)]
+    [InlineData(ExcelImportCommentConflictPolicy.Replace, "correct format", "Bing.Offices", false)]
+    [InlineData(ExcelImportCommentConflictPolicy.Fail, null, null, true)]
+    public void Import_AnnotatedFailureWorkbook_ShouldApplyCommentConflictPolicy(
+        ExcelImportCommentConflictPolicy policy, string expectedText, string expectedAuthor, bool shouldThrow)
+    {
+        // Arrange
+        using var source = new MemoryStream(CreateWorkbook(workbook =>
+        {
+            var sheet = workbook.CreateSheet("Data");
+            sheet.CreateRow(0).CreateCell(0).SetCellValue("Count");
+            var cell = sheet.CreateRow(1).CreateCell(0);
+            cell.SetCellValue("invalid");
+            var anchor = workbook.GetCreationHelper().CreateClientAnchor();
+            anchor.Col1 = 0;
+            anchor.Col2 = 2;
+            anchor.Row1 = 1;
+            anchor.Row2 = 4;
+            var comment = sheet.CreateDrawingPatriarch().CreateCellComment(anchor);
+            comment.String = workbook.GetCreationHelper().CreateRichTextString("原批注");
+            comment.Author = "source";
+            cell.CellComment = comment;
+        }));
+        using var failure = new MemoryStream();
+        var request = ExcelImport.Workbook<FailureWorkbook>(builder => builder
+            .FailureWorkbook(new ExcelImportFailureOptions
+            {
+                Mode = ExcelImportFailureWorkbookMode.AnnotatedOriginal,
+                Destination = failure,
+                CommentConflictPolicy = policy
+            }).Sheet("Data", root => root.Rows));
+
+        // Act
+        var action = () => new NpoiExcelImporter().Import(source, request);
+
+        // Assert
+        if (shouldThrow)
+        {
+            Assert.Throws<InvalidOperationException>(action);
+            return;
+        }
+        action();
+        failure.Position = 0;
+        using var output = WorkbookFactory.Create(failure);
+        var text = output.GetSheet("Data").GetRow(1).GetCell(0).CellComment.String.String;
+        if (policy == ExcelImportCommentConflictPolicy.Preserve)
+            Assert.Equal(expectedText, text);
+        else
+            Assert.Contains(expectedText, text, StringComparison.Ordinal);
+        Assert.Equal(expectedAuthor, output.GetSheet("Data").GetRow(1).GetCell(0).CellComment.Author);
+    }
+
+    /// <summary>
+    /// 测试 - XLSX 和 XLS ErrorRowsOnly 均应在重开后保留富文本运行格式。
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Import_ErrorRowsOnly_ShouldPreserveRichTextRunsAfterReopen(bool legacyFormat)
+    {
+        // Arrange
+        using var source = new MemoryStream(CreateRichTextFailureWorkbook(legacyFormat));
+        using var failure = new MemoryStream();
+        var request = ExcelImport.Workbook<FailureWorkbook>(builder => builder
+            .FailureWorkbook(new ExcelImportFailureOptions
+            {
+                Mode = ExcelImportFailureWorkbookMode.ErrorRowsOnly,
+                Destination = failure
+            }).Sheet("Data", root => root.Rows));
+
+        // Act
+        new NpoiExcelImporter().Import(source, request);
+
+        // Assert
+        failure.Position = 0;
+        using var output = WorkbookFactory.Create(failure);
+        var richText = output.GetSheet("Data").GetRow(1).GetCell(0).RichStringCellValue;
+        Assert.Equal("Error text", richText.String);
+        Assert.True(richText.NumFormattingRuns >= 2);
+        Assert.True(richText.GetIndexOfFormattingRun(1) > 0);
+        Assert.True(GetRichTextFont(output, richText, 0).IsBold);
+        Assert.True(GetRichTextFont(output, richText, 1).IsItalic);
+    }
+
+    /// <summary>
+    /// 测试 - 失败工作簿超过 MaxBytes 时应在临时输出阶段失败且不污染调用方目标流。
+    /// </summary>
+    [Fact]
+    public void Import_FailureWorkbook_ExceedingMaxBytes_ShouldNotWriteDestination()
+    {
+        // Arrange
+        using var source = new MemoryStream(CreateWorkbook(workbook =>
+        {
+            var sheet = workbook.CreateSheet("Data");
+            sheet.CreateRow(0).CreateCell(0).SetCellValue("Count");
+            sheet.CreateRow(1).CreateCell(0).SetCellValue("invalid");
+        }));
+        using var failure = new MemoryStream();
+        var request = ExcelImport.Workbook<FailureWorkbook>(builder => builder
+            .FailureWorkbook(new ExcelImportFailureOptions
+            {
+                Mode = ExcelImportFailureWorkbookMode.AnnotatedOriginal,
+                Destination = failure,
+                MaxBytes = 1
+            })
+            .Sheet("Data", root => root.Rows));
+
+        // Act
+        var action = () => new NpoiExcelImporter().Import(source, request);
+
+        // Assert
+        Assert.Throws<InvalidOperationException>(action);
+        Assert.Equal(0, failure.Length);
+    }
+
+    /// <summary>
     /// 测试 - ErrorRowsOnly 应从源工作簿独立复制并连续重排失败行及其结构部件。
     /// </summary>
     [Fact]
@@ -388,6 +847,23 @@ public sealed class ExcelP0RegressionTest
             var style = workbook.CreateCellStyle();
             style.DataFormat = workbook.CreateDataFormat().GetFormat("0.00");
             formula.CellStyle = style;
+            var commentAnchor = workbook.GetCreationHelper().CreateClientAnchor();
+            commentAnchor.Col1 = 0;
+            commentAnchor.Col2 = 2;
+            commentAnchor.Row1 = 4;
+            commentAnchor.Row2 = 7;
+            var comment = sheet.CreateDrawingPatriarch().CreateCellComment(commentAnchor);
+            comment.String = workbook.GetCreationHelper().CreateRichTextString("源批注");
+            comment.Author = "source";
+            comment.Visible = true;
+            failedRow.GetCell(0).CellComment = comment;
+            var hyperlink = workbook.GetCreationHelper().CreateHyperlink(HyperlinkType.Url);
+            hyperlink.Address = "https://example.invalid/orders";
+            hyperlink.Label = "订单链接";
+            failedRow.GetCell(0).Hyperlink = hyperlink;
+            sheet.SetColumnWidth(0, 20 * 256);
+            sheet.SetColumnHidden(1, true);
+            sheet.CreateFreezePane(1, 3);
             sheet.AddMergedRegion(new CellRangeAddress(4, 4, 0, 1));
             var helper = sheet.GetDataValidationHelper();
             var validation = helper.CreateExplicitListConstraint(new[] { "1", "10" });
@@ -424,6 +900,13 @@ public sealed class ExcelP0RegressionTest
         Assert.Equal(CellType.Formula, outputSheet.GetRow(1).GetCell(1).CellType);
         Assert.Equal("1+1", outputSheet.GetRow(1).GetCell(1).CellFormula);
         Assert.True(outputSheet.GetRow(1).GetCell(1).CellStyle.DataFormat > 0);
+        Assert.Equal("源批注", outputSheet.GetRow(1).GetCell(0).CellComment.String.String);
+        Assert.Equal("source", outputSheet.GetRow(1).GetCell(0).CellComment.Author);
+        Assert.Equal("https://example.invalid/orders", outputSheet.GetRow(1).GetCell(0).Hyperlink.Address);
+        Assert.Equal(20 * 256, outputSheet.GetColumnWidth(0));
+        Assert.True(outputSheet.IsColumnHidden(1));
+        Assert.True(outputSheet.PaneInformation.IsFreezePane());
+        Assert.True(outputSheet.PaneInformation.VerticalSplitPosition > 0);
         Assert.Contains(outputSheet.MergedRegions, region => region.FirstRow == 1 && region.LastRow == 1);
         Assert.Single(outputSheet.GetDataValidations());
         Assert.Single(outputSheet.GetAllPictureInfos());
@@ -818,6 +1301,103 @@ public sealed class ExcelP0RegressionTest
         return stream.ToArray();
     }
 
+    private static byte[] CreateWorkbook<TWorkbook>(Action<TWorkbook> configure)
+        where TWorkbook : IWorkbook, new()
+    {
+        using var workbook = new TWorkbook();
+        configure(workbook);
+        using var stream = new MemoryStream();
+        workbook.Write(stream, false);
+        return stream.ToArray();
+    }
+
+    private static byte[] CreateValidationWorkbook(string format, int operation, string first,
+        string second, string value)
+    {
+        return format == "xls"
+            ? CreateWorkbook<HSSFWorkbook>(workbook => AddNumericValidation(workbook, operation, first, second, value))
+            : CreateWorkbook<XSSFWorkbook>(workbook => AddNumericValidation(workbook, operation, first, second, value));
+    }
+
+    private static byte[] CreateTypedValidationWorkbook(string format, string validationType, int operation,
+        string first, string second, string value)
+    {
+        return format == "xls"
+            ? CreateWorkbook<HSSFWorkbook>(workbook => AddTypedValidation(workbook, validationType, operation,
+                first, second, value))
+            : CreateWorkbook<XSSFWorkbook>(workbook => AddTypedValidation(workbook, validationType, operation,
+                first, second, value));
+    }
+
+    private static void AddNumericValidation(IWorkbook workbook, int operation, string first,
+        string second, string value)
+    {
+        var sheet = workbook.CreateSheet("Data");
+        sheet.CreateRow(0).CreateCell(0).SetCellValue("Amount");
+        sheet.CreateRow(1).CreateCell(0).SetCellValue(value);
+        var helper = sheet.GetDataValidationHelper();
+        var constraint = helper.CreateintConstraint(operation, first, second);
+        sheet.AddValidationData(helper.CreateValidation(constraint, new CellRangeAddressList(1, 1, 0, 0)));
+    }
+
+    private static void AddTypedValidation(IWorkbook workbook, string validationType, int operation,
+        string first, string second, string value)
+    {
+        var sheet = workbook.CreateSheet("Data");
+        sheet.CreateRow(0).CreateCell(0).SetCellValue(nameof(ValidationTypedRow.Amount));
+        sheet.CreateRow(1).CreateCell(0).SetCellValue(value);
+        var helper = sheet.GetDataValidationHelper();
+        IDataValidationConstraint constraint = validationType switch
+        {
+            "decimal" => helper.CreateDecimalConstraint(operation, first, second),
+            "date" => helper.CreateDateConstraint(operation, first, second, "yyyy-MM-dd"),
+            "time" => helper.CreateTimeConstraint(operation, first, second),
+            "text-length" => helper.CreateTextLengthConstraint(operation, first, second),
+            _ => throw new ArgumentOutOfRangeException(nameof(validationType))
+        };
+        sheet.AddValidationData(helper.CreateValidation(constraint, new CellRangeAddressList(1, 1, 0, 0)));
+    }
+
+    private static byte[] CreateRichTextFailureWorkbook(bool legacyFormat)
+    {
+        return legacyFormat
+            ? CreateWorkbook<HSSFWorkbook>(AddRichTextFailureData)
+            : CreateWorkbook<XSSFWorkbook>(AddRichTextFailureData);
+    }
+
+    private static void AddRichTextFailureData(IWorkbook workbook)
+    {
+        var sheet = workbook.CreateSheet("Data");
+        sheet.CreateRow(0).CreateCell(0).SetCellValue("Count");
+        var cell = sheet.CreateRow(1).CreateCell(0);
+        var richText = workbook.GetCreationHelper().CreateRichTextString("Error text");
+        for (var index = 0; index < 8; index++)
+            workbook.CreateFont().FontName = $"Unused{index}";
+        var unusedFont = workbook.CreateFont();
+        unusedFont.IsItalic = true;
+        var font = workbook.CreateFont();
+        font.IsBold = true;
+        richText.ApplyFont(0, 5, font);
+        richText.ApplyFont(5, 10, unusedFont);
+        cell.SetCellValue(richText);
+        cell.SetCellValue(richText);
+    }
+
+    private static IFont GetRichTextFont(IWorkbook workbook, IRichTextString richText, int run)
+    {
+        var fontIndex = richText switch
+        {
+            XSSFRichTextString xssf => xssf.GetFontOfFormattingRun(run).Index,
+            HSSFRichTextString hssf => hssf.GetFontOfFormattingRun(run),
+            _ => -1
+        };
+        if (richText is XSSFRichTextString xssfText)
+            return xssfText.GetFontOfFormattingRun(run);
+        if (fontIndex >= 0)
+            return workbook.GetFontAt((short)fontIndex);
+        throw new NotSupportedException();
+    }
+
     private static void AddImageSheet(IWorkbook workbook, string name, byte[] pictureBytes,
         string header = "Photo")
     {
@@ -893,6 +1473,17 @@ public sealed class ExcelP0RegressionTest
     private sealed class ValidationModeRow
     {
         [ExcelMaxValue(10)]
+        public string Amount { get; set; }
+    }
+
+    private sealed class ValidationStopRow
+    {
+        public string Amount { get; set; }
+        public string Second { get; set; }
+    }
+
+    private sealed class ValidationTypedRow
+    {
         public string Amount { get; set; }
     }
 

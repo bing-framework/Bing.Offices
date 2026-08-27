@@ -8,6 +8,8 @@ using Bing.Offices.Imports;
 using Bing.Offices.Metadata;
 using Bing.Offices.Npoi.Extensions;
 using NPOI.SS.UserModel;
+using NPOI.HSSF.UserModel;
+using NPOI.XSSF.UserModel;
 
 namespace Bing.Offices.Npoi.Imports;
 
@@ -40,15 +42,47 @@ internal static class NpoiFailureWorkbookWriter
                 outputWorkbook = independentWorkbook = CreateErrorRowsWorkbook(workbook, errors, resolvedSheetRequests,
                     cancellationToken);
             else
-                AnnotateErrors(outputWorkbook, errors);
+                AnnotateErrors(outputWorkbook, errors, options.CommentConflictPolicy);
 
             WriteFailureSummary(outputWorkbook, errors, cancellationToken);
-            using var output = new MemoryStream();
-            outputWorkbook.Write(output, false);
-            var bytes = output.ToArray();
-            if (options.MaxBytes.HasValue && bytes.LongLength > options.MaxBytes.Value)
-                throw new InvalidOperationException($"失败工作簿超过最大字节数: {options.MaxBytes.Value}");
-            WriteBytes(options.Destination, bytes, cancellationToken);
+            var temporaryPath = Path.Combine(Path.GetTempPath(), $"bing-offices-failure-{Guid.NewGuid():N}.tmp");
+            try
+            {
+                using (var output = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.ReadWrite,
+                    FileShare.None, 81920, FileOptions.SequentialScan))
+                using (var limitedOutput = new LimitedWriteStream(output, options.MaxBytes))
+                {
+                    try
+                    {
+                        outputWorkbook.Write(limitedOutput, false);
+                    }
+                    catch (Exception exception)
+                    {
+                        var limitException = FindLimitException(exception);
+                        if (limitException != null)
+                            throw limitException;
+                        throw;
+                    }
+                    limitedOutput.Flush();
+                    if (options.MaxBytes.HasValue && output.Length > options.MaxBytes.Value)
+                        throw new InvalidOperationException($"失败工作簿超过最大字节数: {options.MaxBytes.Value}");
+                    output.Position = 0;
+                    WriteStream(options.Destination, output, cancellationToken);
+                }
+            }
+            finally
+            {
+                try
+                {
+                    File.Delete(temporaryPath);
+                }
+                catch (IOException)
+                {
+                }
+                catch (UnauthorizedAccessException)
+                {
+                }
+            }
         }
         finally
         {
@@ -120,9 +154,10 @@ internal static class NpoiFailureWorkbookWriter
             foreach (var pair in rowMap)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                CopyRow(sourceSheet.GetRow(pair.Key), destinationSheet.CreateRow(pair.Value), destination,
-                    styleCache);
+                CopyRow(source, sourceSheet.GetRow(pair.Key), destinationSheet.CreateRow(pair.Value),
+                    destination, styleCache);
             }
+            CopySheetMetadata(sourceSheet, destinationSheet, sourceRows);
             AddFailureColumns(destinationSheet, group.Value, rowMap,
                 sourceSheet.GetRow(headerRowIndex)?.LastCellNum ?? 0);
             CopyMergedRegions(sourceSheet, destinationSheet, rowMap);
@@ -132,12 +167,35 @@ internal static class NpoiFailureWorkbookWriter
         return destination;
     }
 
-    private static void CopyRow(IRow sourceRow, IRow destinationRow, IWorkbook destination,
+    private static void CopyRow(IWorkbook source, IRow sourceRow, IRow destinationRow, IWorkbook destination,
         IDictionary<short, ICellStyle> styleCache)
     {
         if (sourceRow == null)
             return;
         destinationRow.Height = sourceRow.Height;
+        try
+        {
+            destinationRow.Hidden = sourceRow.Hidden;
+        }
+        catch (NotImplementedException)
+        {
+        }
+        try
+        {
+            destinationRow.ZeroHeight = sourceRow.ZeroHeight;
+        }
+        catch (NotImplementedException)
+        {
+        }
+        try
+        {
+            destinationRow.Collapsed = sourceRow.Collapsed;
+        }
+        catch (NotImplementedException)
+        {
+        }
+        if (sourceRow.RowStyle != null)
+            destinationRow.RowStyle = CloneStyle(sourceRow.RowStyle, destination, styleCache);
         foreach (var sourceCell in sourceRow.Cells)
         {
             var destinationCell = destinationRow.CreateCell(sourceCell.ColumnIndex);
@@ -156,19 +214,126 @@ internal static class NpoiFailureWorkbookWriter
                     destinationCell.SetCellErrorValue(sourceCell.ErrorCellValue);
                     break;
                 case CellType.String:
-                    destinationCell.SetCellValue(sourceCell.StringCellValue);
+                    destinationCell.SetCellValue(CopyRichText(sourceCell.RichStringCellValue, source, destination));
                     break;
             }
             if (sourceCell.CellStyle != null)
             {
-                if (!styleCache.TryGetValue(sourceCell.CellStyle.Index, out var style))
-                {
-                    style = destination.CreateCellStyle();
-                    style.CloneStyleFrom(sourceCell.CellStyle);
-                    styleCache[sourceCell.CellStyle.Index] = style;
-                }
-                destinationCell.CellStyle = style;
+                destinationCell.CellStyle = CloneStyle(sourceCell.CellStyle, destination, styleCache);
             }
+            CopyHyperlink(sourceCell, destinationCell, destination);
+            CopyComment(sourceCell, destinationCell, destination);
+        }
+    }
+
+    private static IRichTextString CopyRichText(IRichTextString source, IWorkbook sourceWorkbook,
+        IWorkbook destination)
+    {
+        if (source == null)
+            return destination.GetCreationHelper().CreateRichTextString(string.Empty);
+        var copied = destination.GetCreationHelper().CreateRichTextString(source.String ?? string.Empty);
+        if (source is XSSFRichTextString xssfSource && copied is XSSFRichTextString xssfCopied)
+        {
+            for (var run = 0; run < xssfSource.NumFormattingRuns; run++)
+            {
+                var start = xssfSource.GetIndexOfFormattingRun(run);
+                var end = start + xssfSource.GetLengthOfFormattingRun(run);
+                var font = destination.CreateFont();
+                font.CloneStyleFrom(xssfSource.GetFontOfFormattingRun(run));
+                xssfCopied.ApplyFont(start, end, font);
+            }
+        }
+        else if (source is HSSFRichTextString hssfSource && copied is HSSFRichTextString hssfCopied)
+        {
+            for (var run = 0; run < hssfSource.NumFormattingRuns; run++)
+            {
+                var start = hssfSource.GetIndexOfFormattingRun(run);
+                var end = run + 1 < hssfSource.NumFormattingRuns
+                    ? hssfSource.GetIndexOfFormattingRun(run + 1)
+                    : hssfSource.String.Length;
+                var font = destination.CreateFont();
+                font.CloneStyleFrom(((HSSFWorkbook)sourceWorkbook).GetFontAt(
+                    hssfSource.GetFontOfFormattingRun(run)));
+                hssfCopied.ApplyFont(start, end, font.Index);
+            }
+        }
+        return copied;
+    }
+
+    private static ICellStyle CloneStyle(ICellStyle sourceStyle, IWorkbook destination,
+        IDictionary<short, ICellStyle> styleCache)
+    {
+        if (!styleCache.TryGetValue(sourceStyle.Index, out var style))
+        {
+            style = destination.CreateCellStyle();
+            style.CloneStyleFrom(sourceStyle);
+            styleCache[sourceStyle.Index] = style;
+        }
+        return style;
+    }
+
+    private static void CopyHyperlink(ICell sourceCell, ICell destinationCell, IWorkbook destination)
+    {
+        var sourceHyperlink = sourceCell.Hyperlink;
+        if (sourceHyperlink == null)
+            return;
+        var hyperlink = destination.GetCreationHelper().CreateHyperlink(sourceHyperlink.Type);
+        hyperlink.Address = sourceHyperlink.Address;
+        hyperlink.Label = sourceHyperlink.Label;
+        hyperlink.FirstRow = destinationCell.RowIndex;
+        hyperlink.LastRow = destinationCell.RowIndex;
+        hyperlink.FirstColumn = destinationCell.ColumnIndex;
+        hyperlink.LastColumn = destinationCell.ColumnIndex;
+        destinationCell.Hyperlink = hyperlink;
+    }
+
+    private static void CopyComment(ICell sourceCell, ICell destinationCell, IWorkbook destination)
+    {
+        var sourceComment = sourceCell.CellComment;
+        if (sourceComment == null)
+            return;
+        var anchor = destination.GetCreationHelper().CreateClientAnchor();
+        var sourceAnchor = sourceComment.ClientAnchor;
+        anchor.Col1 = destinationCell.ColumnIndex;
+        anchor.Col2 = destinationCell.ColumnIndex + Math.Max(1, sourceAnchor?.Col2 - sourceAnchor.Col1 ?? 2);
+        anchor.Row1 = destinationCell.RowIndex;
+        anchor.Row2 = destinationCell.RowIndex + Math.Max(1, sourceAnchor?.Row2 - sourceAnchor.Row1 ?? 3);
+        var comment = destinationCell.Sheet.CreateDrawingPatriarch().CreateCellComment(anchor);
+        comment.String = destination.GetCreationHelper().CreateRichTextString(sourceComment.String?.String ?? string.Empty);
+        comment.Author = sourceComment.Author;
+        comment.Visible = sourceComment.Visible;
+        destinationCell.CellComment = comment;
+    }
+
+    private static void CopySheetMetadata(ISheet source, ISheet destination, ISet<int> sourceRows)
+    {
+        destination.DefaultColumnWidth = source.DefaultColumnWidth;
+        destination.DefaultRowHeight = source.DefaultRowHeight;
+        destination.DefaultRowHeightInPoints = source.DefaultRowHeightInPoints;
+        destination.DisplayGridlines = source.DisplayGridlines;
+        destination.DisplayFormulas = source.DisplayFormulas;
+        destination.DisplayZeros = source.DisplayZeros;
+        destination.DisplayRowColHeadings = source.DisplayRowColHeadings;
+        destination.IsRightToLeft = source.IsRightToLeft;
+        destination.HorizontallyCenter = source.HorizontallyCenter;
+        destination.VerticallyCenter = source.VerticallyCenter;
+        destination.FitToPage = source.FitToPage;
+        destination.ForceFormulaRecalculation = source.ForceFormulaRecalculation;
+
+        var maxColumn = Enumerable.Range(source.FirstRowNum, Math.Max(0, source.LastRowNum - source.FirstRowNum + 1))
+            .Select(rowIndex => (int)(source.GetRow(rowIndex)?.LastCellNum ?? 0))
+            .DefaultIfEmpty(0).Max();
+        for (var column = 0; column < maxColumn; column++)
+        {
+            destination.SetColumnWidth(column, source.GetColumnWidth(column));
+            destination.SetColumnHidden(column, source.IsColumnHidden(column));
+        }
+
+        var pane = source.PaneInformation;
+        if (pane != null && pane.IsFreezePane())
+        {
+            var splitRow = sourceRows.Count(row => row < pane.VerticalSplitPosition);
+            destination.CreateFreezePane(pane.HorizontalSplitPosition, splitRow);
         }
     }
 
@@ -230,8 +395,17 @@ internal static class NpoiFailureWorkbookWriter
                     continue;
                 var targetRegion = new NPOI.SS.Util.CellRangeAddressList(firstRow, lastRow,
                     region.FirstColumn, region.LastColumn);
-                destination.AddValidationData(helper.CreateValidation(validation.ValidationConstraint,
-                    targetRegion));
+                var copied = helper.CreateValidation(validation.ValidationConstraint, targetRegion);
+                copied.EmptyCellAllowed = validation.EmptyCellAllowed;
+                copied.ShowErrorBox = validation.ShowErrorBox;
+                if (validation.ShowErrorBox)
+                    copied.CreateErrorBox(validation.ErrorBoxTitle, validation.ErrorBoxText);
+                copied.ShowPromptBox = validation.ShowPromptBox;
+                if (validation.ShowPromptBox)
+                    copied.CreatePromptBox(validation.PromptBoxTitle, validation.PromptBoxText);
+                copied.SuppressDropDownArrow = validation.SuppressDropDownArrow;
+                copied.ErrorStyle = validation.ErrorStyle;
+                destination.AddValidationData(copied);
             }
         }
     }
@@ -263,7 +437,8 @@ internal static class NpoiFailureWorkbookWriter
         return Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
     }
 
-    private static void AnnotateErrors(IWorkbook workbook, IReadOnlyCollection<ExcelImportError> errors)
+    private static void AnnotateErrors(IWorkbook workbook, IReadOnlyCollection<ExcelImportError> errors,
+        ExcelImportCommentConflictPolicy conflictPolicy)
     {
         foreach (var error in errors.Where(error => error.RowIndex > 0 && error.ColumnIndex > 0))
         {
@@ -272,9 +447,20 @@ internal static class NpoiFailureWorkbookWriter
             if (cell == null)
                 continue;
             var existing = cell.CellComment;
+            if (existing != null && conflictPolicy == ExcelImportCommentConflictPolicy.Preserve)
+                continue;
+            if (existing != null && conflictPolicy == ExcelImportCommentConflictPolicy.Fail)
+                throw new InvalidOperationException($"单元格已有失败批注目标: {cell.Address}");
             var text = error.Message ?? string.Empty;
-            if (existing != null)
+            if (existing != null && conflictPolicy == ExcelImportCommentConflictPolicy.Append)
                 text = existing.String.String + Environment.NewLine + text;
+            if (existing != null)
+            {
+                existing.String = workbook.GetCreationHelper().CreateRichTextString(text);
+                if (conflictPolicy == ExcelImportCommentConflictPolicy.Replace)
+                    existing.Author = "Bing.Offices";
+                continue;
+            }
             var anchor = workbook.GetCreationHelper().CreateClientAnchor();
             anchor.Col1 = cell.ColumnIndex;
             anchor.Col2 = cell.ColumnIndex + 2;
@@ -287,17 +473,106 @@ internal static class NpoiFailureWorkbookWriter
         }
     }
 
-    private static void WriteBytes(Stream destination, byte[] bytes, CancellationToken cancellationToken)
+    private static void WriteStream(Stream destination, Stream source, CancellationToken cancellationToken)
     {
         if (destination == null || !destination.CanWrite)
             throw new ArgumentException("失败工作簿目标流不可写入。", nameof(destination));
-        var offset = 0;
-        while (offset < bytes.Length)
+        var buffer = new byte[81920];
+        int count;
+        while ((count = source.Read(buffer, 0, buffer.Length)) > 0)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var count = Math.Min(81920, bytes.Length - offset);
-            destination.Write(bytes, offset, count);
-            offset += count;
+            destination.Write(buffer, 0, count);
+        }
+    }
+
+    /// <summary>
+    /// 查找 NPOI 序列化层包装的大小限制异常。
+    /// </summary>
+    /// <param name="exception">待检查的异常。</param>
+    /// <returns>找到的大小限制异常；否则返回 null。</returns>
+    private static InvalidOperationException FindLimitException(Exception exception)
+    {
+        while (exception != null)
+        {
+            if (exception is InvalidOperationException invalidOperationException
+                && invalidOperationException.Message.StartsWith("失败工作簿超过最大字节数:",
+                    StringComparison.Ordinal))
+                return invalidOperationException;
+            exception = exception.InnerException;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// 在序列化阶段限制失败工作簿的最大字节数。
+    /// </summary>
+    private sealed class LimitedWriteStream : Stream
+    {
+        private readonly Stream _inner;
+        private readonly long? _maxBytes;
+
+        /// <summary>
+        /// 初始化受限写入流。
+        /// </summary>
+        /// <param name="inner">实际写入流。</param>
+        /// <param name="maxBytes">最大允许字节数。</param>
+        internal LimitedWriteStream(Stream inner, long? maxBytes)
+        {
+            _inner = inner ?? throw new ArgumentNullException(nameof(inner));
+            _maxBytes = maxBytes;
+        }
+
+        /// <inheritdoc />
+        public override bool CanRead => false;
+
+        /// <inheritdoc />
+        public override bool CanSeek => _inner.CanSeek;
+
+        /// <inheritdoc />
+        public override bool CanWrite => _inner.CanWrite;
+
+        /// <inheritdoc />
+        public override long Length => _inner.Length;
+
+        /// <inheritdoc />
+        public override long Position
+        {
+            get => _inner.Position;
+            set => _inner.Position = value;
+        }
+
+        /// <inheritdoc />
+        public override void Flush() => _inner.Flush();
+
+        /// <inheritdoc />
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        /// <inheritdoc />
+        public override long Seek(long offset, SeekOrigin origin) => _inner.Seek(offset, origin);
+
+        /// <inheritdoc />
+        public override void SetLength(long value)
+        {
+            if (_maxBytes.HasValue && value > _maxBytes.Value)
+                throw new InvalidOperationException($"失败工作簿超过最大字节数: {_maxBytes.Value}");
+            _inner.SetLength(value);
+        }
+
+        /// <inheritdoc />
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            if (_maxBytes.HasValue && Position > _maxBytes.Value - count)
+                throw new InvalidOperationException($"失败工作簿超过最大字节数: {_maxBytes.Value}");
+            _inner.Write(buffer, offset, count);
+        }
+
+        /// <inheritdoc />
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+                _inner.Flush();
+            base.Dispose(disposing);
         }
     }
 }

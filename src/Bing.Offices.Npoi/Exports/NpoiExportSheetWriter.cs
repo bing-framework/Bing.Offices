@@ -32,6 +32,10 @@ internal sealed class NpoiExportSheetWriter
             workbook.SetSheetVisibility(workbook.GetSheetIndex(sheet), SheetVisibility.Hidden);
         var headerRowIndex = originRow + request.HeaderRowIndex;
         var header = sheet.GetRow(headerRowIndex) ?? sheet.CreateRow(headerRowIndex);
+        var dynamicKeys = request.FailOnUnknownDynamicValues
+            ? new HashSet<string>(columns.Where(column => column.IsDynamic).Select(column => column.Key),
+                StringComparer.Ordinal)
+            : null;
         WriteCustomHeaders(sheet, request.HeaderRows, originRow, originColumn,
             request.CommentConflictPolicy, request.TemplateCellOverwritePolicy);
         for (var index = 0; index < columns.Count; index++)
@@ -47,7 +51,7 @@ internal sealed class NpoiExportSheetWriter
             cancellationToken.ThrowIfCancellationRequested();
             var row = sheet.GetRow(rowIndex) ?? sheet.CreateRow(rowIndex);
             var dynamicValues = request.DynamicGetter?.Invoke(item);
-            ValidateUnknownDynamicValues(request, dynamicValues, columns);
+            ValidateUnknownDynamicValues(request, dynamicValues, dynamicKeys);
             for (var columnIndex = 0; columnIndex < columns.Count; columnIndex++)
             {
                 var physicalColumnIndex = originColumn + columnIndex;
@@ -73,13 +77,11 @@ internal sealed class NpoiExportSheetWriter
     /// 验证动态字典中的键都已声明为导出列。
     /// </summary>
     private static void ValidateUnknownDynamicValues(ExcelSheetExportRequest request,
-        IDictionary<string, object> values, IReadOnlyList<ExcelColumnPlan> columns)
+        IDictionary<string, object> values, ISet<string> dynamicKeys)
     {
-        if (!request.FailOnUnknownDynamicValues || values == null)
+        if (!request.FailOnUnknownDynamicValues || values == null || dynamicKeys == null)
             return;
-        var keys = new HashSet<string>(columns.Where(column => column.IsDynamic).Select(column => column.Key),
-            StringComparer.Ordinal);
-        var unknown = values.Keys.FirstOrDefault(key => !keys.Contains(key));
+        var unknown = values.Keys.FirstOrDefault(key => !dynamicKeys.Contains(key));
         if (unknown != null)
             throw new InvalidOperationException($"动态值未声明: {unknown}");
     }
@@ -331,18 +333,7 @@ internal sealed class NpoiExportSheetWriter
         if (row == null)
             return;
         foreach (var cell in row.Cells)
-        {
-            var style = workbook.CreateCellStyle();
-            style.CloneStyleFrom(cell.CellStyle);
-            var font = workbook.CreateFont();
-            font.CloneStyleFrom(workbook.GetFontAt(cell.CellStyle.FontIndex));
-            font.FontName = attribute.FontName;
-            font.Color = ColorResolver.Resolve(attribute.Color);
-            font.FontHeightInPoints = attribute.FontSize;
-            font.IsBold = attribute.Bold;
-            style.SetFont(font);
-            cell.CellStyle = style;
-        }
+            cell.CellStyle = NpoiStyleCache.ApplyHeaderAttribute(workbook, cell.CellStyle, attribute);
     }
 
     /// <summary>
@@ -466,8 +457,9 @@ internal sealed class NpoiExportSheetWriter
         if (column.IsDynamic)
         {
             var values = dynamicValues ?? column.Getter(item) as IDictionary<string, object>;
-            values ??= new Dictionary<string, object>();
-            values.TryGetValue(column.Key, out value);
+            value = values != null && values.TryGetValue(column.Key, out var dynamicValue)
+                ? dynamicValue
+                : null;
         }
         else
             value = column.Getter(item);

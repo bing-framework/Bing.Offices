@@ -62,6 +62,23 @@ public sealed class DocsConsumerTest
     }
 
     /// <summary>
+    /// 测试 - 当前 2.x 包消费者仍可编译旧映射入口和兼容校验特性，迁移不依赖隐式删除。
+    /// </summary>
+    [Fact]
+    public void LegacyCompatibility_ExternalConsumer_ShouldKeepCurrentMajorEntrypoints()
+    {
+        // Arrange
+        var legacyBuilder = ExcelMapping.For<DocsRow>();
+        legacyBuilder.Property(row => row.Name).HasTitle("名称");
+        var legacyMapping = legacyBuilder.Build();
+        var legacyRegex = new RegexAttribute("^consumer$");
+
+        // Assert
+        Assert.Equal("名称", legacyMapping.Columns[0].Title);
+        Assert.Equal("^consumer$", legacyRegex.RegexString);
+    }
+
+    /// <summary>
     /// 测试 - 外部消费者应能使用 v2 文档和双模型 Profile 构建方向隔离的请求与 Registry。
     /// </summary>
     [Fact]
@@ -205,11 +222,11 @@ public sealed class DocsConsumerTest
     {
         // Arrange
         var documents = new[] { "README.md", "mapping-profile.md", "mapping-json-xml.md",
-            "import-validation.md", "dynamic-columns.md" };
+            "import-validation.md", "dynamic-columns.md", "nuget-migration.md" };
         var fences = System.Linq.Enumerable.SelectMany(documents, document => ExtractFences(document)).ToArray();
 
         // Act / Assert
-        Assert.Equal(9, fences.Length);
+        Assert.Equal(10, fences.Length);
         foreach (var fence in fences)
         {
             var source = BuildFenceSource(fence.FileName, fence.Index, fence.Code);
@@ -281,6 +298,11 @@ public sealed class DocsConsumerTest
             prelude = "var document = new ExcelMappingDocument(); ";
         else if (fileName == "mapping-profile.md" && index == 2)
             prelude = "var services = new ServiceCollection(); ";
+        else if (fileName == "nuget-migration.md")
+        {
+            declarations = "public sealed class OrderWorkbook { public List<OrderRow> Rows { get; } = new List<OrderRow>(); }";
+            prelude = "var services = new ServiceCollection(); ";
+        }
         else if (fileName == "import-validation.md" && index == 2)
             prelude = "var uploadServices = new ServiceCollection(); uploadServices.AddNpoi(); "
                 + "using var uploadProvider = uploadServices.BuildServiceProvider(); "

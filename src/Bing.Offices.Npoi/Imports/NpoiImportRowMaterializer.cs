@@ -30,10 +30,10 @@ internal sealed class NpoiImportRowMaterializer
     /// 判断数据行是否没有任何非空单元格或图片。
     /// </summary>
     internal static bool IsEmpty(IRow row, ExcelWhitespacePolicy bodyWhitespace,
-        IReadOnlyDictionary<(int Row, int Column), IReadOnlyList<PictureInfo>> imageIndex, int rowIndex)
+        ISet<int> imageRows, int rowIndex)
     {
         return row == null
-            || (imageIndex == null || !imageIndex.Keys.Any(key => key.Row == rowIndex))
+            || (imageRows == null || !imageRows.Contains(rowIndex))
             && row.Cells.All(cell => string.IsNullOrWhiteSpace(
                 NpoiExcelImporter.NormalizeText(NpoiExcelImporter.GetRawStringValue(cell), bodyWhitespace)));
     }
@@ -47,14 +47,17 @@ internal sealed class NpoiImportRowMaterializer
     /// 构建按行列坐标索引的图片集合，并应用图片资源限制。
     /// </summary>
     internal static IReadOnlyDictionary<(int Row, int Column), IReadOnlyList<PictureInfo>> BuildImageIndex(
-        ISheet sheet, ExcelImageResourceTracker resources, CancellationToken cancellationToken)
+        ISheet sheet, ExcelImageResourceTracker resources, CancellationToken cancellationToken,
+        out HashSet<int> imageRows)
     {
         var result = new Dictionary<(int Row, int Column), IReadOnlyList<PictureInfo>>();
+        imageRows = new HashSet<int>();
         foreach (var picture in sheet.GetAllPictureInfos())
         {
             cancellationToken.ThrowIfCancellationRequested();
             resources.Consume(picture.PictureData.LongLength);
             var key = (picture.MinRow, picture.MinCol);
+            imageRows.Add(key.Item1);
             if (!result.TryGetValue(key, out var pictures))
                 result[key] = pictures = new List<PictureInfo>();
             ((List<PictureInfo>)pictures).Add(picture);

@@ -16,6 +16,7 @@ using Bing.Offices.Providers;
 using Bing.Offices.Styles;
 using Bing.Offices.Validations;
 using System.Text;
+using NPOI.HSSF.UserModel;
 using NPOI.SS.UserModel;
 using NPOI.XSSF.UserModel;
 using Xunit;
@@ -477,6 +478,517 @@ public sealed class ExcelWorkbookRequestTest
         Assert.Equal(sheet.GetRow(0).GetCell(0).CellStyle.Index, sheet.GetRow(1).GetCell(0).CellStyle.Index);
         Assert.Equal("123456", BitConverter.ToString(((XSSFCellStyle)sheet.GetRow(0).GetCell(0).CellStyle)
             .FillForegroundXSSFColor.RGB).Replace("-", string.Empty));
+    }
+
+    /// <summary>
+    /// 测试 - 宽表头应用 HeaderAttribute 时应复用 Workbook 级字体和样式，并保留请求样式。
+    /// </summary>
+    [Theory]
+    [InlineData(ExcelFormat.Xlsx)]
+    [InlineData(ExcelFormat.Xls)]
+    public void Export_HeaderAttribute_ShouldReuseFontsAndStylesForWideHeaders(ExcelFormat format)
+    {
+        // Arrange
+        var request = ExcelExport.Workbook(workbook =>
+        {
+            workbook.Format(format);
+            workbook.AddSheet("表头", new[]
+            {
+                new HeaderStyleOrder
+                {
+                    A = "A", B = "B", C = "C", D = "D", E = "E", F = "F",
+                    G = "G", H = "H", I = "I", J = "J", K = "K", L = "L"
+                }
+            }, sheet => sheet.HeaderStyle(new ExcelCellStyle
+            {
+                FillPattern = ExcelFillPattern.Solid,
+                ForegroundColor = new ExcelColor(format == ExcelFormat.Xlsx ? "FF112233" : "FF0000FF")
+            }));
+        });
+        using var destination = new MemoryStream();
+
+        // Act
+        new NpoiExcelExporter().Export(request, destination);
+
+        // Assert
+        destination.Position = 0;
+        using var workbook = WorkbookFactory.Create(destination);
+        var header = workbook.GetSheet("表头").GetRow(0);
+        var first = header.GetCell(0);
+        var last = header.GetCell(11);
+        var font = workbook.GetFontAt(first.CellStyle.FontIndex);
+        Assert.Equal(first.CellStyle.Index, last.CellStyle.Index);
+        Assert.Equal(first.CellStyle.FontIndex, last.CellStyle.FontIndex);
+        Assert.Equal("Arial", font.FontName);
+        Assert.Equal(11, font.FontHeightInPoints);
+        Assert.False(font.IsBold);
+        Assert.Equal(FillPattern.SolidForeground, first.CellStyle.FillPattern);
+        if (format == ExcelFormat.Xlsx)
+        {
+            Assert.Equal("112233", BitConverter.ToString(((XSSFCellStyle)first.CellStyle)
+                .FillForegroundXSSFColor.RGB).Replace("-", string.Empty));
+        }
+        else
+        {
+            Assert.Equal(IndexedColors.Blue.Index, first.CellStyle.FillForegroundColor);
+        }
+        var styleCeiling = format == ExcelFormat.Xlsx ? 8 : 23;
+        Assert.True(workbook.NumCellStyles <= styleCeiling,
+            $"宽表头样式数量异常: {workbook.NumCellStyles}, 上限: {styleCeiling}");
+        var fontCeiling = format == ExcelFormat.Xlsx ? 4 : 5;
+        Assert.True(workbook.NumberOfFonts <= fontCeiling,
+            $"宽表头字体数量异常: {workbook.NumberOfFonts}, 上限: {fontCeiling}");
+    }
+
+    /// <summary>
+    /// 测试 - 模板样式叠加时未指定属性应保留，显式 reset 只恢复指定属性。
+    /// </summary>
+    [Fact]
+    public void Export_RequestStyle_Compose_ShouldPreserveAndResetSelectedProperties()
+    {
+        // Arrange
+        using var template = new MemoryStream(CreateWorkbook(workbook =>
+        {
+            var sheet = workbook.CreateSheet("客户");
+            var style = workbook.CreateCellStyle();
+            style.DataFormat = workbook.CreateDataFormat().GetFormat("0.00");
+            style.FillPattern = FillPattern.SolidForeground;
+            style.FillForegroundColor = IndexedColors.Yellow.Index;
+            var cell = sheet.CreateRow(1).CreateCell(0);
+            cell.CellStyle = style;
+            var name = workbook.CreateName();
+            name.NameName = "CustomerRegion";
+            name.RefersToFormula = "'客户'!$A$1:$A$2";
+        }));
+        var request = ExcelExport.Workbook(workbook => workbook
+            .UseTemplate(template, leaveOpen: true)
+            .AddSheet("客户", new[] { new ExportCustomer { Name = "客户 A" } },
+                sheet => sheet.UseTemplateRegion("CustomerRegion")
+                    .BodyStyle(new ExcelCellStyle
+                    {
+                        Bold = true,
+                        Reset = new ExcelCellStyleReset { FillPattern = true }
+                    })));
+        using var destination = new MemoryStream();
+
+        // Act
+        new NpoiExcelExporter().Export(request, destination);
+
+        // Assert
+        destination.Position = 0;
+        using var result = WorkbookFactory.Create(destination);
+        var cell = result.GetSheet("客户").GetRow(1).GetCell(0);
+        Assert.True(cell.CellStyle.GetDataFormatString() == "0.00");
+        Assert.True(cell.CellStyle.Index > 0);
+        Assert.True(cell.CellStyle.FillPattern == FillPattern.NoFill);
+        Assert.True(result.GetFontAt(cell.CellStyle.FontIndex).IsBold);
+    }
+
+    /// <summary>
+    /// 测试 - XSSF 前景色和背景色应独立写入，不能因只设置背景色而改变前景色。
+    /// </summary>
+    [Fact]
+    public void Export_RequestStyle_ShouldKeepXlsxForegroundAndBackgroundIndependent()
+    {
+        // Arrange
+        var style = new ExcelCellStyle
+        {
+            FillPattern = ExcelFillPattern.Solid,
+            ForegroundColor = new ExcelColor("FF112233"),
+            BackgroundColor = new ExcelColor("FF445566")
+        };
+        var request = ExcelExport.Workbook(workbook => workbook.AddSheet("客户",
+            new[] { new ExportCustomer { Name = "客户 A" } }, sheet => sheet.BodyStyle(style)));
+        using var destination = new MemoryStream();
+
+        // Act
+        new NpoiExcelExporter().Export(request, destination);
+
+        // Assert
+        destination.Position = 0;
+        using var result = (XSSFWorkbook)WorkbookFactory.Create(destination);
+        var cellStyle = (XSSFCellStyle)result.GetSheet("客户").GetRow(1).GetCell(0).CellStyle;
+        Assert.Equal("112233", BitConverter.ToString(cellStyle.FillForegroundXSSFColor.RGB)
+            .Replace("-", string.Empty));
+        Assert.Equal("445566", BitConverter.ToString(cellStyle.FillBackgroundXSSFColor.RGB)
+            .Replace("-", string.Empty));
+    }
+
+    /// <summary>
+    /// 测试 - 同一 Workbook 中字体 reset 与未指定 reset 的样式不得共享错误字体。
+    /// </summary>
+    [Fact]
+    public void Export_RequestStyle_FontReset_ShouldIsolateFontCacheEntries()
+    {
+        // Arrange
+        using var workbook = new XSSFWorkbook();
+        var baseFont = workbook.CreateFont();
+        baseFont.IsBold = true;
+        var baseStyle = workbook.CreateCellStyle();
+        baseStyle.SetFont(baseFont);
+        var resetStyle = new ExcelCellStyle
+        {
+            Reset = new ExcelCellStyleReset { Bold = true }
+        };
+        var preserveStyle = new ExcelCellStyle();
+
+        // Act
+        var reset = NpoiStyleCache.Compose(workbook, baseStyle, resetStyle);
+        var preserve = NpoiStyleCache.Compose(workbook, baseStyle, preserveStyle);
+
+        // Assert
+        Assert.False(workbook.GetFontAt(reset.FontIndex).IsBold);
+        Assert.True(workbook.GetFontAt(preserve.FontIndex).IsBold);
+        Assert.NotEqual(reset.FontIndex, preserve.FontIndex);
+
+        var preserveFirst = NpoiStyleCache.Compose(workbook, baseStyle, new ExcelCellStyle());
+        var resetAfterPreserve = NpoiStyleCache.Compose(workbook, baseStyle, resetStyle);
+        Assert.True(workbook.GetFontAt(preserveFirst.FontIndex).IsBold);
+        Assert.False(workbook.GetFontAt(resetAfterPreserve.FontIndex).IsBold);
+    }
+
+    /// <summary>
+    /// 测试 - 样式 reset 应逐属性恢复模板默认状态，并保持缓存结果可重用。
+    /// </summary>
+    [Fact]
+    public void Export_RequestStyle_Reset_ShouldRestoreAllCoveredProperties()
+    {
+        // Arrange
+        using var workbook = new XSSFWorkbook();
+        var baseStyle = workbook.CreateCellStyle();
+        baseStyle.FillPattern = FillPattern.SolidForeground;
+        baseStyle.Alignment = HorizontalAlignment.Center;
+        baseStyle.VerticalAlignment = VerticalAlignment.Center;
+        baseStyle.WrapText = true;
+        baseStyle.Indention = 3;
+        baseStyle.DataFormat = workbook.CreateDataFormat().GetFormat("0.00");
+        baseStyle.BorderTop = BorderStyle.Thin;
+        baseStyle.BorderBottom = BorderStyle.Thin;
+        baseStyle.BorderLeft = BorderStyle.Thin;
+        baseStyle.BorderRight = BorderStyle.Thin;
+
+        // Act
+        var reset = (XSSFCellStyle)NpoiStyleCache.Compose(workbook, baseStyle, new ExcelCellStyle
+        {
+            Reset = new ExcelCellStyleReset
+            {
+                FillPattern = true,
+                HorizontalAlignment = true,
+                VerticalAlignment = true,
+                WrapText = true,
+                Indent = true,
+                NumberFormat = true,
+                TopBorder = true,
+                BottomBorder = true,
+                LeftBorder = true,
+                RightBorder = true
+            }
+        });
+
+        // Assert
+        Assert.Equal(FillPattern.NoFill, reset.FillPattern);
+        Assert.Equal(HorizontalAlignment.General, reset.Alignment);
+        Assert.Equal(VerticalAlignment.Bottom, reset.VerticalAlignment);
+        Assert.False(reset.WrapText);
+        Assert.Equal(0, reset.Indention);
+        Assert.Equal("General", reset.GetDataFormatString());
+        Assert.Equal(BorderStyle.None, reset.BorderTop);
+        Assert.Equal(BorderStyle.None, reset.BorderBottom);
+        Assert.Equal(BorderStyle.None, reset.BorderLeft);
+        Assert.Equal(BorderStyle.None, reset.BorderRight);
+    }
+
+    /// <summary>
+    /// 测试 - 公开导出请求中的固定列和动态列样式 reset 应在 XLS/XLSX 重开后保持契约，且重复行不应无限创建资源。
+    /// </summary>
+    [Theory]
+    [InlineData(ExcelFormat.Xlsx)]
+    [InlineData(ExcelFormat.Xls)]
+    public void Export_RequestStyle_PublicFixedAndDynamicColumns_ShouldResetAndBoundResources(ExcelFormat format)
+    {
+        // Arrange
+        var rows = Enumerable.Range(1, 32).Select(index => new ExportOrder
+        {
+            OrderNo = $"O-{index}",
+            CustomFields = new Dictionary<string, object> { ["amount"] = index + 0.5m }
+        }).ToArray();
+        var request = ExcelExport.Workbook(workbook => workbook
+            .Format(format)
+            .AddSheet("订单", rows, sheet => sheet
+                .HeaderStyle(new ExcelCellStyle { Bold = true, FillPattern = ExcelFillPattern.Solid,
+                    Reset = new ExcelCellStyleReset { ForegroundColor = true, BackgroundColor = true } })
+                .BodyStyle(new ExcelCellStyle { Bold = true, HorizontalAlignment = ExcelHorizontalAlignment.Center,
+                    NumberFormat = "0.00", Reset = new ExcelCellStyleReset { FillPattern = true } })
+                .DynamicColumns(order => order.CustomFields, new[]
+                {
+                    new ExcelDynamicColumnDefinition
+                    {
+                        Key = "amount",
+                        Title = "金额",
+                        DataType = typeof(decimal),
+                        NumberFormat = "0.00",
+                        HeaderStyle = new ExcelCellStyle { Italic = true },
+                        BodyStyle = new ExcelCellStyle { Underline = true, NumberFormat = "0.00" }
+                    }
+                })));
+        using var destination = new MemoryStream();
+
+        // Act
+        new NpoiExcelExporter().Export(request, destination);
+
+        // Assert
+        destination.Position = 0;
+        using var result = WorkbookFactory.Create(destination);
+        var sheet = result.GetSheet("订单");
+        var fixedHeader = sheet.GetRow(0).GetCell(0);
+        var fixedBody = sheet.GetRow(1).GetCell(0);
+        var dynamicHeader = sheet.GetRow(0).GetCell(1);
+        var dynamicBody = sheet.GetRow(1).GetCell(1);
+        Assert.True(result.GetFontAt(fixedHeader.CellStyle.FontIndex).IsBold);
+        Assert.True(result.GetFontAt(fixedBody.CellStyle.FontIndex).IsBold);
+        Assert.True(result.GetFontAt(dynamicHeader.CellStyle.FontIndex).IsItalic);
+        Assert.NotEqual(FontUnderlineType.None, result.GetFontAt(dynamicBody.CellStyle.FontIndex).Underline);
+        Assert.Equal("0.00", fixedBody.CellStyle.GetDataFormatString());
+        Assert.Equal("0.00", dynamicBody.CellStyle.GetDataFormatString());
+        Assert.Equal(FillPattern.NoFill, fixedBody.CellStyle.FillPattern);
+        Assert.True(result.NumCellStyles <= 32, $"样式数量异常: {result.NumCellStyles}");
+        Assert.True(result.NumberOfFonts <= 8, $"字体数量异常: {result.NumberOfFonts}");
+    }
+
+    /// <summary>
+    /// 测试 - 公共导出入口应从模板非默认样式清除 Sheet、固定列和动态列的全部 reset 属性。
+    /// </summary>
+    [Theory]
+    [InlineData(ExcelFormat.Xlsx)]
+    [InlineData(ExcelFormat.Xls)]
+    public void Export_RequestStyle_PublicReset_ShouldClearNonDefaultTemplateProperties(ExcelFormat format)
+    {
+        // Arrange
+        using var template = new MemoryStream(CreateStyledExportTemplate(format));
+        var reset = new ExcelCellStyleReset
+        {
+            FontName = true,
+            FontSize = true,
+            Bold = true,
+            Italic = true,
+            Underline = true,
+            FontColor = true,
+            ForegroundColor = true,
+            BackgroundColor = true,
+            FillPattern = true,
+            TopBorder = true,
+            BottomBorder = true,
+            LeftBorder = true,
+            RightBorder = true,
+            HorizontalAlignment = true,
+            VerticalAlignment = true,
+            WrapText = true,
+            Indent = true,
+            NumberFormat = true
+        };
+        var rows = new[]
+        {
+            new ExportOrder
+            {
+                OrderNo = "O-1",
+                CustomFields = new Dictionary<string, object> { ["amount"] = 12.5m }
+            }
+        };
+        var request = ExcelExport.Workbook(workbook =>
+        {
+            workbook.Format(format)
+                .UseTemplate(template, leaveOpen: true)
+                .AddSheet("订单", rows, sheet => sheet
+                    .SheetStyle(new ExcelCellStyle { Reset = reset })
+                    .HeaderStyle(new ExcelCellStyle { Reset = reset })
+                    .BodyStyle(new ExcelCellStyle { Reset = reset })
+                    .DynamicColumns(order => order.CustomFields, new[]
+                    {
+                        new ExcelDynamicColumnDefinition
+                        {
+                            Key = "amount",
+                            Title = "金额",
+                            DataType = typeof(decimal),
+                            HeaderStyle = new ExcelCellStyle { Reset = reset },
+                            BodyStyle = new ExcelCellStyle { Reset = reset }
+                        }
+                    }))
+                .AddSheet("客户", new[] { new ExportCustomer { Name = "客户 A" } },
+                    sheet => sheet.SheetStyle(new ExcelCellStyle { Reset = reset }));
+        });
+        using var destination = new MemoryStream();
+
+        // Act
+        new NpoiExcelExporter().Export(request, destination);
+
+        // Assert
+        destination.Position = 0;
+        using var result = WorkbookFactory.Create(destination);
+        AssertResetStyle(result.GetSheet("订单").GetRow(0).GetCell(0).CellStyle,
+            result.GetSheet("订单").GetRow(0).GetCell(0));
+        AssertResetStyle(result.GetSheet("订单").GetRow(1).GetCell(0).CellStyle,
+            result.GetSheet("订单").GetRow(1).GetCell(0));
+        AssertResetStyle(result.GetSheet("订单").GetRow(0).GetCell(1).CellStyle,
+            result.GetSheet("订单").GetRow(0).GetCell(1));
+        AssertResetStyle(result.GetSheet("订单").GetRow(1).GetCell(1).CellStyle,
+            result.GetSheet("订单").GetRow(1).GetCell(1));
+        AssertResetStyle(result.GetSheet("客户").GetRow(0).GetCell(0).CellStyle,
+            result.GetSheet("客户").GetRow(0).GetCell(0));
+        AssertResetStyle(result.GetSheet("客户").GetRow(1).GetCell(0).CellStyle,
+            result.GetSheet("客户").GetRow(1).GetCell(0));
+        Assert.True(result.NumCellStyles <= 40, $"样式数量异常: {result.NumCellStyles}");
+        Assert.True(result.NumberOfFonts <= 12, $"字体数量异常: {result.NumberOfFonts}");
+    }
+
+    /// <summary>
+    /// 测试 - 样式 reset 先调用或后调用均不得与保留样式共享错误的字体，且两个提供程序行为一致。
+    /// </summary>
+    [Theory]
+    [InlineData(ExcelFormat.Xlsx, true)]
+    [InlineData(ExcelFormat.Xlsx, false)]
+    [InlineData(ExcelFormat.Xls, true)]
+    [InlineData(ExcelFormat.Xls, false)]
+    public void Export_RequestStyle_ResetOrder_ShouldIsolateFonts(ExcelFormat format, bool resetFirst)
+    {
+        // Arrange
+        using var workbook = format == ExcelFormat.Xls
+            ? (IWorkbook)new HSSFWorkbook()
+            : new XSSFWorkbook();
+        var baseFont = workbook.CreateFont();
+        baseFont.IsBold = true;
+        var baseStyle = workbook.CreateCellStyle();
+        baseStyle.SetFont(baseFont);
+        var resetStyle = new ExcelCellStyle { Reset = new ExcelCellStyleReset { Bold = true } };
+        var preserveStyle = new ExcelCellStyle();
+
+        // Act
+        var first = resetFirst
+            ? NpoiStyleCache.Compose(workbook, baseStyle, resetStyle)
+            : NpoiStyleCache.Compose(workbook, baseStyle, preserveStyle);
+        var second = resetFirst
+            ? NpoiStyleCache.Compose(workbook, baseStyle, preserveStyle)
+            : NpoiStyleCache.Compose(workbook, baseStyle, resetStyle);
+
+        // Assert
+        var reset = resetFirst ? first : second;
+        var preserve = resetFirst ? second : first;
+        Assert.False(workbook.GetFontAt(reset.FontIndex).IsBold);
+        Assert.True(workbook.GetFontAt(preserve.FontIndex).IsBold);
+        Assert.NotEqual(reset.FontIndex, preserve.FontIndex);
+        Assert.True(workbook.NumCellStyles <= 32, $"样式数量异常: {workbook.NumCellStyles}");
+        Assert.True(workbook.NumberOfFonts <= 6, $"字体数量异常: {workbook.NumberOfFonts}");
+    }
+
+    /// <summary>
+    /// 测试 - XSSF 显式清除前景色和背景色后应恢复无色状态，而不是写入黑色。
+    /// </summary>
+    [Fact]
+    public void Export_RequestStyle_XlsxFillColorReset_ShouldClearColors()
+    {
+        // Arrange
+        using var workbook = new XSSFWorkbook();
+        var baseStyle = workbook.CreateCellStyle();
+        var baseXssfStyle = (XSSFCellStyle)baseStyle;
+        baseXssfStyle.SetFillForegroundColor(new XSSFColor(new byte[] { 17, 34, 51 }, null));
+        baseXssfStyle.SetFillBackgroundColor(new XSSFColor(new byte[] { 68, 85, 102 }, null));
+        baseXssfStyle.FillPattern = FillPattern.SolidForeground;
+
+        // Act
+        var result = (XSSFCellStyle)NpoiStyleCache.Compose(workbook, baseStyle, new ExcelCellStyle
+        {
+            Reset = new ExcelCellStyleReset { ForegroundColor = true, BackgroundColor = true }
+        });
+
+        // Assert
+        Assert.Null(result.FillForegroundColorColor);
+        Assert.Null(result.FillBackgroundColorColor);
+    }
+
+    /// <summary>
+    /// 测试 - XLS 支持的 indexed 颜色应写入，无法表示的自定义颜色应明确拒绝。
+    /// </summary>
+    [Fact]
+    public void Export_RequestStyle_Xls_ShouldHonorColorCapabilityBoundary()
+    {
+        // Arrange
+        var supported = ExcelExport.Workbook(workbook => workbook.Format(ExcelFormat.Xls).AddSheet("客户",
+            new[] { new ExportCustomer { Name = "客户 A" } }, sheet => sheet.BodyStyle(new ExcelCellStyle
+            {
+                FillPattern = ExcelFillPattern.Solid,
+                ForegroundColor = new ExcelColor("FFFF0000")
+            })));
+        var unsupported = ExcelExport.Workbook(workbook => workbook.Format(ExcelFormat.Xls).AddSheet("客户",
+            new[] { new ExportCustomer { Name = "客户 A" } }, sheet => sheet.BodyStyle(new ExcelCellStyle
+            {
+                TopBorder = new ExcelBorderStyle
+                {
+                    LineStyle = ExcelBorderLineStyle.Thin,
+                    Color = new ExcelColor("FF123456")
+                }
+            })));
+
+        // Act
+        using var supportedOutput = new MemoryStream();
+        new NpoiExcelExporter().Export(supported, supportedOutput);
+        using var unsupportedOutput = new MemoryStream();
+
+        // Assert
+        supportedOutput.Position = 0;
+        using var workbook = (HSSFWorkbook)WorkbookFactory.Create(supportedOutput);
+        Assert.Equal(IndexedColors.Red.Index, workbook.GetSheet("客户").GetRow(1).GetCell(0)
+            .CellStyle.FillForegroundColor);
+        Assert.Throws<NotSupportedException>(() => new NpoiExcelExporter().Export(unsupported, unsupportedOutput));
+    }
+
+    /// <summary>
+    /// 测试 - 请求样式的 XSSF 四边框自定义颜色应按 RGB 写入并在重开文件后保持一致。
+    /// </summary>
+    [Fact]
+    public void Export_RequestStyle_ShouldWriteCustomXlsxBorderColors()
+    {
+        // Arrange
+        var style = new ExcelCellStyle
+        {
+            TopBorder = new ExcelBorderStyle
+            {
+                LineStyle = ExcelBorderLineStyle.Thin,
+                Color = new ExcelColor("FF112233")
+            },
+            BottomBorder = new ExcelBorderStyle
+            {
+                LineStyle = ExcelBorderLineStyle.Thin,
+                Color = new ExcelColor("FF445566")
+            },
+            LeftBorder = new ExcelBorderStyle
+            {
+                LineStyle = ExcelBorderLineStyle.Thin,
+                Color = new ExcelColor("FF778899")
+            },
+            RightBorder = new ExcelBorderStyle
+            {
+                LineStyle = ExcelBorderLineStyle.Thin,
+                Color = new ExcelColor("FFAABBCC")
+            }
+        };
+        var request = ExcelExport.Workbook(workbook => workbook.AddSheet("客户",
+            new[] { new ExportCustomer { Name = "客户 A" } }, sheet => sheet.BodyStyle(style)));
+        using var destination = new MemoryStream();
+
+        // Act
+        new NpoiExcelExporter().Export(request, destination);
+
+        // Assert
+        destination.Position = 0;
+        using var workbook = WorkbookFactory.Create(destination);
+        var cellStyle = (XSSFCellStyle)workbook.GetSheet("客户").GetRow(1).GetCell(0).CellStyle;
+        Assert.Equal("112233", BitConverter.ToString(cellStyle.TopBorderXSSFColor.RGB)
+            .Replace("-", string.Empty));
+        Assert.Equal("445566", BitConverter.ToString(cellStyle.BottomBorderXSSFColor.RGB)
+            .Replace("-", string.Empty));
+        Assert.Equal("778899", BitConverter.ToString(cellStyle.LeftBorderXSSFColor.RGB)
+            .Replace("-", string.Empty));
+        Assert.Equal("AABBCC", BitConverter.ToString(cellStyle.RightBorderXSSFColor.RGB)
+            .Replace("-", string.Empty));
     }
 
     /// <summary>
@@ -1484,6 +1996,89 @@ public sealed class ExcelWorkbookRequestTest
         return stream.ToArray();
     }
 
+    private static byte[] CreateStyledExportTemplate(ExcelFormat format)
+    {
+        using IWorkbook workbook = format == ExcelFormat.Xls
+            ? new HSSFWorkbook()
+            : new XSSFWorkbook();
+        var orders = workbook.CreateSheet("订单");
+        var customers = workbook.CreateSheet("客户");
+        var orderStyle = CreateNonDefaultStyle(workbook);
+        var customerStyle = CreateNonDefaultStyle(workbook);
+        orders.CreateRow(0).CreateCell(0).CellStyle = orderStyle;
+        orders.GetRow(0).CreateCell(1).CellStyle = orderStyle;
+        orders.CreateRow(1).CreateCell(0).CellStyle = orderStyle;
+        orders.GetRow(1).CreateCell(1).CellStyle = orderStyle;
+        customers.CreateRow(0).CreateCell(0).CellStyle = customerStyle;
+        customers.CreateRow(1).CreateCell(0).CellStyle = customerStyle;
+        using var stream = new MemoryStream();
+        workbook.Write(stream, false);
+        return stream.ToArray();
+    }
+
+    private static ICellStyle CreateNonDefaultStyle(IWorkbook workbook)
+    {
+        var style = workbook.CreateCellStyle();
+        var font = workbook.CreateFont();
+        font.FontName = "Arial";
+        font.FontHeightInPoints = 16;
+        font.IsBold = true;
+        font.IsItalic = true;
+        font.Underline = FontUnderlineType.Single;
+        font.Color = IndexedColors.Red.Index;
+        style.SetFont(font);
+        style.FillPattern = FillPattern.SolidForeground;
+        style.FillForegroundColor = IndexedColors.Yellow.Index;
+        style.FillBackgroundColor = IndexedColors.Green.Index;
+        style.BorderTop = BorderStyle.Thin;
+        style.BorderBottom = BorderStyle.Medium;
+        style.BorderLeft = BorderStyle.Dashed;
+        style.BorderRight = BorderStyle.Double;
+        style.Alignment = HorizontalAlignment.Center;
+        style.VerticalAlignment = VerticalAlignment.Center;
+        style.WrapText = true;
+        style.Indention = 4;
+        style.DataFormat = workbook.CreateDataFormat().GetFormat("0.00");
+        if (style is XSSFCellStyle xssfStyle)
+        {
+            xssfStyle.SetFillForegroundColor(new XSSFColor(new byte[] { 17, 34, 51 }, null));
+            xssfStyle.SetFillBackgroundColor(new XSSFColor(new byte[] { 68, 85, 102 }, null));
+        }
+        return style;
+    }
+
+    private static void AssertResetStyle(ICellStyle style, ICell cell)
+    {
+        var font = cell.Sheet.Workbook.GetFontAt(style.FontIndex);
+        var defaultFont = cell.Sheet.Workbook.GetFontAt(0);
+        Assert.Equal(FillPattern.NoFill, style.FillPattern);
+        Assert.Equal(BorderStyle.None, style.BorderTop);
+        Assert.Equal(BorderStyle.None, style.BorderBottom);
+        Assert.Equal(BorderStyle.None, style.BorderLeft);
+        Assert.Equal(BorderStyle.None, style.BorderRight);
+        Assert.Equal(HorizontalAlignment.General, style.Alignment);
+        Assert.Equal(VerticalAlignment.Bottom, style.VerticalAlignment);
+        Assert.False(style.WrapText);
+        Assert.Equal(0, style.Indention);
+        Assert.Equal("General", style.GetDataFormatString());
+        Assert.Equal(defaultFont.FontName, font.FontName);
+        Assert.Equal(defaultFont.FontHeightInPoints, font.FontHeightInPoints);
+        Assert.Equal(defaultFont.Color, font.Color);
+        Assert.Equal(defaultFont.IsBold, font.IsBold);
+        Assert.Equal(defaultFont.IsItalic, font.IsItalic);
+        Assert.Equal(defaultFont.Underline, font.Underline);
+        if (style is XSSFCellStyle xssfStyle)
+        {
+            Assert.Null(xssfStyle.FillForegroundColorColor);
+            Assert.Null(xssfStyle.FillBackgroundColorColor);
+        }
+        else
+        {
+            Assert.Equal(IndexedColors.Automatic.Index, style.FillForegroundColor);
+            Assert.Equal(IndexedColors.Automatic.Index, style.FillBackgroundColor);
+        }
+    }
+
     private sealed class ExportOrder
     {
         public string OrderNo { get; set; }
@@ -1495,6 +2090,23 @@ public sealed class ExcelWorkbookRequestTest
     private sealed class ExportCustomer
     {
         public string Name { get; set; }
+    }
+
+    [Header(FontName = "Arial", FontSize = 11, Bold = false, Color = Color.Blue)]
+    private sealed class HeaderStyleOrder
+    {
+        public string A { get; set; }
+        public string B { get; set; }
+        public string C { get; set; }
+        public string D { get; set; }
+        public string E { get; set; }
+        public string F { get; set; }
+        public string G { get; set; }
+        public string H { get; set; }
+        public string I { get; set; }
+        public string J { get; set; }
+        public string K { get; set; }
+        public string L { get; set; }
     }
 
     private sealed class ChartRow

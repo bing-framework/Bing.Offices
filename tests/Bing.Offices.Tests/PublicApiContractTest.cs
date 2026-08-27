@@ -98,6 +98,7 @@ public class PublicApiContractTest
             "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelImportErrorCode",
             "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelImportFailureOptions",
             "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelImportFailureWorkbookMode",
+            "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelImportCommentConflictPolicy",
             "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelImportValidationMode",
             "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelImageMultiplicityPolicy",
             "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelImageData",
@@ -131,6 +132,7 @@ public class PublicApiContractTest
             "Bing.Offices.Abstractions:Bing.Offices.Styles.ExcelBorderLineStyle",
             "Bing.Offices.Abstractions:Bing.Offices.Styles.ExcelBorderStyle",
             "Bing.Offices.Abstractions:Bing.Offices.Styles.ExcelCellStyle",
+            "Bing.Offices.Abstractions:Bing.Offices.Styles.ExcelCellStyleReset",
             "Bing.Offices.Abstractions:Bing.Offices.Styles.ExcelColor",
             "Bing.Offices.Abstractions:Bing.Offices.Styles.ExcelFillPattern",
             "Bing.Offices.Abstractions:Bing.Offices.Styles.ExcelHorizontalAlignment",
@@ -354,7 +356,7 @@ public class PublicApiContractTest
         // Arrange
         var expected = new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["Bing.Offices.Abstractions"] = "8EFC3DFC1FD0F4324C05E67206A55F60FF22A8C1EE86BF3CBFA30A0F78E39F81",
+            ["Bing.Offices.Abstractions"] = "A468F8FA4B681EB059F52A6004AC0480259BD8949C252F279071659B9193758B",
             ["Bing.Offices.Core"] = "40A788EE5B49AF9599942AB68DA946D924FF6062257F1831B5AEBCAA26D760BE",
             ["Bing.Offices.Npoi"] = "A0DBE9808D82547601429D8958C7ED283467031A3763EB9037B19D03F19D80BD"
         };

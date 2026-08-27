@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using Bing.Offices.Attributes;
 using Bing.Offices.Styles;
 using NPOI.SS.UserModel;
 using NPOI.XSSF.Model;
@@ -35,11 +36,22 @@ internal static class NpoiStyleCache
         return Caches.GetValue(workbook, _ => new Cache()).Compose(workbook, baseStyle, overlay);
     }
 
+    /// <summary>
+    /// 使用 Workbook 级缓存应用实体表头字体，避免按单元格重复创建样式和字体。
+    /// </summary>
+    internal static ICellStyle ApplyHeaderAttribute(IWorkbook workbook, ICellStyle baseStyle,
+        HeaderAttribute attribute)
+    {
+        return Caches.GetValue(workbook, _ => new Cache())
+            .ApplyHeaderAttribute(workbook, baseStyle, attribute);
+    }
+
     private sealed class Cache
     {
         private readonly Dictionary<string, ICellStyle> _styles = new Dictionary<string, ICellStyle>(StringComparer.Ordinal);
         private readonly Dictionary<string, ICellStyle> _composedStyles = new Dictionary<string, ICellStyle>(StringComparer.Ordinal);
         private readonly Dictionary<string, IFont> _fonts = new Dictionary<string, IFont>(StringComparer.Ordinal);
+        private readonly Dictionary<string, ICellStyle> _headerStyles = new Dictionary<string, ICellStyle>(StringComparer.Ordinal);
 
         internal ICellStyle GetOrCreate(IWorkbook workbook, ExcelCellStyle definition)
         {
@@ -70,6 +82,39 @@ internal static class NpoiStyleCache
             }
         }
 
+        internal ICellStyle ApplyHeaderAttribute(IWorkbook workbook, ICellStyle baseStyle,
+            HeaderAttribute attribute)
+        {
+            var fontKey = string.Join("|", baseStyle.FontIndex, attribute.FontName, attribute.FontSize,
+                attribute.Bold, attribute.Color);
+            IFont font;
+            lock (_fonts)
+            {
+                if (!_fonts.TryGetValue(fontKey, out font))
+                {
+                    font = workbook.CreateFont();
+                    font.CloneStyleFrom(workbook.GetFontAt(baseStyle.FontIndex));
+                    font.FontName = attribute.FontName;
+                    font.Color = Resolvers.ColorResolver.Resolve(attribute.Color);
+                    font.FontHeightInPoints = attribute.FontSize;
+                    font.IsBold = attribute.Bold;
+                    _fonts.Add(fontKey, font);
+                }
+            }
+
+            var styleKey = string.Join("|", baseStyle.Index, fontKey);
+            lock (_headerStyles)
+            {
+                if (_headerStyles.TryGetValue(styleKey, out var style))
+                    return style;
+                style = workbook.CreateCellStyle();
+                style.CloneStyleFrom(baseStyle);
+                style.SetFont(font);
+                _headerStyles.Add(styleKey, style);
+                return style;
+            }
+        }
+
         private void ApplyStyle(IWorkbook workbook, ICellStyle style, ExcelCellStyle definition)
         {
             ApplyStyle(workbook, style, definition, false);
@@ -77,13 +122,18 @@ internal static class NpoiStyleCache
 
         private void ApplyStyle(IWorkbook workbook, ICellStyle style, ExcelCellStyle definition, bool overlay)
         {
+            var reset = definition.Reset;
             var hasFontDefinition = !string.IsNullOrWhiteSpace(definition.FontName)
                 || definition.FontSize.HasValue || definition.Bold.HasValue || definition.Italic.HasValue
-                || definition.Underline.HasValue || definition.FontColor != null;
+                || definition.Underline.HasValue || definition.FontColor != null
+                || reset?.FontName == true || reset?.FontSize == true || reset?.Bold == true
+                || reset?.Italic == true || reset?.Underline == true || reset?.FontColor == true;
             if (!overlay || hasFontDefinition)
             {
                 var fontKey = string.Join("|", definition.FontName, definition.FontSize, definition.Bold,
                     definition.Italic, definition.Underline, definition.FontColor?.Argb,
+                    reset?.FontName, reset?.FontSize, reset?.Bold, reset?.Italic, reset?.Underline,
+                    reset?.FontColor,
                     overlay ? style.FontIndex.ToString() : string.Empty);
                 lock (_fonts)
                 {
@@ -92,6 +142,17 @@ internal static class NpoiStyleCache
                         font = workbook.CreateFont();
                         if (overlay)
                             font.CloneStyleFrom(workbook.GetFontAt(style.FontIndex));
+                        var defaultFont = workbook.GetFontAt(0);
+                        if (reset?.FontName == true)
+                            font.FontName = defaultFont.FontName;
+                        if (reset?.FontSize == true)
+                            font.FontHeightInPoints = defaultFont.FontHeightInPoints;
+                        if (reset?.Bold == true)
+                            font.IsBold = defaultFont.IsBold;
+                        if (reset?.Italic == true)
+                            font.IsItalic = defaultFont.IsItalic;
+                        if (reset?.Underline == true)
+                            font.Underline = defaultFont.Underline;
                         if (!string.IsNullOrWhiteSpace(definition.FontName))
                             font.FontName = definition.FontName;
                         if (definition.FontSize.HasValue)
@@ -104,31 +165,57 @@ internal static class NpoiStyleCache
                             font.Underline = definition.Underline.Value
                                 ? FontUnderlineType.Single
                                 : FontUnderlineType.None;
-                        ApplyFontColor(workbook, font, definition.FontColor);
+                        if (reset?.FontColor == true)
+                            font.Color = defaultFont.Color;
+                        else
+                            ApplyFontColor(workbook, font, definition.FontColor);
                         _fonts.Add(fontKey, font);
                     }
                     style.SetFont(font);
                 }
             }
 
-            if (definition.FillPattern != ExcelFillPattern.None)
+            if (!overlay || definition.FillPattern != ExcelFillPattern.None || reset?.FillPattern == true)
             {
-                style.FillPattern = ToFillPattern(definition.FillPattern);
-                ApplyFillColor(workbook, style, definition.ForegroundColor ?? definition.BackgroundColor);
+                style.FillPattern = reset?.FillPattern == true ? FillPattern.NoFill : ToFillPattern(definition.FillPattern);
             }
+            if (reset?.ForegroundColor == true)
+                ApplyFillColor(workbook, style, null, true);
+            else if (definition.ForegroundColor != null)
+                ApplyFillColor(workbook, style, definition.ForegroundColor, true);
+            if (reset?.BackgroundColor == true)
+                ApplyFillColor(workbook, style, null, false);
+            else if (definition.BackgroundColor != null)
+                ApplyFillColor(workbook, style, definition.BackgroundColor, false);
+            if (reset?.TopBorder == true)
+                style.BorderTop = BorderStyle.None;
+            if (reset?.BottomBorder == true)
+                style.BorderBottom = BorderStyle.None;
+            if (reset?.LeftBorder == true)
+                style.BorderLeft = BorderStyle.None;
+            if (reset?.RightBorder == true)
+                style.BorderRight = BorderStyle.None;
             ApplyBorder(workbook, style, BorderSide.Top, definition.TopBorder);
             ApplyBorder(workbook, style, BorderSide.Bottom, definition.BottomBorder);
             ApplyBorder(workbook, style, BorderSide.Left, definition.LeftBorder);
             ApplyBorder(workbook, style, BorderSide.Right, definition.RightBorder);
-            if (!overlay || definition.HorizontalAlignment != ExcelHorizontalAlignment.General)
+            if (!overlay || definition.HorizontalAlignment != ExcelHorizontalAlignment.General
+                || reset?.HorizontalAlignment == true)
                 style.Alignment = ToHorizontalAlignment(definition.HorizontalAlignment);
-            if (!overlay || definition.VerticalAlignment != ExcelVerticalAlignment.Bottom)
+            if (!overlay || definition.VerticalAlignment != ExcelVerticalAlignment.Bottom
+                || reset?.VerticalAlignment == true)
                 style.VerticalAlignment = ToVerticalAlignment(definition.VerticalAlignment);
-            if (definition.WrapText.HasValue)
+            if (reset?.WrapText == true)
+                style.WrapText = false;
+            else if (definition.WrapText.HasValue)
                 style.WrapText = definition.WrapText.Value;
-            if (definition.Indent.HasValue)
+            if (reset?.Indent == true)
+                style.Indention = 0;
+            else if (definition.Indent.HasValue)
                 style.Indention = definition.Indent.Value;
-            if (!string.IsNullOrWhiteSpace(definition.NumberFormat))
+            if (reset?.NumberFormat == true)
+                style.DataFormat = workbook.CreateDataFormat().GetFormat("General");
+            else if (!string.IsNullOrWhiteSpace(definition.NumberFormat))
                 style.DataFormat = workbook.CreateDataFormat().GetFormat(definition.NumberFormat);
         }
 
@@ -144,16 +231,25 @@ internal static class NpoiStyleCache
             font.Color = ResolveHssfColor(color.Argb);
         }
 
-        private static void ApplyFillColor(IWorkbook workbook, ICellStyle style, ExcelColor color)
+        private static void ApplyFillColor(IWorkbook workbook, ICellStyle style, ExcelColor color, bool foreground)
         {
-            if (color == null)
-                return;
             if (style is XSSFCellStyle xssfStyle)
             {
-                xssfStyle.SetFillForegroundColor(new XSSFColor(ParseRgb(color.Argb), null));
+                if (foreground)
+                    xssfStyle.FillForegroundColorColor = color == null
+                        ? null
+                        : new XSSFColor(ParseRgb(color.Argb), null);
+                else
+                    xssfStyle.FillBackgroundColorColor = color == null
+                        ? null
+                        : new XSSFColor(ParseRgb(color.Argb), null);
                 return;
             }
-            style.FillForegroundColor = ResolveHssfColor(color.Argb);
+            var indexedColor = color == null ? IndexedColors.Automatic.Index : ResolveHssfColor(color.Argb);
+            if (foreground)
+                style.FillForegroundColor = indexedColor;
+            else
+                style.FillBackgroundColor = indexedColor;
         }
 
         private static byte[] ParseRgb(string value)
@@ -168,24 +264,71 @@ internal static class NpoiStyleCache
             if (border == null)
                 return;
             var lineStyle = ToBorderStyle(border.LineStyle);
-            var color = ResolveHssfColor(border.Color?.Argb);
+            var indexedColor = style is XSSFCellStyle ? IndexedColors.Automatic.Index
+                : ResolveHssfColor(border.Color?.Argb);
             switch (side)
             {
                 case BorderSide.Top:
                     style.BorderTop = lineStyle;
-                    style.TopBorderColor = color;
+                    SetBorderColor(style, side, border.Color, indexedColor);
                     break;
                 case BorderSide.Bottom:
                     style.BorderBottom = lineStyle;
-                    style.BottomBorderColor = color;
+                    SetBorderColor(style, side, border.Color, indexedColor);
                     break;
                 case BorderSide.Left:
                     style.BorderLeft = lineStyle;
-                    style.LeftBorderColor = color;
+                    SetBorderColor(style, side, border.Color, indexedColor);
                     break;
                 default:
                     style.BorderRight = lineStyle;
-                    style.RightBorderColor = color;
+                    SetBorderColor(style, side, border.Color, indexedColor);
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// 按 Workbook 格式写入边框颜色，XSSF 使用完整 RGB，HSSF 使用索引色板。
+        /// </summary>
+        /// <param name="style">目标单元格样式。</param>
+        /// <param name="side">边框方向。</param>
+        /// <param name="color">provider-neutral 颜色。</param>
+        /// <param name="indexedColor">HSSF 索引颜色。</param>
+        private static void SetBorderColor(ICellStyle style, BorderSide side, ExcelColor color, short indexedColor)
+        {
+            if (style is XSSFCellStyle xssfStyle && color != null)
+            {
+                var xssfColor = new XSSFColor(ParseRgb(color.Argb), null);
+                switch (side)
+                {
+                    case BorderSide.Top:
+                        xssfStyle.SetTopBorderColor(xssfColor);
+                        break;
+                    case BorderSide.Bottom:
+                        xssfStyle.SetBottomBorderColor(xssfColor);
+                        break;
+                    case BorderSide.Left:
+                        xssfStyle.SetLeftBorderColor(xssfColor);
+                        break;
+                    default:
+                        xssfStyle.SetRightBorderColor(xssfColor);
+                        break;
+                }
+                return;
+            }
+            switch (side)
+            {
+                case BorderSide.Top:
+                    style.TopBorderColor = indexedColor;
+                    break;
+                case BorderSide.Bottom:
+                    style.BottomBorderColor = indexedColor;
+                    break;
+                case BorderSide.Left:
+                    style.LeftBorderColor = indexedColor;
+                    break;
+                default:
+                    style.RightBorderColor = indexedColor;
                     break;
             }
         }
@@ -267,7 +410,12 @@ internal static class NpoiStyleCache
             style.TopBorder?.Color?.Argb, style.BottomBorder?.LineStyle, style.BottomBorder?.Color?.Argb,
             style.LeftBorder?.LineStyle, style.LeftBorder?.Color?.Argb, style.RightBorder?.LineStyle,
             style.RightBorder?.Color?.Argb, style.HorizontalAlignment, style.VerticalAlignment, style.WrapText,
-            style.Indent, style.NumberFormat);
+            style.Indent, style.NumberFormat, style.Reset?.FontName, style.Reset?.FontSize,
+            style.Reset?.Bold, style.Reset?.Italic, style.Reset?.Underline, style.Reset?.FontColor,
+            style.Reset?.ForegroundColor, style.Reset?.BackgroundColor, style.Reset?.FillPattern,
+            style.Reset?.TopBorder, style.Reset?.BottomBorder, style.Reset?.LeftBorder, style.Reset?.RightBorder,
+            style.Reset?.HorizontalAlignment, style.Reset?.VerticalAlignment, style.Reset?.WrapText,
+            style.Reset?.Indent, style.Reset?.NumberFormat);
     }
 
     private enum BorderSide

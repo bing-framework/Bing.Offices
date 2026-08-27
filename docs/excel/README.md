@@ -20,7 +20,13 @@ var request = ExcelExport.Workbook(workbook =>
 exporter.Export(request, stream);
 ```
 
-详细设计见 `ai_docs/excel/00-overview.md` 至 `08-validation.md`。
+按主题阅读：
+
+- [mapping-profile.md](mapping-profile.md)：Profile 与映射优先级
+- [mapping-json-xml.md](mapping-json-xml.md)：JSON/XML 映射文档
+- [import-validation.md](import-validation.md)：Workbook 原生校验、配置校验和错误收集
+- [dynamic-columns.md](dynamic-columns.md)：动态列与物理布局
+- [nuget-migration.md](nuget-migration.md)：包身份、当前兼容边界和迁移注意事项
 
 迁移与使用：
 

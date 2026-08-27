@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using Bing.Offices.Conversions;
 using Bing.Offices.Imports;
+using NPOI.HSSF.UserModel;
 using NPOI.SS.UserModel;
 
 namespace Bing.Offices.Npoi.Imports;
@@ -29,7 +30,7 @@ internal static class NpoiWorkbookValidationPipeline
             var value = NpoiExcelImporter.NormalizeText(cellValue.Text, bodyWhitespace);
             foreach (var validation in validationIndex.Get(rowIndex, column.Key))
             {
-                if (ValidateValue(validation.ValidationConstraint, cellValue, value, sheet, out var message))
+                if (ValidateValue(validation, cellValue, value, sheet, out var message))
                     continue;
                 errors.Add(new ExcelImportError(ExcelImportErrorCode.WorkbookValidation, message, sheetName,
                     rowIndex + 1, column.Key + 1, column.Value.Property.Name, column.Value.DynamicDefinition?.Key
@@ -46,15 +47,26 @@ internal static class NpoiWorkbookValidationPipeline
         return valid;
     }
 
-    private static bool ValidateValue(IDataValidationConstraint constraint, ExcelCellValue cellValue,
+    private static bool ValidateValue(IDataValidation validation, ExcelCellValue cellValue,
         string value, ISheet sheet, out string message)
     {
+        var constraint = validation.ValidationConstraint;
         value ??= string.Empty;
         var type = constraint.GetValidationType();
         if (type == NPOI.SS.UserModel.ValidationType.ANY)
         {
             message = null;
             return true;
+        }
+        if (value.Length == 0)
+        {
+            if (validation.EmptyCellAllowed)
+            {
+                message = null;
+                return true;
+            }
+            message = "不允许 Workbook 校验目标为空。";
+            return false;
         }
         if (type == NPOI.SS.UserModel.ValidationType.LIST)
         {
@@ -70,10 +82,10 @@ internal static class NpoiWorkbookValidationPipeline
         }
         if (type == NPOI.SS.UserModel.ValidationType.TEXT_LENGTH)
         {
-            if (!decimal.TryParse(constraint.Formula1, NumberStyles.Float, CultureInfo.InvariantCulture,
+            if (!decimal.TryParse(GetFormula1(constraint), NumberStyles.Float, CultureInfo.InvariantCulture,
                     out var first))
                 return Unsupported(out message);
-            var secondParsed = decimal.TryParse(constraint.Formula2, NumberStyles.Float,
+            var secondParsed = decimal.TryParse(GetFormula2(constraint), NumberStyles.Float,
                 CultureInfo.InvariantCulture, out var second);
             var valid = Compare(value.Length, first, second, secondParsed, constraint.Operator);
             message = valid ? null : "不符合 Workbook 文本长度校验。";
@@ -83,9 +95,9 @@ internal static class NpoiWorkbookValidationPipeline
         {
             var parsed = decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture,
                 out var number);
-            var firstParsed = decimal.TryParse(constraint.Formula1, NumberStyles.Number,
+            var firstParsed = decimal.TryParse(GetFormula1(constraint), NumberStyles.Number,
                 CultureInfo.InvariantCulture, out var first);
-            var secondParsed = decimal.TryParse(constraint.Formula2, NumberStyles.Number,
+            var secondParsed = decimal.TryParse(GetFormula2(constraint), NumberStyles.Number,
                 CultureInfo.InvariantCulture, out var second);
             var valid = parsed && firstParsed && Compare(number, first, second, secondParsed,
                 constraint.Operator);
@@ -95,9 +107,9 @@ internal static class NpoiWorkbookValidationPipeline
         if (type == NPOI.SS.UserModel.ValidationType.DATE || type == NPOI.SS.UserModel.ValidationType.TIME)
         {
             var parsed = TryGetExcelDate(cellValue, value, type == NPOI.SS.UserModel.ValidationType.TIME, out var date);
-            var first = TryGetExcelDate(constraint.Formula1, type == NPOI.SS.UserModel.ValidationType.TIME,
+            var first = TryGetExcelDate(GetFormula1(constraint), type == NPOI.SS.UserModel.ValidationType.TIME,
                 out var minimum);
-            var second = TryGetExcelDate(constraint.Formula2, type == NPOI.SS.UserModel.ValidationType.TIME,
+            var second = TryGetExcelDate(GetFormula2(constraint), type == NPOI.SS.UserModel.ValidationType.TIME,
                 out var maximum);
             var valid = parsed && first && Compare(date, minimum, maximum, second, constraint.Operator);
             message = valid ? null : "不符合 Workbook 日期/时间校验。";
@@ -138,6 +150,26 @@ internal static class NpoiWorkbookValidationPipeline
             return false;
         values = SplitExplicitList(formula.Trim('\"'));
         return values.Length > 0;
+    }
+
+    private static string GetFormula1(IDataValidationConstraint constraint)
+    {
+        if (!string.IsNullOrWhiteSpace(constraint.Formula1))
+            return constraint.Formula1;
+        var hssfConstraint = constraint as DVConstraint;
+        return hssfConstraint == null
+            ? null
+            : hssfConstraint.Value1.ToString(CultureInfo.InvariantCulture);
+    }
+
+    private static string GetFormula2(IDataValidationConstraint constraint)
+    {
+        if (!string.IsNullOrWhiteSpace(constraint.Formula2))
+            return constraint.Formula2;
+        var hssfConstraint = constraint as DVConstraint;
+        return hssfConstraint == null
+            ? null
+            : hssfConstraint.Value2.ToString(CultureInfo.InvariantCulture);
     }
 
     private static bool TryGetCellRangeValues(string formula, ISheet currentSheet, out string[] values)
@@ -208,7 +240,8 @@ internal static class NpoiWorkbookValidationPipeline
         }
         if (decimal.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var serial))
         {
-            ticks = ExcelSerialToDateTime((double)serial, timeOnly).Ticks;
+            var converted = ExcelSerialToDateTime((double)serial, timeOnly);
+            ticks = timeOnly ? converted.TimeOfDay.Ticks : converted.Ticks;
             return true;
         }
         ticks = 0;
@@ -221,29 +254,47 @@ internal static class NpoiWorkbookValidationPipeline
         return timeOnly ? DateTime.Today.Add(date.TimeOfDay) : date;
     }
 
+    private const int BetweenOperator = OperatorBetween;
+    private const int NotBetweenOperator = OperatorNotBetween;
+    private const int EqualOperator = OperatorEqual;
+    private const int NotEqualOperator = OperatorNotEqual;
+    private const int GreaterThanOperator = OperatorGreaterThan;
+    private const int LessThanOperator = OperatorLessThan;
+    private const int GreaterThanOrEqualOperator = OperatorGreaterThanOrEqual;
+    private const int LessThanOrEqualOperator = OperatorLessThanOrEqual;
+
+    private const int OperatorBetween = OperatorType.BETWEEN;
+    private const int OperatorNotBetween = OperatorType.NOT_BETWEEN;
+    private const int OperatorEqual = OperatorType.EQUAL;
+    private const int OperatorNotEqual = OperatorType.NOT_EQUAL;
+    private const int OperatorGreaterThan = OperatorType.GREATER_THAN;
+    private const int OperatorLessThan = OperatorType.LESS_THAN;
+    private const int OperatorGreaterThanOrEqual = OperatorType.GREATER_OR_EQUAL;
+    private const int OperatorLessThanOrEqual = OperatorType.LESS_OR_EQUAL;
+
     private static bool Compare(long value, long first, long second, bool secondParsed, int operation) => operation switch
     {
-        0 => secondParsed && value >= first && value <= second,
-        1 => secondParsed && (value < first || value > second),
-        2 => value == first,
-        3 => value != first,
-        4 => value > first,
-        5 => value < first,
-        6 => value >= first,
-        7 => secondParsed && value <= second,
+        BetweenOperator => secondParsed && value >= first && value <= second,
+        NotBetweenOperator => secondParsed && (value < first || value > second),
+        EqualOperator => value == first,
+        NotEqualOperator => value != first,
+        GreaterThanOperator => value > first,
+        LessThanOperator => value < first,
+        GreaterThanOrEqualOperator => value >= first,
+        LessThanOrEqualOperator => value <= first,
         _ => false,
     };
 
     private static bool Compare(decimal value, decimal first, decimal second, bool secondParsed, int operation) => operation switch
     {
-        0 => secondParsed && value >= first && value <= second,
-        1 => secondParsed && (value < first || value > second),
-        2 => value == first,
-        3 => value != first,
-        4 => value > first,
-        5 => value < first,
-        6 => value >= first,
-        7 => secondParsed && value <= second,
+        BetweenOperator => secondParsed && value >= first && value <= second,
+        NotBetweenOperator => secondParsed && (value < first || value > second),
+        EqualOperator => value == first,
+        NotEqualOperator => value != first,
+        GreaterThanOperator => value > first,
+        LessThanOperator => value < first,
+        GreaterThanOrEqualOperator => value >= first,
+        LessThanOrEqualOperator => value <= first,
         _ => false
     };
 

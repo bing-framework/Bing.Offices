@@ -123,6 +123,21 @@ public enum ExcelImportFailureWorkbookMode
 }
 
 /// <summary>
+/// 导入失败批注与原有批注冲突时的处理策略。
+/// </summary>
+public enum ExcelImportCommentConflictPolicy
+{
+    /// <summary>保留已有批注，不追加失败信息。</summary>
+    Preserve,
+    /// <summary>在已有批注后追加失败信息。</summary>
+    Append,
+    /// <summary>用失败信息替换已有批注。</summary>
+    Replace,
+    /// <summary>存在已有批注时直接失败。</summary>
+    Fail
+}
+
+/// <summary>
 /// 导入规则来源组合策略。
 /// </summary>
 public enum ExcelImportValidationMode
@@ -230,6 +245,10 @@ public sealed class ExcelImportFailureOptions
     /// <summary>失败工作簿最大字节数。</summary>
     public long? MaxBytes { get; init; }
 
+    /// <summary>AnnotatedOriginal 模式下的批注冲突策略，默认追加失败信息。</summary>
+    public ExcelImportCommentConflictPolicy CommentConflictPolicy { get; init; } =
+        ExcelImportCommentConflictPolicy.Append;
+
     /// <summary>验证失败输出配置。</summary>
     public void Validate()
     {
@@ -239,5 +258,7 @@ public sealed class ExcelImportFailureOptions
             throw new ArgumentException("启用失败工作簿输出时必须提供目标流。", nameof(Destination));
         if (Destination != null && !Destination.CanWrite)
             throw new ArgumentException("失败工作簿目标流不可写入。", nameof(Destination));
+        if (!Enum.IsDefined(typeof(ExcelImportCommentConflictPolicy), CommentConflictPolicy))
+            throw new ArgumentOutOfRangeException(nameof(CommentConflictPolicy));
     }
 }

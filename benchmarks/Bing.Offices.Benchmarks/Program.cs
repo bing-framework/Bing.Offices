@@ -28,15 +28,24 @@ public static class Program
             return;
         }
         BenchmarkSwitcher.FromTypes(
-            new[] { typeof(StreamPipelineBenchmarks), typeof(MappingValidationBenchmarks) }).Run(args);
+            new[]
+            {
+                typeof(StreamPipelineBenchmarks),
+                typeof(FailureWorkbookBenchmarks),
+                typeof(HeaderStyleBenchmarks),
+                typeof(ValidationRangeBenchmarks),
+                typeof(MappingValidationBenchmarks),
+                typeof(DynamicPlanBenchmarks),
+                typeof(TenantPlanCacheBenchmarks),
+                typeof(RegexCacheBenchmarks),
+                typeof(UniqueJournalBenchmarks)
+            }).Run(args);
     }
 
     private static class ResourceProbe
     {
         private const long LohCeilingBytes = 512L * 1024 * 1024;
         private const long PeakWorkingSetCeilingBytes = 1024L * 1024 * 1024;
-        private const int LargeObjectBytes = 90 * 1024;
-
         public static void Run(string artifactPath)
         {
             var fullPath = Path.GetFullPath(artifactPath);
@@ -100,16 +109,14 @@ public static class Program
             }
             sampledLohPeakBytes = Math.Max(sampledLohPeakBytes, GetLohSizeBeforeBytes());
 
-            var payloadCount = Math.Max(1, uniqueRowCount / 1000) * uniqueColumnCount;
-            var payload = new List<byte[]>(payloadCount);
-            for (var index = 0; index < payloadCount; index++)
-                payload.Add(new byte[LargeObjectBytes]);
-            var payloadBytes = (long)payload.Count * LargeObjectBytes;
             var gcBefore = GetLohSizeBeforeBytes();
             sampledLohPeakBytes = Math.Max(sampledLohPeakBytes, gcBefore);
             GC.Collect(2, GCCollectionMode.Forced, true, false);
+            GC.KeepAlive(plans);
+            GC.KeepAlive(tracker);
+            GC.KeepAlive(values);
             var gcAfter = GC.GetGCMemoryInfo().GenerationInfo[3].SizeAfterBytes;
-            var lohRetainedBytes = Math.Max(payloadBytes, gcAfter);
+            var lohRetainedBytes = gcAfter;
             sampledLohPeakBytes = Math.Max(sampledLohPeakBytes, lohRetainedBytes);
             var peakWorkingSetBytes = Process.GetCurrentProcess().PeakWorkingSet64;
             var passed = sampledLohPeakBytes <= LohCeilingBytes
@@ -126,8 +133,7 @@ public static class Program
                 uniqueRowCount,
                 tenantPlanCount = tenantCount,
                 planBuildCountAfterTenantWarmup = planBuildCount,
-                payloadCount,
-                payloadBytes,
+                workload = "mapping-plan-and-unique-tracker",
                 gcLohSizeBeforeBytes = gcBefore,
                 gcLohSizeAfterBytes = gcAfter,
                 lohSampledPeakBytes = sampledLohPeakBytes,
@@ -140,8 +146,6 @@ public static class Program
                 exitCode = passed ? 0 : 1
             };
             Console.WriteLine(JsonSerializer.Serialize(result));
-            GC.KeepAlive(plans);
-            GC.KeepAlive(payload);
             Environment.ExitCode = passed ? 0 : 1;
         }
 

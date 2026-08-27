@@ -277,12 +277,13 @@ internal sealed class NpoiExcelImporter : IExcelImporter
         if (runtime.RowLimitReached)
             return;
         IReadOnlyDictionary<(int Row, int Column), IReadOnlyList<PictureInfo>> imageIndex = null;
+        HashSet<int> imageRows = null;
         if (columns.Values.Any(NpoiImportRowMaterializer.IsImageColumn))
         {
             try
             {
                 imageIndex = NpoiImportRowMaterializer.BuildImageIndex(sheet, runtime.ImageResources,
-                    cancellationToken);
+                    cancellationToken, out imageRows);
             }
             catch (ImageResourceLimitException exception)
             {
@@ -317,7 +318,7 @@ internal sealed class NpoiExcelImporter : IExcelImporter
                 break;
             }
             var row = sheet.GetRow(rowIndex);
-            if (NpoiImportRowMaterializer.IsEmpty(row, options.BodyWhitespace, imageIndex, rowIndex))
+            if (NpoiImportRowMaterializer.IsEmpty(row, options.BodyWhitespace, imageRows, rowIndex))
             {
                 if (options.IgnoreEmptyLineAfterData)
                     break;

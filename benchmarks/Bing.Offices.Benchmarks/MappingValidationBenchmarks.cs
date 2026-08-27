@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Bing.Offices.Configurations;
+using Bing.Offices.Attributes;
 using Bing.Offices.Mappings;
 using Bing.Offices.Providers;
 using Bing.Offices.Validations;
@@ -33,22 +34,6 @@ public class MappingValidationBenchmarks
     private ExcelMappingConfiguration _multiRuleConfiguration = null!;
     private ExcelMappingConfiguration _profileConfiguration = null!;
     private JsonSerializerOptions _cacheKeySerializerOptions = null!;
-
-    /// <summary>动态计划构建次数。</summary>
-    [Params(100, 500)]
-    public int PlanBuildCount { get; set; }
-
-    /// <summary>租户缓存大小。</summary>
-    [Params(100, 1000)]
-    public int TenantCount { get; set; }
-
-    /// <summary>唯一列数量。</summary>
-    [Params(1, 5)]
-    public int UniqueColumnCount { get; set; }
-
-    /// <summary>唯一值行数。</summary>
-    [Params(10000, 100000)]
-    public int UniqueRowCount { get; set; }
 
     /// <summary>
     /// 初始化矩阵输入。
@@ -98,54 +83,6 @@ public class MappingValidationBenchmarks
         };
     }
 
-    /// <summary>测量重复构建固定方向计划。</summary>
-    [Benchmark]
-    public int DynamicPlanBuildCold()
-    {
-        var count = 0;
-        for (var index = 0; index < PlanBuildCount; index++)
-        {
-            var factory = CreatePlanFactory();
-            count += factory.Create<BenchmarkRow>(CreateDynamicDocument(index), MappingDirection.Import).Columns.Count;
-        }
-        return count;
-    }
-
-    /// <summary>测量相同配置命中计划缓存时的构建开销。</summary>
-    [Benchmark]
-    public int DynamicPlanBuildCacheHit()
-    {
-        var document = CreateDynamicDocument(0);
-        var count = _planFactory.Create<BenchmarkRow>(document, MappingDirection.Import).Columns.Count;
-        for (var index = 1; index < PlanBuildCount; index++)
-            count += _planFactory.Create<BenchmarkRow>(CreateDynamicDocument(0), MappingDirection.Import).Columns.Count;
-        return count;
-    }
-
-    /// <summary>测量每次配置变化导致计划缓存未命中时的构建开销。</summary>
-    [Benchmark]
-    public int DynamicPlanBuildCacheMiss()
-    {
-        var count = 0;
-        for (var index = 0; index < PlanBuildCount; index++)
-            count += CreatePlan(index, true).Columns.Count;
-        return count;
-    }
-
-    /// <summary>测量租户、模型、方向和配置版本组成的缓存键隔离。</summary>
-    [Benchmark]
-    public int TenantPlanCache()
-    {
-        var factory = new ExcelMappingPlanFactory(cacheCapacity: TenantCount);
-        var count = 0;
-        for (var index = 0; index < TenantCount; index++)
-        {
-            var document = CreateTenantDocument(index);
-            count += factory.Create<BenchmarkRow>(document, MappingDirection.Import).Columns.Count;
-        }
-        return count;
-    }
-
     /// <summary>测量 JSON v2 配置解析。</summary>
     [Benchmark]
     public int ParseJsonV2() => ExcelMappingConfigurationLoader.FromJsonDocument(_json).Import.Columns.Count;
@@ -167,27 +104,10 @@ public class MappingValidationBenchmarks
     /// <summary>测量 10K 命名规则配置的不可变计划构建。</summary>
     [Benchmark]
     public int MultiRulePlanBuild() => _planFactory.Create<BenchmarkRow>(
-        ExcelMappingDocumentFactory.Create<BenchmarkRow>(_multiRuleConfiguration, MappingDirection.Import),
-        MappingDirection.Import).Columns.Count;
-
-    /// <summary>
-    /// 测量生产有界计划缓存超过容量后的真实淘汰与重新构建开销。
-    /// </summary>
-    [Benchmark]
-    public int TenantPlanCacheEviction()
-    {
-        var capacity = Math.Max(1, TenantCount / 2);
-        var factory = new ExcelMappingPlanFactory(cacheCapacity: capacity);
-        var first = factory.Create<BenchmarkRow>(CreateTenantDocument(0), MappingDirection.Import);
-        var count = first.Columns.Count;
-        for (var index = 0; index < TenantCount; index++)
-            count += factory.Create<BenchmarkRow>(CreateTenantDocument(index), MappingDirection.Import).Columns.Count;
-        var rebuilt = factory.Create<BenchmarkRow>(CreateTenantDocument(0), MappingDirection.Import);
-        var evictedAndRebuilt = ReferenceEquals(first, rebuilt) ? 0 : 1;
-        Console.WriteLine($"CACHE_EVICTION observed={evictedAndRebuilt == 1} capacity={capacity} tenants={TenantCount}");
-        count += rebuilt.Columns.Count + evictedAndRebuilt;
-        return count;
-    }
+        new ExcelMappingDocument
+        {
+            Import = _multiRuleConfiguration
+        }, MappingDirection.Import).Columns.Count;
 
     /// <summary>测量旧式 JSON 字符串转 UTF-8 的缓存键序列化路径。</summary>
     [Benchmark]
@@ -224,43 +144,6 @@ public class MappingValidationBenchmarks
             Console.WriteLine($"RESOURCE_METRIC metric={metric} value={value} ceiling={ceiling} status=passed");
     }
 
-    private IExcelMappingPlan CreatePlan(int index, bool uniqueConfiguration)
-    {
-        var document = CreateDynamicDocument(uniqueConfiguration ? index : 0);
-        return _planFactory.Create<BenchmarkRow>(document, MappingDirection.Import);
-    }
-
-    private ExcelMappingPlanFactory CreatePlanFactory() => new(namedValidationRules:
-        Enumerable.Range(0, 10000)
-            .Select(index => (INamedExcelValidationRule)new BenchmarkNamedValidationRule($"rule-{index}"))
-            .ToArray());
-
-    private ExcelMappingDocument CreateDynamicDocument(int index) => new()
-    {
-        TenantId = $"tenant-{index}",
-        Import = new ExcelMappingConfiguration
-        {
-            Profile = "benchmarks",
-            Columns = _profileConfiguration.Columns
-        }
-    };
-
-    /// <summary>测量 Unique committed/pending journal 的线性插入。</summary>
-    [Benchmark]
-    public int UniqueJournal()
-    {
-        var values = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
-        var tracker = new UniqueTracker(values, UniqueRowCount * UniqueColumnCount);
-        for (var row = 0; row < UniqueRowCount; row++)
-        {
-            tracker.BeginRow();
-            for (var column = 0; column < UniqueColumnCount; column++)
-                tracker.TryReserve($"unique-{column}", $"value-{column}-{row}", false, false, row + 1);
-            tracker.CommitRow();
-        }
-        return tracker.TrackedValueCount;
-    }
-
     /// <summary>测量显式 Profile 注册解析。</summary>
     [Benchmark]
     public int ExplicitRegistration()
@@ -280,18 +163,6 @@ public class MappingValidationBenchmarks
         services.AddMappingProfiles(typeof(MappingValidationBenchmarks).Assembly);
         return services.Count;
     }
-
-    private ExcelMappingDocument CreateTenantDocument(int index) => new()
-    {
-        Version = _document.Version,
-        TenantId = $"tenant-{index}",
-        Import = new ExcelMappingConfiguration
-        {
-            Profile = _document.Import.Profile,
-            ModelAlias = _document.Import.ModelAlias
-        },
-        Export = _document.Export
-    };
 
     private object CreateCacheKeyPayload() => new
     {
@@ -323,5 +194,210 @@ public class MappingValidationBenchmarks
     {
         public string Code { get; set; } = string.Empty;
         public decimal Amount { get; set; }
+    }
+}
+
+/// <summary>
+/// 动态映射计划构建与缓存基准。
+/// </summary>
+[MemoryDiagnoser]
+[SimpleJob(launchCount: 1, warmupCount: 2, iterationCount: 3)]
+public class DynamicPlanBenchmarks
+{
+    [Params(100, 500)]
+    public int PlanBuildCount { get; set; }
+
+    private ExcelMappingPlanFactory _planFactory = null!;
+    private ExcelMappingConfiguration _profileConfiguration = null!;
+
+    [GlobalSetup]
+    public void Setup()
+    {
+        _planFactory = new ExcelMappingPlanFactory(namedValidationRules:
+            Enumerable.Range(0, 10000)
+                .Select(index => (INamedExcelValidationRule)new BenchmarkNamedValidationRule($"rule-{index}"))
+                .ToArray());
+        var profileBuilder = new ImportMappingBuilder<BenchmarkRow>();
+        profileBuilder.Property(row => row.Code).HasHeader("编码");
+        _profileConfiguration = profileBuilder.Build();
+    }
+
+    [Benchmark]
+    public int DynamicPlanBuildCold()
+    {
+        var count = 0;
+        for (var index = 0; index < PlanBuildCount; index++)
+        {
+            var factory = CreatePlanFactory();
+            count += factory.Create<BenchmarkRow>(CreateDynamicDocument(index), MappingDirection.Import).Columns.Count;
+        }
+        return count;
+    }
+
+    [Benchmark]
+    public int DynamicPlanBuildCacheHit()
+    {
+        var count = _planFactory.Create<BenchmarkRow>(CreateDynamicDocument(0), MappingDirection.Import).Columns.Count;
+        for (var index = 1; index < PlanBuildCount; index++)
+            count += _planFactory.Create<BenchmarkRow>(CreateDynamicDocument(0), MappingDirection.Import).Columns.Count;
+        return count;
+    }
+
+    [Benchmark]
+    public int DynamicPlanBuildCacheMiss()
+    {
+        var count = 0;
+        for (var index = 0; index < PlanBuildCount; index++)
+            count += _planFactory.Create<BenchmarkRow>(CreateDynamicDocument(index), MappingDirection.Import).Columns.Count;
+        return count;
+    }
+
+    private ExcelMappingPlanFactory CreatePlanFactory() => new(namedValidationRules:
+        Enumerable.Range(0, 10000)
+            .Select(index => (INamedExcelValidationRule)new BenchmarkNamedValidationRule($"rule-{index}"))
+            .ToArray());
+
+    private ExcelMappingDocument CreateDynamicDocument(int index) => new()
+    {
+        TenantId = $"tenant-{index}",
+        Import = new ExcelMappingConfiguration
+        {
+            Profile = "benchmarks",
+            Columns = _profileConfiguration.Columns
+        }
+    };
+
+    private sealed class BenchmarkNamedValidationRule : INamedExcelValidationRule
+    {
+        public BenchmarkNamedValidationRule(string name) => Name = name;
+        public string Name { get; }
+        public string ErrorMessage => "benchmark";
+        public bool Validate(ExcelValidationContext context) => true;
+    }
+
+    private sealed class BenchmarkRow
+    {
+        public string Code { get; set; } = string.Empty;
+    }
+}
+
+/// <summary>
+/// 租户映射计划缓存隔离与淘汰基准。
+/// </summary>
+[MemoryDiagnoser]
+[SimpleJob(launchCount: 1, warmupCount: 2, iterationCount: 3)]
+public class TenantPlanCacheBenchmarks
+{
+    [Params(100, 1000)]
+    public int TenantCount { get; set; }
+
+    private ExcelMappingDocument _document = null!;
+
+    [GlobalSetup]
+    public void Setup()
+    {
+        _document = new ExcelMappingDocument
+        {
+            Import = new ExcelMappingConfiguration { Profile = "benchmarks", ModelAlias = "benchmark-row" },
+            Export = new ExcelMappingConfiguration()
+        };
+    }
+
+    [Benchmark]
+    public int TenantPlanCache()
+    {
+        var factory = new ExcelMappingPlanFactory(cacheCapacity: TenantCount);
+        var count = 0;
+        for (var index = 0; index < TenantCount; index++)
+            count += factory.Create<BenchmarkRow>(CreateTenantDocument(index), MappingDirection.Import).Columns.Count;
+        return count;
+    }
+
+    [Benchmark]
+    public int TenantPlanCacheEviction()
+    {
+        var capacity = Math.Max(1, TenantCount / 2);
+        var factory = new ExcelMappingPlanFactory(cacheCapacity: capacity);
+        var first = factory.Create<BenchmarkRow>(CreateTenantDocument(0), MappingDirection.Import);
+        var count = first.Columns.Count;
+        for (var index = 0; index < TenantCount; index++)
+            count += factory.Create<BenchmarkRow>(CreateTenantDocument(index), MappingDirection.Import).Columns.Count;
+        var rebuilt = factory.Create<BenchmarkRow>(CreateTenantDocument(0), MappingDirection.Import);
+        var evictedAndRebuilt = ReferenceEquals(first, rebuilt) ? 0 : 1;
+        Console.WriteLine($"CACHE_EVICTION observed={evictedAndRebuilt == 1} capacity={capacity} tenants={TenantCount}");
+        return count + rebuilt.Columns.Count + evictedAndRebuilt;
+    }
+
+    private ExcelMappingDocument CreateTenantDocument(int index) => new()
+    {
+        Version = _document.Version,
+        TenantId = $"tenant-{index}",
+        Import = new ExcelMappingConfiguration
+        {
+            Profile = _document.Import.Profile,
+            ModelAlias = _document.Import.ModelAlias
+        },
+        Export = _document.Export
+    };
+
+    private sealed class BenchmarkRow
+    {
+        public string Code { get; set; } = string.Empty;
+    }
+}
+
+/// <summary>
+/// 有界 Regex 缓存命中基准。
+/// </summary>
+[MemoryDiagnoser]
+[SimpleJob(launchCount: 1, warmupCount: 2, iterationCount: 3)]
+public class RegexCacheBenchmarks
+{
+    private readonly ExcelValidationContext _context = new("CODE-123", "Sheet1", 2, 1, "Code");
+    private readonly ExcelRegexAttribute _attribute = new("^CODE-[0-9]+$");
+    private readonly RegexExcelValidationRule _rule = new();
+
+    /// <summary>
+    /// 测量重复命中有界 Regex 缓存的校验成本。
+    /// </summary>
+    [Benchmark]
+    public bool RegexCacheHit() => _rule.Validate(_attribute, _context);
+}
+
+/// <summary>
+/// Unique committed/pending journal 基准。
+/// </summary>
+[MemoryDiagnoser]
+[SimpleJob(launchCount: 1, warmupCount: 2, iterationCount: 3)]
+public class UniqueJournalBenchmarks
+{
+    /// <summary>
+    /// 唯一列数量。
+    /// </summary>
+    [Params(1, 5)]
+    public int UniqueColumnCount { get; set; }
+
+    /// <summary>
+    /// 唯一值行数。
+    /// </summary>
+    [Params(10000, 100000)]
+    public int UniqueRowCount { get; set; }
+
+    /// <summary>
+    /// 测量 Unique committed/pending journal 的线性插入。
+    /// </summary>
+    [Benchmark]
+    public int UniqueJournal()
+    {
+        var values = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+        var tracker = new UniqueTracker(values, UniqueRowCount * UniqueColumnCount);
+        for (var row = 0; row < UniqueRowCount; row++)
+        {
+            tracker.BeginRow();
+            for (var column = 0; column < UniqueColumnCount; column++)
+                tracker.TryReserve($"unique-{column}", $"value-{column}-{row}", false, false, row + 1);
+            tracker.CommitRow();
+        }
+        return tracker.TrackedValueCount;
     }
 }
