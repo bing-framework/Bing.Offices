@@ -21,20 +21,22 @@ internal static partial class SheetExtensions
     }
 
     /// <summary>
-    /// 获取工作表中包含合并区域的信息列表
+    /// 获取工作表中全部合并区域的信息列表；工作表没有合并区域时返回空列表。
     /// </summary>
     /// <param name="sheet">NPOI工作表</param>
+    /// <returns>按 NPOI 区域索引顺序排列的合并区域信息。</returns>
     public static List<MergedRegionInfo> GetMergedRegionInfos(this NPOI.SS.UserModel.ISheet sheet) => sheet.GetMergedRegionInfos(null, null, null, null);
 
     /// <summary>
-    /// 获取工作表中指定区域包含合并区域的信息列表
+    /// 获取工作表中与指定区域相交或完全位于其中的合并区域信息；没有匹配项时返回空列表。
     /// </summary>
     /// <param name="sheet">NPOI工作表</param>
     /// <param name="minRow">最小行索引</param>
     /// <param name="maxRow">最大行索引</param>
     /// <param name="minCol">最小列索引</param>
     /// <param name="maxCol">最大列索引</param>
-    /// <param name="onlyInternal">是否仅在内部</param>
+    /// <param name="onlyInternal">为 true 时仅返回完全位于指定区域内部的合并区域；为 false 时返回相交区域。</param>
+    /// <returns>按 NPOI 区域索引顺序排列的筛选结果。</returns>
     public static List<MergedRegionInfo> GetMergedRegionInfos(this NPOI.SS.UserModel.ISheet sheet, int? minRow,
         int? maxRow, int? minCol, int? maxCol, bool onlyInternal = true)
     {

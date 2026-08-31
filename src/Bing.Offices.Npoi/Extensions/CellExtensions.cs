@@ -23,9 +23,10 @@ internal static partial class CellExtensions
     #region GetStringValue(获取单元格的字符串值)
 
     /// <summary>
-    /// 获取单元格的字符串值
+    /// 按公式缓存结果、日期格式和单元格类型将单元格转换为文本。
     /// </summary>
     /// <param name="cell">单元格</param>
+    /// <returns>单元格文本；空单元格或空引用返回空字符串。</returns>
     public static string GetStringValue(this ICell cell)
     {
         if (cell == null)
@@ -59,7 +60,7 @@ internal static partial class CellExtensions
     #region SetValue(设置单元格值)
 
     /// <summary>
-    /// 设置单元值
+    /// 根据运行时类型将值写入单元格，并处理日期、枚举、图片和 Excel 精度边界。
     /// </summary>
     /// <param name="cell">单元格</param>
     /// <param name="value">值</param>
@@ -273,9 +274,10 @@ internal static partial class CellExtensions
     }
 
     /// <summary>
-    /// 获取单元格跨度信息
+    /// 获取单元格所在合并区域的行列跨度；非合并单元格返回（1，1）。
     /// </summary>
     /// <param name="cell">单元格</param>
+    /// <returns>包含行跨度和列跨度的元组。</returns>
     private static Tuple<int, int> GetSpan(this ICell cell)
     {
         if (cell.IsMergedCell)
@@ -295,14 +297,14 @@ internal static partial class CellExtensions
     }
 
     /// <summary>
-    /// 设置单元格值
+    /// 将值写入单元格，并使用默认格式处理日期、数字和特殊类型。
     /// </summary>
     /// <param name="cell">单元格</param>
     /// <param name="value">值</param>
     public static void SetCellValue(this ICell cell, object value) => cell.SetValue(value);
 
     /// <summary>
-    /// 设置单元格值
+    /// 将值写入单元格，并在需要时使用指定格式创建派生样式。
     /// </summary>
     /// <param name="cell">单元格</param>
     /// <param name="value">值</param>

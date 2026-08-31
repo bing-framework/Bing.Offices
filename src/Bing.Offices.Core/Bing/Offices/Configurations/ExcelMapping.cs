@@ -12,6 +12,7 @@ public static class ExcelMapping
     /// 创建指定实体类型的映射配置构建器。
     /// </summary>
     /// <typeparam name="T">实体类型。</typeparam>
+    /// <returns>用于配置实体属性映射的构建器。</returns>
     public static ExcelMappingBuilder<T> For<T>() where T : class, new() => new();
 }
 
@@ -28,6 +29,7 @@ public sealed class ExcelMappingBuilder<T> where T : class, new()
     /// </summary>
     /// <typeparam name="TProperty">属性类型。</typeparam>
     /// <param name="expression">属性表达式。</param>
+    /// <returns>指定属性的列映射构建器。</returns>
     public ExcelColumnMappingBuilder<T, TProperty> Property<TProperty>(Expression<Func<T, TProperty>> expression)
     {
         if (expression == null)
@@ -47,11 +49,15 @@ public sealed class ExcelMappingBuilder<T> where T : class, new()
     /// <summary>
     /// 创建当前配置的独立快照。
     /// </summary>
+    /// <returns>不再依赖当前构建器内部状态的映射配置。</returns>
     public ExcelMappingConfiguration Build() => new()
     {
         Columns = _configuration.Columns.Select(CloneColumn).ToList()
     };
 
+    /// <summary>复制列配置及其集合属性，避免构建器快照共享可变集合。</summary>
+    /// <param name="source">待复制的列配置。</param>
+    /// <returns>独立的列配置副本。</returns>
     private static ExcelColumnConfiguration CloneColumn(ExcelColumnConfiguration source) => new()
     {
         PropertyName = source.PropertyName,
@@ -97,6 +103,7 @@ public sealed class ExcelColumnMappingBuilder<T, TProperty> where T : class, new
     /// 设置列标题。
     /// </summary>
     /// <param name="title">列标题。</param>
+    /// <returns>当前列映射构建器。</returns>
     public ExcelColumnMappingBuilder<T, TProperty> HasTitle(string title)
     {
         _configuration.Title = title;
@@ -107,6 +114,7 @@ public sealed class ExcelColumnMappingBuilder<T, TProperty> where T : class, new
     /// 设置从零开始的导出列索引。
     /// </summary>
     /// <param name="columnIndex">列索引。</param>
+    /// <returns>当前列映射构建器。</returns>
     public ExcelColumnMappingBuilder<T, TProperty> HasColumnIndex(int columnIndex)
     {
         _configuration.ColumnIndex = columnIndex;
@@ -117,6 +125,7 @@ public sealed class ExcelColumnMappingBuilder<T, TProperty> where T : class, new
     /// 设置单元格格式化字符串。
     /// </summary>
     /// <param name="formatter">格式化字符串。</param>
+    /// <returns>当前列映射构建器。</returns>
     public ExcelColumnMappingBuilder<T, TProperty> HasFormatter(string formatter)
     {
         _configuration.Formatter = formatter;
@@ -127,6 +136,7 @@ public sealed class ExcelColumnMappingBuilder<T, TProperty> where T : class, new
     /// 设置小数精度。
     /// </summary>
     /// <param name="decimalScale">小数精度。</param>
+    /// <returns>当前列映射构建器。</returns>
     public ExcelColumnMappingBuilder<T, TProperty> HasDecimalScale(byte decimalScale)
     {
         _configuration.DecimalScale = decimalScale;
@@ -137,6 +147,7 @@ public sealed class ExcelColumnMappingBuilder<T, TProperty> where T : class, new
     /// 设置已注册值转换器的名称。
     /// </summary>
     /// <param name="converterName">转换器名称。</param>
+    /// <returns>当前列映射构建器。</returns>
     public ExcelColumnMappingBuilder<T, TProperty> HasConverter(string converterName)
     {
         _configuration.ConverterName = converterName;
@@ -147,6 +158,7 @@ public sealed class ExcelColumnMappingBuilder<T, TProperty> where T : class, new
     /// 添加已注册校验规则的名称。
     /// </summary>
     /// <param name="ruleName">校验规则名称。</param>
+    /// <returns>当前列映射构建器。</returns>
     public ExcelColumnMappingBuilder<T, TProperty> HasValidationRule(string ruleName)
     {
         _configuration.ValidationRuleNames.Add(ruleName);
@@ -157,6 +169,7 @@ public sealed class ExcelColumnMappingBuilder<T, TProperty> where T : class, new
     /// 设置是否忽略属性。
     /// </summary>
     /// <param name="ignored">是否忽略。</param>
+    /// <returns>当前列映射构建器。</returns>
     public ExcelColumnMappingBuilder<T, TProperty> Ignored(bool ignored = true)
     {
         _configuration.Ignored = ignored;
@@ -168,6 +181,7 @@ public sealed class ExcelColumnMappingBuilder<T, TProperty> where T : class, new
     /// </summary>
     /// <param name="text">显示文本。</param>
     /// <param name="value">属性值。</param>
+    /// <returns>当前列映射构建器。</returns>
     public ExcelColumnMappingBuilder<T, TProperty> Map(string text, TProperty value)
     {
         _configuration.ValueMappings.Add(new ExcelValueMappingConfiguration
@@ -181,5 +195,6 @@ public sealed class ExcelColumnMappingBuilder<T, TProperty> where T : class, new
     /// <summary>
     /// 返回当前映射配置构建器。
     /// </summary>
+    /// <returns>拥有当前列配置的实体映射构建器。</returns>
     public ExcelMappingBuilder<T> And() => _owner;
 }

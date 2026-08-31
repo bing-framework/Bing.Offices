@@ -13,7 +13,7 @@ namespace Bing.Offices.Npoi.Extensions;
 internal static partial class SheetExtensions
 {
     /// <summary>
-    /// 添加图片
+    /// 将图片数据按指定锚点和样式添加到工作表绘图区。
     /// </summary>
     /// <param name="sheet">NPOI工作表</param>
     /// <param name="picInfo">图片信息</param>
@@ -41,20 +41,22 @@ internal static partial class SheetExtensions
     }
 
     /// <summary>
-    /// 获取工作表中包含图片的信息列表
+    /// 获取工作表中所有图片的锚点、数据和样式信息。
     /// </summary>
     /// <param name="sheet">NPOI工作表</param>
+    /// <returns>工作表中的图片信息；没有图片时返回空列表。</returns>
     public static List<PictureInfo> GetAllPictureInfos(this NPOI.SS.UserModel.ISheet sheet) => sheet.GetAllPictureInfos(null, null, null, null);
 
     /// <summary>
-    /// 获取工作表中指定区域包含图片的信息列表
+    /// 获取工作表指定区域内或与其相交的图片信息。
     /// </summary>
     /// <param name="sheet">NPOI工作表</param>
     /// <param name="minRow">最小行索引</param>
     /// <param name="maxRow">最大行索引</param>
     /// <param name="minCol">最小列索引</param>
     /// <param name="maxCol">最大列索引</param>
-    /// <param name="onlyInternal">是否仅在内部</param>
+    /// <param name="onlyInternal">是否仅返回完全位于指定区域内的图片。</param>
+    /// <returns>符合区域条件的图片信息；没有匹配项时返回空列表。</returns>
     public static List<PictureInfo> GetAllPictureInfos(this NPOI.SS.UserModel.ISheet sheet, int? minRow,
         int? maxRow, int? minCol, int? maxCol, bool onlyInternal = true)
     {
@@ -69,14 +71,15 @@ internal static partial class SheetExtensions
     }
 
     /// <summary>
-    /// 获取所有图片信息列表
+    /// 从 HSSF 工作表读取符合区域条件的图片信息。
     /// </summary>
     /// <param name="sheet">工作表</param>
     /// <param name="minRow">最小行索引</param>
     /// <param name="maxRow">最大行索引</param>
     /// <param name="minCol">最小列索引</param>
     /// <param name="maxCol">最大列索引</param>
-    /// <param name="onlyInternal">是否仅在内部</param>
+    /// <param name="onlyInternal">是否仅返回完全位于指定区域内的图片。</param>
+    /// <returns>符合条件的图片信息列表。</returns>
     private static List<PictureInfo> GetAllPictureInfos(HSSFSheet sheet, int? minRow,
         int? maxRow, int? minCol, int? maxCol, bool onlyInternal)
     {
@@ -112,14 +115,15 @@ internal static partial class SheetExtensions
     }
 
     /// <summary>
-    /// 获取所有图片信息列表
+    /// 从 XSSF 工作表读取符合区域条件的图片信息。
     /// </summary>
     /// <param name="sheet">工作表</param>
     /// <param name="minRow">最小行索引</param>
     /// <param name="maxRow">最大行索引</param>
     /// <param name="minCol">最小列索引</param>
     /// <param name="maxCol">最大列索引</param>
-    /// <param name="onlyInternal">是否仅在内部</param>
+    /// <param name="onlyInternal">是否仅返回完全位于指定区域内的图片。</param>
+    /// <returns>符合条件的图片信息列表。</returns>
     private static List<PictureInfo> GetAllPictureInfos(XSSFSheet sheet, int? minRow,
         int? maxRow, int? minCol, int? maxCol, bool onlyInternal)
     {
@@ -153,20 +157,20 @@ internal static partial class SheetExtensions
     }
 
     /// <summary>
-    /// 移除工作表中所有的图片
+    /// 移除工作表中的所有图片。
     /// </summary>
     /// <param name="sheet">NPOI工作表</param>
     public static void RemovePictures(this NPOI.SS.UserModel.ISheet sheet) => sheet.RemovePictures(null, null, null, null);
 
     /// <summary>
-    /// 移除工作表中指定区域的图片
+    /// 移除工作表指定区域内或与其相交的图片。
     /// </summary>
     /// <param name="sheet">NPOI工作表</param>
     /// <param name="minRow">最小行索引</param>
     /// <param name="maxRow">最大行索引</param>
     /// <param name="minCol">最小列索引</param>
     /// <param name="maxCol">最大列索引</param>
-    /// <param name="onlyInternal">是否仅在内部</param>
+    /// <param name="onlyInternal">是否仅移除完全位于指定区域内的图片。</param>
     public static void RemovePictures(this NPOI.SS.UserModel.ISheet sheet, int? minRow, int? maxRow, int? minCol,
         int? maxCol, bool onlyInternal = true)
     {
@@ -183,14 +187,14 @@ internal static partial class SheetExtensions
     }
 
     /// <summary>
-    /// 移除图片
+    /// 从 HSSF 工作表移除符合区域条件的图片。
     /// </summary>
     /// <param name="sheet">工作表</param>
     /// <param name="minRow">最小行索引</param>
     /// <param name="maxRow">最大行索引</param>
     /// <param name="minCol">最小列索引</param>
     /// <param name="maxCol">最大列索引</param>
-    /// <param name="onlyInternal">是否仅在内部</param>
+    /// <param name="onlyInternal">是否仅移除完全位于指定区域内的图片。</param>
     private static void RemovePictures(HSSFSheet sheet, int? minRow, int? maxRow, int? minCol,
         int? maxCol, bool onlyInternal)
     {
@@ -209,14 +213,14 @@ internal static partial class SheetExtensions
     }
 
     /// <summary>
-    /// 移除图片
+    /// 从 XSSF 工作表移除符合区域条件的图片。
     /// </summary>
     /// <param name="sheet">工作表</param>
     /// <param name="minRow">最小行索引</param>
     /// <param name="maxRow">最大行索引</param>
     /// <param name="minCol">最小列索引</param>
     /// <param name="maxCol">最大列索引</param>
-    /// <param name="onlyInternal">是否仅在内部</param>
+    /// <param name="onlyInternal">是否仅移除完全位于指定区域内的图片。</param>
     private static void RemovePictures(XSSFSheet sheet, int? minRow, int? maxRow, int? minCol,
         int? maxCol, bool onlyInternal)
     {
@@ -228,7 +232,7 @@ internal static partial class SheetExtensions
     }
 
     /// <summary>
-    /// 移动工作表中所有的图片
+    /// 移动工作表中的所有图片锚点。
     /// </summary>
     /// <param name="sheet">NPOI工作表</param>
     /// <param name="moveRowCount">移动行数</param>
@@ -238,14 +242,14 @@ internal static partial class SheetExtensions
         sheet.MovePictures(null, null, null, null, true, moveRowCount, moveColCount);
 
     /// <summary>
-    /// 移动工作表中指定区域的图片
+    /// 按行列偏移移动指定区域内的图片锚点。
     /// </summary>
     /// <param name="sheet">NPOI工作表</param>
     /// <param name="minRow">最小行索引</param>
     /// <param name="maxRow">最大行索引</param>
     /// <param name="minCol">最小列索引</param>
     /// <param name="maxCol">最大列索引</param>
-    /// <param name="onlyInternal">是否仅在内部</param>
+    /// <param name="onlyInternal">是否仅移动完全位于指定区域内的图片。</param>
     /// <param name="moveRowCount">移动行数</param>
     /// <param name="moveColCount">移动列数</param>
     public static void MovePictures(this NPOI.SS.UserModel.ISheet sheet, int? minRow, int? maxRow, int? minCol,
@@ -376,24 +380,24 @@ internal static partial class SheetExtensions
     }
 
     /// <summary>
-    /// 尝试添加图片到工作表当中
+    /// 将已有 NPOI 图片数据添加到工作表并自动调整图片大小。
     /// </summary>
     /// <param name="sheet">工作表</param>
     /// <param name="row">行索引</param>
     /// <param name="col">列索引</param>
     /// <param name="pictureData">图片数据</param>
-    /// <returns>添加成功则返回true</returns>
+    /// <returns>图片成功添加时为 true；NPOI 拒绝图片数据或创建绘图区失败时为 false。</returns>
     public static bool TryAddPicture(this ISheet sheet, int row, int col, IPictureData pictureData) => TryAddPicture(sheet, row, col, pictureData.Data, pictureData.PictureType);
 
     /// <summary>
-    /// 尝试添加图片到工作表当中
+    /// 将图片字节添加到工作表并自动调整图片大小；失败时返回 false。
     /// </summary>
     /// <param name="sheet">工作表</param>
     /// <param name="row">行索引</param>
     /// <param name="col">列索引</param>
     /// <param name="pictureBytes">图片数据</param>
     /// <param name="pictureType">图片类型</param>
-    /// <returns>添加成功则返回true</returns>
+    /// <returns>图片成功添加时为 true；图片数据无效或 NPOI 创建失败时为 false。</returns>
     public static bool TryAddPicture(this ISheet sheet, int row, int col, byte[] pictureBytes,
         PictureType pictureType = PictureType.PNG)
     {

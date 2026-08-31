@@ -9,6 +9,7 @@ namespace Bing.Offices.Configurations;
 /// </summary>
 public sealed class ExcelModelAliasRegistry
 {
+    /// <summary>按不区分大小写的业务别名保存已批准的模型和 Profile 身份。</summary>
     private readonly ConcurrentDictionary<string, ExcelModelAliasRegistration> _aliases =
         new ConcurrentDictionary<string, ExcelModelAliasRegistration>(StringComparer.OrdinalIgnoreCase);
 
@@ -60,15 +61,21 @@ public sealed class ExcelModelAliasRegistry
         return true;
     }
 
+    /// <summary>保存单个业务别名关联的可选模型类型和 Profile 名称。</summary>
     private sealed class ExcelModelAliasRegistration
     {
+        /// <summary>创建模型别名注册记录。</summary>
+        /// <param name="modelType">批准的模型类型；仅注册名称时可为空。</param>
+        /// <param name="profileName">批准的 Profile 名称；未限制时可为空。</param>
         internal ExcelModelAliasRegistration(Type modelType, string profileName)
         {
             ModelType = modelType;
             ProfileName = profileName;
         }
 
+        /// <summary>获取批准的模型类型。</summary>
         internal Type ModelType { get; }
+        /// <summary>获取批准的 Profile 名称。</summary>
         internal string ProfileName { get; }
     }
 

@@ -16,12 +16,12 @@ internal static class ExcelHelper
     private static readonly Version AppVersion = typeof(ExcelHelper).Assembly.GetName().Version!;
 
     /// <summary>
-    /// 校验Excel文件路径
+    /// 校验 Excel 文件路径是否具有受支持的扩展名，并在需要时确认文件存在。
     /// </summary>
     /// <param name="excelPath">Excel文件路径</param>
     /// <param name="msg">错误消息</param>
     /// <param name="isExport">是否导出</param>
-    /// <exception cref="ArgumentNullException"></exception>
+    /// <returns>路径有效且满足存在性要求时为 true，否则为 false，并通过 <paramref name="msg"/> 返回原因。</returns>
     private static bool ValidateExcelFilePath(string excelPath, out string msg, bool isExport = false)
     {
         if (string.IsNullOrWhiteSpace(excelPath))
@@ -46,17 +46,18 @@ internal static class ExcelHelper
     #region PrepareWorkbook(准备工作簿)
 
     /// <summary>
-    /// 准备工作簿
+    /// 根据文件扩展名创建对应格式的空工作簿。
     /// </summary>
     /// <param name="excelPath">Excel文件路径</param>
+    /// <returns>新建的 NPOI 工作簿。</returns>
     public static NPOI.SS.UserModel.IWorkbook PrepareWorkbook(string excelPath) => PrepareWorkbook(excelPath, null);
 
     /// <summary>
-    /// 准备工作簿
+    /// 根据文件扩展名创建工作簿，并应用指定元数据。
     /// </summary>
     /// <param name="excelPath">Excel文件路径</param>
     /// <param name="metadata">Workbook 元数据</param>
-    /// <exception cref="ArgumentException"></exception>
+    /// <returns>新建的 NPOI 工作簿。</returns>
     public static NPOI.SS.UserModel.IWorkbook PrepareWorkbook(string excelPath, ExcelWorkbookMetadataOptions metadata)
     {
         if (!ValidateExcelFilePath(excelPath, out var msg, true))
@@ -65,35 +66,39 @@ internal static class ExcelHelper
     }
 
     /// <summary>
-    /// 准备工作簿
+    /// 根据 Excel 格式创建工作簿并应用指定元数据。
     /// </summary>
     /// <param name="format">Excel格式</param>
     /// <param name="metadata">Workbook 元数据</param>
+    /// <returns>新建的 NPOI 工作簿。</returns>
     public static NPOI.SS.UserModel.IWorkbook PrepareWorkbook(ExcelFormat format, ExcelWorkbookMetadataOptions metadata) =>
         PrepareWorkbook(format == ExcelFormat.Xlsx, metadata);
 
     /// <summary>
-    /// 准备工作簿
+    /// 创建默认的 XLSX 工作簿。
     /// </summary>
     public static NPOI.SS.UserModel.IWorkbook PrepareWorkbook() => PrepareWorkbook(true);
 
     /// <summary>
-    /// 准备工作簿
+    /// 根据 Excel 格式创建空工作簿。
     /// </summary>
     /// <param name="format">Excel格式</param>
+    /// <returns>新建的 NPOI 工作簿。</returns>
     public static NPOI.SS.UserModel.IWorkbook PrepareWorkbook(ExcelFormat format) => PrepareWorkbook(format == ExcelFormat.Xlsx);
 
     /// <summary>
-    /// 准备工作簿
+    /// 根据 XLS/XLSX 标志创建空工作簿。
     /// </summary>
     /// <param name="isXlsx">是否Xlsx格式</param>
+    /// <returns>新建的 NPOI 工作簿。</returns>
     public static NPOI.SS.UserModel.IWorkbook PrepareWorkbook(bool isXlsx) => PrepareWorkbook(isXlsx, null);
 
     /// <summary>
-    /// 准备工作簿
+    /// 根据 XLS/XLSX 标志创建工作簿并应用元数据。
     /// </summary>
     /// <param name="isXlsx">是否Xlsx格式</param>
     /// <param name="metadata">Workbook 元数据</param>
+    /// <returns>新建的 NPOI 工作簿。</returns>
     public static NPOI.SS.UserModel.IWorkbook PrepareWorkbook(bool isXlsx, ExcelWorkbookMetadataOptions metadata)
     {
         var workbook = isXlsx

@@ -5,7 +5,7 @@ namespace Bing.Offices.Configurations;
 using Bing.Offices.Imports;
 
 /// <summary>
-/// normalized mapping document 中的动态列描述，不包含 CLR 类型名。
+/// 规范化映射文档中的动态列描述，不包含 CLR 类型对象。
 /// </summary>
 public sealed class ExcelMappingDynamicColumnConfiguration
 {

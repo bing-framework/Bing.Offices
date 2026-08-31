@@ -1,50 +1,50 @@
 ﻿namespace Bing.Offices.Exceptions;
 
 /// <summary>
-/// Office表头缺列异常
+/// 表示导入工作表表头缺少必需列或无法匹配。
 /// </summary>
 [Serializable]
 public class OfficeHeaderException : OfficeException
 {
     /// <summary>
-    /// 行索引
+    /// 表头对应的零基行索引。
     /// </summary>
     public int RowIndex { get; set; }
 
     /// <summary>
-    /// 列索引
+    /// 相关列对应的零基列索引。
     /// </summary>
     public int ColumnIndex { get; set; }
 
     /// <summary>
-    /// 初始化一个<see cref="OfficeHeaderException"/>类型的实例
+    /// 使用错误消息初始化 <see cref="OfficeHeaderException"/> 实例。
     /// </summary>
-    /// <param name="message">序列化信息</param>
+    /// <param name="message">描述表头匹配失败的异常消息。</param>
     public OfficeHeaderException(string message) : base(message) { }
 
     /// <summary>
-    /// 初始化一个<see cref="OfficeHeaderException"/>类型的实例
+    /// 使用错误消息和内部异常初始化 <see cref="OfficeHeaderException"/> 实例。
     /// </summary>
-    /// <param name="message">序列化信息</param>
-    /// <param name="innerException">错误来源</param>
+    /// <param name="message">描述表头匹配失败的异常消息。</param>
+    /// <param name="innerException">导致当前异常的内部异常。</param>
     public OfficeHeaderException(string message, Exception innerException) : base(message, innerException) { }
 
     /// <summary>
-    /// 初始化一个<see cref="OfficeHeaderException"/>类型的实例
+    /// 使用错误消息和行索引初始化 <see cref="OfficeHeaderException"/> 实例。
     /// </summary>
-    /// <param name="message">序列化信息</param>
-    /// <param name="rowIndex">行索引</param>
+    /// <param name="message">描述表头匹配失败的异常消息。</param>
+    /// <param name="rowIndex">表头对应的零基行索引。</param>
     public OfficeHeaderException(string message, int rowIndex) : base(message)
     {
         RowIndex = rowIndex;
     }
 
     /// <summary>
-    /// 初始化一个<see cref="OfficeHeaderException"/>类型的实例
+    /// 使用错误消息、行索引和列索引初始化 <see cref="OfficeHeaderException"/> 实例。
     /// </summary>
-    /// <param name="message">序列化信息</param>
-    /// <param name="rowIndex">行索引</param>
-    /// <param name="columnIndex">列索引</param>
+    /// <param name="message">描述表头匹配失败的异常消息。</param>
+    /// <param name="rowIndex">表头对应的零基行索引。</param>
+    /// <param name="columnIndex">相关列对应的零基列索引。</param>
     public OfficeHeaderException(string message, int rowIndex, int columnIndex) : base(message)
     {
         RowIndex = rowIndex;

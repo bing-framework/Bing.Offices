@@ -3,14 +3,15 @@
 namespace Bing.Offices.Npoi.Extensions;
 
 /// <summary>
-/// 工作表(<see cref="ISheet"/> ) 扩展
+/// 工作表行、合并区域和图片相关操作扩展。
 /// </summary>
 internal static partial class SheetExtensions
 {
     /// <summary>
-    /// 获取所有合并单元格区域。格式：(x1,y1,x2,y2)
+    /// 获取工作表全部合并区域的零基边界，列顺序为起始行、起始列、结束行、结束列。
     /// </summary>
     /// <param name="sheet">工作表</param>
+    /// <returns>每行表示一个合并区域的四列整数矩阵；没有合并区域时返回零行矩阵。</returns>
     public static int[,] GetAllMergedRegions(this ISheet sheet)
     {
         // 工作表合并单元格数量
@@ -28,12 +29,11 @@ internal static partial class SheetExtensions
     }
 
     /// <summary>
-    /// 删除行。
-    /// 解决因为shiftRows上移删除行而造成的格式错乱问题
+    /// 删除指定数量的行，并先移除受影响的合并区域以避免移动行时产生格式错乱。
     /// </summary>
     /// <param name="sheet">工作表</param>
-    /// <param name="deleteRowStartIndex">删除行起始索引。从0开始</param>
-    /// <param name="count">删除行数</param>
+    /// <param name="deleteRowStartIndex">删除起始行的零基索引。</param>
+    /// <param name="count">要删除的行数，必须大于零。</param>
     public static void DeleteRows(this ISheet sheet, int deleteRowStartIndex, int count)
     {
         if (deleteRowStartIndex < 0)
@@ -53,9 +53,10 @@ internal static partial class SheetExtensions
     }
 
     /// <summary>
-    /// 获取有数据（非空行）的最后一行的行数。如果sheet中一行数据都没有则返回-1，只有第一行有数据则返回0，最后有数据的行是第n行则返回n-1。
+    /// 获取最后一个非空数据行的零基索引；没有数据行时返回 -1。
     /// </summary>
     /// <param name="sheet">工作表</param>
+    /// <returns>最后一个非空行的零基索引，或 -1。</returns>
     public static int GetHasDataRowNum(this ISheet sheet)
     {
         for (var i = sheet.LastRowNum; i >= 0; i--)
@@ -67,7 +68,7 @@ internal static partial class SheetExtensions
     }
 
     /// <summary>
-    /// 添加行
+    /// 从第一行数据位置开始按顺序创建行，并为每项执行行配置操作。
     /// </summary>
     /// <typeparam name="T">实体类型</typeparam>
     /// <param name="sheet">工作表</param>
@@ -86,20 +87,20 @@ internal static partial class SheetExtensions
     }
 
     /// <summary>
-    /// 插入行
+    /// 在指定零基索引处插入一行，并移动后续行。
     /// </summary>
     /// <param name="sheet">NPOI工作表</param>
     /// <param name="rowIndex">行索引</param>
-    /// <returns>NPOI单元行</returns>
+    /// <returns>新建的行；底层工作表未返回时为 null。</returns>
     public static NPOI.SS.UserModel.IRow InsertRow(this NPOI.SS.UserModel.ISheet sheet, int rowIndex) => sheet.InsertRows(rowIndex, 1).FirstOrDefault();
 
     /// <summary>
-    /// 批量插入行
+    /// 在指定零基索引处插入多行，并移动后续行。
     /// </summary>
     /// <param name="sheet">NPOI工作表</param>
     /// <param name="rowIndex">行索引</param>
     /// <param name="rowsCount">插入行数量</param>
-    /// <returns>NPOI单元行数组</returns>
+    /// <returns>按插入顺序排列的新建行数组。</returns>
     public static NPOI.SS.UserModel.IRow[] InsertRows(this NPOI.SS.UserModel.ISheet sheet, int rowIndex,
         int rowsCount)
     {
@@ -119,18 +120,20 @@ internal static partial class SheetExtensions
     }
 
     /// <summary>
-    /// 移除行
+    /// 移除指定零基索引的一行，并同步处理受影响的合并区域和图片锚点。
     /// </summary>
     /// <param name="sheet">NPOI工作表</param>
     /// <param name="rowIndex">行索引</param>
+    /// <returns>实际移除的行数，通常为 1。</returns>
     public static int RemoveRow(this NPOI.SS.UserModel.ISheet sheet, int rowIndex) => sheet.RemoveRows(rowIndex, rowIndex);
 
     /// <summary>
-    /// 移除行
+    /// 移除指定闭合零基行区间，并同步处理合并区域和图片锚点。
     /// </summary>
     /// <param name="sheet">NPOI工作表</param>
     /// <param name="startRowIndex">起始行索引</param>
     /// <param name="endRowIndex">结束行索引</param>
+    /// <returns>实际移除的行数。</returns>
     public static int RemoveRows(this NPOI.SS.UserModel.ISheet sheet, int startRowIndex, int endRowIndex)
     {
         if (startRowIndex < 0)

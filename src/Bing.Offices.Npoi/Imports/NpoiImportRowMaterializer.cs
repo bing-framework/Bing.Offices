@@ -15,6 +15,7 @@ namespace Bing.Offices.Npoi.Imports;
 /// </summary>
 internal sealed class NpoiImportRowMaterializer
 {
+    /// <summary>按顺序重写单元格文本的旧版转换器集合。</summary>
     private readonly IReadOnlyList<ICellValueConverter> _legacyValueConverters;
 
     /// <summary>
@@ -29,6 +30,11 @@ internal sealed class NpoiImportRowMaterializer
     /// <summary>
     /// 判断数据行是否没有任何非空单元格或图片。
     /// </summary>
+    /// <param name="row">待检查的数据行。</param>
+    /// <param name="bodyWhitespace">正文单元格文本的空白处理策略。</param>
+    /// <param name="imageRows">包含至少一张图片的零基行索引集合。</param>
+    /// <param name="rowIndex">当前行的零基索引。</param>
+    /// <returns>行不存在或不包含文本和图片数据时为 true。</returns>
     internal static bool IsEmpty(IRow row, ExcelWhitespacePolicy bodyWhitespace,
         ISet<int> imageRows, int rowIndex)
     {
@@ -41,11 +47,18 @@ internal sealed class NpoiImportRowMaterializer
     /// <summary>
     /// 判断列是否为图片列。
     /// </summary>
+    /// <param name="column">待检查的列执行计划。</param>
+    /// <returns>目标属性可接收单张或多张图片时为 true。</returns>
     internal static bool IsImageColumn(ExcelColumnPlan column) => IsImageType(column.ValueType);
 
     /// <summary>
     /// 构建按行列坐标索引的图片集合，并应用图片资源限制。
     /// </summary>
+    /// <param name="sheet">包含图片的工作表。</param>
+    /// <param name="resources">验证图片数量和字节数的资源跟踪器。</param>
+    /// <param name="cancellationToken">遍历图片时检查的取消令牌。</param>
+    /// <param name="imageRows">返回包含至少一张图片的零基行索引集合。</param>
+    /// <returns>按零基行列坐标索引的图片集合。</returns>
     internal static IReadOnlyDictionary<(int Row, int Column), IReadOnlyList<PictureInfo>> BuildImageIndex(
         ISheet sheet, ExcelImageResourceTracker resources, CancellationToken cancellationToken,
         out HashSet<int> imageRows)
@@ -68,6 +81,16 @@ internal sealed class NpoiImportRowMaterializer
     /// <summary>
     /// 校验单行的原始单元格值。
     /// </summary>
+    /// <param name="row">待校验的数据行。</param>
+    /// <param name="columns">按零基列索引排列的列执行计划。</param>
+    /// <param name="duplicateValues">兼容旧校验规则的重复值状态。</param>
+    /// <param name="sheetName">用于错误定位的工作表名称。</param>
+    /// <param name="rowIndex">当前行的零基索引。</param>
+    /// <param name="validateMode">发生校验失败后的继续策略。</param>
+    /// <param name="culture">校验上下文使用的区域性。</param>
+    /// <param name="bodyWhitespace">正文单元格文本的空白处理策略。</param>
+    /// <param name="errors">接收原始值校验错误的收集器。</param>
+    /// <returns>当前行全部原始值校验通过时为 true。</returns>
     internal bool ValidateRawValues(IRow row, IReadOnlyDictionary<int, ExcelColumnPlan> columns,
         IDictionary<string, HashSet<string>> duplicateValues, string sheetName, int rowIndex,
         ValidateMode validateMode, CultureInfo culture, ExcelWhitespacePolicy bodyWhitespace,
@@ -116,6 +139,22 @@ internal sealed class NpoiImportRowMaterializer
     /// <summary>
     /// 将单行数据转换为实体，并执行转换后校验和唯一值校验。
     /// </summary>
+    /// <typeparam name="T">要物化的实体类型。</typeparam>
+    /// <param name="row">待转换的数据行。</param>
+    /// <param name="columns">按零基列索引排列的列执行计划。</param>
+    /// <param name="duplicateValues">兼容旧校验规则的重复值状态。</param>
+    /// <param name="uniqueTracker">负责当前行唯一值预留、提交和回滚的跟踪器。</param>
+    /// <param name="sheetName">用于错误定位的工作表名称。</param>
+    /// <param name="rowIndex">当前行的零基索引。</param>
+    /// <param name="validateMode">发生校验失败后的继续策略。</param>
+    /// <param name="configuredValidationEnabled">是否执行配置校验规则。</param>
+    /// <param name="errors">接收转换和校验错误的收集器。</param>
+    /// <param name="culture">文本转换和校验使用的区域性。</param>
+    /// <param name="bodyWhitespace">正文单元格文本的空白处理策略。</param>
+    /// <param name="dynamicTargetGetter">从实体取得动态值目标字典的委托。</param>
+    /// <param name="imageIndex">按行列坐标索引的图片集合。</param>
+    /// <param name="item">成功时返回已物化的实体；失败时为 null。</param>
+    /// <returns>当前行成功转换并通过校验时为 true。</returns>
     internal bool TryCreateItem<T>(IRow row, IReadOnlyDictionary<int, ExcelColumnPlan> columns,
         IDictionary<string, HashSet<string>> duplicateValues, UniqueTracker uniqueTracker,
         string sheetName, int rowIndex, ValidateMode validateMode, bool configuredValidationEnabled,

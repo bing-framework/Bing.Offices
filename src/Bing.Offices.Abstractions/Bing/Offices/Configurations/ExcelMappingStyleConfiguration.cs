@@ -1,7 +1,7 @@
 ﻿namespace Bing.Offices.Configurations;
 
 /// <summary>
-/// normalized mapping document 中的 provider-neutral 样式描述。
+/// 规范化映射文档中的跨提供程序样式描述。
 /// </summary>
 public sealed class ExcelMappingStyleConfiguration
 {

@@ -14,6 +14,12 @@ internal static class NpoiRelationBinder
     /// <summary>
     /// 绑定一个具体的父子关系请求。
     /// </summary>
+    /// <typeparam name="TWorkbook">包含父子集合的工作簿根实体类型。</typeparam>
+    /// <param name="root">已完成工作表导入的工作簿根实体。</param>
+    /// <param name="request">定义集合、键选择器和导航集合的关系请求。</param>
+    /// <param name="errors">接收关系绑定错误的工作簿级错误收集器。</param>
+    /// <param name="sourceLocations">实体到原始工作表位置的引用映射。</param>
+    /// <param name="cancellationToken">遍历父项和子项时检查的取消令牌。</param>
     public static void Bind<TWorkbook>(TWorkbook root, ExcelRelationRequest request,
         ExcelImportErrorCollector errors, IReadOnlyDictionary<object, SourceLocation> sourceLocations,
         CancellationToken cancellationToken)
@@ -26,6 +32,16 @@ internal static class NpoiRelationBinder
             new object[] { root, request, errors, sourceLocations, cancellationToken });
     }
 
+    /// <summary>使用具体泛型类型执行父子键关联并写入导航集合。</summary>
+    /// <typeparam name="TWorkbook">包含父子集合的工作簿根实体类型。</typeparam>
+    /// <typeparam name="TParent">父项实体类型。</typeparam>
+    /// <typeparam name="TChild">子项实体类型。</typeparam>
+    /// <typeparam name="TKey">父子关联键类型。</typeparam>
+    /// <param name="root">工作簿根实体。</param>
+    /// <param name="request">关系绑定请求。</param>
+    /// <param name="errors">接收键缺失、重复和未匹配错误的收集器。</param>
+    /// <param name="sourceLocations">实体来源位置映射。</param>
+    /// <param name="cancellationToken">遍历过程检查的取消令牌。</param>
     private static void BindCore<TWorkbook, TParent, TChild, TKey>(TWorkbook root,
         ExcelRelationRequest request, ExcelImportErrorCollector errors,
         IReadOnlyDictionary<object, SourceLocation> sourceLocations, CancellationToken cancellationToken)
@@ -100,6 +116,12 @@ internal static class NpoiRelationBinder
         }
     }
 
+    /// <summary>使用源实体的导入位置创建关系绑定错误。</summary>
+    /// <param name="message">描述关系绑定失败的消息。</param>
+    /// <param name="sourceLocations">实体来源位置映射。</param>
+    /// <param name="source">产生错误的父项或子项实体。</param>
+    /// <param name="key">导致错误的关联键。</param>
+    /// <returns>带有可用工作表和行号的导入错误。</returns>
     private static ExcelImportError CreateError(string message,
         IReadOnlyDictionary<object, SourceLocation> sourceLocations, object source, object key)
     {

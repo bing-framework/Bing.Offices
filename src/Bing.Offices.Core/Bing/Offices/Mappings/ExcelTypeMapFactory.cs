@@ -28,6 +28,7 @@ public static class ExcelTypeMapFactory
     /// 获取类型的不可变静态映射。
     /// </summary>
     /// <typeparam name="T">实体类型。</typeparam>
+    /// <returns>从实体公共可读属性和特性编译得到的类型映射。</returns>
     public static ExcelTypeMap<T> Get<T>() => (ExcelTypeMap<T>)TypeMaps.GetOrAdd(typeof(T), _ => Create<T>());
 
     /// <summary>
@@ -35,17 +36,19 @@ public static class ExcelTypeMapFactory
     /// </summary>
     /// <typeparam name="T">实体类型。</typeparam>
     /// <param name="configuration">请求级映射配置。</param>
+    /// <returns>应用请求级列配置后的类型映射。</returns>
     public static ExcelTypeMap<T> Get<T>(ExcelMappingConfiguration configuration)
     {
         return ApplyConfiguration(configuration, Get<T>());
     }
 
     /// <summary>
-    /// 获取 normalized Mapping Document 指定方向的类型映射。
+    /// 获取规范化映射文档指定方向的类型映射。
     /// </summary>
     /// <typeparam name="T">实体类型。</typeparam>
     /// <param name="document">规范化映射文档。</param>
     /// <param name="direction">映射方向。</param>
+    /// <returns>应用指定方向配置后的类型映射。</returns>
     public static ExcelTypeMap<T> Get<T>(ExcelMappingDocument document, MappingDirection direction)
     {
         if (document == null)
@@ -54,12 +57,13 @@ public static class ExcelTypeMapFactory
     }
 
     /// <summary>
-    /// 获取 normalized Mapping Document 指定方向的类型映射，并应用请求级配置。
+    /// 获取规范化映射文档指定方向的类型映射，并应用请求级配置。
     /// </summary>
     /// <typeparam name="T">实体类型。</typeparam>
     /// <param name="document">规范化映射文档。</param>
     /// <param name="configuration">请求级映射配置。</param>
     /// <param name="direction">映射方向。</param>
+    /// <returns>合并方向文档配置和请求级配置后的类型映射。</returns>
     public static ExcelTypeMap<T> Get<T>(ExcelMappingDocument document, ExcelMappingConfiguration configuration,
         MappingDirection direction)
     {
@@ -69,6 +73,10 @@ public static class ExcelTypeMapFactory
     /// <summary>
     /// 将配置编译到给定的不可变类型映射。
     /// </summary>
+    /// <typeparam name="T">实体类型。</typeparam>
+    /// <param name="configuration">待应用的列配置。</param>
+    /// <param name="source">基础类型映射。</param>
+    /// <returns>应用配置后的不可变类型映射。</returns>
     private static ExcelTypeMap<T> ApplyConfiguration<T>(ExcelMappingConfiguration configuration, ExcelTypeMap<T> source)
     {
         if (configuration == null || configuration.Columns == null || configuration.Columns.Count == 0)
@@ -132,6 +140,11 @@ public static class ExcelTypeMapFactory
         return new ExcelTypeMap<T>(new ReadOnlyCollection<ExcelPropertyMap>(mappedProperties));
     }
 
+    /// <summary>将配置应用到已创建的基础类型映射。</summary>
+    /// <typeparam name="T">实体类型。</typeparam>
+    /// <param name="configuration">待应用的列配置。</param>
+    /// <param name="source">基础类型映射。</param>
+    /// <returns>应用配置后的类型映射。</returns>
     private static ExcelTypeMap<T> Get<T>(ExcelMappingConfiguration configuration, ExcelTypeMap<T> source)
     {
         if (configuration == null || configuration.Columns == null || configuration.Columns.Count == 0)
@@ -157,6 +170,7 @@ public static class ExcelTypeMapFactory
     /// 创建类型映射。
     /// </summary>
     /// <typeparam name="T">实体类型。</typeparam>
+    /// <returns>根据实体公共可读属性创建的类型映射。</returns>
     private static ExcelTypeMap<T> Create<T>()
     {
         var properties = typeof(T).GetProperties(BindingFlags.Instance | BindingFlags.Public)
@@ -170,6 +184,7 @@ public static class ExcelTypeMapFactory
     /// 创建属性映射。
     /// </summary>
     /// <param name="property">属性元数据。</param>
+    /// <returns>根据属性特性和访问器创建的属性映射。</returns>
     private static ExcelPropertyMap CreatePropertyMap(PropertyInfo property)
     {
         foreach (var attribute in property.GetCustomAttributes<ExcelRegexAttribute>())
@@ -257,6 +272,7 @@ public static class ExcelTypeMapFactory
     /// </summary>
     /// <param name="property">默认属性映射。</param>
     /// <param name="configuration">列配置。</param>
+    /// <returns>合并后的显示文本到业务值映射。</returns>
     private static IReadOnlyDictionary<string, object> CreateConfiguredValueMap(ExcelPropertyMap property,
         ExcelColumnConfiguration configuration)
     {

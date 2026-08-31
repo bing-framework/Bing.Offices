@@ -12,32 +12,34 @@ namespace Bing.Offices;
 public static class CsvHelper
 {
     /// <summary>
-    /// 旧版 CSV 分隔符。请改用包含显式分隔符参数的重载。
+    /// 旧版 CSV 分隔符；该可变全局状态仅用于兼容旧调用方。
     /// </summary>
     [Obsolete("请使用包含 delimiter 参数的 CSV 导出重载，避免跨请求共享可变状态。")]
     public static char CsvSeparatorCharacter { get; set; } = ',';
 
     /// <summary>
-    /// 旧版 CSV 引用字符。请改用包含显式引用字符参数的重载。
+    /// 旧版 CSV 引用字符；该可变全局状态仅用于兼容旧调用方。
     /// </summary>
     [Obsolete("请使用包含 quote 参数的 CSV 导出重载，避免跨请求共享可变状态。")]
     public static char CsvQuoteCharacter = '"';
 
     /// <summary>
-    /// 转换为Csv文件
+    /// 使用旧版全局分隔符和引用字符将 DataTable 写入 CSV 文件。
     /// </summary>
     /// <param name="dataTable">数据表</param>
     /// <param name="filePath">文件路径</param>
+    /// <returns>文件成功写入时为 true。</returns>
     [Obsolete("请使用包含 delimiter 和 quote 参数的重载。")]
     public static bool ToCsvFile(DataTable dataTable, string filePath) => ToCsvFile(dataTable, filePath, true,
         CsvSeparatorCharacter, CsvQuoteCharacter);
 
     /// <summary>
-    /// 转换为Csv文件
+    /// 使用旧版全局分隔符和引用字符将 DataTable 写入 CSV 文件。
     /// </summary>
     /// <param name="dataTable">数据表</param>
     /// <param name="filePath">文件路径</param>
     /// <param name="includeHeader">是否包含表头</param>
+    /// <returns>文件成功写入时为 true。</returns>
     [Obsolete("请使用包含 delimiter 和 quote 参数的重载。")]
     public static bool ToCsvFile(DataTable dataTable, string filePath, bool includeHeader) =>
         ToCsvFile(dataTable, filePath, includeHeader, CsvSeparatorCharacter, CsvQuoteCharacter);
@@ -51,6 +53,7 @@ public static class CsvHelper
     /// <param name="delimiter">字段分隔符。</param>
     /// <param name="quote">字段引用字符。</param>
     /// <param name="formulaInjectionPolicy">潜在公式字段的处理策略。</param>
+    /// <returns>文件成功写入时为 true。</returns>
     public static bool ToCsvFile(DataTable dataTable, string filePath, bool includeHeader, char delimiter = ',',
         char quote = '"', CsvFormulaInjectionPolicy formulaInjectionPolicy = CsvFormulaInjectionPolicy.Escape)
     {
@@ -67,18 +70,20 @@ public static class CsvHelper
     }
 
     /// <summary>
-    /// 转换为Csv字节数组
+    /// 使用旧版全局分隔符和引用字符将 DataTable 转换为 UTF-8 字节数组。
     /// </summary>
     /// <param name="dataTable">数据表</param>
+    /// <returns>不带 UTF-8 BOM 的 CSV 字节数组。</returns>
     [Obsolete("请使用包含 delimiter 和 quote 参数的重载。")]
     public static byte[] ToCsvBytes(DataTable dataTable) => ToCsvBytes(dataTable, true, CsvSeparatorCharacter,
         CsvQuoteCharacter);
 
     /// <summary>
-    /// 转换为Csv字节数组
+    /// 使用旧版全局分隔符和引用字符将 DataTable 转换为 UTF-8 字节数组。
     /// </summary>
     /// <param name="dataTable">数据表</param>
     /// <param name="includeHeader">是否包含表头</param>
+    /// <returns>不带 UTF-8 BOM 的 CSV 字节数组。</returns>
     [Obsolete("请使用包含 delimiter 和 quote 参数的重载。")]
     public static byte[] ToCsvBytes(DataTable dataTable, bool includeHeader) => ToCsvBytes(dataTable, includeHeader,
         CsvSeparatorCharacter, CsvQuoteCharacter);
@@ -91,15 +96,17 @@ public static class CsvHelper
     /// <param name="delimiter">字段分隔符。</param>
     /// <param name="quote">字段引用字符。</param>
     /// <param name="formulaInjectionPolicy">潜在公式字段的处理策略。</param>
+    /// <returns>不带 UTF-8 BOM 的 CSV 字节数组。</returns>
     public static byte[] ToCsvBytes(DataTable dataTable, bool includeHeader, char delimiter = ',', char quote = '"',
         CsvFormulaInjectionPolicy formulaInjectionPolicy = CsvFormulaInjectionPolicy.Escape) =>
         new UTF8Encoding(false).GetBytes(GetCsvText(dataTable, includeHeader, delimiter, quote, formulaInjectionPolicy));
 
     /// <summary>
-    /// 获取Csv文本
+    /// 使用旧版全局分隔符和引用字符获取 DataTable 的 CSV 文本。
     /// </summary>
     /// <param name="dataTable">数据表</param>
     /// <param name="includeHeader">是否包含表头</param>
+    /// <returns>CSV 文本；没有列时返回空字符串。</returns>
     [Obsolete("请使用包含 delimiter 和 quote 参数的重载。")]
     public static string GetCsvText(DataTable dataTable, bool includeHeader = true) => GetCsvText(dataTable, includeHeader,
         CsvSeparatorCharacter, CsvQuoteCharacter);
@@ -112,6 +119,7 @@ public static class CsvHelper
     /// <param name="delimiter">字段分隔符。</param>
     /// <param name="quote">字段引用字符。</param>
     /// <param name="formulaInjectionPolicy">潜在公式字段的处理策略。</param>
+    /// <returns>CSV 文本；没有列时返回空字符串。</returns>
     public static string GetCsvText(DataTable dataTable, bool includeHeader, char delimiter = ',', char quote = '"',
         CsvFormulaInjectionPolicy formulaInjectionPolicy = CsvFormulaInjectionPolicy.Escape)
     {
@@ -132,6 +140,10 @@ public static class CsvHelper
         return result.ToString();
     }
 
+    /// <summary>验证 CSV 分隔符、引用字符和公式防护策略。</summary>
+    /// <param name="delimiter">字段分隔符。</param>
+    /// <param name="quote">字段引用字符。</param>
+    /// <param name="formulaInjectionPolicy">潜在公式字段的处理策略。</param>
     private static void ValidateOptions(char delimiter, char quote, CsvFormulaInjectionPolicy formulaInjectionPolicy)
     {
         if (delimiter == quote || delimiter == '\r' || delimiter == '\n')

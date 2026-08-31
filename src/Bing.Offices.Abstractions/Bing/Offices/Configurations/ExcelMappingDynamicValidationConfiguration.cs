@@ -1,7 +1,7 @@
 ﻿namespace Bing.Offices.Configurations;
 
 /// <summary>
-/// normalized 动态列的内置校验规则描述。
+/// 规范化动态列的内置校验规则描述。
 /// </summary>
 public sealed class ExcelMappingDynamicValidationConfiguration
 {

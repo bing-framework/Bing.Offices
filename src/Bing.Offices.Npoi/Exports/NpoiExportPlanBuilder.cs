@@ -15,6 +15,7 @@ namespace Bing.Offices.Npoi.Exports;
 /// </summary>
 internal sealed class NpoiExportPlanBuilder
 {
+    /// <summary>将请求映射文档编译为不可变工作簿映射计划的工厂。</summary>
     private readonly IExcelMappingPlanFactory _mappingPlanFactory;
 
     /// <summary>
@@ -29,6 +30,8 @@ internal sealed class NpoiExportPlanBuilder
     /// <summary>
     /// 按规范化请求分组创建导出计划，并将计划映射回原始 Sheet 请求。
     /// </summary>
+    /// <param name="request">包含工作表和映射配置的工作簿导出请求。</param>
+    /// <returns>每个原始工作表请求对应的不可变列映射计划。</returns>
     public Dictionary<ExcelSheetExportRequest, IExcelMappingPlan> Create(
         ExcelWorkbookExportRequest request)
     {
@@ -44,10 +47,17 @@ internal sealed class NpoiExportPlanBuilder
         return result;
     }
 
+    /// <summary>生成区分实体类型、映射来源和导出方向的工作簿计划分组键。</summary>
+    /// <param name="request">待分组的工作表导出请求。</param>
+    /// <returns>可复用映射计划的稳定分组键。</returns>
     private static string GetWorkbookPlanKey(ExcelSheetExportRequest request)
         => NpoiWorkbookPlanKeyBuilder.Create(request.ItemType, request.MappingDocument,
             request.MappingConfiguration, MappingDirection.Export);
 
+    /// <summary>通过反射分派到工作表实体类型对应的泛型计划构建方法。</summary>
+    /// <param name="request">包含运行时实体类型的工作表导出请求。</param>
+    /// <param name="sheetNames">使用同一映射计划的工作表名称。</param>
+    /// <returns>包含各工作表视图的不可变映射计划。</returns>
     private IExcelMappingWorkbookPlan CreateWorkbookPlan(ExcelSheetExportRequest request,
         IReadOnlyList<string> sheetNames)
     {
@@ -64,6 +74,11 @@ internal sealed class NpoiExportPlanBuilder
         }
     }
 
+    /// <summary>为具体实体类型创建导出方向的工作簿映射计划。</summary>
+    /// <typeparam name="T">工作表实体类型。</typeparam>
+    /// <param name="request">工作表导出请求。</param>
+    /// <param name="sheetNames">使用同一映射计划的工作表名称。</param>
+    /// <returns>导出方向的不可变工作簿映射计划。</returns>
     private IExcelMappingWorkbookPlan CreateTypedWorkbookPlan<T>(ExcelSheetExportRequest request,
         IReadOnlyList<string> sheetNames) where T : class, new()
     {

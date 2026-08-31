@@ -5,16 +5,16 @@ using NPOI.SS.Util;
 namespace Bing.Offices.Npoi.Extensions;
 
 /// <summary>
-/// NPOI单元格(<see cref="NPOI.SS.UserModel.ICell"/>) 扩展
+/// 单元格合并和合并区域解析扩展。
 /// </summary>
 internal static partial class CellExtensions
 {
     /// <summary>
-    /// 合并单元格
+    /// 合并两个单元格所在区域，并按选项删除或吸收相交的既有合并区域。
     /// </summary>
     /// <param name="fromCell">起始单元格</param>
     /// <param name="toCell">终止单元格</param>
-    /// <param name="isExpand">扩充模式</param>
+    /// <param name="isExpand">是否将相交既有区域的边界吸收到新合并区域中。</param>
     public static void Merge(this NPOI.SS.UserModel.ICell fromCell, NPOI.SS.UserModel.ICell toCell,
         bool isExpand = false)
     {
@@ -44,9 +44,10 @@ internal static partial class CellExtensions
     }
 
     /// <summary>
-    /// 获取合并区域信息
+    /// 获取单元格所在的合并区域；未合并时返回仅包含该单元格的区域信息。
     /// </summary>
     /// <param name="cell">NPOI单元格</param>
+    /// <returns>合并区域信息；未合并单元格的区域索引为 -1。</returns>
     private static MergedRegionInfo GetRangeInfo(this NPOI.SS.UserModel.ICell cell)
     {
         var sheet = cell.Sheet;

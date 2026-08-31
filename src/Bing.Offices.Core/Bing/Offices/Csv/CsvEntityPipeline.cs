@@ -18,7 +18,9 @@ namespace Bing.Offices.Csv;
 /// </summary>
 public sealed class CsvEntityExporter : ICsvExporter
 {
+    /// <summary>按优先级用于导出字段的值转换器集合。</summary>
     private readonly IReadOnlyList<IExcelValueConverter> _valueConverters;
+    /// <summary>将 CSV 请求编译为不可变列映射计划的工厂。</summary>
     private readonly IExcelMappingPlanFactory _mappingPlanFactory;
 
     /// <summary>
@@ -70,6 +72,13 @@ public sealed class CsvEntityExporter : ICsvExporter
         writer.Flush();
     }
 
+    /// <summary>验证 CSV 序列化使用的字符、编码、区域性和公式防护策略。</summary>
+    /// <param name="delimiter">字段分隔符。</param>
+    /// <param name="quote">字段引用字符。</param>
+    /// <param name="newLine">记录换行符。</param>
+    /// <param name="encoding">目标流文本编码。</param>
+    /// <param name="culture">值格式化使用的区域性。</param>
+    /// <param name="formulaInjectionPolicy">潜在公式字段的处理策略。</param>
     private static void ValidateOptions(char delimiter, char quote, string newLine, Encoding encoding, CultureInfo culture,
         CsvFormulaInjectionPolicy formulaInjectionPolicy)
     {
@@ -87,6 +96,13 @@ public sealed class CsvEntityExporter : ICsvExporter
             throw new ArgumentOutOfRangeException(nameof(formulaInjectionPolicy));
     }
 
+    /// <summary>将固定映射列的实体值格式化为 CSV 字段文本。</summary>
+    /// <param name="column">固定列属性绑定。</param>
+    /// <param name="value">待格式化的实体值。</param>
+    /// <param name="rowIndex">目标记录的一基行号。</param>
+    /// <param name="columnIndex">目标字段的一基列号。</param>
+    /// <param name="culture">值格式化使用的区域性。</param>
+    /// <returns>可写入 CSV 记录的字段文本。</returns>
     private string FormatValue(CsvPropertyBinding column, object value, int rowIndex, int columnIndex, CultureInfo culture)
     {
         if (value == null)
@@ -106,6 +122,13 @@ public sealed class CsvEntityExporter : ICsvExporter
         return Convert.ToString(value, culture) ?? string.Empty;
     }
 
+    /// <summary>将固定或动态导出列从实体中读取并格式化为 CSV 字段文本。</summary>
+    /// <param name="column">包含映射和动态列定义的导出列。</param>
+    /// <param name="item">当前导出实体。</param>
+    /// <param name="rowIndex">目标记录的一基行号。</param>
+    /// <param name="columnIndex">目标字段的一基列号。</param>
+    /// <param name="culture">值格式化使用的区域性。</param>
+    /// <returns>可写入 CSV 记录的字段文本。</returns>
     private string FormatValue(CsvExportColumn column, object item, int rowIndex, int columnIndex, CultureInfo culture)
     {
         if (!column.IsDynamic)
@@ -124,6 +147,11 @@ public sealed class CsvEntityExporter : ICsvExporter
         return Convert.ToString(value, culture) ?? string.Empty;
     }
 
+    /// <summary>将不可变映射计划展开为固定和动态 CSV 导出列。</summary>
+    /// <typeparam name="T">导出实体类型。</typeparam>
+    /// <param name="map">已编译的实体映射计划。</param>
+    /// <param name="dynamicColumns">映射未声明动态列计划时使用的请求级标题。</param>
+    /// <returns>按输出顺序排列的 CSV 导出列。</returns>
     private static IReadOnlyList<CsvExportColumn> CreateColumns<T>(IExcelMappingPlan map,
         IReadOnlyList<string> dynamicColumns) where T : class, new()
     {
@@ -150,6 +178,11 @@ public sealed class CsvEntityExporter : ICsvExporter
         return columns;
     }
 
+    /// <summary>比较配置映射值与实体值的文本表示。</summary>
+    /// <param name="mappedValue">映射配置中的文本值。</param>
+    /// <param name="value">待比较的实体值。</param>
+    /// <param name="culture">格式化实体值使用的区域性。</param>
+    /// <returns>两个值语义相等时为 true。</returns>
     private static bool IsMappedValue(string mappedValue, object value, CultureInfo culture)
     {
         if (mappedValue == null || value == null)
@@ -159,6 +192,11 @@ public sealed class CsvEntityExporter : ICsvExporter
 
     private sealed class CsvExportColumn
     {
+        /// <summary>使用属性绑定和可选动态列计划创建导出列。</summary>
+        /// <param name="property">实体属性绑定。</param>
+        /// <param name="title">输出表头标题。</param>
+        /// <param name="isDynamic">是否从实体动态字典中读取值。</param>
+        /// <param name="dynamicColumn">已绑定的动态列计划。</param>
         public CsvExportColumn(CsvPropertyBinding property, string title, bool isDynamic,
             IExcelDynamicMappingColumn dynamicColumn = null)
         {
@@ -168,9 +206,13 @@ public sealed class CsvEntityExporter : ICsvExporter
             DynamicColumn = dynamicColumn;
         }
 
+        /// <summary>获取实体属性绑定。</summary>
         public CsvPropertyBinding Property { get; }
+        /// <summary>获取输出表头标题。</summary>
         public string Title { get; }
+        /// <summary>获取是否从实体动态字典中读取值。</summary>
         public bool IsDynamic { get; }
+        /// <summary>获取已绑定的动态列计划；固定列时为 null。</summary>
         public IExcelDynamicMappingColumn DynamicColumn { get; }
     }
 }
@@ -180,9 +222,13 @@ public sealed class CsvEntityExporter : ICsvExporter
 /// </summary>
 public sealed class CsvEntityImporter : ICsvImporter
 {
+    /// <summary>按优先级用于导入字段的值转换器集合。</summary>
     private readonly IReadOnlyList<IExcelValueConverter> _valueConverters;
+    /// <summary>用于属性特性校验的规则集合。</summary>
     private readonly IReadOnlyList<IExcelValidationRule> _validationRules;
+    /// <summary>可按配置名称绑定的校验规则集合。</summary>
     private readonly IReadOnlyList<INamedExcelValidationRule> _namedValidationRules;
+    /// <summary>将 CSV 请求编译为不可变列映射计划的工厂。</summary>
     private readonly IExcelMappingPlanFactory _mappingPlanFactory;
 
     /// <summary>
@@ -368,12 +414,20 @@ public sealed class CsvEntityImporter : ICsvImporter
         return new CsvImportResult<T>(items, errors, isTruncated, options.MaxErrors);
     }
 
+    /// <summary>创建表示输入资源限制已触发的截断导入结果。</summary>
+    /// <typeparam name="T">导入实体类型。</typeparam>
+    /// <param name="message">描述超出资源限制的错误消息。</param>
+    /// <param name="options">提供最大错误数的当前导入选项。</param>
+    /// <returns>不包含实体且带有资源限制错误的截断结果。</returns>
     private static CsvImportResult<T> CreateResourceLimitResult<T>(string message, CsvImportOptions<T> options)
         where T : class, new() => new CsvImportResult<T>(Array.Empty<T>(), new[]
         {
             new CsvImportError(message, 0, 0, null, code: CsvImportErrorCode.ResourceLimit)
         }, true, options.MaxErrors);
 
+    /// <summary>将转换和校验异常映射为公开的 CSV 错误代码。</summary>
+    /// <param name="exception">处理字段时捕获的异常。</param>
+    /// <returns>用于导入结果的错误代码。</returns>
     private static CsvImportErrorCode ClassifyError(Exception exception)
     {
         if (exception is InvalidCastException || exception is FormatException
@@ -384,6 +438,13 @@ public sealed class CsvEntityImporter : ICsvImporter
         return CsvImportErrorCode.InvalidInput;
     }
 
+    /// <summary>将固定列文本转换为实体属性的目标类型。</summary>
+    /// <param name="value">规范化后的 CSV 字段文本。</param>
+    /// <param name="property">固定列属性绑定。</param>
+    /// <param name="rowIndex">字段所在的一基行号。</param>
+    /// <param name="columnIndex">字段所在的一基列号。</param>
+    /// <param name="culture">文本转换使用的区域性。</param>
+    /// <returns>可写入实体属性的转换结果。</returns>
     private object ConvertValue(string value, CsvPropertyBinding property, int rowIndex, int columnIndex, CultureInfo culture)
     {
         var type = property.Property.PropertyType;
@@ -411,6 +472,12 @@ public sealed class CsvEntityImporter : ICsvImporter
         return Convert.ChangeType(value, targetType, culture);
     }
 
+    /// <summary>将动态列文本转换为其配置的逻辑类型。</summary>
+    /// <param name="value">规范化后的 CSV 字段文本。</param>
+    /// <param name="column">动态列的表头和映射绑定。</param>
+    /// <param name="rowIndex">字段所在的一基行号。</param>
+    /// <param name="culture">文本转换使用的区域性。</param>
+    /// <returns>适合写入动态值字典的转换结果。</returns>
     private static object ConvertDynamicValue(string value, CsvColumn column, int rowIndex, CultureInfo culture)
     {
         if (column.DynamicColumn == null)
@@ -436,6 +503,12 @@ public sealed class CsvEntityImporter : ICsvImporter
         return Convert.ChangeType(value, targetType, culture);
     }
 
+    /// <summary>执行需要原始字段文本的校验规则。</summary>
+    /// <param name="value">规范化后的 CSV 字段文本。</param>
+    /// <param name="column">当前列绑定。</param>
+    /// <param name="rowIndex">字段所在的一基行号。</param>
+    /// <param name="duplicateValues">兼容旧校验规则的重复值状态。</param>
+    /// <param name="culture">校验上下文使用的区域性。</param>
     private void ValidateRawValue(string value, CsvColumn column, int rowIndex,
         IDictionary<string, HashSet<string>> duplicateValues, CultureInfo culture)
     {
@@ -447,6 +520,14 @@ public sealed class CsvEntityImporter : ICsvImporter
         }
     }
 
+    /// <summary>执行转换后校验规则并为唯一性规则预留当前值。</summary>
+    /// <param name="value">规范化后的原始字段文本。</param>
+    /// <param name="convertedValue">转换后的字段值。</param>
+    /// <param name="column">当前列绑定。</param>
+    /// <param name="rowIndex">字段所在的一基行号。</param>
+    /// <param name="duplicateValues">兼容旧校验规则的重复值状态。</param>
+    /// <param name="uniqueTracker">负责当前行提交或回滚的唯一值跟踪器。</param>
+    /// <param name="culture">校验上下文使用的区域性。</param>
     private void ValidateConvertedValue(string value, object convertedValue, CsvColumn column, int rowIndex,
         IDictionary<string, HashSet<string>> duplicateValues, UniqueTracker uniqueTracker, CultureInfo culture)
     {
@@ -464,6 +545,14 @@ public sealed class CsvEntityImporter : ICsvImporter
             throw new InvalidOperationException("重复数据");
     }
 
+    /// <summary>创建供 CSV 字段校验规则使用的提供程序无关上下文。</summary>
+    /// <param name="value">原始字段文本。</param>
+    /// <param name="convertedValue">转换后的字段值。</param>
+    /// <param name="column">当前列绑定。</param>
+    /// <param name="rowIndex">字段所在的一基行号。</param>
+    /// <param name="duplicateValues">兼容旧校验规则的重复值状态。</param>
+    /// <param name="culture">校验上下文使用的区域性。</param>
+    /// <returns>包含字段位置、类型和文本值的校验上下文。</returns>
     private static ExcelValidationContext CreateValidationContext(string value, object convertedValue, CsvColumn column,
         int rowIndex, IDictionary<string, HashSet<string>> duplicateValues, CultureInfo culture) => new(value, null,
         rowIndex, column.Index + 1, column.DynamicColumn?.Key ?? column.Property.Name, convertedValue,
@@ -471,9 +560,17 @@ public sealed class CsvEntityImporter : ICsvImporter
             : CsvDynamicTypeResolver.Resolve(column.DynamicColumn.DataTypeName),
         new ExcelCellValue(value, value, ExcelCellKind.Text), culture);
 
+    /// <summary>获取固定列或动态列已经绑定的校验规则。</summary>
+    /// <param name="column">当前 CSV 列绑定。</param>
+    /// <returns>按执行顺序排列的校验规则集合。</returns>
     private static IReadOnlyList<IExcelValidationBinding> GetValidationBindings(CsvColumn column) =>
         column.DynamicColumn?.ValidationBindings ?? column.Property.ValidationBindings;
 
+    /// <summary>将配置的显示值映射文本转换为目标属性类型。</summary>
+    /// <param name="value">映射配置中的文本值。</param>
+    /// <param name="type">目标属性类型。</param>
+    /// <param name="culture">文本转换使用的区域性。</param>
+    /// <returns>目标类型的映射值。</returns>
     private static object ConvertMappedValue(string value, Type type, CultureInfo culture)
     {
         var targetType = Nullable.GetUnderlyingType(type) ?? type;
@@ -490,6 +587,10 @@ public sealed class CsvEntityImporter : ICsvImporter
         return Convert.ChangeType(value, targetType, culture);
     }
 
+    /// <summary>按照列配置的空白策略规范化 CSV 字段文本。</summary>
+    /// <param name="value">待规范化的文本；为 null 时按空字符串处理。</param>
+    /// <param name="policy">空白处理策略；为 null 时保留原始文本。</param>
+    /// <returns>规范化后的字段文本。</returns>
     private static string NormalizeText(string value, ExcelWhitespacePolicy? policy)
     {
         value ??= string.Empty;
@@ -502,6 +603,9 @@ public sealed class CsvEntityImporter : ICsvImporter
         };
     }
 
+    /// <summary>创建与导入选项中字符串比较规则等效的比较器。</summary>
+    /// <param name="comparison">要支持的字符串比较规则。</param>
+    /// <returns>对应的字符串比较器。</returns>
     private static StringComparer CreateStringComparer(StringComparison comparison) => comparison switch
     {
         StringComparison.Ordinal => StringComparer.Ordinal,
@@ -515,13 +619,19 @@ public sealed class CsvEntityImporter : ICsvImporter
 
 }
 
+/// <summary>表示 CSV 表头无法与当前映射计划匹配。</summary>
 internal sealed class CsvInvalidHeaderException : InvalidOperationException
 {
+    /// <summary>使用表头结构错误消息初始化异常。</summary>
+    /// <param name="message">描述无效表头的消息。</param>
     public CsvInvalidHeaderException(string message) : base(message) { }
 }
 
+/// <summary>表示 CSV 输入超出配置的资源限制。</summary>
 internal sealed class CsvResourceLimitException : InvalidOperationException
 {
+    /// <summary>使用资源限制错误消息初始化异常。</summary>
+    /// <param name="message">描述超出资源限制的消息。</param>
     public CsvResourceLimitException(string message) : base(message) { }
 }
 
@@ -530,6 +640,12 @@ internal sealed class CsvResourceLimitException : InvalidOperationException
 /// </summary>
 internal static class CsvRecordReader
 {
+    /// <summary>按 RFC 4180 规则延迟读取调用方拥有的文本读取器。</summary>
+    /// <param name="reader">调用方负责释放的源文本读取器。</param>
+    /// <param name="delimiter">字段分隔符。</param>
+    /// <param name="quote">字段引用字符。</param>
+    /// <param name="cancellationToken">每条记录读取前检查的取消令牌。</param>
+    /// <returns>按出现顺序产生的 CSV 记录字段集合。</returns>
     public static IEnumerable<IReadOnlyList<string>> Read(TextReader reader, char delimiter, char quote,
         CancellationToken cancellationToken)
     {
@@ -550,24 +666,37 @@ internal static class CsvRecordReader
     }
 }
 
+/// <summary>对不可定位的 CSV 源流施加读取字节上限且不拥有底层流的包装器。</summary>
 internal sealed class CsvLimitedReadStream : Stream
 {
+    /// <summary>由调用方拥有且不会由包装器释放的底层输入流。</summary>
     private readonly Stream _inner;
+    /// <summary>允许从底层流读取的最大字节数。</summary>
     private readonly long _maxBytes;
+    /// <summary>当前已从底层流读取的累计字节数。</summary>
     private long _readBytes;
 
+    /// <summary>创建对底层输入流实施字节上限的包装器。</summary>
+    /// <param name="inner">由调用方负责释放的底层输入流。</param>
+    /// <param name="maxBytes">允许读取的最大字节数。</param>
     public CsvLimitedReadStream(Stream inner, long maxBytes)
     {
         _inner = inner;
         _maxBytes = maxBytes;
     }
 
+    /// <inheritdoc />
     public override bool CanRead => _inner.CanRead;
+    /// <inheritdoc />
     public override bool CanSeek => false;
+    /// <inheritdoc />
     public override bool CanWrite => false;
+    /// <inheritdoc />
     public override long Length => throw new NotSupportedException();
+    /// <inheritdoc />
     public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
 
+    /// <inheritdoc />
     public override int Read(byte[] buffer, int offset, int count)
     {
         if (_readBytes == _maxBytes)
@@ -583,10 +712,16 @@ internal sealed class CsvLimitedReadStream : Stream
         return read;
     }
 
+    /// <inheritdoc />
     public override void Flush() => throw new NotSupportedException();
+    /// <inheritdoc />
     public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+    /// <inheritdoc />
     public override void SetLength(long value) => throw new NotSupportedException();
+    /// <inheritdoc />
     public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    /// <summary>不释放调用方拥有的底层输入流。</summary>
+    /// <param name="disposing">指示释放流程是否由 Dispose 调用触发。</param>
     protected override void Dispose(bool disposing) { }
 }
 
@@ -620,6 +755,10 @@ internal static class CsvRecordWriter
         csv.NextRecord();
     }
 
+    /// <summary>按照配置策略转义可能被电子表格解释为公式的字段。</summary>
+    /// <param name="value">待写入的字段文本。</param>
+    /// <param name="policy">潜在公式字段的处理策略。</param>
+    /// <returns>安全写入 CSV 的字段文本。</returns>
     private static string ProtectFormula(string value, CsvFormulaInjectionPolicy policy) =>
         policy == CsvFormulaInjectionPolicy.Escape && value.Length > 0 && "=+-@".IndexOf(value[0]) >= 0
             ? $"'{value}"

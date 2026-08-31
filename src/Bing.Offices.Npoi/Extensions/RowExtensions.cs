@@ -8,18 +8,20 @@ namespace Bing.Offices.Npoi.Extensions;
 internal static class RowExtensions
 {
     /// <summary>
-    /// 获取或创建单元格
+    /// 获取指定索引的单元格；不存在时创建新单元格。
     /// </summary>
     /// <param name="row">行</param>
     /// <param name="cellIndex">单元格索引</param>
+    /// <returns>指定索引的现有或新建单元格。</returns>
     public static ICell GetOrCreateCell(this IRow row, int cellIndex) => row.GetCell(cellIndex) ?? row.CreateCell(cellIndex);
 
     /// <summary>
-    /// 创建单元格并进行操作
+    /// 获取或创建指定单元格，执行可选配置操作后返回当前行。
     /// </summary>
     /// <param name="row">行</param>
     /// <param name="cellIndex">单元格索引</param>
     /// <param name="action">单元格操作</param>
+    /// <returns>当前行。</returns>
     public static IRow CreateCell(this IRow row, int cellIndex, Action<ICell> action)
     {
         var cell = row.GetOrCreateCell(cellIndex);
@@ -28,9 +30,10 @@ internal static class RowExtensions
     }
 
     /// <summary>
-    /// 清空内容
+    /// 将当前行已有单元格的内容清空为字符串空值。
     /// </summary>
     /// <param name="row">NPOI单元行</param>
+    /// <returns>当前行。</returns>
     public static IRow ClearContent(this IRow row)
     {
         foreach (var cell in row.Cells)
@@ -39,13 +42,14 @@ internal static class RowExtensions
     }
 
     /// <summary>
-    /// 是否空行
+    /// 判断行不存在或所有已有单元格均为空白。
     /// </summary>
     /// <param name="row">行</param>
+    /// <returns>行为空或不存在时为 true。</returns>
     public static bool IsEmptyRow(this IRow row) => row == null || row.Cells.All(x => string.IsNullOrWhiteSpace(x?.GetStringValue()));
 
     /// <summary>
-    /// 设置单元格值
+    /// 将值写入指定列，并在提供样式时绑定该样式。
     /// </summary>
     /// <typeparam name="T">数据类型</typeparam>
     /// <param name="row">行</param>

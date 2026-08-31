@@ -16,6 +16,7 @@ namespace Bing.Offices.Npoi.Imports;
 /// </summary>
 internal sealed class NpoiImportPlanBuilder
 {
+    /// <summary>将请求映射文档编译为不可变工作簿映射计划的工厂。</summary>
     private readonly IExcelMappingPlanFactory _mappingPlanFactory;
 
     /// <summary>
@@ -30,6 +31,11 @@ internal sealed class NpoiImportPlanBuilder
     /// <summary>
     /// 按规范化请求分组创建导入计划，并将计划映射回原始 Sheet 请求。
     /// </summary>
+    /// <typeparam name="TWorkbook">导入工作簿根实体类型。</typeparam>
+    /// <param name="request">当前工作簿导入请求。</param>
+    /// <param name="workbook">用于解析实际工作表名称的 NPOI 工作簿。</param>
+    /// <param name="existingSheets">成功解析为物理工作表的请求及其零基索引。</param>
+    /// <returns>每个原始工作表请求对应的不可变列映射计划。</returns>
     public Dictionary<ExcelSheetImportRequest, IExcelMappingPlan> Create<TWorkbook>(
         ExcelWorkbookImportRequest<TWorkbook> request, IWorkbook workbook,
         IEnumerable<KeyValuePair<ExcelSheetImportRequest, int>> existingSheets)
@@ -48,10 +54,17 @@ internal sealed class NpoiImportPlanBuilder
         return result;
     }
 
+    /// <summary>生成区分实体类型、映射来源和导入方向的工作簿计划分组键。</summary>
+    /// <param name="request">待分组的工作表导入请求。</param>
+    /// <returns>可复用映射计划的稳定分组键。</returns>
     private static string GetWorkbookPlanKey(ExcelSheetImportRequest request)
         => NpoiWorkbookPlanKeyBuilder.Create(request.ItemType, request.MappingDocument,
             request.MappingConfiguration, MappingDirection.Import);
 
+    /// <summary>通过反射分派到工作表实体类型对应的泛型计划构建方法。</summary>
+    /// <param name="request">包含运行时实体类型的工作表导入请求。</param>
+    /// <param name="sheetNames">使用同一映射计划的工作表名称。</param>
+    /// <returns>包含各工作表视图的不可变映射计划。</returns>
     private IExcelMappingWorkbookPlan CreateWorkbookPlan(ExcelSheetImportRequest request,
         IReadOnlyList<string> sheetNames)
     {
@@ -68,6 +81,11 @@ internal sealed class NpoiImportPlanBuilder
         }
     }
 
+    /// <summary>为具体实体类型创建导入方向的工作簿映射计划。</summary>
+    /// <typeparam name="T">工作表实体类型。</typeparam>
+    /// <param name="request">工作表导入请求。</param>
+    /// <param name="sheetNames">使用同一映射计划的工作表名称。</param>
+    /// <returns>导入方向的不可变工作簿映射计划。</returns>
     private IExcelMappingWorkbookPlan CreateTypedWorkbookPlan<T>(ExcelSheetImportRequest request,
         IReadOnlyList<string> sheetNames) where T : class, new()
     {

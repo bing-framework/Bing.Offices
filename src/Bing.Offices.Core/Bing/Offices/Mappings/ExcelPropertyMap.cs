@@ -54,7 +54,7 @@ public sealed class ExcelPropertyMap
     public PropertyInfo Property { get; }
 
     /// <summary>
-    /// 获取属性名称。
+    /// 获取用于列绑定和错误定位的实体属性名称。
     /// </summary>
     public string Name => Property.Name;
 

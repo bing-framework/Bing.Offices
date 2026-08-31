@@ -41,22 +41,22 @@ public sealed class CsvImportError
     }
 
     /// <summary>
-    /// 获取错误信息。
+    /// 获取面向调用方的错误描述。
     /// </summary>
     public string Message { get; }
 
     /// <summary>
-    /// 获取从一开始的行号。
+    /// 获取错误所在的从一开始计数的行号。
     /// </summary>
     public int RowIndex { get; }
 
     /// <summary>
-    /// 获取从一开始的列号。
+    /// 获取错误所在的从一开始计数的列号。
     /// </summary>
     public int ColumnIndex { get; }
 
     /// <summary>
-    /// 获取属性名称。
+    /// 获取发生错误的实体属性名称；无法关联属性时为 null。
     /// </summary>
     public string PropertyName { get; }
 

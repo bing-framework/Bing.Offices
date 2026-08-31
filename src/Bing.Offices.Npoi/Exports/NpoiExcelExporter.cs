@@ -25,7 +25,13 @@ internal sealed class NpoiExcelExporter : IExcelExporter
     /// 当前导出器使用的值转换器。
     /// </summary>
     private readonly IReadOnlyList<IExcelValueConverter> _valueConverters;
+    /// <summary>
+    /// 将导出请求编译为按工作表执行的映射计划生成器。
+    /// </summary>
     private readonly NpoiExportPlanBuilder _planBuilder;
+    /// <summary>
+    /// 根据列计划将实体数据写入 NPOI 工作表的写入器。
+    /// </summary>
     private readonly NpoiExportSheetWriter _sheetWriter;
 
     /// <summary>
@@ -91,6 +97,8 @@ internal sealed class NpoiExcelExporter : IExcelExporter
     /// <summary>
     /// 创建普通或模板工作簿。模板加载后沿用同一 Sheet Writer。
     /// </summary>
+    /// <param name="request">包含格式、模板流和元数据的导出请求。</param>
+    /// <returns>已准备好的 NPOI 工作簿。</returns>
     private static NPOI.SS.UserModel.IWorkbook CreateWorkbook(ExcelWorkbookExportRequest request)
     {
         if (request.Template == null)
@@ -106,6 +114,7 @@ internal sealed class NpoiExcelExporter : IExcelExporter
     /// <summary>
     /// 验证 Excel Sheet 名称边界。
     /// </summary>
+    /// <param name="name">待验证的工作表名称。</param>
     private static void ValidateSheetName(string name)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -116,6 +125,12 @@ internal sealed class NpoiExcelExporter : IExcelExporter
             throw new ArgumentException($"工作表名称包含非法字符: {name}", nameof(name));
     }
 
+    /// <summary>通过反射分派到对应实体类型的工作表写入方法。</summary>
+    /// <param name="workbook">目标 NPOI 工作簿。</param>
+    /// <param name="request">当前工作表导出请求。</param>
+    /// <param name="isTemplate">是否基于模板工作簿导出。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <param name="mapping">当前工作表的不可变映射计划。</param>
     private void WriteSheet(NPOI.SS.UserModel.IWorkbook workbook, ExcelSheetExportRequest request,
         bool isTemplate, CancellationToken cancellationToken, IExcelMappingPlan mapping)
     {
@@ -135,6 +150,12 @@ internal sealed class NpoiExcelExporter : IExcelExporter
     /// <summary>
     /// 执行一个泛型 Sheet 的统一列计划和 Cell Writer。
     /// </summary>
+    /// <typeparam name="T">工作表数据项类型。</typeparam>
+    /// <param name="workbook">目标 NPOI 工作簿。</param>
+    /// <param name="request">当前工作表导出请求。</param>
+    /// <param name="isTemplate">是否基于模板工作簿导出。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <param name="map">当前工作表的映射计划。</param>
     private void WriteTypedSheet<T>(NPOI.SS.UserModel.IWorkbook workbook, ExcelSheetExportRequest request,
         bool isTemplate, CancellationToken cancellationToken, IExcelMappingPlan map) where T : class, new()
     {
@@ -219,6 +240,8 @@ internal sealed class NpoiExcelExporter : IExcelExporter
         ValidateColumns(columns);
     }
 
+    /// <summary>验证动态列定义具有导出所需的键和标题。</summary>
+    /// <param name="definitions">待验证的动态列定义。</param>
     private static void ValidateDynamicDefinitions(IReadOnlyList<ExcelDynamicColumnDefinition> definitions)
     {
         foreach (var definition in definitions ?? Array.Empty<ExcelDynamicColumnDefinition>())
@@ -232,6 +255,10 @@ internal sealed class NpoiExcelExporter : IExcelExporter
     /// <summary>
     /// 创建 Workbook 请求使用的固定列和 typed 动态列计划。
     /// </summary>
+    /// <typeparam name="T">工作表数据项类型。</typeparam>
+    /// <param name="typeMap">实体类型的映射计划。</param>
+    /// <param name="dynamicColumns">请求级动态列定义。</param>
+    /// <returns>按最终物理列顺序排列的列计划。</returns>
     private static IReadOnlyList<ExcelColumnPlan> CreateColumns<T>(IExcelMappingPlan typeMap,
         IReadOnlyList<ExcelDynamicColumnDefinition> dynamicColumns)
         where T : class, new()
@@ -301,6 +328,11 @@ internal sealed class NpoiExcelExporter : IExcelExporter
         return columns;
     }
 
+    /// <summary>合并映射计划和请求级样式以生成导出动态列定义。</summary>
+    /// <param name="column">已绑定的动态列映射。</param>
+    /// <param name="requestColumn">请求中与映射键匹配的动态列定义。</param>
+    /// <param name="mapping">包含默认样式和布局的列映射计划。</param>
+    /// <returns>用于生成导出列计划的动态列定义。</returns>
     private static ExcelDynamicColumnDefinition CreateDynamicDefinition(IExcelDynamicMappingColumn column,
         ExcelDynamicColumnDefinition requestColumn, IExcelMappingPlan mapping)
     {
@@ -331,6 +363,9 @@ internal sealed class NpoiExcelExporter : IExcelExporter
         };
     }
 
+    /// <summary>将 before/after 形式的位置键转换为动态列定位规则。</summary>
+    /// <param name="placementKey">映射中保存的相对位置键。</param>
+    /// <returns>解析后的定位规则；键为空时为 null。</returns>
     private static ExcelColumnPlacement CreatePlacement(string placementKey)
     {
         if (string.IsNullOrWhiteSpace(placementKey))
@@ -342,6 +377,9 @@ internal sealed class NpoiExcelExporter : IExcelExporter
             : ExcelColumnPlacement.After(key);
     }
 
+    /// <summary>解析配置允许的动态列逻辑类型名称。</summary>
+    /// <param name="name">配置中的类型名称；为空时使用 string。</param>
+    /// <returns>对应的 CLR 类型。</returns>
     private static Type ResolveDynamicType(string name)
     {
         switch ((name ?? "string").ToLowerInvariant())
@@ -378,6 +416,10 @@ internal sealed class NpoiExcelExporter : IExcelExporter
         }
     }
 
+    /// <summary>解析实体上的公共实例属性。</summary>
+    /// <typeparam name="T">导出实体类型。</typeparam>
+    /// <param name="name">映射配置中的属性名称。</param>
+    /// <returns>匹配的公共实例属性。</returns>
     private static PropertyInfo ResolveProperty<T>(string name) where T : class, new()
     {
         var property = typeof(T).GetProperty(name, BindingFlags.Instance | BindingFlags.Public);
@@ -391,34 +433,51 @@ internal sealed class NpoiExcelExporter : IExcelExporter
     /// </summary>
     private sealed class NonDisposingStream : Stream
     {
+        /// <summary>由调用方拥有且不会被此包装器释放的底层流。</summary>
         private readonly Stream _inner;
+        /// <summary>在写入或刷新边界检查的取消令牌。</summary>
         private readonly CancellationToken _cancellationToken;
 
+        /// <summary>创建不会关闭底层流的 NPOI 流包装器。</summary>
+        /// <param name="inner">由调用方负责释放的底层流。</param>
+        /// <param name="cancellationToken">写入和刷新期间检查的取消令牌。</param>
         public NonDisposingStream(Stream inner, CancellationToken cancellationToken = default)
         {
             _inner = inner;
             _cancellationToken = cancellationToken;
         }
 
+        /// <inheritdoc />
         public override bool CanRead => _inner.CanRead;
+        /// <inheritdoc />
         public override bool CanSeek => _inner.CanSeek;
+        /// <inheritdoc />
         public override bool CanWrite => _inner.CanWrite;
+        /// <inheritdoc />
         public override long Length => _inner.Length;
+        /// <inheritdoc />
         public override long Position { get => _inner.Position; set => _inner.Position = value; }
+        /// <inheritdoc />
         public override void Flush()
         {
             _cancellationToken.ThrowIfCancellationRequested();
             _inner.Flush();
         }
+        /// <inheritdoc />
         public override int Read(byte[] buffer, int offset, int count) => _inner.Read(buffer, offset, count);
+        /// <inheritdoc />
         public override long Seek(long offset, SeekOrigin origin) => _inner.Seek(offset, origin);
+        /// <inheritdoc />
         public override void SetLength(long value) => _inner.SetLength(value);
+        /// <inheritdoc />
         public override void Write(byte[] buffer, int offset, int count)
         {
             _cancellationToken.ThrowIfCancellationRequested();
             _inner.Write(buffer, offset, count);
             _cancellationToken.ThrowIfCancellationRequested();
         }
+        /// <summary>刷新底层流但不释放调用方拥有的流。</summary>
+        /// <param name="disposing">指示释放流程是否由 Dispose 调用触发。</param>
         protected override void Dispose(bool disposing)
         {
             if (disposing)

@@ -12,9 +12,10 @@ internal static class WorkbookExtensions
     #region GetExcelFormat(获取Excel格式类型)
 
     /// <summary>
-    /// 获取Excel格式类型
+    /// 获取工作簿的 Excel 文件格式；仅支持 HSSF/XLS 和 XSSF/XLSX 实现。
     /// </summary>
     /// <param name="workbook">工作簿</param>
+    /// <returns>工作簿对应的 XLS 或 XLSX 格式。</returns>
     public static ExcelFormat GetExcelFormat(this IWorkbook workbook)
     {
         switch (workbook)
@@ -32,9 +33,10 @@ internal static class WorkbookExtensions
     #region GetSheets(获取工作表集合)
 
     /// <summary>
-    /// 获取工作表集合
+    /// 获取工作簿中可见且非非常隐藏的工作表集合。
     /// </summary>
     /// <param name="workbook">工作簿</param>
+    /// <returns>按工作簿顺序排列的可见工作表；没有可见工作表时返回空集合。</returns>
     public static IEnumerable<ISheet> GetSheets(this IWorkbook workbook)
     {
         var sheets = new List<ISheet>();
@@ -52,7 +54,7 @@ internal static class WorkbookExtensions
     #region SetAllSheetAutoCompute(设置所有工作表自动计算)
 
     /// <summary>
-    /// 设置所有工作表自动计算
+    /// 将所有工作表的 <see cref="ISheet.ForceFormulaRecalculation"/> 设置为 true；空工作簿不执行任何操作。
     /// </summary>
     /// <param name="workbook">工作簿</param>
     public static void SetAllSheetAutoCompute(this IWorkbook workbook)

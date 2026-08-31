@@ -44,9 +44,13 @@ public sealed class RequiredExcelValidationRule : IExcelValidationRule
 /// </summary>
 public sealed class RegexExcelValidationRule : IExcelValidationRule
 {
+    /// <summary>进程级正则缓存允许保留的最大模式数量。</summary>
     internal const int RegexCacheCapacity = 256;
+    /// <summary>保护正则缓存和淘汰队列的一致性锁。</summary>
     private static readonly object RegexCacheLock = new object();
+    /// <summary>按模式文本缓存的已编译正则表达式。</summary>
     private static readonly Dictionary<string, Regex> RegexCache = new Dictionary<string, Regex>(StringComparer.Ordinal);
+    /// <summary>按插入顺序记录缓存模式，用于有界先进先出淘汰。</summary>
     private static readonly Queue<string> RegexCacheOrder = new Queue<string>();
 
     /// <inheritdoc />

@@ -5,14 +5,15 @@ using Bing.Text;
 namespace Bing.Offices.Extensions;
 
 /// <summary>
-/// 类型(<see cref="Type"/>) 扩展
+/// 类型名称和枚举元数据解析扩展。
 /// </summary>
 public static class TypeExtensions
 {
     /// <summary>
-    /// 获取CSharp类型名称
+    /// 将类型转换为不含程序集限定名的 C# 泛型类型名称。
     /// </summary>
     /// <param name="type">类型</param>
+    /// <returns>类型的 C# 名称；泛型类型包含其递归解析后的类型参数。</returns>
     public static string GetCSharpTypeName(this Type type)
     {
         var sb = new StringBuilder();
@@ -28,7 +29,7 @@ public static class TypeExtensions
     }
 
     /// <summary>
-    /// 获取枚举列表
+    /// 创建枚举显示文本到整数值的映射。
     /// </summary>
     /// <param name="type">类型</param>
     /// <returns>
@@ -48,10 +49,10 @@ public static class TypeExtensions
     }
 
     /// <summary>
-    /// 获取枚举定义列表
+    /// 读取枚举名称、整数值、显示名称和描述组成的定义列表。
     /// </summary>
     /// <param name="type">类型</param>
-    /// <returns>返回枚举列表元组（名称、值、显示名、描述）</returns>
+    /// <returns>枚举定义列表；传入类型不是枚举时返回 null。</returns>
     public static IEnumerable<(string Name, int Value, string DisplayName, string Description)> GetEnumDefinitionList(this Type type)
     {
         var list = new List<(string Name, int Value, string DisplayName, string Description)>();
@@ -84,7 +85,7 @@ public static class TypeExtensions
     /// 获取保留原始底层值的枚举定义列表。
     /// </summary>
     /// <param name="type">枚举类型。</param>
-    /// <returns>返回枚举名称、原始值、显示名和描述。</returns>
+    /// <returns>保留枚举底层值的名称、值、显示名和描述列表。</returns>
     internal static IEnumerable<(string Name, object Value, string DisplayName, string Description)>
         GetEnumValueDefinitionList(this Type type)
     {

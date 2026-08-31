@@ -2,8 +2,12 @@
 
 namespace Bing.Offices.Csv;
 
+/// <summary>解析 CSV 动态列允许使用的 CLR 类型名称。</summary>
 internal static class CsvDynamicTypeResolver
 {
+    /// <summary>将配置中的动态列类型名称解析为受支持的 CLR 类型。</summary>
+    /// <param name="name">类型名称；为空时使用 string。</param>
+    /// <returns>对应的 CLR 类型。</returns>
     public static Type Resolve(string name)
     {
         switch ((name ?? "string").ToLowerInvariant())
