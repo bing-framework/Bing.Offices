@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
@@ -7,6 +8,7 @@ using Bing.Offices.Attributes;
 using Bing.Offices.Configurations;
 using Bing.Offices.Exports;
 using Bing.Offices.Imports;
+using Bing.Offices.IO;
 using Bing.Offices.Mappings;
 using Bing.Offices.Providers;
 using Bing.Offices.Validations;
@@ -22,6 +24,91 @@ namespace Bing.Offices.Tests;
 /// </summary>
 public sealed class ReviewFixRegressionTest
 {
+    /// <summary>
+    /// 测试 - 原子文件提交主异常与临时文件清理异常同时发生时，应保留主异常和结构化诊断。
+    /// </summary>
+    [Fact]
+    public void AtomicFileCommitter_PrimaryFailureWithCleanupFailure_ShouldPreserveBothExceptions()
+    {
+        // Arrange
+        var fileSystem = new FailingAtomicFileSystem { FailWrite = true, FailDelete = true };
+
+        // Act
+        var exception = Assert.Throws<InvalidOperationException>(() => AtomicFileCommitter.Commit(
+            "target.xlsx", stream => stream.Write(new byte[] { 1 }, 0, 1), default, "Excel", fileSystem));
+
+        // Assert
+        Assert.Equal("写入失败", exception.Message);
+        Assert.IsType<IOException>(exception.Data["Bing.Offices.Excel.TemporaryCleanupException"]);
+        Assert.True(fileSystem.DeleteCalled);
+    }
+
+    /// <summary>
+    /// 测试 - 原子文件提交阶段失败时应清理临时文件且不替换既有目标。
+    /// </summary>
+    [Fact]
+    public void AtomicFileCommitter_CommitFailure_ShouldKeepExistingTargetAndCleanup()
+    {
+        // Arrange
+        var fileSystem = new FailingAtomicFileSystem { FailMove = true };
+
+        // Act
+        var exception = Assert.Throws<InvalidOperationException>(() => AtomicFileCommitter.Commit(
+            "target.xlsx", stream => stream.WriteByte(1), default, "CSV", fileSystem));
+
+        // Assert
+        Assert.Equal("提交失败", exception.Message);
+        Assert.True(fileSystem.DeleteCalled);
+        Assert.False(fileSystem.Replaced);
+    }
+
+    /// <summary>代码自身无法证明 Move 提交与清理同时失败时的异常合同。</summary>
+    [Theory]
+    [InlineData("Excel")]
+    [InlineData("CSV")]
+    public void AtomicFileCommitter_MoveFailureWithCleanupFailure_ShouldPreserveDiagnostics(string format)
+    {
+        // Arrange
+        var fileSystem = new FailingAtomicFileSystem { FailMove = true, FailDelete = true };
+
+        // Act
+        var exception = Assert.Throws<InvalidOperationException>(() => AtomicFileCommitter.Commit(
+            "target.xlsx", stream => stream.Write(new byte[] { 1 }, 0, 1), default, format, fileSystem));
+
+        // Assert
+        Assert.Equal("提交失败", exception.Message);
+        Assert.IsType<IOException>(exception.Data[$"Bing.Offices.{format}.TemporaryCleanupException"]);
+        Assert.True(fileSystem.DeleteCalled);
+        Assert.False(fileSystem.TargetChanged);
+        Assert.True(fileSystem.TemporaryRemains);
+    }
+
+    /// <summary>代码自身无法证明 Replace 提交与清理同时失败时的异常合同。</summary>
+    [Theory]
+    [InlineData("Excel")]
+    [InlineData("CSV")]
+    public void AtomicFileCommitter_ReplaceFailureWithCleanupFailure_ShouldKeepExistingTarget(string format)
+    {
+        // Arrange
+        var fileSystem = new FailingAtomicFileSystem
+        {
+            ExistingTarget = true,
+            FailReplace = true,
+            FailDelete = true
+        };
+
+        // Act
+        var exception = Assert.Throws<InvalidOperationException>(() => AtomicFileCommitter.Commit(
+            "target.xlsx", stream => stream.Write(new byte[] { 1 }, 0, 1), default, format, fileSystem));
+
+        // Assert
+        Assert.Equal("替换失败", exception.Message);
+        Assert.IsType<IOException>(exception.Data[$"Bing.Offices.{format}.TemporaryCleanupException"]);
+        Assert.True(fileSystem.DeleteCalled);
+        Assert.False(fileSystem.TargetChanged);
+        Assert.True(fileSystem.TemporaryRemains);
+    }
+
     /// <summary>
     /// 测试 - Document 与 Request 应按 Request 优先级合并，并在构建后保持快照隔离。
     /// </summary>
@@ -727,5 +814,58 @@ public sealed class ReviewFixRegressionTest
         public string Name { get; }
         public string ErrorMessage => string.Empty;
         public bool Validate(ExcelValidationContext context) => true;
+    }
+
+    private sealed class FailingAtomicFileSystem : IAtomicFileSystem
+    {
+        public bool FailWrite { get; set; }
+        public bool FailMove { get; set; }
+        public bool FailReplace { get; set; }
+        public bool FailDelete { get; set; }
+        public bool ExistingTarget { get; set; }
+        public bool DeleteCalled { get; private set; }
+        public bool Replaced { get; private set; }
+        public bool TargetChanged { get; private set; }
+        public bool TemporaryRemains { get; private set; }
+
+        public Stream CreateFile(string path) => FailWrite
+            ? new ThrowingAtomicStream()
+            : new MemoryStream();
+
+        public void Flush(Stream stream) => stream.Flush();
+
+        public bool Exists(string path) => ExistingTarget;
+
+        public void Replace(string sourcePath, string destinationPath)
+        {
+            if (FailReplace)
+                throw new InvalidOperationException("替换失败");
+            Replaced = true;
+            TargetChanged = true;
+        }
+
+        public void Move(string sourcePath, string destinationPath)
+        {
+            if (FailMove)
+                throw new InvalidOperationException("提交失败");
+            TargetChanged = true;
+        }
+
+        public void Delete(string path)
+        {
+            DeleteCalled = true;
+            if (FailDelete)
+            {
+                TemporaryRemains = true;
+                throw new IOException("清理失败");
+            }
+        }
+    }
+
+    private sealed class ThrowingAtomicStream : MemoryStream
+    {
+        public override void Write(byte[] buffer, int offset, int count) => throw new InvalidOperationException("写入失败");
+
+        public override void WriteByte(byte value) => throw new InvalidOperationException("写入失败");
     }
 }

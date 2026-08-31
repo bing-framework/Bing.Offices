@@ -4,6 +4,7 @@ using System.Data;
 using System.IO;
 using System.Globalization;
 using System.Text;
+using System.Threading;
 using Bing.Offices.Csv;
 using Bing.Offices.Attributes;
 using Bing.Offices.Configurations;
@@ -161,6 +162,96 @@ public class CsvTest
     }
 
     /// <summary>
+    /// 测试 - CSV 资源限制应在输入、行、字段和列边界返回 ResourceLimit 并标记截断。
+    /// </summary>
+    [Fact]
+    public void EntityPipeline_ResourceLimits_ShouldClassifyAndTruncate()
+    {
+        // Arrange
+        var importer = new CsvEntityImporter();
+        var content = Encoding.UTF8.GetBytes("Name,Count,Description\r\n超长,1,说明\r\n第二行,2,说明\r\n");
+
+        // Act
+        using var source = new MemoryStream(content);
+        var fieldResult = importer.Import<CsvRow>(source, new CsvImportOptions<CsvRow> { MaxFieldLength = 2 });
+        using var rowsSource = new MemoryStream(content);
+        var rowResult = importer.Import<CsvRow>(rowsSource, new CsvImportOptions<CsvRow> { MaxRows = 1 });
+        using var columnsSource = new MemoryStream(Encoding.UTF8.GetBytes("Name,Count,Description\r\nA,1,说明,多余\r\n"));
+        var columnResult = importer.Import<CsvRow>(columnsSource, new CsvImportOptions<CsvRow> { MaxColumns = 3 });
+
+        // Assert
+        Assert.True(fieldResult.IsTruncated);
+        Assert.Equal(CsvImportErrorCode.ResourceLimit, Assert.Single(fieldResult.Errors).Code);
+        Assert.True(rowResult.IsTruncated);
+        Assert.Equal(CsvImportErrorCode.ResourceLimit, Assert.Single(rowResult.Errors).Code);
+        Assert.True(columnResult.IsTruncated);
+        Assert.Equal(CsvImportErrorCode.ResourceLimit, Assert.Single(columnResult.Errors).Code);
+    }
+
+    /// <summary>
+    /// 测试 - CSV 输入字节限制应在可寻址和不可寻址流上阻止超限内容。
+    /// </summary>
+    [Fact]
+    public void EntityPipeline_MaxInputBytes_ShouldRejectSeekableAndNonSeekableOverflow()
+    {
+        // Arrange
+        var content = Encoding.UTF8.GetBytes("Name,Count,Description\r\nA,1,说明\r\n");
+        var options = new CsvImportOptions<CsvRow> { MaxInputBytes = content.Length - 1 };
+
+        // Act
+        using var seekable = new MemoryStream(content);
+        using var nonSeekable = new NonSeekableReadStream(content);
+
+        // Assert
+        var seekableResult = new CsvEntityImporter().Import<CsvRow>(seekable, options);
+        var nonSeekableResult = new CsvEntityImporter().Import<CsvRow>(nonSeekable, options);
+        Assert.Equal(CsvImportErrorCode.ResourceLimit, Assert.Single(seekableResult.Errors).Code);
+        Assert.True(seekableResult.IsTruncated);
+        Assert.Equal(CsvImportErrorCode.ResourceLimit, Assert.Single(nonSeekableResult.Errors).Code);
+        Assert.True(nonSeekableResult.IsTruncated);
+    }
+
+    /// <summary>
+    /// 测试 - CSV 错误数量达到上限后应停止读取并保留截断元数据。
+    /// </summary>
+    [Fact]
+    public void EntityPipeline_MaxErrors_ShouldTruncateWithoutExceedingLimit()
+    {
+        // Arrange
+        using var source = new MemoryStream(Encoding.UTF8.GetBytes(
+            "Name,Count,Description\r\nA,invalid,说明\r\nB,invalid,说明\r\n"));
+
+        // Act
+        var result = new CsvEntityImporter().Import<CsvRow>(source,
+            new CsvImportOptions<CsvRow> { MaxErrors = 1 });
+
+        // Assert
+        Assert.Single(result.Errors);
+        Assert.True(result.IsTruncated);
+        Assert.Equal(1, result.MaxErrors);
+        Assert.Equal(CsvImportErrorCode.ValueConversion, result.Errors[0].Code);
+    }
+
+    /// <summary>
+    /// 测试 - CSV 表头结构错误应返回 InvalidHeader，而不是混入行级校验错误。
+    /// </summary>
+    [Fact]
+    public void EntityPipeline_InvalidHeader_ShouldReturnInvalidHeaderCode()
+    {
+        // Arrange
+        using var source = new MemoryStream(Encoding.UTF8.GetBytes("Name,Count\r\nA,1\r\n"));
+
+        // Act
+        var result = new CsvEntityImporter().Import<CsvRow>(source);
+
+        // Assert
+        var error = Assert.Single(result.Errors);
+        Assert.Equal(CsvImportErrorCode.InvalidHeader, error.Code);
+        Assert.Empty(result.Items);
+        Assert.False(result.IsTruncated);
+    }
+
+    /// <summary>
     /// 测试 - CSV 字节数组和路径便利扩展应委托流式实体管线完成往返。
     /// </summary>
     [Fact]
@@ -184,6 +275,65 @@ public class CsvTest
             Assert.Empty(fromFile.Errors);
             Assert.Equal("兼容", Assert.Single(fromBytes.Items).Name);
             Assert.Equal("路径", Assert.Single(fromFile.Items).Description);
+        }
+        finally
+        {
+            if (File.Exists(filePath))
+                File.Delete(filePath);
+        }
+    }
+
+    /// <summary>
+    /// 测试 - CSV 文件导出失败时应保留已存在目标文件的原始内容。
+    /// </summary>
+    [Fact]
+    public void StreamExtensions_FileExportFailure_ShouldKeepExistingTarget()
+    {
+        // Arrange
+        var filePath = Path.Combine(Path.GetTempPath(), $"Bing.Offices.Tests.{Guid.NewGuid():N}.csv");
+        File.WriteAllText(filePath, "原始内容", Encoding.UTF8);
+
+        try
+        {
+            // Act
+            Assert.Throws<InvalidOperationException>(() => new ThrowingCsvExporter()
+                .ExportToFile(new[] { new CsvRow() }, filePath));
+
+            // Assert
+            Assert.Equal("原始内容", File.ReadAllText(filePath, Encoding.UTF8));
+        }
+        finally
+        {
+            if (File.Exists(filePath))
+                File.Delete(filePath);
+        }
+    }
+
+    /// <summary>
+    /// 测试 - CSV 文件导出在预取消和 staging 写后取消时均不得提交目标文件。
+    /// </summary>
+    [Fact]
+    public void StreamExtensions_FileExportCancellation_ShouldKeepExistingTarget()
+    {
+        // Arrange
+        var filePath = Path.Combine(Path.GetTempPath(), $"Bing.Offices.Cancel.{Guid.NewGuid():N}.csv");
+        File.WriteAllText(filePath, "原始内容", Encoding.UTF8);
+        using var canceled = new CancellationTokenSource();
+        canceled.Cancel();
+
+        try
+        {
+            // Act
+            Assert.Throws<OperationCanceledException>(() => new CsvEntityExporter().ExportToFile(
+                new[] { new CsvRow { Name = "客户" } }, filePath, cancellationToken: canceled.Token));
+            Assert.Equal("原始内容", File.ReadAllText(filePath, Encoding.UTF8));
+            Assert.Throws<OperationCanceledException>(() => new CancelingCsvExporter().ExportToFile(
+                new[] { new CsvRow { Name = "客户" } }, filePath));
+
+            // Assert
+            Assert.Equal("原始内容", File.ReadAllText(filePath, Encoding.UTF8));
+            Assert.Empty(Directory.GetFiles(Path.GetDirectoryName(filePath),
+                Path.GetFileName(filePath) + ".*.tmp"));
         }
         finally
         {
@@ -645,6 +795,26 @@ public class CsvTest
         /// 描述。
         /// </summary>
         public string Description { get; set; }
+    }
+
+    private sealed class ThrowingCsvExporter : ICsvExporter
+    {
+        public void Export<T>(IEnumerable<T> data, Stream destination, CsvExportOptions<T> options = null,
+            CancellationToken cancellationToken = default) where T : class, new()
+        {
+            destination.WriteByte(1);
+            throw new InvalidOperationException("测试导出失败");
+        }
+    }
+
+    private sealed class CancelingCsvExporter : ICsvExporter
+    {
+        public void Export<T>(IEnumerable<T> data, Stream destination, CsvExportOptions<T> options = null,
+            CancellationToken cancellationToken = default) where T : class, new()
+        {
+            destination.WriteByte(1);
+            throw new OperationCanceledException(cancellationToken);
+        }
     }
 
     /// <summary>

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -30,9 +31,18 @@ internal static class NpoiFailureWorkbookWriter
         IReadOnlyCollection<ExcelImportError> errors,
         IReadOnlyDictionary<string, ExcelSheetImportRequest> resolvedSheetRequests,
         CancellationToken cancellationToken)
+        => Write(workbook, options, errors, resolvedSheetRequests, cancellationToken,
+            new SystemFailureWorkbookFileSystem());
+
+    internal static void Write(IWorkbook workbook, ExcelImportFailureOptions options,
+        IReadOnlyCollection<ExcelImportError> errors,
+        IReadOnlyDictionary<string, ExcelSheetImportRequest> resolvedSheetRequests,
+        CancellationToken cancellationToken, IFailureWorkbookFileSystem fileSystem)
     {
         if (options == null || options.Mode == ExcelImportFailureWorkbookMode.None || errors.Count == 0)
             return;
+        if (fileSystem == null)
+            throw new ArgumentNullException(nameof(fileSystem));
         cancellationToken.ThrowIfCancellationRequested();
         IWorkbook outputWorkbook = workbook;
         IWorkbook independentWorkbook = null;
@@ -45,11 +55,29 @@ internal static class NpoiFailureWorkbookWriter
                 AnnotateErrors(outputWorkbook, errors, options.CommentConflictPolicy);
 
             WriteFailureSummary(outputWorkbook, errors, cancellationToken);
-            var temporaryPath = Path.Combine(Path.GetTempPath(), $"bing-offices-failure-{Guid.NewGuid():N}.tmp");
+            var temporaryDirectory = options.TemporaryDirectory ?? Path.GetTempPath();
             try
             {
-                using (var output = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.ReadWrite,
-                    FileShare.None, 81920, FileOptions.SequentialScan))
+                fileSystem.CreateDirectory(temporaryDirectory);
+            }
+            catch (Exception exception) when (exception is IOException || exception is UnauthorizedAccessException)
+            {
+                throw new IOException("失败工作簿临时目录创建失败。", exception);
+            }
+            var temporaryPath = Path.Combine(temporaryDirectory, $"bing-offices-failure-{Guid.NewGuid():N}.tmp");
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                Stream output;
+                try
+                {
+                    output = fileSystem.CreateFile(temporaryPath);
+                }
+                catch (Exception exception) when (exception is IOException || exception is UnauthorizedAccessException)
+                {
+                    throw new IOException("失败工作簿临时文件创建失败。", exception);
+                }
+                using (output)
                 using (var limitedOutput = new LimitedWriteStream(output, options.MaxBytes))
                 {
                     try
@@ -61,32 +89,67 @@ internal static class NpoiFailureWorkbookWriter
                         var limitException = FindLimitException(exception);
                         if (limitException != null)
                             throw limitException;
-                        throw;
+                        throw new InvalidOperationException("失败工作簿序列化失败。", exception);
                     }
                     limitedOutput.Flush();
                     if (options.MaxBytes.HasValue && output.Length > options.MaxBytes.Value)
                         throw new InvalidOperationException($"失败工作簿超过最大字节数: {options.MaxBytes.Value}");
+                    cancellationToken.ThrowIfCancellationRequested();
                     output.Position = 0;
-                    WriteStream(options.Destination, output, cancellationToken);
+                    try
+                    {
+                        WriteStream(options.Destination, output, cancellationToken);
+                    }
+                    catch (Exception exception) when (!(exception is OperationCanceledException))
+                    {
+                        throw new InvalidOperationException("失败工作簿复制到目标流失败。", exception);
+                    }
                 }
             }
-            finally
+            catch (Exception exception)
             {
-                try
-                {
-                    File.Delete(temporaryPath);
-                }
-                catch (IOException)
-                {
-                }
-                catch (UnauthorizedAccessException)
-                {
-                }
+                DeleteTemporaryFile(options, temporaryPath, exception, fileSystem);
+                throw;
             }
+            DeleteTemporaryFile(options, temporaryPath, null, fileSystem);
         }
         finally
         {
             independentWorkbook?.Close();
+        }
+    }
+
+    private static void DeleteTemporaryFile(ExcelImportFailureOptions options, string temporaryPath,
+        Exception primaryException, IFailureWorkbookFileSystem fileSystem)
+    {
+        try
+        {
+            fileSystem.Delete(temporaryPath);
+        }
+        catch (Exception cleanupException) when (cleanupException is IOException
+            || cleanupException is UnauthorizedAccessException)
+        {
+            var diagnostic = new ExcelImportFailureDiagnostic("FailureWorkbookTemporaryCleanupFailed",
+                temporaryPath, cleanupException);
+            if (options.DiagnosticSink != null)
+            {
+                try
+                {
+                    options.DiagnosticSink(diagnostic);
+                }
+                catch (Exception diagnosticException)
+                {
+                    Trace.WriteLine($"失败工作簿诊断接收器执行失败: {diagnosticException.GetType().Name}");
+                }
+            }
+            else if (primaryException != null)
+            {
+                primaryException.Data["Bing.Offices.FailureWorkbook.TemporaryCleanupException"] = cleanupException;
+            }
+            else
+            {
+                throw new IOException("失败工作簿临时文件清理失败。", cleanupException);
+            }
         }
     }
 
@@ -483,6 +546,7 @@ internal static class NpoiFailureWorkbookWriter
         {
             cancellationToken.ThrowIfCancellationRequested();
             destination.Write(buffer, 0, count);
+            cancellationToken.ThrowIfCancellationRequested();
         }
     }
 
@@ -575,4 +639,21 @@ internal static class NpoiFailureWorkbookWriter
             base.Dispose(disposing);
         }
     }
+}
+
+internal interface IFailureWorkbookFileSystem
+{
+    void CreateDirectory(string path);
+    Stream CreateFile(string path);
+    void Delete(string path);
+}
+
+internal sealed class SystemFailureWorkbookFileSystem : IFailureWorkbookFileSystem
+{
+    public void CreateDirectory(string path) => Directory.CreateDirectory(path);
+
+    public Stream CreateFile(string path) => new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite,
+        FileShare.None, 81920, FileOptions.SequentialScan);
+
+    public void Delete(string path) => File.Delete(path);
 }

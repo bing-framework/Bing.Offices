@@ -145,10 +145,14 @@ public sealed class ExcelWorkbookImportBuilder<TWorkbook> where TWorkbook : clas
         var names = new HashSet<string>(_sheetNameComparison == ExcelNameComparison.Ordinal
             ? StringComparer.Ordinal
             : StringComparer.OrdinalIgnoreCase);
+        var indexes = new HashSet<int>();
         foreach (var sheet in _sheets)
         {
             if (sheet.Selector.Kind == ExcelSheetSelectorKind.ByName && !names.Add(sheet.Selector.Name))
-                throw new ArgumentException($"Workbook 包含重复 Sheet 名称: {sheet.Name}");
+                throw new ArgumentException($"Workbook 包含重复 Sheet selector: {sheet.Selector.Name}");
+            if (sheet.Selector.Kind == ExcelSheetSelectorKind.ByIndex
+                && !indexes.Add(sheet.Selector.Index.Value))
+                throw new ArgumentException($"Workbook 包含重复 Sheet selector: #{sheet.Selector.Index.Value}");
         }
         return new ExcelWorkbookImportRequest<TWorkbook>(_sheets.AsReadOnly(), _relations.AsReadOnly(),
             _sheetNameComparison, _resourceLimits, _failureOptions, _validationMode, _unsupportedFeaturePolicy);

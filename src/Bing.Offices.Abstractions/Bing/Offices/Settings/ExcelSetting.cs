@@ -6,11 +6,6 @@
 public sealed class ExcelSetting
 {
     /// <summary>
-    /// 默认Excel设置
-    /// </summary>
-    private static ExcelSetting _defaultExcelSetting = new ExcelSetting();
-
-    /// <summary>
     /// 作者
     /// </summary>
     public string Author { get; set; } = "简玄冰";
@@ -40,16 +35,4 @@ public sealed class ExcelSetting
     /// </summary>
     public string Description { get; set; } = "Bing.Offices 生成";
 
-    /// <summary>
-    /// 默认设置
-    /// </summary>
-    public static ExcelSetting Default
-    {
-        get => _defaultExcelSetting;
-        set
-        {
-            if (value != null)
-                _defaultExcelSetting = value;
-        }
-    }
 }

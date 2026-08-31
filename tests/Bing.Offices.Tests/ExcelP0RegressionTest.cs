@@ -1,8 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
+using System.Threading;
 using Bing.Offices.Attributes;
 using Bing.Offices.Configurations;
 using Bing.Offices.Exports;
@@ -828,6 +831,268 @@ public sealed class ExcelP0RegressionTest
     }
 
     /// <summary>
+    /// 测试 - Failure Workbook 应使用请求级临时目录，并在大小失败后清理临时文件。
+    /// </summary>
+    [Fact]
+    public void Import_FailureWorkbook_TemporaryDirectory_ShouldBeCleanedAfterFailure()
+    {
+        // Arrange
+        var temporaryDirectory = Path.Combine(Path.GetTempPath(), $"Bing.Offices.Failure.{Guid.NewGuid():N}");
+        Directory.CreateDirectory(temporaryDirectory);
+        using var source = new MemoryStream(CreateWorkbook(workbook =>
+        {
+            var sheet = workbook.CreateSheet("Data");
+            sheet.CreateRow(0).CreateCell(0).SetCellValue("Count");
+            sheet.CreateRow(1).CreateCell(0).SetCellValue("invalid");
+        }));
+        using var failure = new MemoryStream();
+        var request = ExcelImport.Workbook<FailureWorkbook>(builder => builder
+            .FailureWorkbook(new ExcelImportFailureOptions
+            {
+                Mode = ExcelImportFailureWorkbookMode.AnnotatedOriginal,
+                Destination = failure,
+                MaxBytes = 1,
+                TemporaryDirectory = temporaryDirectory
+            })
+            .Sheet("Data", root => root.Rows));
+
+        try
+        {
+            // Act
+            Assert.Throws<InvalidOperationException>(() => new NpoiExcelImporter().Import(source, request));
+
+            // Assert
+            Assert.Empty(Directory.GetFiles(temporaryDirectory));
+        }
+        finally
+        {
+            if (Directory.Exists(temporaryDirectory))
+                Directory.Delete(temporaryDirectory, true);
+        }
+    }
+
+    /// <summary>
+    /// 测试 - 清理失败无 sink 时应抛出；sink 抛异常时不应覆盖失败诊断流程。
+    /// </summary>
+    [Fact]
+    public void FailureWorkbook_CleanupFailure_ShouldBeObservableWithoutOverridingSink()
+    {
+        // Arrange
+        var temporaryDirectory = Path.Combine(Path.GetTempPath(), $"Bing.Offices.Failure.{Guid.NewGuid():N}");
+        var error = new ExcelImportError(ExcelImportErrorCode.InvalidInput, "invalid", "Data", 2, 1, "Value");
+        var errors = new[] { error };
+        var resolved = new Dictionary<string, ExcelSheetImportRequest>(StringComparer.OrdinalIgnoreCase);
+        var noSinkFileSystem = new FailingDeleteFileSystem();
+        using var noSinkDestination = new MemoryStream();
+        using var noSinkWorkbook = new XSSFWorkbook();
+        noSinkWorkbook.CreateSheet("Data");
+        var noSinkOptions = new ExcelImportFailureOptions
+        {
+            Mode = ExcelImportFailureWorkbookMode.AnnotatedOriginal,
+            Destination = noSinkDestination,
+            TemporaryDirectory = temporaryDirectory
+        };
+
+        try
+        {
+            // Act
+            var noSinkException = Assert.Throws<IOException>(() => NpoiFailureWorkbookWriter.Write(noSinkWorkbook,
+                noSinkOptions, errors, resolved, CancellationToken.None, noSinkFileSystem));
+
+            // Assert
+            Assert.Contains("清理失败", noSinkException.Message);
+            Assert.NotNull(noSinkFileSystem.CreatedPath);
+            Assert.True(File.Exists(noSinkFileSystem.CreatedPath));
+
+            var sinkCalled = false;
+            using var sinkWorkbook = new XSSFWorkbook();
+            sinkWorkbook.CreateSheet("Data");
+            var sinkOptions = new ExcelImportFailureOptions
+            {
+                Mode = ExcelImportFailureWorkbookMode.AnnotatedOriginal,
+                Destination = new MemoryStream(),
+                TemporaryDirectory = temporaryDirectory,
+                DiagnosticSink = diagnostic =>
+                {
+                    sinkCalled = true;
+                    throw new InvalidOperationException("sink failure");
+                }
+            };
+            var sinkFileSystem = new FailingDeleteFileSystem();
+            NpoiFailureWorkbookWriter.Write(sinkWorkbook, sinkOptions, errors, resolved, CancellationToken.None,
+                sinkFileSystem);
+            Assert.True(sinkCalled);
+        }
+        finally
+        {
+            if (noSinkFileSystem.CreatedPath != null && File.Exists(noSinkFileSystem.CreatedPath))
+                File.Delete(noSinkFileSystem.CreatedPath);
+            if (Directory.Exists(temporaryDirectory))
+                Directory.Delete(temporaryDirectory, true);
+        }
+    }
+
+    /// <summary>
+    /// 测试 - Failure Workbook 主异常优先时仍应保留清理异常诊断。
+    /// </summary>
+    [Fact]
+    public void FailureWorkbook_PrimaryFailureWithCleanupFailure_ShouldPreserveCleanupException()
+    {
+        // Arrange
+        var fileSystem = new PrimaryAndDeleteFailingFileSystem();
+        var error = new ExcelImportError(ExcelImportErrorCode.InvalidInput, "invalid", "Data", 2, 1, "Value");
+        using var destination = new MemoryStream();
+        using var workbook = new XSSFWorkbook();
+        workbook.CreateSheet("Data");
+        var options = new ExcelImportFailureOptions
+        {
+            Mode = ExcelImportFailureWorkbookMode.AnnotatedOriginal,
+            Destination = destination,
+            TemporaryDirectory = Path.GetTempPath()
+        };
+
+        // Act
+        var exception = Assert.Throws<InvalidOperationException>(() => NpoiFailureWorkbookWriter.Write(workbook,
+            options, new[] { error }, new Dictionary<string, ExcelSheetImportRequest>(), CancellationToken.None,
+            fileSystem));
+
+        // Assert
+        Assert.Contains("序列化失败", exception.Message);
+        Assert.IsType<IOException>(exception.Data["Bing.Offices.FailureWorkbook.TemporaryCleanupException"]);
+    }
+
+    /// <summary>
+    /// 测试 - Failure Workbook 目标复制阶段取消时应清理临时文件并传播取消。
+    /// </summary>
+    [Fact]
+    public void FailureWorkbook_CancellationDuringCopy_ShouldCleanTemporaryFile()
+    {
+        // Arrange
+        var temporaryDirectory = Path.Combine(Path.GetTempPath(), $"Bing.Offices.Failure.{Guid.NewGuid():N}");
+        Directory.CreateDirectory(temporaryDirectory);
+        using var cancellation = new CancellationTokenSource();
+        using var destination = new CancelOnWriteStream(cancellation);
+        using var workbook = new XSSFWorkbook();
+        workbook.CreateSheet("Data");
+        var options = new ExcelImportFailureOptions
+        {
+            Mode = ExcelImportFailureWorkbookMode.AnnotatedOriginal,
+            Destination = destination,
+            TemporaryDirectory = temporaryDirectory
+        };
+        var error = new ExcelImportError(ExcelImportErrorCode.InvalidInput, "invalid", "Data", 2, 1, "Value");
+
+        try
+        {
+            // Act
+            Assert.Throws<OperationCanceledException>(() => NpoiFailureWorkbookWriter.Write(workbook, options,
+                new[] { error }, new Dictionary<string, ExcelSheetImportRequest>(), cancellation.Token));
+
+            // Assert
+            Assert.Empty(Directory.GetFiles(temporaryDirectory));
+        }
+        finally
+        {
+            if (Directory.Exists(temporaryDirectory))
+                Directory.Delete(temporaryDirectory, true);
+        }
+    }
+
+    /// <summary>
+    /// 测试 - Failure Workbook 临时目录创建失败时应返回稳定的创建错误并保留原始异常。
+    /// </summary>
+    [Fact]
+    public void FailureWorkbook_TemporaryDirectoryCreationFailure_ShouldClassifyError()
+    {
+        // Arrange
+        using var workbook = new XSSFWorkbook();
+        workbook.CreateSheet("Data");
+        using var destination = new MemoryStream(new byte[] { 7 });
+        var options = new ExcelImportFailureOptions
+        {
+            Mode = ExcelImportFailureWorkbookMode.AnnotatedOriginal,
+            Destination = destination,
+            TemporaryDirectory = "injected"
+        };
+        var error = new ExcelImportError(ExcelImportErrorCode.InvalidInput, "invalid", "Data", 2, 1, "Value");
+
+        // Act
+        var fileSystem = new DirectoryCreationFailingFileSystem();
+        var exception = Assert.Throws<IOException>(() => NpoiFailureWorkbookWriter.Write(workbook, options,
+            new[] { error }, new Dictionary<string, ExcelSheetImportRequest>(), CancellationToken.None,
+            fileSystem));
+
+        // Assert
+        Assert.Equal("失败工作簿临时目录创建失败。", exception.Message);
+        Assert.IsType<UnauthorizedAccessException>(exception.InnerException);
+        Assert.Equal(1, destination.Length);
+        Assert.False(fileSystem.DeleteCalled);
+    }
+
+    /// <summary>
+    /// 测试 - Failure Workbook 临时文件创建失败时应返回稳定的创建错误并保留原始异常。
+    /// </summary>
+    [Fact]
+    public void FailureWorkbook_TemporaryFileCreationFailure_ShouldClassifyError()
+    {
+        // Arrange
+        using var workbook = new XSSFWorkbook();
+        workbook.CreateSheet("Data");
+        using var destination = new MemoryStream(new byte[] { 7 });
+        var options = new ExcelImportFailureOptions
+        {
+            Mode = ExcelImportFailureWorkbookMode.AnnotatedOriginal,
+            Destination = destination,
+            TemporaryDirectory = "injected"
+        };
+        var error = new ExcelImportError(ExcelImportErrorCode.InvalidInput, "invalid", "Data", 2, 1, "Value");
+
+        // Act
+        var fileSystem = new FileCreationFailingFileSystem();
+        var exception = Assert.Throws<IOException>(() => NpoiFailureWorkbookWriter.Write(workbook, options,
+            new[] { error }, new Dictionary<string, ExcelSheetImportRequest>(), CancellationToken.None,
+            fileSystem));
+
+        // Assert
+        Assert.Equal("失败工作簿临时文件创建失败。", exception.Message);
+        Assert.IsType<IOException>(exception.InnerException);
+        Assert.Equal(1, destination.Length);
+        Assert.True(fileSystem.DeleteCalled);
+        Assert.NotNull(fileSystem.CreatedPath);
+    }
+
+    /// <summary>
+    /// 测试 - Failure Workbook 复制失败时应保留复制错误分类并清理临时文件。
+    /// </summary>
+    [Fact]
+    public void FailureWorkbook_DestinationCopyFailure_ShouldClassifyErrorAndCleanup()
+    {
+        // Arrange
+        var fileSystem = new TrackingFileSystem();
+        using var workbook = new XSSFWorkbook();
+        workbook.CreateSheet("Data");
+        using var destination = new ThrowingDestinationStream(new byte[] { 7 });
+        var options = new ExcelImportFailureOptions
+        {
+            Mode = ExcelImportFailureWorkbookMode.AnnotatedOriginal,
+            Destination = destination,
+            TemporaryDirectory = "injected"
+        };
+        var error = new ExcelImportError(ExcelImportErrorCode.InvalidInput, "invalid", "Data", 2, 1, "Value");
+
+        // Act
+        var exception = Assert.Throws<InvalidOperationException>(() => NpoiFailureWorkbookWriter.Write(workbook, options,
+            new[] { error }, new Dictionary<string, ExcelSheetImportRequest>(), CancellationToken.None, fileSystem));
+
+        // Assert
+        Assert.Equal("失败工作簿复制到目标流失败。", exception.Message);
+        Assert.IsType<IOException>(exception.InnerException);
+        Assert.True(fileSystem.DeleteCalled);
+        Assert.Equal(1, destination.Length);
+        Assert.True(fileSystem.CreatedPath != null);
+    }
+
+    /// <summary>
     /// 测试 - ErrorRowsOnly 应从源工作簿独立复制并连续重排失败行及其结构部件。
     /// </summary>
     [Fact]
@@ -1123,6 +1388,75 @@ public sealed class ExcelP0RegressionTest
     }
 
     /// <summary>
+    /// 测试 - XLSX/XLS 解析资源边界应在独立进程中可复现，并输出峰值工作集证据。
+    /// </summary>
+    [Fact]
+    public void Import_ResourceProbe_ShouldRunInIndependentProcess()
+    {
+#if !NET8_0_OR_GREATER
+        return;
+#else
+        // Arrange
+        var directory = Path.Combine(Path.GetTempPath(), $"Bing.Offices.Probe.{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        var paths = new Dictionary<string, string>
+        {
+            ["zip"] = Path.Combine(directory, "zip.xlsx"),
+            ["dom"] = Path.Combine(directory, "dom.xlsx"),
+            ["dom-limit"] = Path.Combine(directory, "dom-limit.xlsx"),
+            ["shared-strings"] = Path.Combine(directory, "shared-strings.xlsx"),
+            ["styles"] = Path.Combine(directory, "styles.xlsx"),
+            ["drawings"] = Path.Combine(directory, "drawings.xlsx"),
+            ["ole"] = Path.Combine(directory, "ole.xls")
+        };
+        File.WriteAllBytes(paths["zip"], CreateProbeWorkbook(4, 2, 0, 0));
+        File.WriteAllBytes(paths["dom"], CreateProbeWorkbook(250, 4, 0, 0));
+        File.WriteAllBytes(paths["dom-limit"], CreateProbeWorkbook(250, 4, 0, 0));
+        File.WriteAllBytes(paths["shared-strings"], CreateProbeWorkbook(20, 20, 400, 0));
+        File.WriteAllBytes(paths["styles"], CreateProbeWorkbook(20, 20, 0, 80));
+        File.WriteAllBytes(paths["drawings"], CreateProbeWorkbook(10, 4, 0, 0, 6));
+        File.WriteAllBytes(paths["ole"], CreateProbeWorkbook<HSSFWorkbook>(4, 2, 0, 0));
+
+        try
+        {
+            // Act
+            var outputs = new Dictionary<string, ProbeOutput>
+            {
+                ["zip"] = RunResourceProbe(paths["zip"], "zip"),
+                ["dom"] = RunResourceProbe(paths["dom"], "dom"),
+                ["dom-limit"] = RunResourceProbe(paths["dom-limit"], "dom-limit"),
+                ["shared-strings"] = RunResourceProbe(paths["shared-strings"], "shared-strings"),
+                ["styles"] = RunResourceProbe(paths["styles"], "styles"),
+                ["drawings"] = RunResourceProbe(paths["drawings"], "drawings"),
+                ["ole"] = RunResourceProbe(paths["ole"], "ole")
+            };
+
+            // Assert
+            Assert.Equal("success", outputs["zip"].Status);
+            Assert.Equal("success", outputs["dom"].Status);
+            Assert.Equal("resource-limit", outputs["dom-limit"].Status);
+            Assert.Equal(250, outputs["dom-limit"].Rows);
+            Assert.True(outputs["dom"].Rows > outputs["zip"].Rows);
+            Assert.True(outputs["shared-strings"].SharedStrings >= 400);
+            Assert.True(outputs["styles"].Styles >= 80);
+            Assert.True(outputs["drawings"].Pictures >= 6);
+            Assert.Equal("ole", outputs["ole"].Mode);
+            Assert.All(outputs.Values, output =>
+            {
+                Assert.True(output.InputBytes > 0);
+                Assert.True(output.ElapsedMilliseconds >= 0);
+                Assert.True(output.PeakWorkingSet > 0);
+            });
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+                Directory.Delete(directory, true);
+        }
+#endif
+    }
+
+    /// <summary>
     /// 测试 - 未绑定图片列时不应扫描图片，也不应触发图片资源限制。
     /// </summary>
     [Fact]
@@ -1299,6 +1633,117 @@ public sealed class ExcelP0RegressionTest
         using var stream = new MemoryStream();
         workbook.Write(stream, false);
         return stream.ToArray();
+    }
+
+    private static ProbeOutput RunResourceProbe(string inputPath, string mode)
+    {
+        var probePath = Path.Combine(AppContext.BaseDirectory, "Bing.Offices.ResourceProbe.dll");
+        using var process = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = "dotnet",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            }
+        };
+        process.StartInfo.ArgumentList.Add(probePath);
+        process.StartInfo.ArgumentList.Add(inputPath);
+        process.StartInfo.ArgumentList.Add(mode);
+        Assert.True(process.Start());
+        Assert.True(process.WaitForExit(30000), $"Resource probe timed out: {mode}");
+        var output = process.StandardOutput.ReadToEnd();
+        Assert.True(process.ExitCode == 0, output + process.StandardError.ReadToEnd());
+        var values = output.Trim().Split(';')
+            .Select(part => part.Split(new[] { '=' }, 2))
+            .Where(parts => parts.Length == 2)
+            .ToDictionary(parts => parts[0], parts => parts[1], StringComparer.Ordinal);
+        return new ProbeOutput(
+            values["mode"],
+            values["status"],
+            long.Parse(values["inputBytes"], CultureInfo.InvariantCulture),
+            int.Parse(values["rows"], CultureInfo.InvariantCulture),
+            int.Parse(values["sharedStrings"], CultureInfo.InvariantCulture),
+            int.Parse(values["styles"], CultureInfo.InvariantCulture),
+            int.Parse(values["pictures"], CultureInfo.InvariantCulture),
+            long.Parse(values["elapsedMs"], CultureInfo.InvariantCulture),
+            long.Parse(values["peakWorkingSet"], CultureInfo.InvariantCulture));
+    }
+
+    private static byte[] CreateProbeWorkbook(int rows, int columns, int uniqueStrings, int styles,
+        int pictures = 0) => CreateProbeWorkbook<XSSFWorkbook>(rows, columns, uniqueStrings, styles, pictures);
+
+    private static byte[] CreateProbeWorkbook<TWorkbook>(int rows, int columns, int uniqueStrings, int styles,
+        int pictures = 0) where TWorkbook : IWorkbook, new()
+    {
+        return CreateWorkbook<TWorkbook>(workbook =>
+        {
+            var sheet = workbook.CreateSheet("Data");
+            for (var rowIndex = 0; rowIndex < rows; rowIndex++)
+            {
+                var row = sheet.CreateRow(rowIndex);
+                for (var columnIndex = 0; columnIndex < columns; columnIndex++)
+                {
+                    var cell = row.CreateCell(columnIndex);
+                    cell.SetCellValue(rowIndex == 0
+                        ? columnIndex == 0 ? "Name" : $"Extra-{columnIndex}"
+                        : uniqueStrings > 0 ? $"shared-{rowIndex}-{columnIndex}" : $"value-{rowIndex}-{columnIndex}");
+                    if (styles > 0)
+                    {
+                        var style = workbook.CreateCellStyle();
+                        style.Alignment = (HorizontalAlignment)(style.Index % 3);
+                        cell.CellStyle = style;
+                    }
+                }
+            }
+            for (var index = 0; index < pictures; index++)
+            {
+                var anchor = workbook.GetCreationHelper().CreateClientAnchor();
+                anchor.Row1 = index;
+                anchor.Row2 = index + 1;
+                anchor.Col1 = 0;
+                anchor.Col2 = 1;
+                sheet.CreateDrawingPatriarch().CreatePicture(anchor, workbook.AddPicture(ProbePng, PictureType.PNG));
+            }
+        });
+    }
+
+    private static readonly byte[] ProbePng =
+    {
+        137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 82,
+        0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 196, 137,
+        0, 0, 0, 13, 73, 68, 65, 84, 120, 156, 99, 248, 207, 192, 240,
+        31, 0, 5, 0, 1, 255, 137, 153, 61, 29, 0, 0, 0, 0, 73, 69,
+        78, 68, 174, 66, 96, 130
+    };
+
+    private sealed class ProbeOutput
+    {
+        public ProbeOutput(string mode, string status, long inputBytes, int rows, int sharedStrings,
+            int styles, int pictures, long elapsedMilliseconds, long peakWorkingSet)
+        {
+            Mode = mode;
+            Status = status;
+            InputBytes = inputBytes;
+            Rows = rows;
+            SharedStrings = sharedStrings;
+            Styles = styles;
+            Pictures = pictures;
+            ElapsedMilliseconds = elapsedMilliseconds;
+            PeakWorkingSet = peakWorkingSet;
+        }
+
+        public string Mode { get; }
+        public string Status { get; }
+        public long InputBytes { get; }
+        public int Rows { get; }
+        public int SharedStrings { get; }
+        public int Styles { get; }
+        public int Pictures { get; }
+        public long ElapsedMilliseconds { get; }
+        public long PeakWorkingSet { get; }
     }
 
     private static byte[] CreateWorkbook<TWorkbook>(Action<TWorkbook> configure)
@@ -1490,6 +1935,105 @@ public sealed class ExcelP0RegressionTest
     private sealed class ValidationRow
     {
         public string Code { get; set; }
+    }
+
+    private sealed class FailingDeleteFileSystem : IFailureWorkbookFileSystem
+    {
+        public string CreatedPath { get; private set; }
+
+        public void CreateDirectory(string path) => Directory.CreateDirectory(path);
+
+        public Stream CreateFile(string path)
+        {
+            CreatedPath = path;
+            return new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None);
+        }
+
+        public void Delete(string path) => throw new IOException("注入的删除失败");
+    }
+
+    private sealed class PrimaryAndDeleteFailingFileSystem : IFailureWorkbookFileSystem
+    {
+        public void CreateDirectory(string path) { }
+
+        public Stream CreateFile(string path) => new ThrowingWriteStream();
+
+        public void Delete(string path) => throw new IOException("注入的删除失败");
+    }
+
+    private sealed class DirectoryCreationFailingFileSystem : IFailureWorkbookFileSystem
+    {
+        public bool DeleteCalled { get; private set; }
+
+        public void CreateDirectory(string path) => throw new UnauthorizedAccessException("注入的目录创建失败");
+
+        public Stream CreateFile(string path) => throw new InvalidOperationException("不应创建文件");
+
+        public void Delete(string path)
+        {
+            DeleteCalled = true;
+            throw new InvalidOperationException("不应删除文件");
+        }
+    }
+
+    private sealed class FileCreationFailingFileSystem : IFailureWorkbookFileSystem
+    {
+        public string CreatedPath { get; private set; }
+        public bool DeleteCalled { get; private set; }
+
+        public void CreateDirectory(string path) { }
+
+        public Stream CreateFile(string path)
+        {
+            CreatedPath = path;
+            throw new IOException("注入的文件创建失败");
+        }
+
+        public void Delete(string path) => DeleteCalled = true;
+    }
+
+    private sealed class TrackingFileSystem : IFailureWorkbookFileSystem
+    {
+        public string CreatedPath { get; private set; }
+        public bool DeleteCalled { get; private set; }
+
+        public void CreateDirectory(string path) { }
+
+        public Stream CreateFile(string path)
+        {
+            CreatedPath = path;
+            return new MemoryStream();
+        }
+
+        public void Delete(string path) => DeleteCalled = true;
+    }
+
+    private sealed class ThrowingDestinationStream : MemoryStream
+    {
+        public ThrowingDestinationStream(byte[] buffer) : base(buffer) { }
+
+        public override void Write(byte[] buffer, int offset, int count) => throw new IOException("注入的目标复制失败");
+    }
+
+    private sealed class ThrowingWriteStream : MemoryStream
+    {
+        public override void Write(byte[] buffer, int offset, int count) => throw new IOException("注入的写入失败");
+    }
+
+    private sealed class CancelOnWriteStream : MemoryStream
+    {
+        private readonly CancellationTokenSource _cancellation;
+
+        public CancelOnWriteStream(CancellationTokenSource cancellation)
+        {
+            _cancellation = cancellation;
+        }
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            base.Write(buffer, offset, count);
+            _cancellation.Cancel();
+        }
     }
 
     private sealed class RowsWorkbook<T> where T : class, new()

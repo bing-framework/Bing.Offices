@@ -216,6 +216,7 @@ public sealed class CsvEntityImporter : ICsvImporter
             throw new ArgumentException("输入流不可读取。", nameof(source));
         cancellationToken.ThrowIfCancellationRequested();
         options ??= new CsvImportOptions<T>();
+        options.Validate();
         if (options.Delimiter == options.Quote || options.Delimiter == '\r' || options.Delimiter == '\n')
             throw new ArgumentOutOfRangeException(nameof(options.Delimiter));
         if (options.Quote == '\r' || options.Quote == '\n')
@@ -236,71 +237,151 @@ public sealed class CsvEntityImporter : ICsvImporter
             .Select(CsvPropertyBinding.Create<T>).ToList();
         if (dynamicProperties.Count > 1)
             throw new InvalidOperationException($"CSV 模板 {typeof(T).FullName} 只能声明一个动态列属性。");
-        using var reader = new StreamReader(source, options.Encoding, true, 1024, true);
-        var records = CsvRecordReader.Read(reader, options.Delimiter, options.Quote, cancellationToken).GetEnumerator();
-        var columns = options.HasHeader
-            ? CsvHeaderBinder.Bind(records, properties, dynamicProperties, map.DynamicColumns, options.HeaderMatch)
-            : CsvHeaderBinder.BindByPosition(properties);
+        if (options.MaxInputBytes.HasValue && source.CanSeek && source.Length - source.Position > options.MaxInputBytes.Value)
+            return CreateResourceLimitResult($"CSV 输入超过最大字节数: {options.MaxInputBytes.Value}", options);
+        using var limitedSource = options.MaxInputBytes.HasValue && !source.CanSeek
+            ? new CsvLimitedReadStream(source, options.MaxInputBytes.Value)
+            : null;
+        using var reader = new StreamReader(limitedSource ?? source, options.Encoding, true, 1024, true);
+        using var records = CsvRecordReader.Read(reader, options.Delimiter, options.Quote, cancellationToken).GetEnumerator();
+        IReadOnlyList<CsvColumn> columns;
+        try
+        {
+            columns = options.HasHeader
+                ? CsvHeaderBinder.Bind(records, properties, dynamicProperties, map.DynamicColumns, options.HeaderMatch,
+                    options.MaxColumns)
+                : CsvHeaderBinder.BindByPosition(properties);
+        }
+        catch (CsvResourceLimitException exception)
+        {
+            return CreateResourceLimitResult(exception.Message, options);
+        }
+        catch (CsvInvalidHeaderException exception)
+        {
+            return new CsvImportResult<T>(Array.Empty<T>(), new[]
+            {
+                new CsvImportError(exception.Message, 1, 0, null, code: CsvImportErrorCode.InvalidHeader)
+            }, maxErrors: options.MaxErrors);
+        }
+        if (options.MaxColumns.HasValue && columns.Count > options.MaxColumns.Value)
+            return CreateResourceLimitResult($"CSV 映射列数超过最大列数: {options.MaxColumns.Value}", options);
         var items = new List<T>();
         var errors = new List<CsvImportError>();
         var duplicateValues = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
         var uniqueTracker = new UniqueTracker(duplicateValues, options.MaxTrackedUniqueValues,
             CreateStringComparer(options.UniqueComparison));
         var rowIndex = options.HasHeader ? 1 : 0;
-        while (records.MoveNext())
+        var dataRowCount = 0;
+        var isTruncated = false;
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            rowIndex++;
-            var record = records.Current;
-            var item = new T();
-            var valid = true;
-            uniqueTracker.BeginRow();
-            Dictionary<string, object> dynamicValues = null;
-            foreach (var column in columns)
+            while (records.MoveNext())
             {
-                var value = column.Index < record.Count ? record[column.Index] : string.Empty;
-                value = NormalizeText(value, column.Property.ImportWhitespace);
-                try
+                cancellationToken.ThrowIfCancellationRequested();
+                if (options.MaxRows.HasValue && dataRowCount >= options.MaxRows.Value)
                 {
-                    if (column.IsDynamic)
-                    {
-                        dynamicValues ??= new Dictionary<string, object>(StringComparer.Ordinal);
-                        ValidateRawValue(value, column, rowIndex, duplicateValues, options.Culture);
-                        var dynamicValue = ConvertDynamicValue(value, column, rowIndex, options.Culture);
-                        ValidateConvertedValue(value, dynamicValue, column, rowIndex, duplicateValues,
-                            uniqueTracker, options.Culture);
-                        dynamicValues[column.DynamicColumn?.Key ?? column.HeaderName] = dynamicValue;
-                        continue;
-                    }
-                    ValidateRawValue(value, column, rowIndex, duplicateValues, options.Culture);
-                    var converted = ConvertValue(value, column.Property, rowIndex, column.Index + 1, options.Culture);
-                    ValidateConvertedValue(value, converted, column, rowIndex, duplicateValues, uniqueTracker,
-                        options.Culture);
-                    column.Property.Setter(item, converted);
+                    errors.Add(new CsvImportError($"CSV 数据行数超过限制: {options.MaxRows.Value}", rowIndex + 1, 0,
+                        null, code: CsvImportErrorCode.ResourceLimit));
+                    isTruncated = true;
+                    break;
                 }
-                catch (Exception exception)
+                dataRowCount++;
+                rowIndex++;
+                var record = records.Current;
+                if (options.MaxColumns.HasValue && record.Count > options.MaxColumns.Value)
                 {
-                    int? firstRowNumber = null;
-                    var errorColumnKey = column.DynamicColumn?.Key ?? column.Property.Name;
-                    if (uniqueTracker.TryGetFirstRowNumber(errorColumnKey, value, out var firstRow))
-                        firstRowNumber = firstRow;
-                    errors.Add(new CsvImportError(exception.Message, rowIndex, column.Index + 1,
-                        errorColumnKey, firstRowNumber));
-                    valid = false;
+                    errors.Add(new CsvImportError($"CSV 第 {rowIndex} 行超过最大列数: {options.MaxColumns.Value}",
+                        rowIndex, 0, null, code: CsvImportErrorCode.ResourceLimit));
+                    isTruncated = true;
+                    break;
+                }
+                var item = new T();
+                var valid = true;
+                uniqueTracker.BeginRow();
+                Dictionary<string, object> dynamicValues = null;
+                foreach (var column in columns)
+                {
+                    var value = column.Index < record.Count ? record[column.Index] : string.Empty;
+                    if (options.MaxFieldLength.HasValue && value.Length > options.MaxFieldLength.Value)
+                    {
+                        errors.Add(new CsvImportError(
+                            $"CSV 第 {rowIndex} 行第 {column.Index + 1} 列超过最大字段长度: {options.MaxFieldLength.Value}",
+                            rowIndex, column.Index + 1, column.DynamicColumn?.Key ?? column.Property.Name,
+                            code: CsvImportErrorCode.ResourceLimit));
+                        valid = false;
+                        isTruncated = true;
+                        break;
+                    }
+                    value = NormalizeText(value, column.Property.ImportWhitespace);
+                    try
+                    {
+                        if (column.IsDynamic)
+                        {
+                            dynamicValues ??= new Dictionary<string, object>(StringComparer.Ordinal);
+                            ValidateRawValue(value, column, rowIndex, duplicateValues, options.Culture);
+                            var dynamicValue = ConvertDynamicValue(value, column, rowIndex, options.Culture);
+                            ValidateConvertedValue(value, dynamicValue, column, rowIndex, duplicateValues,
+                                uniqueTracker, options.Culture);
+                            dynamicValues[column.DynamicColumn?.Key ?? column.HeaderName] = dynamicValue;
+                            continue;
+                        }
+                        ValidateRawValue(value, column, rowIndex, duplicateValues, options.Culture);
+                        var converted = ConvertValue(value, column.Property, rowIndex, column.Index + 1, options.Culture);
+                        ValidateConvertedValue(value, converted, column, rowIndex, duplicateValues, uniqueTracker,
+                            options.Culture);
+                        column.Property.Setter(item, converted);
+                    }
+                    catch (Exception exception)
+                    {
+                        int? firstRowNumber = null;
+                        var errorColumnKey = column.DynamicColumn?.Key ?? column.Property.Name;
+                        if (uniqueTracker.TryGetFirstRowNumber(errorColumnKey, value, out var firstRow))
+                            firstRowNumber = firstRow;
+                        errors.Add(new CsvImportError(exception.Message, rowIndex, column.Index + 1,
+                            errorColumnKey, firstRowNumber, ClassifyError(exception)));
+                        valid = false;
+                        break;
+                    }
+                }
+                if (valid)
+                {
+                    if (dynamicValues != null)
+                        dynamicProperties[0].Setter(item, dynamicValues);
+                    items.Add(item);
+                    uniqueTracker.CommitRow();
+                }
+                else
+                    uniqueTracker.RollbackRow();
+                if (isTruncated || options.MaxErrors.HasValue && errors.Count >= options.MaxErrors.Value)
+                {
+                    isTruncated = true;
                     break;
                 }
             }
-            if (valid)
-            {
-                if (dynamicValues != null)
-                    dynamicProperties[0].Setter(item, dynamicValues);
-                items.Add(item);
-                uniqueTracker.CommitRow();
-            }
-            else
-                uniqueTracker.RollbackRow();
         }
-        return new CsvImportResult<T>(items, errors);
+        catch (CsvResourceLimitException exception)
+        {
+            errors.Add(new CsvImportError(exception.Message, rowIndex + 1, 0, null,
+                code: CsvImportErrorCode.ResourceLimit));
+            isTruncated = true;
+        }
+        return new CsvImportResult<T>(items, errors, isTruncated, options.MaxErrors);
+    }
+
+    private static CsvImportResult<T> CreateResourceLimitResult<T>(string message, CsvImportOptions<T> options)
+        where T : class, new() => new CsvImportResult<T>(Array.Empty<T>(), new[]
+        {
+            new CsvImportError(message, 0, 0, null, code: CsvImportErrorCode.ResourceLimit)
+        }, true, options.MaxErrors);
+
+    private static CsvImportErrorCode ClassifyError(Exception exception)
+    {
+        if (exception is InvalidCastException || exception is FormatException
+            || exception is OverflowException || exception is ArgumentException)
+            return CsvImportErrorCode.ValueConversion;
+        if (exception is InvalidOperationException)
+            return CsvImportErrorCode.Validation;
+        return CsvImportErrorCode.InvalidInput;
     }
 
     private object ConvertValue(string value, CsvPropertyBinding property, int rowIndex, int columnIndex, CultureInfo culture)
@@ -434,6 +515,16 @@ public sealed class CsvEntityImporter : ICsvImporter
 
 }
 
+internal sealed class CsvInvalidHeaderException : InvalidOperationException
+{
+    public CsvInvalidHeaderException(string message) : base(message) { }
+}
+
+internal sealed class CsvResourceLimitException : InvalidOperationException
+{
+    public CsvResourceLimitException(string message) : base(message) { }
+}
+
 /// <summary>
 /// RFC 4180 风格 CSV 记录读取器。
 /// </summary>
@@ -457,6 +548,46 @@ internal static class CsvRecordReader
             yield return parser.Record;
         }
     }
+}
+
+internal sealed class CsvLimitedReadStream : Stream
+{
+    private readonly Stream _inner;
+    private readonly long _maxBytes;
+    private long _readBytes;
+
+    public CsvLimitedReadStream(Stream inner, long maxBytes)
+    {
+        _inner = inner;
+        _maxBytes = maxBytes;
+    }
+
+    public override bool CanRead => _inner.CanRead;
+    public override bool CanSeek => false;
+    public override bool CanWrite => false;
+    public override long Length => throw new NotSupportedException();
+    public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+
+    public override int Read(byte[] buffer, int offset, int count)
+    {
+        if (_readBytes == _maxBytes)
+        {
+            var probe = _inner.ReadByte();
+            if (probe >= 0)
+                throw new CsvResourceLimitException($"CSV 输入超过最大字节数: {_maxBytes}");
+            return 0;
+        }
+        var allowed = (int)Math.Min(count, _maxBytes - _readBytes);
+        var read = _inner.Read(buffer, offset, allowed);
+        _readBytes += read;
+        return read;
+    }
+
+    public override void Flush() => throw new NotSupportedException();
+    public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+    public override void SetLength(long value) => throw new NotSupportedException();
+    public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    protected override void Dispose(bool disposing) { }
 }
 
 /// <summary>

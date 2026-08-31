@@ -17,7 +17,7 @@ using NPOI.XSSF.UserModel;
 namespace Bing.Offices.Npoi.Exports;
 
 /// <summary>
-/// 基于 NPOI 的单工作簿流式 Excel 导出器。
+/// 基于 NPOI 的单工作簿 Excel 导出器；NPOI 工作簿在内存中构建后写入目标流。
 /// </summary>
 internal sealed class NpoiExcelExporter : IExcelExporter
 {
@@ -94,10 +94,13 @@ internal sealed class NpoiExcelExporter : IExcelExporter
     private static NPOI.SS.UserModel.IWorkbook CreateWorkbook(ExcelWorkbookExportRequest request)
     {
         if (request.Template == null)
-            return ExcelHelper.PrepareWorkbook(request.Format);
+            return ExcelHelper.PrepareWorkbook(request.Format, request.Metadata);
         if (!request.Template.CanRead)
             throw new ArgumentException("模板流不可读取。", nameof(request));
-        return NPOI.SS.UserModel.WorkbookFactory.Create(new NonDisposingStream(request.Template));
+        var workbook = NPOI.SS.UserModel.WorkbookFactory.Create(new NonDisposingStream(request.Template));
+        if (request.MetadataSpecified)
+            ExcelHelper.ApplyWorkbookMetadata(workbook, request.Metadata);
+        return workbook;
     }
 
     /// <summary>

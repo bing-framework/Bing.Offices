@@ -67,6 +67,7 @@ public class PublicApiContractTest
             "Bing.Offices.Abstractions:Bing.Offices.Csv.CsvExportOptions`1",
             "Bing.Offices.Abstractions:Bing.Offices.Csv.CsvFormulaInjectionPolicy",
             "Bing.Offices.Abstractions:Bing.Offices.Csv.CsvImportError",
+            "Bing.Offices.Abstractions:Bing.Offices.Csv.CsvImportErrorCode",
             "Bing.Offices.Abstractions:Bing.Offices.Csv.CsvImportOptions`1",
             "Bing.Offices.Abstractions:Bing.Offices.Csv.CsvImportResult`1",
             "Bing.Offices.Abstractions:Bing.Offices.Csv.ICsvExporter",
@@ -91,12 +92,14 @@ public class PublicApiContractTest
             "Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelSheetExportRequest",
             "Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelUnknownDynamicValuePolicy",
             "Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelWorkbookExportBuilder",
+            "Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelWorkbookMetadataOptions",
             "Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelWorkbookExportRequest",
             "Bing.Offices.Abstractions:Bing.Offices.Exports.IExcelExporter",
             "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelImport",
             "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelImportError",
             "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelImportErrorCode",
             "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelImportFailureOptions",
+            "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelImportFailureDiagnostic",
             "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelImportFailureWorkbookMode",
             "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelImportCommentConflictPolicy",
             "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelImportValidationMode",
@@ -356,7 +359,7 @@ public class PublicApiContractTest
         // Arrange
         var expected = new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["Bing.Offices.Abstractions"] = "A468F8FA4B681EB059F52A6004AC0480259BD8949C252F279071659B9193758B",
+            ["Bing.Offices.Abstractions"] = "225DC5822857B4D660FC7944CB885BC46249D72C344E90B6654EDCC5DC1F15D9",
             ["Bing.Offices.Core"] = "40A788EE5B49AF9599942AB68DA946D924FF6062257F1831B5AEBCAA26D760BE",
             ["Bing.Offices.Npoi"] = "A0DBE9808D82547601429D8958C7ED283467031A3763EB9037B19D03F19D80BD"
         };

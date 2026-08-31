@@ -1,6 +1,6 @@
 # NuGet Migration
 
-当前 major 为 `2.x`。三个包身份和依赖方向保持不变：
+当前工作树包版本为 `2.0.0`，三个包身份和依赖方向保持不变：
 
 `Bing.Offices.Abstractions <- Bing.Offices.Core <- Bing.Offices.Npoi`
 
@@ -13,13 +13,13 @@
 5. 只依赖 provider-neutral 请求、结果和转换器接口，不引用 NPOI 类型。
 6. 调用方提供的输入、输出和配置流仍由调用方拥有，库不会关闭它们。
 
-当前 2.x 保留既有公开入口以维持源码和二进制兼容，包括 `ExcelMapping.For<T>()`、旧的映射重载、布尔语义配置方法和 `ICellValueConverter` 兼容层。它们不应作为新代码的首选入口；迁移到方向明确的映射配置和 `IExcelValueConverter` 时，应在现有测试通过后逐项验证。
+当前 `2.0.0` 工作树移除了 `ExcelSetting.Default` 静态可变入口；Workbook metadata 改为请求级快照。CSV 新增输入字节、行、错误、字段和列限制，超限结果使用 `CsvImportErrorCode.ResourceLimit` 并设置 `CsvImportResult.IsTruncated`。
 
-下一 major 的 breaking table 尚未在本任务中获得批准，因此本任务不删除或重命名上述 API，也不执行包发布。`dotnet pack` 和本地 package consumer 验证仅用于确认当前包的可消费性。
+除 `ExcelSetting.Default` 外，其它 breaking table 尚未在本任务中获得批准，因此本任务不删除或重命名其它 API，也不执行包发布。`dotnet pack` 和本地 package consumer 验证仅用于确认当前 `2.0.0` 包的可消费性。
 
 ## 候选 API 迁移对照
 
-下表是待批准的 next-major 候选项，不代表当前 2.x 已删除或已承诺删除：
+下表列出仍保持兼容的旧版入口和候选替代项；除 `ExcelSetting.Default` 外，不代表本次 3.0.0 已删除或承诺删除：
 
 | 当前 2.x 入口 | 新代码建议 | 当前兼容策略 | 批准状态 |
 | --- | --- | --- | --- |
@@ -30,13 +30,13 @@
 | `EnabledEmptyLine` | `ReportEmptyRows` | 保留 | 待批准 |
 | `IgnoreEmptyLineAfterData` | `StopAtFirstEmptyRow` | 保留 | 待批准 |
 | `AddNavigationSheet` | `AddSheet(name, parents.SelectMany(...))` | 保留 | 待批准 |
-| `ExcelSetting.Default` | request/DI 范围内的显式设置 | 保留 | 待批准 |
+| `ExcelSetting.Default` | `ExcelWorkbookMetadataOptions` request 范围内的显式设置 | 已移除 | 本任务批准 |
 | `ICellValueConverter` | `IExcelValueConverter` | 保留兼容层 | 待批准 |
 
 迁移示例：
 
 ```csharp
-// 2.x 兼容入口
+// 仍兼容的旧版入口
 var mappingBuilder = ExcelMapping.For<OrderRow>();
 mappingBuilder.Property(row => row.Code).HasTitle("订单号");
 var mapping = mappingBuilder.Build();
@@ -47,4 +47,4 @@ var request = ExcelImport.Workbook<OrderWorkbook>(builder =>
 	builder.Sheet("订单", workbook => workbook.Rows));
 ```
 
-在 breaking table 获得批准前，旧入口继续纳入包消费者兼容测试；批准后必须同步 obsolete shim、删除项 negative baseline、迁移示例和版本号。
+`ExcelSetting.Default` 已不再提供静态可变实例。请在每个 Workbook 请求上调用 `Metadata(...)`；不配置时使用请求级默认值。其余候选入口仍保持兼容，只有在单独批准对应 breaking table 后才可删除或重命名。

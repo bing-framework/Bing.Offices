@@ -16,7 +16,7 @@ using NPOI.SS.UserModel;
 namespace Bing.Offices.Npoi.Imports;
 
 /// <summary>
-/// 基于 NPOI 的单遍流式 Excel 导入器。
+/// 基于 NPOI 的 Excel 导入器；输入会先复制并由 NPOI 建立内存中的 Workbook DOM。
 /// </summary>
 internal sealed class NpoiExcelImporter : IExcelImporter
 {
@@ -94,6 +94,17 @@ internal sealed class NpoiExcelImporter : IExcelImporter
         var existingSheets = request.Sheets.Select(sheet => new KeyValuePair<ExcelSheetImportRequest, int>(
             sheet, ResolveSheetIndex(workbook, sheet.Selector, request.SheetNameComparison)))
             .Where(item => item.Value >= 0).ToArray();
+        var duplicatePhysicalSheet = existingSheets.GroupBy(item => item.Value)
+            .FirstOrDefault(group => group.Count() > 1);
+        if (duplicatePhysicalSheet != null)
+        {
+            var physicalIndex = duplicatePhysicalSheet.Key;
+            var physicalName = workbook.GetSheetName(physicalIndex);
+            var selectors = string.Join(", ", duplicatePhysicalSheet.Select(item =>
+                GetSelectorDescription(item.Key.Selector)));
+            throw new ArgumentException(
+                $"多个 Sheet selector 指向同一物理 Sheet: {selectors}; 实际 Sheet=#{physicalIndex} {physicalName}");
+        }
         var plans = _planBuilder.Create(request, workbook, existingSheets);
         var resolvedSheetRequests = new Dictionary<string, ExcelSheetImportRequest>(StringComparer.OrdinalIgnoreCase);
         foreach (var sheetRequest in request.Sheets)
@@ -253,7 +264,7 @@ internal sealed class NpoiExcelImporter : IExcelImporter
     }
 
     /// <summary>
-    /// 单遍处理工作表中的数据行。
+    /// 按行处理已由 NPOI 加载到内存的工作表数据。
     /// </summary>
     /// <typeparam name="T">实体类型。</typeparam>
     /// <param name="sheet">NPOI 工作表。</param>

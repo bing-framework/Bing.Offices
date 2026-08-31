@@ -45,6 +45,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Bing.Offices.Npoi\Bing.Offices.Npoi.csproj" />
     <ProjectReference Include="..\Bing.Offices.ProfileFixtures\Bing.Offices.ProfileFixtures.csproj" />
+    <ProjectReference Include="..\Bing.Offices.ResourceProbe\Bing.Offices.ResourceProbe.csproj"
+              Condition="'$(TargetFramework)' == 'net8.0'" />
   </ItemGroup>
 
   <ItemGroup>

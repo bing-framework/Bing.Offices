@@ -7,6 +7,7 @@ using Bing.Offices.Conversions;
 using Bing.Offices.Configurations;
 using Bing.Offices.Csv;
 using Bing.Offices.Exports;
+using Bing.Offices.Extensions;
 using Bing.Offices.Imports;
 using Bing.Offices.Mappings;
 using Bing.Offices.Npoi.Exports;
@@ -16,6 +17,7 @@ using Bing.Offices.Providers;
 using Bing.Offices.Styles;
 using Bing.Offices.Validations;
 using System.Text;
+using System.Threading;
 using NPOI.HSSF.UserModel;
 using NPOI.SS.UserModel;
 using NPOI.XSSF.UserModel;
@@ -56,8 +58,9 @@ public sealed class ExcelWorkbookRequestTest
     public void Export_DestinationStream_ShouldRemainOpenAfterDirectWrite()
     {
         // Arrange
-        var request = ExcelExport.Workbook(workbook => workbook.AddSheet("客户",
-            new[] { new ExportCustomer { Name = "客户 A" } }));
+        var request = ExcelExport.Workbook(workbook => workbook
+            .Metadata(new ExcelWorkbookMetadataOptions { Author = "作者 A", Title = "标题 A" })
+            .AddSheet("客户", new[] { new ExportCustomer { Name = "客户 A" } }));
         using var destination = new MemoryStream();
 
         // Act
@@ -69,6 +72,248 @@ public sealed class ExcelWorkbookRequestTest
         destination.Position = 0;
         using var workbook = WorkbookFactory.Create(destination);
         Assert.Equal("客户 A", workbook.GetSheet("客户").GetRow(1).GetCell(0).StringCellValue);
+        var xssfWorkbook = Assert.IsType<XSSFWorkbook>(workbook);
+        Assert.Equal("作者 A", xssfWorkbook.GetProperties().CoreProperties.Creator);
+        Assert.Equal("标题 A", xssfWorkbook.GetProperties().CoreProperties.Title);
+    }
+
+    /// <summary>
+    /// 测试 - Workbook 请求应复制 metadata，避免调用方后续修改配置影响已构建请求。
+    /// </summary>
+    [Fact]
+    public void Export_WorkbookRequest_ShouldSnapshotMetadata()
+    {
+        // Arrange
+        var metadata = new ExcelWorkbookMetadataOptions
+        {
+            Author = "作者 A",
+            Company = "公司 A",
+            Title = "标题 A"
+        };
+        var request = ExcelExport.Workbook(workbook => workbook
+            .Metadata(metadata)
+            .AddSheet("客户", new[] { new ExportCustomer { Name = "客户 A" } }));
+
+        // Act
+        metadata = new ExcelWorkbookMetadataOptions { Author = "作者 B" };
+
+        // Assert
+        Assert.Equal("作者 A", request.Metadata.Author);
+        Assert.Equal("公司 A", request.Metadata.Company);
+        Assert.Equal("标题 A", request.Metadata.Title);
+    }
+
+    /// <summary>
+    /// 测试 - 模板默认保留 metadata，显式 Metadata 应在 XLS/XLSX 中覆盖六个字段。
+    /// </summary>
+    [Theory]
+    [InlineData(ExcelFormat.Xlsx)]
+    [InlineData(ExcelFormat.Xls)]
+    public void Export_TemplateMetadata_ShouldPreserveByDefaultAndOverrideExplicitly(ExcelFormat format)
+    {
+        // Arrange
+        var templateBytes = CreateMetadataTemplate(format, "模板作者", "模板公司", "模板标题", "模板主题",
+            "模板类别", "模板备注");
+        using var template = new MemoryStream(templateBytes);
+        var request = ExcelExport.Workbook(workbook => workbook
+            .Format(format)
+            .UseTemplate(template, leaveOpen: true)
+            .Metadata(new ExcelWorkbookMetadataOptions
+            {
+                Author = "请求作者",
+                Company = "请求公司",
+                Title = "请求标题",
+                Subject = "请求主题",
+                Category = "请求类别",
+                Description = "请求备注"
+            })
+            .AddSheet("客户", new[] { new ExportCustomer { Name = "客户 A" } }));
+        using var destination = new MemoryStream();
+
+        // Act
+        new NpoiExcelExporter().Export(request, destination);
+
+        // Assert
+        destination.Position = 0;
+        using var result = WorkbookFactory.Create(destination);
+        if (format == ExcelFormat.Xlsx)
+        {
+            var properties = Assert.IsType<XSSFWorkbook>(result).GetProperties();
+            Assert.Equal("请求作者", properties.CoreProperties.Creator);
+            Assert.Equal("请求公司", properties.ExtendedProperties.GetUnderlyingProperties().Company);
+            Assert.Equal("请求标题", properties.CoreProperties.Title);
+            Assert.Equal("请求主题", properties.CoreProperties.Subject);
+            Assert.Equal("请求类别", properties.CoreProperties.Category);
+            Assert.Equal("请求备注", properties.CoreProperties.Description);
+        }
+        else
+        {
+            var workbook = Assert.IsType<HSSFWorkbook>(result);
+            Assert.Equal("请求作者", workbook.SummaryInformation.Author);
+            Assert.Equal("请求公司", workbook.DocumentSummaryInformation.Company);
+            Assert.Equal("请求标题", workbook.SummaryInformation.Title);
+            Assert.Equal("请求主题", workbook.SummaryInformation.Subject);
+            Assert.Equal("请求类别", workbook.DocumentSummaryInformation.Category);
+            Assert.Equal("请求备注", workbook.SummaryInformation.Comments);
+        }
+    }
+
+    /// <summary>
+    /// 测试 - 未显式设置请求 metadata 时，模板原有 metadata 应保持不变。
+    /// </summary>
+    [Fact]
+    public void Export_TemplateMetadata_WhenNotSpecified_ShouldPreserveTemplateValues()
+    {
+        // Arrange
+        using var template = new MemoryStream(CreateMetadataTemplate(ExcelFormat.Xlsx, "模板作者", "模板公司",
+            "模板标题", "模板主题", "模板类别", "模板备注"));
+        var request = ExcelExport.Workbook(workbook => workbook
+            .UseTemplate(template, leaveOpen: true)
+            .AddSheet("客户", new[] { new ExportCustomer { Name = "客户 A" } }));
+        using var destination = new MemoryStream();
+
+        // Act
+        new NpoiExcelExporter().Export(request, destination);
+
+        // Assert
+        destination.Position = 0;
+        using var result = Assert.IsType<XSSFWorkbook>(WorkbookFactory.Create(destination));
+        var properties = result.GetProperties();
+        Assert.Equal("模板作者", properties.CoreProperties.Creator);
+        Assert.Equal("模板公司", properties.ExtendedProperties.GetUnderlyingProperties().Company);
+        Assert.Equal("模板标题", properties.CoreProperties.Title);
+        Assert.Equal("模板主题", properties.CoreProperties.Subject);
+        Assert.Equal("模板类别", properties.CoreProperties.Category);
+        Assert.Equal("模板备注", properties.CoreProperties.Description);
+    }
+
+    /// <summary>
+    /// 测试 - Excel 文件导出失败时应保留已存在目标文件的原始内容。
+    /// </summary>
+    [Fact]
+    public void ExportToFile_Failure_ShouldKeepExistingTarget()
+    {
+        // Arrange
+        var request = ExcelExport.Workbook(workbook => workbook
+            .AddSheet("客户", new[] { new ExportCustomer { Name = "客户 A" } }));
+        var filePath = Path.Combine(Path.GetTempPath(), $"Bing.Offices.Tests.{Guid.NewGuid():N}.xlsx");
+        File.WriteAllText(filePath, "原始内容", Encoding.UTF8);
+
+        try
+        {
+            // Act
+            Assert.Throws<InvalidOperationException>(() => new ThrowingExcelExporter()
+                .ExportToFile(request, filePath));
+
+            // Assert
+            Assert.Equal("原始内容", File.ReadAllText(filePath, Encoding.UTF8));
+        }
+        finally
+        {
+            if (File.Exists(filePath))
+                File.Delete(filePath);
+        }
+    }
+
+    /// <summary>
+    /// 测试 - Excel 文件导出在预取消和 staging 写后取消时均不得提交目标文件。
+    /// </summary>
+    [Fact]
+    public void ExportToFile_Cancellation_ShouldKeepExistingTarget()
+    {
+        // Arrange
+        var request = ExcelExport.Workbook(workbook => workbook
+            .AddSheet("客户", new[] { new ExportCustomer { Name = "客户 A" } }));
+        var filePath = Path.Combine(Path.GetTempPath(), $"Bing.Offices.Cancel.{Guid.NewGuid():N}.xlsx");
+        File.WriteAllText(filePath, "原始内容", Encoding.UTF8);
+        using var canceled = new CancellationTokenSource();
+        canceled.Cancel();
+
+        try
+        {
+            // Act
+            Assert.Throws<OperationCanceledException>(() => new NpoiExcelExporter()
+                .ExportToFile(request, filePath, canceled.Token));
+            Assert.Equal("原始内容", File.ReadAllText(filePath, Encoding.UTF8));
+
+            using var writeCanceled = new CancellationTokenSource();
+            Assert.Throws<OperationCanceledException>(() => new CancelingExcelExporter()
+                .ExportToFile(request, filePath, writeCanceled.Token));
+
+            // Assert
+            Assert.Equal("原始内容", File.ReadAllText(filePath, Encoding.UTF8));
+            Assert.Empty(Directory.GetFiles(Path.GetDirectoryName(filePath),
+                Path.GetFileName(filePath) + ".*.tmp"));
+        }
+        finally
+        {
+            if (File.Exists(filePath))
+                File.Delete(filePath);
+        }
+    }
+
+    /// <summary>
+    /// 测试 - Excel 文件导出成功时应支持新建和替换目标，并可重新打开结果。
+    /// </summary>
+    [Fact]
+    public void ExportToFile_Success_ShouldCreateAndReplaceTarget()
+    {
+        // Arrange
+        var request = ExcelExport.Workbook(workbook => workbook
+            .AddSheet("客户", new[] { new ExportCustomer { Name = "新内容" } }));
+        var filePath = Path.Combine(Path.GetTempPath(), $"Bing.Offices.Success.{Guid.NewGuid():N}.xlsx");
+
+        try
+        {
+            // Act
+            new NpoiExcelExporter().ExportToFile(request, filePath);
+
+            // Assert
+            using (var first = File.OpenRead(filePath))
+            using (var workbook = WorkbookFactory.Create(first))
+                Assert.Equal("新内容", workbook.GetSheet("客户").GetRow(1).GetCell(0).StringCellValue);
+
+            var replacementRequest = ExcelExport.Workbook(workbook => workbook
+                .AddSheet("客户", new[] { new ExportCustomer { Name = "替换内容" } }));
+            new NpoiExcelExporter().ExportToFile(replacementRequest, filePath);
+            using var second = File.OpenRead(filePath);
+            using var replaced = WorkbookFactory.Create(second);
+            Assert.Equal("替换内容", replaced.GetSheet("客户").GetRow(1).GetCell(0).StringCellValue);
+        }
+        finally
+        {
+            if (File.Exists(filePath))
+                File.Delete(filePath);
+        }
+    }
+
+    /// <summary>
+    /// 测试 - Excel 文件提交目标不可替换时应保留 staging 清理和目标目录。
+    /// </summary>
+    [Fact]
+    public void ExportToFile_CommitFailure_ShouldNotReplaceTargetDirectory()
+    {
+        // Arrange
+        var request = ExcelExport.Workbook(workbook => workbook
+            .AddSheet("客户", new[] { new ExportCustomer { Name = "客户 A" } }));
+        var directoryPath = Path.Combine(Path.GetTempPath(), $"Bing.Offices.Directory.{Guid.NewGuid():N}.xlsx");
+        Directory.CreateDirectory(directoryPath);
+
+        try
+        {
+            // Act
+            Assert.ThrowsAny<IOException>(() => new NpoiExcelExporter().ExportToFile(request, directoryPath));
+
+            // Assert
+            Assert.True(Directory.Exists(directoryPath));
+            Assert.Empty(Directory.GetFiles(Path.GetDirectoryName(directoryPath),
+                Path.GetFileName(directoryPath) + ".*.tmp"));
+        }
+        finally
+        {
+            if (Directory.Exists(directoryPath))
+                Directory.Delete(directoryPath, true);
+        }
     }
 
     /// <summary>
@@ -1659,6 +1904,44 @@ public sealed class ExcelWorkbookRequestTest
     }
 
     /// <summary>
+    /// 测试 - 重复索引和名称索引混用指向同一物理 Sheet 时，应在计划构建前给出确定性错误。
+    /// </summary>
+    [Fact]
+    public void Import_DuplicateSheetSelectors_ShouldFailBeforePlanExecution()
+    {
+        // Arrange
+        using var source = new MemoryStream(CreateWorkbook(workbook =>
+        {
+            var sheet = workbook.CreateSheet("目标");
+            sheet.CreateRow(0).CreateCell(0).SetCellValue("Code");
+            sheet.CreateRow(1).CreateCell(0).SetCellValue("A-1");
+        }));
+
+        var duplicateIndex = Record.Exception(() => ExcelImport.Workbook<SelectorWorkbook>(workbook =>
+        {
+            workbook.Sheet(ExcelSheetSelector.ByIndex(0), root => root.Rows);
+            workbook.Sheet(ExcelSheetSelector.ByIndex(0), root => root.Rows);
+        }));
+        var mixedSelectorRequest = ExcelImport.Workbook<SelectorWorkbook>(workbook =>
+        {
+            workbook.Sheet(ExcelSheetSelector.ByName("目标"), root => root.Rows);
+            workbook.Sheet(ExcelSheetSelector.ByIndex(0), root => root.Rows);
+        });
+
+        // Act
+        source.Position = 0;
+        var mixedSelector = Record.Exception(() => new NpoiExcelImporter().Import(source, mixedSelectorRequest));
+
+        // Assert
+        var duplicateIndexArgument = Assert.IsType<ArgumentException>(duplicateIndex);
+        Assert.Contains("#0", duplicateIndexArgument.Message);
+        var mixedSelectorArgument = Assert.IsType<ArgumentException>(mixedSelector);
+        Assert.Contains("目标", mixedSelectorArgument.Message);
+        Assert.Contains("#0", mixedSelectorArgument.Message);
+        Assert.Contains("同一物理 Sheet", mixedSelectorArgument.Message);
+    }
+
+    /// <summary>
     /// 测试 - ReadColumns 应限制表头绑定范围，并允许范围外的辅助列存在。
     /// </summary>
     [Fact]
@@ -1996,6 +2279,40 @@ public sealed class ExcelWorkbookRequestTest
         return stream.ToArray();
     }
 
+    private static byte[] CreateMetadataTemplate(ExcelFormat format, string author, string company, string title,
+        string subject, string category, string description)
+    {
+        using IWorkbook workbook = format == ExcelFormat.Xls ? new HSSFWorkbook() : new XSSFWorkbook();
+        if (workbook is XSSFWorkbook xssf)
+        {
+            var properties = xssf.GetProperties();
+            properties.CoreProperties.Creator = author;
+            properties.ExtendedProperties.GetUnderlyingProperties().Company = company;
+            properties.CoreProperties.Title = title;
+            properties.CoreProperties.Subject = subject;
+            properties.CoreProperties.Category = category;
+            properties.CoreProperties.Description = description;
+        }
+        else
+        {
+            var hssf = (HSSFWorkbook)workbook;
+            var document = NPOI.HPSF.PropertySetFactory.CreateDocumentSummaryInformation();
+            document.Company = company;
+            document.Category = category;
+            hssf.DocumentSummaryInformation = document;
+            var summary = NPOI.HPSF.PropertySetFactory.CreateSummaryInformation();
+            summary.Author = author;
+            summary.Title = title;
+            summary.Subject = subject;
+            summary.Comments = description;
+            hssf.SummaryInformation = summary;
+        }
+        workbook.CreateSheet("客户");
+        using var stream = new MemoryStream();
+        workbook.Write(stream, false);
+        return stream.ToArray();
+    }
+
     private static byte[] CreateStyledExportTemplate(ExcelFormat format)
     {
         using IWorkbook workbook = format == ExcelFormat.Xls
@@ -2090,6 +2407,26 @@ public sealed class ExcelWorkbookRequestTest
     private sealed class ExportCustomer
     {
         public string Name { get; set; }
+    }
+
+    private sealed class ThrowingExcelExporter : IExcelExporter
+    {
+        public void Export(ExcelWorkbookExportRequest request, Stream destination,
+            CancellationToken cancellationToken = default)
+        {
+            destination.WriteByte(1);
+            throw new InvalidOperationException("测试导出失败");
+        }
+    }
+
+    private sealed class CancelingExcelExporter : IExcelExporter
+    {
+        public void Export(ExcelWorkbookExportRequest request, Stream destination,
+            CancellationToken cancellationToken = default)
+        {
+            destination.WriteByte(1);
+            throw new OperationCanceledException(cancellationToken);
+        }
     }
 
     [Header(FontName = "Arial", FontSize = 11, Bold = false, Color = Color.Blue)]

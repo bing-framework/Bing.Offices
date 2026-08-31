@@ -13,12 +13,15 @@ namespace Bing.Offices.Exports;
 public sealed class ExcelWorkbookExportRequest
 {
     internal ExcelWorkbookExportRequest(IReadOnlyList<ExcelSheetExportRequest> sheets, Stream template,
-        bool leaveTemplateOpen, ExcelFormat format)
+        bool leaveTemplateOpen, ExcelFormat format, ExcelWorkbookMetadataOptions metadata,
+        bool metadataSpecified)
     {
         Sheets = sheets;
         Template = template;
         LeaveTemplateOpen = leaveTemplateOpen;
         Format = format;
+        Metadata = metadata?.Clone() ?? new ExcelWorkbookMetadataOptions();
+        MetadataSpecified = metadataSpecified;
     }
 
     /// <summary>
@@ -37,6 +40,12 @@ public sealed class ExcelWorkbookExportRequest
 
     [EditorBrowsable(EditorBrowsableState.Never)]
     public ExcelFormat Format { get; }
+
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public ExcelWorkbookMetadataOptions Metadata { get; }
+
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public bool MetadataSpecified { get; }
 }
 
 /// <summary>

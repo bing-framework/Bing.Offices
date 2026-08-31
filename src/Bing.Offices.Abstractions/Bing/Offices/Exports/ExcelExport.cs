@@ -32,6 +32,7 @@ public sealed class ExcelWorkbookExportBuilder
     private Stream _template;
     private bool _leaveTemplateOpen;
     private ExcelFormat _format = ExcelFormat.Xlsx;
+    private ExcelWorkbookMetadataOptions _metadata;
 
     /// <summary>
     /// 设置输出格式。
@@ -39,6 +40,15 @@ public sealed class ExcelWorkbookExportBuilder
     public ExcelWorkbookExportBuilder Format(ExcelFormat format)
     {
         _format = format;
+        return this;
+    }
+
+    /// <summary>
+    /// 设置 Workbook 元数据。
+    /// </summary>
+    public ExcelWorkbookExportBuilder Metadata(ExcelWorkbookMetadataOptions metadata)
+    {
+        _metadata = metadata ?? throw new ArgumentNullException(nameof(metadata));
         return this;
     }
 
@@ -99,6 +109,7 @@ public sealed class ExcelWorkbookExportBuilder
             if (!names.Add(sheet.Name))
                 throw new ArgumentException($"Workbook 包含重复 Sheet 名称: {sheet.Name}");
         }
-        return new ExcelWorkbookExportRequest(_sheets.AsReadOnly(), _template, _leaveTemplateOpen, _format);
+        return new ExcelWorkbookExportRequest(_sheets.AsReadOnly(), _template, _leaveTemplateOpen, _format, _metadata,
+            _metadata != null);
     }
 }

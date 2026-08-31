@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using Bing.Offices.Attributes;
 using Bing.Offices.Conversions;
 using Bing.Offices.Configurations;
@@ -22,6 +23,136 @@ namespace Bing.Offices.Tests.Integration;
 /// </summary>
 public class ExcelImporterIntegrationTest
 {
+    /// <summary>
+    /// 测试 - Windows 目标文件被占用时，原子 Excel 文件导出应保留旧目标内容和临时文件清理。
+    /// </summary>
+    [Fact]
+    public void ExportToFile_TargetLocked_ShouldKeepExistingTarget()
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            return;
+
+        // Arrange
+        var path = Path.Combine(Path.GetTempPath(), $"Bing.Offices.Locked.{Guid.NewGuid():N}.xlsx");
+        File.WriteAllText(path, "原始内容", System.Text.Encoding.UTF8);
+        using var locked = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        using var provider = BuildProvider();
+        var request = ExcelExport.Workbook(builder => builder.AddSheet("Data",
+            new[] { new FileIntegrationRow { Name = "新内容", Count = 1 } }));
+
+        try
+        {
+            // Act
+            Assert.ThrowsAny<IOException>(() => provider.GetRequiredService<IExcelExporter>()
+                .ExportToFile(request, path));
+
+            // Assert
+            Assert.Equal("原始内容", File.ReadAllText(path, System.Text.Encoding.UTF8));
+            Assert.Empty(Directory.GetFiles(Path.GetDirectoryName(path), Path.GetFileName(path) + ".*.tmp"));
+        }
+        finally
+        {
+            locked.Dispose();
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+    }
+
+    /// <summary>
+    /// 测试 - Failure Workbook 临时目录路径与文件冲突时，应返回稳定的目录创建错误。
+    /// </summary>
+    [Fact]
+    public void FailureWorkbook_TemporaryDirectoryPathConflict_ShouldClassifyError()
+    {
+        // Arrange
+        var conflictPath = Path.Combine(Path.GetTempPath(), $"Bing.Offices.FailureConflict.{Guid.NewGuid():N}");
+        File.WriteAllText(conflictPath, "directory-conflict", System.Text.Encoding.UTF8);
+        using var source = new MemoryStream(CreateWorkbook(workbook =>
+        {
+            var sheet = workbook.CreateSheet("Data");
+            sheet.CreateRow(0).CreateCell(0).SetCellValue(nameof(ConflictIntegrationRow.Count));
+            sheet.CreateRow(1).CreateCell(0).SetCellValue("invalid");
+        }));
+        using var destination = new MemoryStream(new byte[] { 7 });
+        using var provider = BuildProvider();
+        var request = ExcelImport.Workbook<IntegrationWorkbook<ConflictIntegrationRow>>(builder => builder
+            .FailureWorkbook(new ExcelImportFailureOptions
+            {
+                Mode = ExcelImportFailureWorkbookMode.AnnotatedOriginal,
+                Destination = destination,
+                TemporaryDirectory = conflictPath
+            })
+            .Sheet("Data", root => root.Rows));
+
+        try
+        {
+            // Act
+            var exception = Assert.Throws<IOException>(() => provider.GetRequiredService<IExcelImporter>()
+                .Import(source, request));
+
+            // Assert
+            Assert.Equal("失败工作簿临时目录创建失败。", exception.Message);
+            Assert.IsType<IOException>(exception.InnerException);
+            Assert.Equal(1, destination.Length);
+        }
+        finally
+        {
+            if (File.Exists(conflictPath))
+                File.Delete(conflictPath);
+        }
+    }
+
+    /// <summary>代码自身无法证明 Windows 文件占用时 Failure Workbook 复制阶段的异常合同。</summary>
+    [Fact]
+    public void FailureWorkbook_LockedDestination_ShouldClassifyCopyFailureAndCleanup()
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            return;
+
+        // Arrange
+        var directory = Path.Combine(Path.GetTempPath(), $"Bing.Offices.FailureLocked.{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        var destinationPath = Path.Combine(directory, "failure.xlsx");
+        var temporaryDirectory = Path.Combine(directory, "temporary");
+        Directory.CreateDirectory(temporaryDirectory);
+        File.WriteAllText(destinationPath, "原始失败文件", System.Text.Encoding.UTF8);
+        using var destination = new LockedDestinationStream(destinationPath);
+        using var source = new MemoryStream(CreateWorkbook(workbook =>
+        {
+            var sheet = workbook.CreateSheet("Data");
+            sheet.CreateRow(0).CreateCell(0).SetCellValue(nameof(ConflictIntegrationRow.Count));
+            sheet.CreateRow(1).CreateCell(0).SetCellValue("invalid");
+        }));
+        using var provider = BuildProvider();
+        var request = ExcelImport.Workbook<IntegrationWorkbook<ConflictIntegrationRow>>(builder => builder
+            .FailureWorkbook(new ExcelImportFailureOptions
+            {
+                Mode = ExcelImportFailureWorkbookMode.AnnotatedOriginal,
+                Destination = destination,
+                TemporaryDirectory = temporaryDirectory
+            })
+            .Sheet("Data", root => root.Rows));
+
+        try
+        {
+            // Act
+            var exception = Assert.Throws<InvalidOperationException>(() => provider.GetRequiredService<IExcelImporter>()
+                .Import(source, request));
+
+            // Assert
+            Assert.Equal("失败工作簿复制到目标流失败。", exception.Message);
+            Assert.IsType<IOException>(exception.InnerException);
+            Assert.Equal("原始失败文件", File.ReadAllText(destinationPath, System.Text.Encoding.UTF8));
+            Assert.Empty(Directory.GetFiles(temporaryDirectory));
+        }
+        finally
+        {
+            destination.Dispose();
+            if (Directory.Exists(directory))
+                Directory.Delete(directory, true);
+        }
+    }
+
     /// <summary>
     /// 测试 - 通过 DI 解析的导入器应在真实 XLSX 流中执行调用方注册的自定义校验规则。
     /// </summary>
@@ -374,6 +505,13 @@ public class ExcelImporterIntegrationTest
         return destination.ToArray();
     }
 
+    private static ServiceProvider BuildProvider()
+    {
+        var services = new ServiceCollection();
+        services.AddNpoi();
+        return services.BuildServiceProvider();
+    }
+
     /// <summary>
     /// 集成测试行模型。
     /// </summary>
@@ -450,6 +588,54 @@ public class ExcelImporterIntegrationTest
         /// 数量。
         /// </summary>
         public int Count { get; set; }
+    }
+
+    private class ConflictIntegrationRow
+    {
+        public int Count { get; set; }
+    }
+
+    private sealed class LockedDestinationStream : Stream
+    {
+        private readonly string _path;
+        private readonly FileStream _lock;
+
+        public LockedDestinationStream(string path)
+        {
+            _path = path;
+            _lock = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        }
+
+        public override bool CanRead => true;
+        public override bool CanSeek => true;
+        public override bool CanWrite => true;
+        public override long Length => _lock.Length;
+        public override long Position
+        {
+            get => _lock.Position;
+            set => _lock.Position = value;
+        }
+
+        public override void Flush() { }
+
+        public override int Read(byte[] buffer, int offset, int count) => _lock.Read(buffer, offset, count);
+
+        public override long Seek(long offset, SeekOrigin origin) => _lock.Seek(offset, origin);
+
+        public override void SetLength(long value) => _lock.SetLength(value);
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            using var blocked = new FileStream(_path, FileMode.Open, FileAccess.Write, FileShare.None);
+            blocked.Write(buffer, offset, count);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+                _lock.Dispose();
+            base.Dispose(disposing);
+        }
     }
 
     /// <summary>

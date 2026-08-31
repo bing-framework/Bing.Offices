@@ -11,12 +11,14 @@ internal static class CsvHeaderBinder
     public static IReadOnlyList<CsvColumn> Bind(IEnumerator<IReadOnlyList<string>> records,
         IReadOnlyCollection<CsvPropertyBinding> properties,
         IReadOnlyCollection<CsvPropertyBinding> dynamicProperties,
-        IReadOnlyList<IExcelDynamicMappingColumn> dynamicColumns, bool headerMatch)
+        IReadOnlyList<IExcelDynamicMappingColumn> dynamicColumns, bool headerMatch, int? maxColumns = null)
     {
         if (records == null)
             throw new ArgumentNullException(nameof(records));
         if (!records.MoveNext())
-            throw new InvalidOperationException("CSV 不包含表头。");
+            throw new CsvInvalidHeaderException("CSV 不包含表头。");
+        if (maxColumns.HasValue && records.Current.Count > maxColumns.Value)
+            throw new CsvResourceLimitException($"CSV 表头超过最大列数: {maxColumns.Value}");
 
         var columns = new List<CsvColumn>();
         var headers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -24,7 +26,7 @@ internal static class CsvHeaderBinder
         {
             var header = records.Current[index];
             if (!headers.Add(header))
-                throw new InvalidOperationException($"CSV 包含重复表头: {header}");
+                throw new CsvInvalidHeaderException($"CSV 包含重复表头: {header}");
             var property = properties.FirstOrDefault(candidate =>
                 string.Equals(candidate.Title, header, StringComparison.OrdinalIgnoreCase)
                 || candidate.Aliases.Any(alias => string.Equals(alias, header, StringComparison.OrdinalIgnoreCase))
@@ -42,7 +44,7 @@ internal static class CsvHeaderBinder
             if (property == null)
                 continue;
             if (!property.Property.CanWrite)
-                throw new InvalidOperationException($"导入模板属性不可写入: {property.Name}");
+                throw new CsvInvalidHeaderException($"导入模板属性不可写入: {property.Name}");
             columns.Add(new CsvColumn(index, property, header, property.IsDynamicColumn, dynamicColumn));
         }
         if (headerMatch)
@@ -50,7 +52,7 @@ internal static class CsvHeaderBinder
             var missing = properties.Where(property => columns.All(column => column.Property != property))
                 .Select(property => property.Title);
             if (missing.Any())
-                throw new InvalidOperationException($"CSV 不存在列: {string.Join(",", missing)}");
+                throw new CsvInvalidHeaderException($"CSV 不存在列: {string.Join(",", missing)}");
         }
         return columns;
     }

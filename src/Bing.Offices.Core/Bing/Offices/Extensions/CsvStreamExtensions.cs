@@ -1,4 +1,5 @@
 ﻿using Bing.Offices.Csv;
+using Bing.Offices.IO;
 
 namespace Bing.Offices.Extensions;
 
@@ -41,8 +42,8 @@ public static class CsvStreamExtensions
             throw new ArgumentNullException(nameof(exporter));
         if (string.IsNullOrWhiteSpace(path))
             throw new ArgumentException("目标文件路径不能为空。", nameof(path));
-        using var destination = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
-        exporter.Export(data, destination, options, cancellationToken);
+        AtomicFileCommitter.Commit(path, destination => exporter.Export(data, destination, options, cancellationToken),
+            cancellationToken, "CSV");
     }
 
     /// <summary>

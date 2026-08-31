@@ -123,6 +123,28 @@ public enum ExcelImportFailureWorkbookMode
 }
 
 /// <summary>
+/// 失败工作簿输出边界的结构化诊断。
+/// </summary>
+public sealed class ExcelImportFailureDiagnostic
+{
+    public ExcelImportFailureDiagnostic(string code, string temporaryPath, Exception exception)
+    {
+        Code = code;
+        TemporaryPath = temporaryPath;
+        Exception = exception;
+    }
+
+    /// <summary>诊断代码。</summary>
+    public string Code { get; }
+
+    /// <summary>未包含工作簿内容的临时文件路径。</summary>
+    public string TemporaryPath { get; }
+
+    /// <summary>清理异常。</summary>
+    public Exception Exception { get; }
+}
+
+/// <summary>
 /// 导入失败批注与原有批注冲突时的处理策略。
 /// </summary>
 public enum ExcelImportCommentConflictPolicy
@@ -245,6 +267,12 @@ public sealed class ExcelImportFailureOptions
     /// <summary>失败工作簿最大字节数。</summary>
     public long? MaxBytes { get; init; }
 
+    /// <summary>失败工作簿请求级临时目录；为空时使用系统临时目录。</summary>
+    public string TemporaryDirectory { get; init; }
+
+    /// <summary>失败工作簿边界诊断接收器。</summary>
+    public Action<ExcelImportFailureDiagnostic> DiagnosticSink { get; init; }
+
     /// <summary>AnnotatedOriginal 模式下的批注冲突策略，默认追加失败信息。</summary>
     public ExcelImportCommentConflictPolicy CommentConflictPolicy { get; init; } =
         ExcelImportCommentConflictPolicy.Append;
@@ -258,6 +286,8 @@ public sealed class ExcelImportFailureOptions
             throw new ArgumentException("启用失败工作簿输出时必须提供目标流。", nameof(Destination));
         if (Destination != null && !Destination.CanWrite)
             throw new ArgumentException("失败工作簿目标流不可写入。", nameof(Destination));
+        if (TemporaryDirectory != null && string.IsNullOrWhiteSpace(TemporaryDirectory))
+            throw new ArgumentException("临时目录不能为空白字符串。", nameof(TemporaryDirectory));
         if (!Enum.IsDefined(typeof(ExcelImportCommentConflictPolicy), CommentConflictPolicy))
             throw new ArgumentOutOfRangeException(nameof(CommentConflictPolicy));
     }
