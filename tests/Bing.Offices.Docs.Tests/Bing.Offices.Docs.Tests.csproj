@@ -11,12 +11,13 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.7.0" PrivateAssets="all" />
     <PackageReference Include="NPOI" Version="2.7.4" />
-    <PackageReference Include="Bing.Offices.Abstractions" Version="2.0.0" />
-    <PackageReference Include="Bing.Offices.Core" Version="2.0.0" />
-    <PackageReference Include="Bing.Offices.Npoi" Version="2.0.0" />
   </ItemGroup>
 
   <ItemGroup>
     <None Include="..\..\docs\excel\*.md" Link="Docs\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Bing.Offices.Npoi\Bing.Offices.Npoi.csproj" />
   </ItemGroup>
 </Project>
