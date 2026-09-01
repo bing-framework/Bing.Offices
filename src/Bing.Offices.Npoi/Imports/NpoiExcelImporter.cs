@@ -100,44 +100,45 @@ internal sealed class NpoiExcelImporter : IExcelImporter
             ? null
             : new Dictionary<object, SourceLocation>(ReferenceObjectComparer.Instance);
         var runtime = new ExcelImportRuntime(request.ResourceLimits);
-        var existingSheets = request.Sheets.Select(sheet => new KeyValuePair<ExcelSheetImportRequest, int>(
-            sheet, ResolveSheetIndex(workbook, sheet.Selector, request.SheetNameComparison)))
-            .Where(item => item.Value >= 0).ToArray();
-        var duplicatePhysicalSheet = existingSheets.GroupBy(item => item.Value)
+        var resolvedSheets = request.Sheets.Select(sheet => ResolveSheet(workbook, sheet,
+            request.SheetNameComparison)).ToArray();
+        var existingSheets = resolvedSheets.Where(sheet => sheet.Exists).ToArray();
+        var duplicatePhysicalSheet = existingSheets.GroupBy(item => item.Index)
             .FirstOrDefault(group => group.Count() > 1);
         if (duplicatePhysicalSheet != null)
         {
             var physicalIndex = duplicatePhysicalSheet.Key;
-            var physicalName = workbook.GetSheetName(physicalIndex);
+            var physicalName = duplicatePhysicalSheet.First().Name;
             var selectors = string.Join(", ", duplicatePhysicalSheet.Select(item =>
-                GetSelectorDescription(item.Key.Selector)));
+                GetSelectorDescription(item.Request.Selector)));
             throw new ArgumentException(
                 $"多个 Sheet selector 指向同一物理 Sheet: {selectors}; 实际 Sheet=#{physicalIndex} {physicalName}");
         }
-        var plans = _planBuilder.Create(request, workbook, existingSheets);
-        var resolvedSheetRequests = new Dictionary<string, ExcelSheetImportRequest>(StringComparer.OrdinalIgnoreCase);
-        foreach (var sheetRequest in request.Sheets)
+        var plans = _planBuilder.Create(existingSheets);
+        var resolvedSheetRequests = resolvedSheets.Where(sheet => sheet.Exists &&
+                !workbook.IsSheetHidden(sheet.Index) && !workbook.IsSheetVeryHidden(sheet.Index))
+            .ToDictionary(sheet => sheet.Name, sheet => sheet.Request, StringComparer.OrdinalIgnoreCase);
+        foreach (var resolvedSheet in resolvedSheets)
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (errors.IsLimitReached || runtime.RowLimitReached)
                 break;
-            var sheetIndex = ResolveSheetIndex(workbook, sheetRequest.Selector, request.SheetNameComparison);
-            if (sheetIndex < 0)
+            var sheetRequest = resolvedSheet.Request;
+            if (!resolvedSheet.Exists)
             {
                 errors.Add(new ExcelImportError(ExcelImportErrorCode.InvalidHeader,
                     $"缺少请求的 Sheet: {GetSelectorDescription(sheetRequest.Selector)}",
                     GetSelectorDescription(sheetRequest.Selector), 0, 0, null));
                 continue;
             }
-            if (workbook.IsSheetHidden(sheetIndex) || workbook.IsSheetVeryHidden(sheetIndex))
+            if (workbook.IsSheetHidden(resolvedSheet.Index) || workbook.IsSheetVeryHidden(resolvedSheet.Index))
             {
                 errors.Add(new ExcelImportError(ExcelImportErrorCode.InvalidHeader,
-                    $"请求的 Sheet 被隐藏: {workbook.GetSheetName(sheetIndex)}", workbook.GetSheetName(sheetIndex),
+                    $"请求的 Sheet 被隐藏: {resolvedSheet.Name}", resolvedSheet.Name,
                     0, 0, null));
                 continue;
             }
-            var sheet = workbook.GetSheetAt(sheetIndex);
-            resolvedSheetRequests[sheet.SheetName] = sheetRequest;
+            var sheet = workbook.GetSheetAt(resolvedSheet.Index);
             try
             {
                 ImportTypedSheet(sheet, sheetRequest, root, sheetResults, errors, request.ValidationMode,
@@ -189,6 +190,18 @@ internal sealed class NpoiExcelImporter : IExcelImporter
                 return index;
         }
         return -1;
+    }
+
+    /// <summary>解析一个工作表请求并保存物理名称，供后续所有导入阶段复用。</summary>
+    /// <param name="workbook">待查找的工作簿。</param>
+    /// <param name="request">待解析的工作表请求。</param>
+    /// <param name="comparison">工作表名称比较规则。</param>
+    /// <returns>已解析的工作表执行描述。</returns>
+    private static NpoiResolvedSheet ResolveSheet(IWorkbook workbook, ExcelSheetImportRequest request,
+        ExcelNameComparison comparison)
+    {
+        var index = ResolveSheetIndex(workbook, request.Selector, comparison);
+        return new NpoiResolvedSheet(request, index, index < 0 ? null : workbook.GetSheetName(index));
     }
 
     /// <summary>生成用于错误消息的工作表选择器描述。</summary>

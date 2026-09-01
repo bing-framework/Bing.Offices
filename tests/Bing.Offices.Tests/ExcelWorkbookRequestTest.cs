@@ -18,6 +18,7 @@ using Bing.Offices.Styles;
 using Bing.Offices.Validations;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using NPOI.HSSF.UserModel;
 using NPOI.SS.UserModel;
 using NPOI.XSSF.UserModel;
@@ -185,6 +186,87 @@ public sealed class ExcelWorkbookRequestTest
         Assert.Equal("模板主题", properties.CoreProperties.Subject);
         Assert.Equal("模板类别", properties.CoreProperties.Category);
         Assert.Equal("模板备注", properties.CoreProperties.Description);
+    }
+
+    /// <summary>
+    /// 测试 - XLS 模板未显式指定请求 metadata 时，应保留 SummaryInformation 和 DocumentSummaryInformation。
+    /// </summary>
+    [Fact]
+    public void Export_XlsTemplateMetadata_WhenNotSpecified_ShouldPreserveTemplateValues()
+    {
+        // Arrange
+        using var template = new MemoryStream(CreateMetadataTemplate(ExcelFormat.Xls, "模板作者", "模板公司",
+            "模板标题", "模板主题", "模板类别", "模板备注"));
+        var request = ExcelExport.Workbook(workbook => workbook
+            .Format(ExcelFormat.Xls)
+            .UseTemplate(template, leaveOpen: true)
+            .AddSheet("客户", new[] { new ExportCustomer { Name = "客户 A" } }));
+        using var destination = new MemoryStream();
+
+        // Act
+        new NpoiExcelExporter().Export(request, destination);
+
+        // Assert
+        destination.Position = 0;
+        using var result = Assert.IsType<HSSFWorkbook>(WorkbookFactory.Create(destination));
+        Assert.Equal("模板作者", result.SummaryInformation.Author);
+        Assert.Equal("模板公司", result.DocumentSummaryInformation.Company);
+        Assert.Equal("模板标题", result.SummaryInformation.Title);
+        Assert.Equal("模板主题", result.SummaryInformation.Subject);
+        Assert.Equal("模板类别", result.DocumentSummaryInformation.Category);
+        Assert.Equal("模板备注", result.SummaryInformation.Comments);
+    }
+
+    /// <summary>
+    /// 测试 - 并发导出不同请求 metadata 时，各个 XLS/XLSX 结果应保持请求级隔离。
+    /// </summary>
+    [Fact]
+    public void Export_MetadataConcurrentRequests_ShouldRemainIsolated()
+    {
+        // Arrange
+        var results = new MetadataSnapshot[64];
+
+        // Act
+        Parallel.For(0, results.Length, index =>
+        {
+            var value = $"并发-{index}";
+            var request = ExcelExport.Workbook(workbook => workbook
+                .Format(index % 2 == 0 ? ExcelFormat.Xlsx : ExcelFormat.Xls)
+                .Metadata(new ExcelWorkbookMetadataOptions
+                {
+                    Author = value,
+                    Company = value,
+                    Title = value,
+                    Subject = value,
+                    Category = value,
+                    Description = value
+                })
+                .AddSheet("客户", new[] { new ExportCustomer { Name = value } }));
+            using var destination = new MemoryStream();
+            new NpoiExcelExporter().Export(request, destination);
+            destination.Position = 0;
+            using var workbook = WorkbookFactory.Create(destination);
+            results[index] = workbook is XSSFWorkbook xssf
+                ? new MetadataSnapshot(value,
+                    xssf.GetProperties().CoreProperties.Creator,
+                    xssf.GetProperties().ExtendedProperties.GetUnderlyingProperties().Company,
+                    xssf.GetProperties().CoreProperties.Title,
+                    xssf.GetProperties().CoreProperties.Subject,
+                    xssf.GetProperties().CoreProperties.Category,
+                    xssf.GetProperties().CoreProperties.Description)
+                : CreateMetadataSnapshot((HSSFWorkbook)workbook, value);
+        });
+
+        // Assert
+        foreach (var result in results)
+        {
+            Assert.Equal(result.Expected, result.Author);
+            Assert.Equal(result.Expected, result.Company);
+            Assert.Equal(result.Expected, result.Title);
+            Assert.Equal(result.Expected, result.Subject);
+            Assert.Equal(result.Expected, result.Category);
+            Assert.Equal(result.Expected, result.Description);
+        }
     }
 
     /// <summary>
@@ -2279,6 +2361,15 @@ public sealed class ExcelWorkbookRequestTest
         return stream.ToArray();
     }
 
+    private static MetadataSnapshot CreateMetadataSnapshot(HSSFWorkbook workbook, string expected) => new(
+        expected,
+        workbook.SummaryInformation.Author,
+        workbook.DocumentSummaryInformation.Company,
+        workbook.SummaryInformation.Title,
+        workbook.SummaryInformation.Subject,
+        workbook.DocumentSummaryInformation.Category,
+        workbook.SummaryInformation.Comments);
+
     private static byte[] CreateMetadataTemplate(ExcelFormat format, string author, string company, string title,
         string subject, string category, string description)
     {
@@ -2407,6 +2498,29 @@ public sealed class ExcelWorkbookRequestTest
     private sealed class ExportCustomer
     {
         public string Name { get; set; }
+    }
+
+    private sealed class MetadataSnapshot
+    {
+        public MetadataSnapshot(string expected, string author, string company, string title, string subject,
+            string category, string description)
+        {
+            Expected = expected;
+            Author = author;
+            Company = company;
+            Title = title;
+            Subject = subject;
+            Category = category;
+            Description = description;
+        }
+
+        public string Expected { get; }
+        public string Author { get; }
+        public string Company { get; }
+        public string Title { get; }
+        public string Subject { get; }
+        public string Category { get; }
+        public string Description { get; }
     }
 
     private sealed class ThrowingExcelExporter : IExcelExporter

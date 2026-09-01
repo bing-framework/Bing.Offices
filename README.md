@@ -1,8 +1,8 @@
 # Bing.Offices
 [![GitHub license](https://img.shields.io/badge/license-MIT-blue.svg)](https://mit-license.org/)
 
-Bing.Offices是Bing应用框架的Office操作类库。
-主要用于Excel、Word、Pdf相关功能操作。
+Bing.Offices是Bing应用框架的 Excel 导入导出类库。
+当前发布程序集提供 Excel/CSV 相关能力；Word、PDF 不属于当前交付范围。
 
 ## Nuget Packages
 |Nuget|版本号|说明|

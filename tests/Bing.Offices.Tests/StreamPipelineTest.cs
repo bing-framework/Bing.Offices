@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,6 +20,7 @@ using Bing.Offices.Npoi;
 using Bing.Offices.Npoi.Exports;
 using Bing.Offices.Npoi.Extensions;
 using Bing.Offices.Npoi.Imports;
+using Bing.Offices.Providers;
 using Bing.Offices.Validations;
 using Microsoft.Extensions.DependencyInjection;
 using NPOI.HSSF.UserModel;
@@ -1380,6 +1382,185 @@ public class StreamPipelineTest
     }
 
     /// <summary>
+    /// 测试 - XLSX 与 XLS 均应支持按名称选择工作表，并按配置执行大小写比较。
+    /// </summary>
+    [Theory]
+    [InlineData(false, ExcelNameComparison.OrdinalIgnoreCase, true)]
+    [InlineData(false, ExcelNameComparison.Ordinal, false)]
+    [InlineData(true, ExcelNameComparison.OrdinalIgnoreCase, true)]
+    [InlineData(true, ExcelNameComparison.Ordinal, false)]
+    public void Import_SheetSelectorByName_ShouldHonorFormatAndComparison(
+        bool legacyFormat, ExcelNameComparison comparison, bool shouldImport)
+    {
+        // Arrange
+        var bytes = legacyFormat
+            ? CreateWorkbook<HSSFWorkbook>(workbook =>
+            {
+                var sheet = workbook.CreateSheet("Orders");
+                sheet.CreateRow(0).CreateCell(0).SetCellValue(nameof(StreamRow.Name));
+                sheet.CreateRow(1).CreateCell(0).SetCellValue("selected");
+            })
+            : CreateWorkbook<XSSFWorkbook>(workbook =>
+            {
+                var sheet = workbook.CreateSheet("Orders");
+                sheet.CreateRow(0).CreateCell(0).SetCellValue(nameof(StreamRow.Name));
+                sheet.CreateRow(1).CreateCell(0).SetCellValue("selected");
+            });
+        var request = ExcelImport.Workbook<SingleWorkbook<StreamRow>>(builder =>
+            builder.SheetNameComparison(comparison)
+                .Sheet(ExcelSheetSelector.ByName("orders"), root => root.Items));
+        using var source = new MemoryStream(bytes, writable: false);
+
+        // Act
+        var result = new NpoiExcelImporter().Import(source, request);
+
+        // Assert
+        if (shouldImport)
+        {
+            Assert.Empty(result.Errors);
+            Assert.Equal("selected", Assert.Single(result.Workbook.Items).Name);
+        }
+        else
+        {
+            Assert.Empty(result.Workbook.Items);
+            var error = Assert.Single(result.Errors);
+            Assert.Equal(ExcelImportErrorCode.InvalidHeader, error.Code);
+            Assert.Contains("orders", error.Message, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// 测试 - 缺失工作表和隐藏工作表选择均应返回定位明确的 InvalidHeader 错误。
+    /// </summary>
+    [Theory]
+    [InlineData(false, "Missing", "Missing")]
+    [InlineData(true, "Hidden", "Hidden")]
+    public void Import_SheetSelectorMissingOrHidden_ShouldReturnInvalidHeader(
+        bool hidden, string selectorName, string expectedSheetName)
+    {
+        // Arrange
+        var bytes = CreateWorkbook(workbook =>
+        {
+            var sheet = workbook.CreateSheet(hidden ? "Hidden" : "Data");
+            sheet.CreateRow(0).CreateCell(0).SetCellValue(nameof(StreamRow.Name));
+            sheet.CreateRow(1).CreateCell(0).SetCellValue("value");
+            if (hidden)
+                workbook.SetSheetHidden(0, SheetVisibility.Hidden);
+        });
+        var request = ExcelImport.Workbook<SingleWorkbook<StreamRow>>(builder =>
+            builder.Sheet(ExcelSheetSelector.ByName(selectorName), root => root.Items));
+        using var source = new MemoryStream(bytes, writable: false);
+
+        // Act
+        var result = new NpoiExcelImporter().Import(source, request);
+
+        // Assert
+        Assert.Empty(result.Workbook.Items);
+        var error = Assert.Single(result.Errors);
+        Assert.Equal(ExcelImportErrorCode.InvalidHeader, error.Code);
+        Assert.Equal(expectedSheetName, error.SheetName);
+    }
+
+    /// <summary>
+    /// 测试 - 不同工作表的名称和索引选择器可以混用，并分别导入对应物理工作表。
+    /// </summary>
+    [Fact]
+    public void Import_MixedNameAndIndexSelectors_ShouldImportDistinctSheets()
+    {
+        // Arrange
+        using var source = new MemoryStream(CreateWorkbook(workbook =>
+        {
+            var first = workbook.CreateSheet("Orders");
+            first.CreateRow(0).CreateCell(0).SetCellValue(nameof(StreamRow.Name));
+            first.CreateRow(1).CreateCell(0).SetCellValue("orders");
+            var second = workbook.CreateSheet("Customers");
+            second.CreateRow(0).CreateCell(0).SetCellValue(nameof(StreamRow.Name));
+            second.CreateRow(1).CreateCell(0).SetCellValue("customers");
+        }), writable: false);
+        var request = ExcelImport.Workbook<MultiSheetWorkbook<StreamRow>>(builder => builder
+            .Sheet(ExcelSheetSelector.ByName("Orders"), root => root.Items)
+            .Sheet(ExcelSheetSelector.ByIndex(1), root => root.Items));
+
+        // Act
+        var result = new NpoiExcelImporter().Import(source, request);
+
+        // Assert
+        Assert.Empty(result.Errors);
+        Assert.Equal(2, result.Workbook.Items.Count);
+        Assert.Contains(result.Workbook.Items, item => item.Name == "orders");
+        Assert.Contains(result.Workbook.Items, item => item.Name == "customers");
+    }
+
+    /// <summary>
+    /// 测试 - 名称和索引选择器指向同一物理工作表时，应在执行前确定性拒绝重复选择。
+    /// </summary>
+    [Fact]
+    public void Import_NameAndIndexSelectorsForSameSheet_ShouldThrowDeterministically()
+    {
+        // Arrange
+        using var source = new MemoryStream(CreateWorkbook(workbook =>
+        {
+            var sheet = workbook.CreateSheet("Orders");
+            sheet.CreateRow(0).CreateCell(0).SetCellValue(nameof(StreamRow.Name));
+            sheet.CreateRow(1).CreateCell(0).SetCellValue("orders");
+        }), writable: false);
+        var request = ExcelImport.Workbook<MultiSheetWorkbook<StreamRow>>(builder => builder
+            .Sheet(ExcelSheetSelector.ByName("Orders"), root => root.Items)
+            .Sheet(ExcelSheetSelector.ByIndex(0), root => root.Items));
+
+        // Act
+        var exception = Assert.Throws<ArgumentException>(() =>
+            new NpoiExcelImporter().Import(source, request));
+
+        // Assert
+        Assert.Contains("同一物理 Sheet", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("Orders", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 测试 - 按索引选择的失败工作表应在失败产物和错误汇总中回链实际物理 Sheet 名称。
+    /// </summary>
+    [Fact]
+    public void Import_IndexSelectorFailureWorkbook_ShouldUseResolvedPhysicalSheetName()
+    {
+        // Arrange
+        using var source = new MemoryStream(CreateWorkbook(workbook =>
+        {
+            var ignored = workbook.CreateSheet("Ignored");
+            ignored.CreateRow(0).CreateCell(0).SetCellValue(nameof(ValidatedRow.Count));
+            ignored.CreateRow(1).CreateCell(0).SetCellValue("1");
+            var selected = workbook.CreateSheet("Selected");
+            selected.CreateRow(0).CreateCell(0).SetCellValue(nameof(ValidatedRow.Code));
+            selected.GetRow(0).CreateCell(1).SetCellValue(nameof(ValidatedRow.Count));
+            selected.CreateRow(1).CreateCell(0).SetCellValue("selected");
+            selected.GetRow(1).CreateCell(1).SetCellValue("invalid");
+        }), writable: false);
+        using var failure = new MemoryStream();
+        var request = ExcelImport.Workbook<SingleWorkbook<ValidatedRow>>(builder => builder
+            .FailureWorkbook(new ExcelImportFailureOptions
+            {
+                Mode = ExcelImportFailureWorkbookMode.AnnotatedOriginal,
+                Destination = failure
+            })
+            .Sheet(ExcelSheetSelector.ByIndex(1), root => root.Items));
+
+        // Act
+        var result = new NpoiExcelImporter().Import(source, request);
+
+        // Assert
+        var error = Assert.Single(result.Errors);
+        Assert.Equal(ExcelImportErrorCode.ValueConversion, error.Code);
+        Assert.Equal("Selected", error.SheetName);
+        Assert.Empty(result.Workbook.Items);
+        failure.Position = 0;
+        using var failedWorkbook = WorkbookFactory.Create(failure);
+        var selectedCell = failedWorkbook.GetSheet("Selected").GetRow(1).GetCell(1);
+        Assert.NotNull(selectedCell.CellComment);
+        var summary = failedWorkbook.GetSheet("_ImportErrors");
+        Assert.Equal("Selected", summary.GetRow(1).GetCell(2).StringCellValue);
+    }
+
+    /// <summary>
     /// 测试 - 非法最大列数和多个动态列声明应被明确拒绝。
     /// </summary>
     [Fact]
@@ -2170,6 +2351,56 @@ public class StreamPipelineTest
         Assert.Throws<OperationCanceledException>(export);
         Assert.True(destination.CanWrite);
         Assert.Equal(originalBytes, destination.ToArray());
+    }
+
+    /// <summary>
+    /// 测试 - Excel 输入超过限制时应在 NPOI 建立 Workbook 前失败，并保持不可寻址调用方流可读。
+    /// </summary>
+    [Fact]
+    public void Import_NonSeekableInputOverLimit_ShouldRejectAndKeepSourceOpen()
+    {
+        // Arrange
+        using var source = new NonSeekableReadStream(CreateWorkbook(workbook =>
+        {
+            var sheet = workbook.CreateSheet("Data");
+            sheet.CreateRow(0).CreateCell(0).SetCellValue(nameof(StreamRow.Name));
+            sheet.CreateRow(1).CreateCell(0).SetCellValue("Value");
+        }));
+        var request = ExcelImport.Workbook<SingleWorkbook<StreamRow>>(workbook => workbook
+            .ResourceLimits(new ExcelResourceLimits { MaxInputBytes = 1 })
+            .Sheet("Data", root => root.Items));
+
+        // Act
+        var action = () => new NpoiExcelImporter().Import(source, request);
+
+        // Assert
+        Assert.Throws<InvalidOperationException>(action);
+        Assert.True(source.CanRead);
+    }
+
+    /// <summary>
+    /// 测试 - Excel 泛型反射调度应重新抛出映射工厂原始异常，而不是泄漏 TargetInvocationException 包装。
+    /// </summary>
+    [Fact]
+    public void Import_MappingFactoryFailure_ShouldPreserveOriginalExceptionType()
+    {
+        // Arrange
+        using var source = new MemoryStream(CreateWorkbook(workbook =>
+        {
+            var sheet = workbook.CreateSheet("Data");
+            sheet.CreateRow(0).CreateCell(0).SetCellValue(nameof(StreamRow.Name));
+            sheet.CreateRow(1).CreateCell(0).SetCellValue("Value");
+        }));
+        var request = CreateSingleSheetRequest<StreamRow>();
+        var importer = new NpoiExcelImporter(mappingPlanFactory: new ThrowingMappingPlanFactory());
+
+        // Act
+        var exception = Assert.Throws<ArgumentException>(() => importer.Import(source, request));
+
+        // Assert
+        Assert.Equal("映射工厂原始异常", exception.Message);
+        Assert.IsNotType<TargetInvocationException>(exception);
+        Assert.True(source.CanRead);
     }
 
     /// <summary>
@@ -3010,6 +3241,25 @@ public class StreamPipelineTest
                 _inner.Dispose();
             base.Dispose(disposing);
         }
+    }
+
+    private sealed class ThrowingMappingPlanFactory : IExcelMappingPlanFactory
+    {
+        public IExcelMappingPlan Create<T>(ExcelMappingDocument document, MappingDirection direction)
+            where T : class, new() => throw new ArgumentException("映射工厂原始异常");
+
+        public IExcelMappingPlan Create<T>(ExcelMappingDocument document,
+            ExcelMappingConfiguration requestConfiguration, MappingDirection direction)
+            where T : class, new() => throw new ArgumentException("映射工厂原始异常");
+
+        public IExcelMappingWorkbookPlan CreateWorkbook<T>(ExcelMappingDocument document,
+            MappingDirection direction, IReadOnlyList<string> sheetNames)
+            where T : class, new() => throw new ArgumentException("映射工厂原始异常");
+
+        public IExcelMappingWorkbookPlan CreateWorkbook<T>(ExcelMappingDocument document,
+            ExcelMappingConfiguration requestConfiguration, MappingDirection direction,
+            IReadOnlyList<string> sheetNames) where T : class, new()
+            => throw new ArgumentException("映射工厂原始异常");
     }
 
     /// <summary>

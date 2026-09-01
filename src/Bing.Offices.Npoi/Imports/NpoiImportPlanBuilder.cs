@@ -12,6 +12,37 @@ using NPOI.SS.UserModel;
 namespace Bing.Offices.Npoi.Imports;
 
 /// <summary>
+/// 已解析的工作表请求执行描述，保存请求与实际物理工作表之间的绑定结果。
+/// </summary>
+internal sealed class NpoiResolvedSheet
+{
+    /// <summary>
+    /// 初始化已解析的工作表请求。
+    /// </summary>
+    /// <param name="request">原始工作表请求。</param>
+    /// <param name="index">工作簿中的零基物理索引；未找到时为 -1。</param>
+    /// <param name="name">工作簿中的物理工作表名称；未找到时为 null。</param>
+    public NpoiResolvedSheet(ExcelSheetImportRequest request, int index, string name)
+    {
+        Request = request ?? throw new ArgumentNullException(nameof(request));
+        Index = index;
+        Name = name;
+    }
+
+    /// <summary>获取原始工作表请求。</summary>
+    public ExcelSheetImportRequest Request { get; }
+
+    /// <summary>获取工作簿中的零基物理索引。</summary>
+    public int Index { get; }
+
+    /// <summary>获取工作簿中的物理工作表名称。</summary>
+    public string Name { get; }
+
+    /// <summary>获取 selector 是否成功解析到物理工作表。</summary>
+    public bool Exists => Index >= 0;
+}
+
+/// <summary>
 /// 创建导入工作簿的方向化映射计划，并隔离泛型反射调度。
 /// </summary>
 internal sealed class NpoiImportPlanBuilder
@@ -31,25 +62,20 @@ internal sealed class NpoiImportPlanBuilder
     /// <summary>
     /// 按规范化请求分组创建导入计划，并将计划映射回原始 Sheet 请求。
     /// </summary>
-    /// <typeparam name="TWorkbook">导入工作簿根实体类型。</typeparam>
-    /// <param name="request">当前工作簿导入请求。</param>
-    /// <param name="workbook">用于解析实际工作表名称的 NPOI 工作簿。</param>
-    /// <param name="existingSheets">成功解析为物理工作表的请求及其零基索引。</param>
+    /// <param name="existingSheets">已成功解析为物理工作表的请求描述。</param>
     /// <returns>每个原始工作表请求对应的不可变列映射计划。</returns>
-    public Dictionary<ExcelSheetImportRequest, IExcelMappingPlan> Create<TWorkbook>(
-        ExcelWorkbookImportRequest<TWorkbook> request, IWorkbook workbook,
-        IEnumerable<KeyValuePair<ExcelSheetImportRequest, int>> existingSheets)
-        where TWorkbook : class, new()
+    public Dictionary<ExcelSheetImportRequest, IExcelMappingPlan> Create(
+        IEnumerable<NpoiResolvedSheet> existingSheets)
     {
         var result = new Dictionary<ExcelSheetImportRequest, IExcelMappingPlan>();
-        foreach (var group in existingSheets.GroupBy(item => GetWorkbookPlanKey(item.Key), StringComparer.Ordinal))
+        foreach (var group in existingSheets.GroupBy(item => GetWorkbookPlanKey(item.Request), StringComparer.Ordinal))
         {
-            var first = group.First().Key;
-            var sheetNames = group.Select(item => workbook.GetSheetName(item.Value)).ToArray();
+            var first = group.First().Request;
+            var sheetNames = group.Select(item => item.Name).ToArray();
             var plan = CreateWorkbookPlan(first, sheetNames);
             foreach (var item in group)
-                result.Add(item.Key, plan.Sheets.Single(sheet => string.Equals(sheet.Name,
-                    workbook.GetSheetName(item.Value), StringComparison.OrdinalIgnoreCase)).Mapping);
+                result.Add(item.Request, plan.Sheets.Single(sheet => string.Equals(sheet.Name,
+                    item.Name, StringComparison.OrdinalIgnoreCase)).Mapping);
         }
         return result;
     }

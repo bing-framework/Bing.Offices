@@ -273,3 +273,5 @@ __pycache__/
 .agents/runtime/*
 
 packages.lock.json
+
+ai_docs/tasks/**/benchmarks/**

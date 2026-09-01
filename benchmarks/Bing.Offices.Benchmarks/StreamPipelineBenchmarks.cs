@@ -1,5 +1,4 @@
 ﻿using BenchmarkDotNet.Attributes;
-using BenchmarkDotNet.Jobs;
 using Bing.Offices.Attributes;
 using Bing.Offices.Exports;
 using Bing.Offices.Imports;
@@ -15,7 +14,6 @@ namespace Bing.Offices.Benchmarks;
 /// Stream-first 导入与单工作簿导出性能基准。
 /// </summary>
 [MemoryDiagnoser]
-[SimpleJob(launchCount: 1, warmupCount: 2, iterationCount: 3)]
 public class StreamPipelineBenchmarks
 {
     /// <summary>
@@ -158,7 +156,6 @@ public class StreamPipelineBenchmarks
 /// 随失败行数增长的失败工作簿导出基准。
 /// </summary>
 [MemoryDiagnoser]
-[SimpleJob(launchCount: 1, warmupCount: 2, iterationCount: 3)]
 public class FailureWorkbookBenchmarks
 {
     [Params(1000, 10000, 100000)]
@@ -223,7 +220,6 @@ public class FailureWorkbookBenchmarks
 /// 使用真实 HeaderAttribute 宽表头模型的样式缓存基准。
 /// </summary>
 [MemoryDiagnoser]
-[SimpleJob(launchCount: 1, warmupCount: 2, iterationCount: 3)]
 public class HeaderStyleBenchmarks
 {
     [Params(1000, 10000, 100000)]
@@ -293,7 +289,6 @@ public class HeaderStyleBenchmarks
 /// 使用随行数扩大的真实 Workbook Data Validation 区间的基准。
 /// </summary>
 [MemoryDiagnoser]
-[SimpleJob(launchCount: 1, warmupCount: 2, iterationCount: 3)]
 public class ValidationRangeBenchmarks
 {
     [Params(1000, 10000, 100000)]

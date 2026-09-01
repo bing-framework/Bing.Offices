@@ -1,5 +1,4 @@
 ﻿using BenchmarkDotNet.Attributes;
-using BenchmarkDotNet.Jobs;
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
@@ -19,7 +18,6 @@ namespace Bing.Offices.Benchmarks;
 /// Mapping、Unique、配置解析和 Profile 注册基准矩阵。
 /// </summary>
 [MemoryDiagnoser]
-[SimpleJob(launchCount: 1, warmupCount: 2, iterationCount: 3)]
 public class MappingValidationBenchmarks
 {
     private const long PeakWorkingSetCeilingBytes = 1024L * 1024 * 1024;
@@ -201,7 +199,6 @@ public class MappingValidationBenchmarks
 /// 动态映射计划构建与缓存基准。
 /// </summary>
 [MemoryDiagnoser]
-[SimpleJob(launchCount: 1, warmupCount: 2, iterationCount: 3)]
 public class DynamicPlanBenchmarks
 {
     [Params(100, 500)]
@@ -285,7 +282,6 @@ public class DynamicPlanBenchmarks
 /// 租户映射计划缓存隔离与淘汰基准。
 /// </summary>
 [MemoryDiagnoser]
-[SimpleJob(launchCount: 1, warmupCount: 2, iterationCount: 3)]
 public class TenantPlanCacheBenchmarks
 {
     [Params(100, 1000)]
@@ -350,7 +346,6 @@ public class TenantPlanCacheBenchmarks
 /// 有界 Regex 缓存命中基准。
 /// </summary>
 [MemoryDiagnoser]
-[SimpleJob(launchCount: 1, warmupCount: 2, iterationCount: 3)]
 public class RegexCacheBenchmarks
 {
     private readonly ExcelValidationContext _context = new("CODE-123", "Sheet1", 2, 1, "Code");
@@ -368,7 +363,6 @@ public class RegexCacheBenchmarks
 /// Unique committed/pending journal 基准。
 /// </summary>
 [MemoryDiagnoser]
-[SimpleJob(launchCount: 1, warmupCount: 2, iterationCount: 3)]
 public class UniqueJournalBenchmarks
 {
     /// <summary>

@@ -10,6 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="System.Reflection.MetadataLoadContext" Version="8.0.1" PrivateAssets="all" />
     <PackageReference Include="GenFu" Version="1.6.0" />
     <PackageReference Include="Bing.Utils.IdUtils" Version="1.5.0" />
   </ItemGroup>
@@ -43,6 +44,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\..\build\ApiSnapshot\PublicApiSnapshot.cs" Link="ApiSnapshot\PublicApiSnapshot.cs" />
     <ProjectReference Include="..\..\src\Bing.Offices.Npoi\Bing.Offices.Npoi.csproj" />
     <ProjectReference Include="..\Bing.Offices.ProfileFixtures\Bing.Offices.ProfileFixtures.csproj" />
     <ProjectReference Include="..\Bing.Offices.ResourceProbe\Bing.Offices.ResourceProbe.csproj"

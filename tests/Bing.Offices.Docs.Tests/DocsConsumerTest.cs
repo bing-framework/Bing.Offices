@@ -8,6 +8,7 @@ using Bing.Offices.Configurations;
 using Bing.Offices.Exports;
 using Bing.Offices.Imports;
 using Bing.Offices.Extensions;
+using Bing.Offices.Metadata;
 using Bing.Offices.Npoi.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Http;
@@ -17,6 +18,9 @@ using Microsoft.CodeAnalysis.Emit;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Linq;
+using NPOI.HSSF.UserModel;
+using NPOI.SS.UserModel;
+using NPOI.XSSF.UserModel;
 using Xunit;
 
 namespace Bing.Offices.Docs.Tests;
@@ -59,6 +63,62 @@ public sealed class DocsConsumerTest
         // Assert
         Assert.Equal(1, request.SheetCount);
         Assert.Equal(1, export.SheetCount);
+    }
+
+    /// <summary>
+    /// 测试 - 外部消费者通过 AddNpoi 导出后重新打开 XLS/XLSX，六个 metadata 字段均应保持一致。
+    /// </summary>
+    [Theory]
+    [InlineData(ExcelFormat.Xlsx)]
+    [InlineData(ExcelFormat.Xls)]
+    public void WorkbookMetadata_ExternalConsumer_ShouldRoundTripAllFields(ExcelFormat format)
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        services.AddNpoi();
+        using var provider = services.BuildServiceProvider();
+        var exporter = provider.GetRequiredService<IExcelExporter>();
+        using var destination = new MemoryStream();
+        var request = ExcelExport.Workbook(builder => builder
+            .Format(format)
+            .Metadata(new ExcelWorkbookMetadataOptions
+            {
+                Author = "consumer-author",
+                Company = "consumer-company",
+                Title = "consumer-title",
+                Subject = "consumer-subject",
+                Category = "consumer-category",
+                Description = "consumer-description"
+            })
+            .AddSheet("Data", new[] { new DocsExportRow { Label = "consumer" } }));
+
+        // Act
+        exporter.Export(request, destination);
+        Assert.True(destination.CanRead);
+        destination.Position = 0;
+        using var workbook = WorkbookFactory.Create(destination);
+
+        // Assert
+        if (format == ExcelFormat.Xlsx)
+        {
+            var properties = Assert.IsType<XSSFWorkbook>(workbook).GetProperties();
+            Assert.Equal("consumer-author", properties.CoreProperties.Creator);
+            Assert.Equal("consumer-company", properties.ExtendedProperties.GetUnderlyingProperties().Company);
+            Assert.Equal("consumer-title", properties.CoreProperties.Title);
+            Assert.Equal("consumer-subject", properties.CoreProperties.Subject);
+            Assert.Equal("consumer-category", properties.CoreProperties.Category);
+            Assert.Equal("consumer-description", properties.CoreProperties.Description);
+        }
+        else
+        {
+            var legacy = Assert.IsType<HSSFWorkbook>(workbook);
+            Assert.Equal("consumer-author", legacy.SummaryInformation.Author);
+            Assert.Equal("consumer-company", legacy.DocumentSummaryInformation.Company);
+            Assert.Equal("consumer-title", legacy.SummaryInformation.Title);
+            Assert.Equal("consumer-subject", legacy.SummaryInformation.Subject);
+            Assert.Equal("consumer-category", legacy.DocumentSummaryInformation.Category);
+            Assert.Equal("consumer-description", legacy.SummaryInformation.Comments);
+        }
     }
 
     /// <summary>
