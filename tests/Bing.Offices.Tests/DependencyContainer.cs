@@ -21,7 +21,7 @@ public static class DependencyContainer
     static DependencyContainer()
     {
         var serviceCollection = new ServiceCollection();
-        serviceCollection.AddNpoi();
+        serviceCollection.AddBingOfficesNpoi();
         ServiceProvider = serviceCollection.BuildServiceProvider();
     }
 

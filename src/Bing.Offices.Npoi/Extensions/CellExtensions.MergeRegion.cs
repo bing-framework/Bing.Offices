@@ -1,5 +1,4 @@
-﻿using Bing.Offices.Exceptions;
-using Bing.Offices.Metadata;
+﻿using Bing.Offices.Metadata;
 using NPOI.SS.Util;
 
 namespace Bing.Offices.Npoi.Extensions;
@@ -19,7 +18,7 @@ internal static partial class CellExtensions
         bool isExpand = false)
     {
         if (!fromCell.Sheet.Equals(toCell.Sheet))
-            throw new OfficeException("单元格不在同一个工作表上");
+            throw new InvalidOperationException("单元格不在同一个工作表上");
         var sheet = fromCell.Sheet;
         var fromRange = fromCell.GetRangeInfo();
         var toRange = toCell.GetRangeInfo();

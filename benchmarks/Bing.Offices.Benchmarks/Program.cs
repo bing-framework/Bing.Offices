@@ -43,6 +43,7 @@ public static class Program
                 typeof(HeaderStyleBenchmarks),
                 typeof(ValidationRangeBenchmarks),
                 typeof(MappingValidationBenchmarks),
+                typeof(PropertyAccessorBenchmarks),
                 typeof(DynamicPlanBenchmarks),
                 typeof(TenantPlanCacheBenchmarks),
                 typeof(RegexCacheBenchmarks),
@@ -89,8 +90,7 @@ public static class Program
             int uniqueColumnCount, int uniqueRowCount)
         {
             var stopwatch = Stopwatch.StartNew();
-            var factory = new Bing.Offices.Mappings.ExcelMappingPlanFactory(
-                cacheCapacity: Math.Max(1, tenantCount));
+            var factory = Bing.Offices.Mappings.ExcelMappingPlanFactoryProvider.CreateDefault();
             var plans = new List<Bing.Offices.Providers.IExcelMappingPlan>();
             var sampledLohPeakBytes = GetLohSizeBeforeBytes();
             for (var tenant = 0; tenant < tenantCount; tenant++)
@@ -326,8 +326,7 @@ public static class Program
                 .ToArray();
             var submittedAt = new long[operationCount];
             var samples = captureSamples ? new long[operationCount] : Array.Empty<long>();
-            var factory = new Bing.Offices.Mappings.ExcelMappingPlanFactory(
-                cacheCapacity: Math.Max(1, operationCount));
+            var factory = Bing.Offices.Mappings.ExcelMappingPlanFactoryProvider.CreateDefault();
             var workers = Enumerable.Range(0, concurrency)
                 .Select(_ => Task.Factory.StartNew(
                     () => RunWorker(queue, documents, submittedAt, samples, factory, captureSamples,
@@ -357,7 +356,7 @@ public static class Program
             Bing.Offices.Configurations.ExcelMappingDocument[] documents,
             long[] submittedAt,
             long[] samples,
-            Bing.Offices.Mappings.ExcelMappingPlanFactory factory,
+            Bing.Offices.Providers.IExcelMappingPlanFactory factory,
             bool captureSamples,
             CountdownEvent ready,
             ManualResetEventSlim startGate)

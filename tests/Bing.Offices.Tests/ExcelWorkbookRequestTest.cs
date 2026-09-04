@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using Bing.Offices.Attributes;
 using Bing.Offices.Conversions;
 using Bing.Offices.Configurations;
@@ -582,6 +583,50 @@ public sealed class ExcelWorkbookRequestTest
         // Assert
         Assert.True(result.IsSuccess, string.Join("; ", result.Errors.Select(error => error.Message)));
         Assert.Equal("商品", Assert.Single(Assert.Single(result.Workbook.Orders).DetailItems).Name);
+    }
+
+    /// <summary>
+    /// 测试 - 关系绑定的父集合、子集合、键选择器和导航选择器异常应保留原始异常类型。
+    /// </summary>
+    [Theory]
+    [InlineData("parents")]
+    [InlineData("children")]
+    [InlineData("parent-key")]
+    [InlineData("child-key")]
+    [InlineData("navigation")]
+    public void Import_RelationDelegateFailure_ShouldPreserveOriginalExceptionType(string failurePoint)
+    {
+        // Arrange
+        var root = new ThrowingRelationWorkbook();
+        root.Parents.Add(new ThrowingRelationParent { Id = 1 });
+        root.Children.Add(new ThrowingRelationChild { ParentId = 1 });
+        var request = ExcelRelationRequest.Create<ThrowingRelationWorkbook, ThrowingRelationParent,
+            ThrowingRelationChild, int>(
+            failurePoint == "parents"
+                ? value => ThrowRelation<ThrowingRelationParent>("parents")
+                : value => value.Parents,
+            failurePoint == "children"
+                ? value => ThrowRelation<ThrowingRelationChild>("children")
+                : value => value.Children,
+            failurePoint == "parent-key"
+                ? parent => ThrowRelationKey(parent, "parent-key")
+                : parent => parent.Id,
+            failurePoint == "child-key"
+                ? child => ThrowRelationKey(child, "child-key")
+                : child => child.ParentId,
+            failurePoint == "navigation"
+                ? parent => ThrowRelation<ThrowingRelationChild>("navigation")
+                : parent => parent.Children,
+            null);
+
+        // Act
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            NpoiRelationBinder.Bind(root, request, new ExcelImportErrorCollector(null), null,
+                CancellationToken.None));
+
+        // Assert
+        Assert.Equal($"关系异常: {failurePoint}", exception.Message);
+        Assert.IsNotType<TargetInvocationException>(exception);
     }
 
     /// <summary>
@@ -2610,6 +2655,33 @@ public sealed class ExcelWorkbookRequestTest
     private sealed class IntChild
     {
         public int ParentId { get; set; }
+    }
+
+    private sealed class ThrowingRelationWorkbook
+    {
+        public List<ThrowingRelationParent> Parents { get; } = new();
+        public List<ThrowingRelationChild> Children { get; } = new();
+    }
+
+    private sealed class ThrowingRelationParent
+    {
+        public int Id { get; set; }
+        public List<ThrowingRelationChild> Children { get; } = new();
+    }
+
+    private sealed class ThrowingRelationChild
+    {
+        public int ParentId { get; set; }
+    }
+
+    private static ICollection<T> ThrowRelation<T>(string failurePoint)
+    {
+        throw new InvalidOperationException($"关系异常: {failurePoint}");
+    }
+
+    private static int ThrowRelationKey<T>(T value, string failurePoint)
+    {
+        throw new InvalidOperationException($"关系异常: {failurePoint}");
     }
 
     private sealed class SelectorWorkbook

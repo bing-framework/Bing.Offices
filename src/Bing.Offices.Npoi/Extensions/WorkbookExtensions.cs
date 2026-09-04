@@ -25,7 +25,7 @@ internal static class WorkbookExtensions
             case XSSFWorkbook _:
                 return ExcelFormat.Xlsx;
         }
-        throw new NotImplementedException($"未知Excel格式类型");
+        throw new NotSupportedException("未知 Excel 格式类型。");
     }
 
     #endregion

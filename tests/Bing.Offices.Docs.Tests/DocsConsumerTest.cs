@@ -31,16 +31,16 @@ namespace Bing.Offices.Docs.Tests;
 public sealed class DocsConsumerTest
 {
     /// <summary>
-    /// 测试 - 外部消费者应能调用 AddNpoi 并解析导入导出接口。
+    /// 测试 - 外部消费者应能调用 NPOI 注册入口并解析导入导出接口。
     /// </summary>
     [Fact]
-    public void AddNpoi_ExternalConsumer_ShouldResolveProviderNeutralServices()
+    public void AddBingOfficesNpoi_ExternalConsumer_ShouldResolveProviderNeutralServices()
     {
         // Arrange
         var services = new ServiceCollection();
 
         // Act
-        services.AddNpoi();
+        services.AddBingOfficesNpoi();
         using var provider = services.BuildServiceProvider();
 
         // Assert
@@ -66,7 +66,7 @@ public sealed class DocsConsumerTest
     }
 
     /// <summary>
-    /// 测试 - 外部消费者通过 AddNpoi 导出后重新打开 XLS/XLSX，六个 metadata 字段均应保持一致。
+    /// 测试 - 外部消费者通过 NPOI 注册导出后重新打开 XLS/XLSX，六个 metadata 字段均应保持一致。
     /// </summary>
     [Theory]
     [InlineData(ExcelFormat.Xlsx)]
@@ -75,7 +75,7 @@ public sealed class DocsConsumerTest
     {
         // Arrange
         var services = new ServiceCollection();
-        services.AddNpoi();
+        services.AddBingOfficesNpoi();
         using var provider = services.BuildServiceProvider();
         var exporter = provider.GetRequiredService<IExcelExporter>();
         using var destination = new MemoryStream();
@@ -131,11 +131,11 @@ public sealed class DocsConsumerTest
         var legacyBuilder = ExcelMapping.For<DocsRow>();
         legacyBuilder.Property(row => row.Name).HasTitle("名称");
         var legacyMapping = legacyBuilder.Build();
-        var legacyRegex = new RegexAttribute("^consumer$");
+        var regex = new ExcelRegexAttribute("^consumer$");
 
         // Assert
         Assert.Equal("名称", legacyMapping.Columns[0].Title);
-        Assert.Equal("^consumer$", legacyRegex.RegexString);
+        Assert.Equal("^consumer$", regex.Pattern);
     }
 
     /// <summary>
@@ -207,8 +207,10 @@ public sealed class DocsConsumerTest
         using var dynamicSource = new MemoryStream(Encoding.UTF8.GetBytes("Name,区域\r\nconsumer,华东\r\n"));
 
         // Act
-        var validation = new CsvEntityImporter().Import<DocsValidatedRow>(validationSource);
-        var dynamic = new CsvEntityImporter().Import<DocsDynamicRow>(dynamicSource);
+        using var provider = new ServiceCollection().AddBingOfficesNpoi().BuildServiceProvider();
+        var importer = provider.GetRequiredService<ICsvImporter>();
+        var validation = importer.Import<DocsValidatedRow>(validationSource);
+        var dynamic = importer.Import<DocsDynamicRow>(dynamicSource);
 
         // Assert
         Assert.Single(validation.Errors);
@@ -225,7 +227,7 @@ public sealed class DocsConsumerTest
         // Arrange
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddNpoi();
+        services.AddBingOfficesNpoi();
         using var provider = services.BuildServiceProvider();
         var exporter = provider.GetRequiredService<IExcelExporter>();
         var importer = provider.GetRequiredService<IExcelImporter>();
@@ -264,8 +266,10 @@ public sealed class DocsConsumerTest
         // Act
         var profile = DocsExamples.Profile();
         var migrated = DocsExamples.JsonXml(json);
-        var validationResult = DocsExamples.Validation(validation);
-        var dynamicResult = DocsExamples.Dynamic(dynamic);
+        using var provider = new ServiceCollection().AddBingOfficesNpoi().BuildServiceProvider();
+        var importer = provider.GetRequiredService<ICsvImporter>();
+        var validationResult = DocsExamples.Validation(validation, importer);
+        var dynamicResult = DocsExamples.Dynamic(dynamic, importer);
 
         // Assert
         Assert.NotNull(profile);
@@ -350,7 +354,7 @@ public sealed class DocsConsumerTest
         var prelude = string.Empty;
         if (fileName == "README.md")
             prelude = "var orders = new List<OrderExport> { new OrderExport { DisplayName = \"fence\" } }; "
-                + "var services = new ServiceCollection(); services.AddNpoi(); using var provider = services.BuildServiceProvider(); "
+                + "var services = new ServiceCollection(); services.AddBingOfficesNpoi(); using var provider = services.BuildServiceProvider(); "
                 + "var exporter = provider.GetRequiredService<IExcelExporter>(); using var stream = new MemoryStream(); ";
         else if (fileName == "mapping-json-xml.md")
             prelude = "var json = \"{\\\"version\\\":2,\\\"import\\\":{\\\"columns\\\":[]},\\\"export\\\":{\\\"columns\\\":[]}}\"; ";
@@ -364,7 +368,7 @@ public sealed class DocsConsumerTest
             prelude = "var services = new ServiceCollection(); ";
         }
         else if (fileName == "import-validation.md" && index == 2)
-            prelude = "var uploadServices = new ServiceCollection(); uploadServices.AddNpoi(); "
+            prelude = "var uploadServices = new ServiceCollection(); uploadServices.AddBingOfficesNpoi(); "
                 + "using var uploadProvider = uploadServices.BuildServiceProvider(); "
                 + "var exporter = uploadProvider.GetRequiredService<IExcelExporter>(); "
                 + "using var uploadPayload = new MemoryStream(); "

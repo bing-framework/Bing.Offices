@@ -10,7 +10,7 @@ var baseline = JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, 
     ?? throw new InvalidOperationException("API snapshot baseline is empty.");
 var failures = new List<string>();
 
-foreach (var tfm in new[] { "netcoreapp3.1", "net6.0", "net7.0", "net8.0" })
+foreach (var tfm in new[] { "netcoreapp3.1", "net6.0", "net8.0" })
 {
     var paths = new[]
     {
@@ -58,7 +58,7 @@ if (failures.Count > 0)
     return 1;
 }
 
-Console.WriteLine("API snapshot comparison passed for netcoreapp3.1, net6.0, net7.0, net8.0.");
+Console.WriteLine("API snapshot comparison passed for netcoreapp3.1, net6.0, net8.0.");
 return 0;
 
 static Dictionary<string, string> ParseArguments(string[] args)

@@ -15,8 +15,7 @@ internal sealed class ExcelValidationBinding : IExcelValidationBinding
         _attribute = attribute;
         _attributeRule = attributeRule;
         Kind = ResolveKind(attribute);
-        IsRaw = attribute is RequiredAttribute || attribute is RegexAttribute
-            || attribute is ExcelRequiredAttribute || attribute is ExcelRegexAttribute;
+        IsRaw = attribute is ExcelRequiredAttribute || attribute is ExcelRegexAttribute;
         ErrorMessage = attribute.ErrorMsg;
     }
 
@@ -49,13 +48,13 @@ internal sealed class ExcelValidationBinding : IExcelValidationBinding
 
     private static ExcelValidationBindingKind ResolveKind(FilterAttributeBase attribute) => attribute switch
     {
-        RequiredAttribute or ExcelRequiredAttribute => ExcelValidationBindingKind.Required,
-        RegexAttribute or ExcelRegexAttribute => ExcelValidationBindingKind.Regex,
-        DateTimeAttribute or ExcelDateAttribute => ExcelValidationBindingKind.Date,
+        ExcelRequiredAttribute => ExcelValidationBindingKind.Required,
+        ExcelRegexAttribute => ExcelValidationBindingKind.Regex,
+        ExcelDateAttribute => ExcelValidationBindingKind.Date,
         ExcelMaxValueAttribute => ExcelValidationBindingKind.MaxValue,
-        RangeAttribute or ExcelRangeAttribute => ExcelValidationBindingKind.Range,
-        MaxLengthAttribute or ExcelMaxLengthAttribute => ExcelValidationBindingKind.MaxLength,
-        DuplicationAttribute or ExcelUniqueAttribute => ExcelValidationBindingKind.Unique,
+        ExcelRangeAttribute => ExcelValidationBindingKind.Range,
+        ExcelMaxLengthAttribute => ExcelValidationBindingKind.MaxLength,
+        ExcelUniqueAttribute => ExcelValidationBindingKind.Unique,
         _ => ExcelValidationBindingKind.Custom
     };
 }

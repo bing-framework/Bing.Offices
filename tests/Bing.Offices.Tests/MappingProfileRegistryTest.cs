@@ -107,7 +107,7 @@ public class MappingProfileRegistryTest
         // Arrange
         var services = new ServiceCollection();
         services.AddMappingProfile<ExplicitProfile>();
-        services.AddNpoi();
+        services.AddBingOfficesNpoi();
         using var provider = services.BuildServiceProvider();
         var document = new ExcelMappingDocument
         {

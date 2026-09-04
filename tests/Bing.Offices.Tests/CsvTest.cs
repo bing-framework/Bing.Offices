@@ -482,6 +482,105 @@ public class CsvTest
     }
 
     /// <summary>
+    /// 测试 - CSV 公式防护应识别 BOM、控制字符和 Unicode 空白后的危险前缀，但不改写普通负数。
+    /// </summary>
+    [Fact]
+    public void EntityPipeline_FormulaPrefixesAfterWhitespace_ShouldEscapeWithoutChangingNegativeNumbers()
+    {
+        // Arrange
+        using var destination = new MemoryStream();
+
+        // Act
+        new CsvEntityExporter().Export(new[]
+        {
+            new CsvRow
+            {
+                Name = " \t\uFEFF=SUM(A1:A2)",
+                Count = 1,
+                Description = "\u00A0@cmd"
+            },
+            new CsvRow { Name = " -123.50", Count = 2, Description = " +42" }
+        }, destination);
+
+        // Assert
+        var content = Encoding.UTF8.GetString(destination.ToArray());
+        Assert.Contains("' \t\uFEFF=SUM(A1:A2)", content);
+        Assert.Contains("'\u00A0@cmd", content);
+        Assert.Contains(" -123.50", content);
+        Assert.Contains(" +42", content);
+        Assert.DoesNotContain("' -123.50", content);
+        Assert.DoesNotContain("' +42", content);
+    }
+
+    /// <summary>
+    /// 测试 - 只有完整的带符号数值可免于公式转义，数值前缀后的运算符和危险字符必须被转义。
+    /// </summary>
+    [Fact]
+    public void EntityPipeline_SignedNumericPrefixWithTrailingExpression_ShouldEscape()
+    {
+        // Arrange
+        using var destination = new MemoryStream();
+
+        // Act
+        new CsvEntityExporter().Export(new[]
+        {
+            new CsvRow { Name = "-1+2", Count = 1, Description = "+1-2" },
+            new CsvRow { Name = "-.5+1", Count = 2, Description = "-1@cmd" },
+            new CsvRow { Name = "-123", Count = 3, Description = "+1.25e-2" }
+        }, destination);
+
+        // Assert
+        var content = Encoding.UTF8.GetString(destination.ToArray());
+        Assert.Equal(
+            "Name,Count,Description\r\n"
+            + "'-1+2,1,'+1-2\r\n"
+            + "'-.5+1,2,'-1@cmd\r\n"
+            + "-123,3,+1.25e-2\r\n",
+            content);
+    }
+
+    /// <summary>
+    /// 测试 - Preserve 策略应保留带前导空白的公式文本，不因默认防护规则改变内容。
+    /// </summary>
+    [Fact]
+    public void EntityPipeline_PreserveFormulaPolicy_ShouldKeepOriginalText()
+    {
+        // Arrange
+        using var destination = new MemoryStream();
+
+        // Act
+        new CsvEntityExporter().Export(new[]
+        {
+            new CsvRow { Name = " \t=SUM(A1:A2)", Count = 1, Description = "@cmd" }
+        }, destination, new CsvExportOptions<CsvRow>
+        {
+            FormulaInjectionPolicy = CsvFormulaInjectionPolicy.None
+        });
+
+        // Assert
+        var content = Encoding.UTF8.GetString(destination.ToArray());
+        Assert.Contains(" \t=SUM(A1:A2)", content);
+        Assert.Contains("@cmd", content);
+        Assert.DoesNotContain("' \t=SUM(A1:A2)", content);
+        Assert.DoesNotContain("'@cmd", content);
+    }
+
+    /// <summary>
+    /// 测试 - CSV 导入选项应拒绝无效的唯一值上限和字符串比较策略。
+    /// </summary>
+    [Fact]
+    public void EntityPipeline_InvalidUniqueOptions_ShouldThrowAtValidationBoundary()
+    {
+        // Arrange
+        var maxValues = new CsvImportOptions<CsvRow> { MaxTrackedUniqueValues = 0 };
+        var comparison = new CsvImportOptions<CsvRow> { UniqueComparison = (StringComparison)12345 };
+
+        // Act / Assert
+        Assert.Throws<ArgumentOutOfRangeException>(maxValues.Validate);
+        Assert.Throws<ArgumentOutOfRangeException>(comparison.Validate);
+    }
+
+    /// <summary>
     /// 测试 - 预取消的 CSV 导入导出应在读取或写入前取消。
     /// </summary>
     [Fact]
@@ -833,11 +932,11 @@ public class CsvTest
     /// </summary>
     private class CsvValidatedRow
     {
-        [Required]
-        [Duplication]
+        [ExcelRequired]
+        [ExcelUnique]
         public string Code { get; set; }
 
-        [Range(1, 9)]
+        [ExcelRange(1, 9)]
         public int Count { get; set; }
     }
 

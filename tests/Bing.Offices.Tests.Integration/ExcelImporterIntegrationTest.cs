@@ -157,11 +157,11 @@ public class ExcelImporterIntegrationTest
     /// 测试 - 通过 DI 解析的导入器应在真实 XLSX 流中执行调用方注册的自定义校验规则。
     /// </summary>
     [Fact]
-    public void AddNpoi_RegisteredCustomValidationRule_ShouldValidateRealWorkbook()
+    public void AddBingOfficesNpoi_RegisteredCustomValidationRule_ShouldValidateRealWorkbook()
     {
         // Arrange
         var services = new ServiceCollection();
-        services.AddNpoi();
+        services.AddBingOfficesNpoi();
         services.AddSingleton<IExcelValidationRule, StartsWithExcelValidationRule>();
         using var provider = services.BuildServiceProvider();
         using var source = new MemoryStream(CreateWorkbook());
@@ -179,14 +179,14 @@ public class ExcelImporterIntegrationTest
     }
 
     /// <summary>
-    /// 测试 - 通过 AddNpoi 解析的导入器应执行最大值特性校验。
+    /// 测试 - 通过 NPOI 注册解析的导入器应执行最大值特性校验。
     /// </summary>
     [Fact]
-    public void AddNpoi_MaxValueAttribute_ShouldValidateRealWorkbook()
+    public void AddBingOfficesNpoi_MaxValueAttribute_ShouldValidateRealWorkbook()
     {
         // Arrange
         var services = new ServiceCollection();
-        services.AddNpoi();
+        services.AddBingOfficesNpoi();
         using var provider = services.BuildServiceProvider();
         using var source = new MemoryStream(CreateWorkbook(workbook =>
         {
@@ -211,11 +211,11 @@ public class ExcelImporterIntegrationTest
     /// 测试 - 通过 DI 注册的双向转换器应参与真实 XLSX 的导出与导入。
     /// </summary>
     [Fact]
-    public void AddNpoi_RegisteredCustomValueConverter_ShouldRoundTripRealWorkbook()
+    public void AddBingOfficesNpoi_RegisteredCustomValueConverter_ShouldRoundTripRealWorkbook()
     {
         // Arrange
         var services = new ServiceCollection();
-        services.AddNpoi();
+        services.AddBingOfficesNpoi();
         services.AddSingleton<IExcelValueConverter, IntegrationCodeExcelValueConverter>();
         using var provider = services.BuildServiceProvider();
         using var destination = new MemoryStream();
@@ -235,14 +235,14 @@ public class ExcelImporterIntegrationTest
     }
 
     /// <summary>
-    /// 测试 - AddNpoi 注册的 CSV 实体服务应通过真实流完成往返且不关闭调用方流。
+    /// 测试 - NPOI 注册的 CSV 实体服务应通过真实流完成往返且不关闭调用方流。
     /// </summary>
     [Fact]
-    public void AddNpoi_CsvServices_ShouldRoundTripStream()
+    public void AddBingOfficesNpoi_CsvServices_ShouldRoundTripStream()
     {
         // Arrange
         var services = new ServiceCollection();
-        services.AddNpoi();
+        services.AddBingOfficesNpoi();
         using var provider = services.BuildServiceProvider();
         using var destination = new MemoryStream();
 
@@ -265,11 +265,11 @@ public class ExcelImporterIntegrationTest
     /// 测试 - 通过 DI 注册的命名校验规则应由 JSON 映射配置在真实 XLSX 导入中解析。
     /// </summary>
     [Fact]
-    public void AddNpoi_RegisteredNamedValidationRule_ShouldValidateConfiguredWorkbook()
+    public void AddBingOfficesNpoi_RegisteredNamedValidationRule_ShouldValidateConfiguredWorkbook()
     {
         // Arrange
         var services = new ServiceCollection();
-        services.AddNpoi();
+        services.AddBingOfficesNpoi();
         services.AddSingleton<INamedExcelValidationRule, NamedStartsWithValidationRule>();
         using var provider = services.BuildServiceProvider();
         using var source = new MemoryStream(CreateWorkbook());
@@ -298,7 +298,7 @@ public class ExcelImporterIntegrationTest
     {
         // Arrange
         var services = new ServiceCollection();
-        services.AddNpoi();
+        services.AddBingOfficesNpoi();
         using var provider = services.BuildServiceProvider();
         var extension = format == ExcelFormat.Xls ? "xls" : "xlsx";
         var path = Path.Combine(Path.GetTempPath(), $"Bing.Offices.Integration.{Guid.NewGuid():N}.{extension}");
@@ -331,11 +331,11 @@ public class ExcelImporterIntegrationTest
     /// 测试 - 已取消的真实导出请求不应向调用方目标流写入内容。
     /// </summary>
     [Fact]
-    public void AddNpoi_PreCancelledExport_ShouldNotWriteDestination()
+    public void AddBingOfficesNpoi_PreCancelledExport_ShouldNotWriteDestination()
     {
         // Arrange
         var services = new ServiceCollection();
-        services.AddNpoi();
+        services.AddBingOfficesNpoi();
         using var provider = services.BuildServiceProvider();
         using var destination = new MemoryStream();
         using var cancellationTokenSource = new System.Threading.CancellationTokenSource();
@@ -356,11 +356,11 @@ public class ExcelImporterIntegrationTest
     /// 测试 - 导出写入过程中取消时应停止后续写入并保持调用方目标流打开。
     /// </summary>
     [Fact]
-    public void AddNpoi_MidWriteCancelledExport_ShouldStopWritingAndPreserveDestination()
+    public void AddBingOfficesNpoi_MidWriteCancelledExport_ShouldStopWritingAndPreserveDestination()
     {
         // Arrange
         var services = new ServiceCollection();
-        services.AddNpoi();
+        services.AddBingOfficesNpoi();
         using var provider = services.BuildServiceProvider();
         using var cancellationTokenSource = new System.Threading.CancellationTokenSource();
         using var destination = new CancelAfterFirstWriteStream(cancellationTokenSource);
@@ -384,11 +384,11 @@ public class ExcelImporterIntegrationTest
     /// 测试 - 通过 DI 解析的导入器应支持不可寻址 XLSX 流、保持调用方流打开，并在预取消时不读取输入。
     /// </summary>
     [Fact]
-    public void AddNpoi_NonSeekableAndPreCancelledImport_ShouldPreserveStreamContract()
+    public void AddBingOfficesNpoi_NonSeekableAndPreCancelledImport_ShouldPreserveStreamContract()
     {
         // Arrange
         var services = new ServiceCollection();
-        services.AddNpoi();
+        services.AddBingOfficesNpoi();
         using var provider = services.BuildServiceProvider();
         using var generatedWorkbook = new MemoryStream();
         provider.GetRequiredService<IExcelExporter>().Export(ExcelExport.Workbook(builder => builder.AddSheet("Data",
@@ -418,11 +418,11 @@ public class ExcelImporterIntegrationTest
     /// 测试 - Fluent 配置与 XML 映射配置应在真实 XLSX 导入导出中使用相同的列定义。
     /// </summary>
     [Fact]
-    public void AddNpoi_FluentConfigurationAndXmlConfiguration_ShouldRoundTripRealWorkbook()
+    public void AddBingOfficesNpoi_FluentConfigurationAndXmlConfiguration_ShouldRoundTripRealWorkbook()
     {
         // Arrange
         var services = new ServiceCollection();
-        services.AddNpoi();
+        services.AddBingOfficesNpoi();
         using var provider = services.BuildServiceProvider();
         using var destination = new MemoryStream();
         var profile = ExcelMapping.For<MappingIntegrationRow>()
@@ -445,14 +445,14 @@ public class ExcelImporterIntegrationTest
     }
 
     /// <summary>
-    /// 测试 - AddNpoi 应解析安全配置加载器，并将已注册的双向转换器注入 CSV 实体服务。
+    /// 测试 - NPOI 注册应解析安全配置加载器，并将已注册的双向转换器注入 CSV 实体服务。
     /// </summary>
     [Fact]
-    public void AddNpoi_ConfigurationLoaderAndCsvConverter_ShouldResolveThroughDi()
+    public void AddBingOfficesNpoi_ConfigurationLoaderAndCsvConverter_ShouldResolveThroughDi()
     {
         // Arrange
         var services = new ServiceCollection();
-        services.AddNpoi();
+        services.AddBingOfficesNpoi();
         services.AddSingleton<IExcelValueConverter, IntegrationCodeExcelValueConverter>();
         using var provider = services.BuildServiceProvider();
         using var destination = new MemoryStream();
@@ -508,7 +508,7 @@ public class ExcelImporterIntegrationTest
     private static ServiceProvider BuildProvider()
     {
         var services = new ServiceCollection();
-        services.AddNpoi();
+        services.AddBingOfficesNpoi();
         return services.BuildServiceProvider();
     }
 

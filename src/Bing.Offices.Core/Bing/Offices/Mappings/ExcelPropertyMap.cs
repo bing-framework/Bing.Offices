@@ -6,7 +6,7 @@ namespace Bing.Offices.Mappings;
 /// <summary>
 /// Excel 属性的不可变静态映射。
 /// </summary>
-public sealed class ExcelPropertyMap
+internal sealed class ExcelPropertyMap
 {
     /// <summary>
     /// 初始化一个<see cref="ExcelPropertyMap"/>类型的实例。

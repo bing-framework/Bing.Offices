@@ -31,8 +31,7 @@ public static class ExcelValidationRules
 public sealed class RequiredExcelValidationRule : IExcelValidationRule
 {
     /// <inheritdoc />
-    public bool CanValidate(FilterAttributeBase attribute) => attribute is RequiredAttribute
-        || attribute is ExcelRequiredAttribute;
+    public bool CanValidate(FilterAttributeBase attribute) => attribute is ExcelRequiredAttribute;
 
     /// <inheritdoc />
     public bool Validate(FilterAttributeBase attribute, ExcelValidationContext context) =>
@@ -54,13 +53,12 @@ public sealed class RegexExcelValidationRule : IExcelValidationRule
     private static readonly Queue<string> RegexCacheOrder = new Queue<string>();
 
     /// <inheritdoc />
-    public bool CanValidate(FilterAttributeBase attribute) => attribute is RegexAttribute
-        || attribute is ExcelRegexAttribute;
+    public bool CanValidate(FilterAttributeBase attribute) => attribute is ExcelRegexAttribute;
 
     /// <inheritdoc />
     public bool Validate(FilterAttributeBase attribute, ExcelValidationContext context)
     {
-        var pattern = attribute is RegexAttribute legacy ? legacy.RegexString : ((ExcelRegexAttribute)attribute).Pattern;
+        var pattern = ((ExcelRegexAttribute)attribute).Pattern;
         var regex = GetRegex(pattern);
         return regex.IsMatch(context.Value);
     }
@@ -92,18 +90,16 @@ public sealed class RegexExcelValidationRule : IExcelValidationRule
 public sealed class RangeExcelValidationRule : IExcelValidationRule
 {
     /// <inheritdoc />
-    public bool CanValidate(FilterAttributeBase attribute) => attribute is RangeAttribute
-        || attribute is ExcelRangeAttribute;
+    public bool CanValidate(FilterAttributeBase attribute) => attribute is ExcelRangeAttribute;
 
     /// <inheritdoc />
     public bool Validate(FilterAttributeBase attribute, ExcelValidationContext context)
     {
-        var minimum = attribute is RangeAttribute legacy ? legacy.Min : ((ExcelRangeAttribute)attribute).Min;
-        var maximum = attribute is RangeAttribute old ? old.Max : ((ExcelRangeAttribute)attribute).Max;
+         var range = (ExcelRangeAttribute)attribute;
         var valueText = Convert.ToString(context.ConvertedValue ?? context.Value, context.Culture);
         return decimal.TryParse(valueText, NumberStyles.Number, context.Culture, out var value)
-               && value >= Convert.ToDecimal(minimum, CultureInfo.InvariantCulture)
-               && value <= Convert.ToDecimal(maximum, CultureInfo.InvariantCulture);
+             && value >= Convert.ToDecimal(range.Min, CultureInfo.InvariantCulture)
+             && value <= Convert.ToDecimal(range.Max, CultureInfo.InvariantCulture);
     }
 }
 
@@ -131,15 +127,12 @@ public sealed class MaxValueExcelValidationRule : IExcelValidationRule
 public sealed class MaxLengthExcelValidationRule : IExcelValidationRule
 {
     /// <inheritdoc />
-    public bool CanValidate(FilterAttributeBase attribute) => attribute is MaxLengthAttribute
-        || attribute is ExcelMaxLengthAttribute;
+    public bool CanValidate(FilterAttributeBase attribute) => attribute is ExcelMaxLengthAttribute;
 
     /// <inheritdoc />
     public bool Validate(FilterAttributeBase attribute, ExcelValidationContext context)
     {
-        var maxLength = attribute is MaxLengthAttribute legacy
-            ? legacy.MaxLength
-            : ((ExcelMaxLengthAttribute)attribute).MaxLength;
+        var maxLength = ((ExcelMaxLengthAttribute)attribute).MaxLength;
         return context.Value.Length <= maxLength;
     }
 }
@@ -150,8 +143,7 @@ public sealed class MaxLengthExcelValidationRule : IExcelValidationRule
 public sealed class DateTimeExcelValidationRule : IExcelValidationRule
 {
     /// <inheritdoc />
-    public bool CanValidate(FilterAttributeBase attribute) => attribute is DateTimeAttribute
-        || attribute is ExcelDateAttribute;
+    public bool CanValidate(FilterAttributeBase attribute) => attribute is ExcelDateAttribute;
 
     /// <inheritdoc />
     public bool Validate(FilterAttributeBase attribute, ExcelValidationContext context)
@@ -188,8 +180,7 @@ public sealed class DateTimeExcelValidationRule : IExcelValidationRule
 public sealed class DuplicationExcelValidationRule : IExcelValidationRule
 {
     /// <inheritdoc />
-    public bool CanValidate(FilterAttributeBase attribute) => attribute is DuplicationAttribute
-        || attribute is ExcelUniqueAttribute;
+    public bool CanValidate(FilterAttributeBase attribute) => attribute is ExcelUniqueAttribute;
 
     /// <inheritdoc />
     public bool Validate(FilterAttributeBase attribute, ExcelValidationContext context)

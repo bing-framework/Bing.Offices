@@ -6,7 +6,7 @@ namespace Bing.Offices.Mappings;
 /// <summary>
 /// 统一创建预绑定的命名校验描述。
 /// </summary>
-public static class ExcelValidationBindingFactory
+internal static class ExcelValidationBindingFactory
 {
     /// <summary>
     /// 创建命名校验绑定。

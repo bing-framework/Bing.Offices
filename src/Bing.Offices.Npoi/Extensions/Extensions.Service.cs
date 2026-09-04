@@ -2,7 +2,6 @@
 using Bing.Offices.Imports;
 using Bing.Offices.Conversions;
 using Bing.Offices.Configurations;
-using Bing.Offices.Csv;
 using Bing.Offices.Npoi.Exports;
 using Bing.Offices.Npoi.Imports;
 using Bing.Offices.Providers;
@@ -19,18 +18,19 @@ namespace Bing.Offices.Npoi.Extensions;
 public static class ExcelNpoiServiceCollectionExtensions
 {
     /// <summary>
-    /// 注册Npoi操作
+    /// 注册 Bing.Offices 的 NPOI 操作服务。
     /// </summary>
     /// <param name="services">服务集合</param>
-    public static void AddNpoi(this IServiceCollection services)
+    /// <returns>已完成注册的原始服务集合。</returns>
+    public static IServiceCollection AddBingOfficesNpoi(this IServiceCollection services)
     {
+        if (services == null)
+            throw new ArgumentNullException(nameof(services));
         foreach (var rule in ExcelValidationRules.CreateDefault())
             services.TryAddEnumerable(ServiceDescriptor.Singleton(typeof(IExcelValidationRule), rule.GetType()));
-        services.TryAddSingleton<IExcelMappingConfigurationLoader, DefaultExcelMappingConfigurationLoader>();
         ExcelMappingPlanFactoryProvider.RegisterDefault(services);
         services.TryAddTransient<IExcelImporter, NpoiExcelImporter>();
         services.TryAddTransient<IExcelExporter, NpoiExcelExporter>();
-        services.TryAddTransient<ICsvImporter, CsvEntityImporter>();
-        services.TryAddTransient<ICsvExporter, CsvEntityExporter>();
+        return services;
     }
 }

@@ -13,7 +13,6 @@ using Bing.Offices.Conversions;
 using Bing.Offices.Csv;
 using Bing.Offices.Exports;
 using Bing.Offices.Extensions;
-using Bing.Offices.Exceptions;
 using Bing.Offices.Imports;
 using Bing.Offices.Mappings;
 using Bing.Offices.Npoi;
@@ -39,13 +38,13 @@ public class StreamPipelineTest
     /// 测试 - 服务注册应只解析新的流式导入和导出契约。
     /// </summary>
     [Fact]
-    public void AddNpoi_ShouldRegisterStreamPipeline()
+    public void AddBingOfficesNpoi_ShouldRegisterStreamPipeline()
     {
         // Arrange
         var services = new ServiceCollection();
 
         // Act
-        services.AddNpoi();
+        services.AddBingOfficesNpoi();
         using var provider = services.BuildServiceProvider();
 
         // Assert
@@ -54,16 +53,35 @@ public class StreamPipelineTest
     }
 
     /// <summary>
-    /// 测试 - AddNpoi 应将请求处理服务注册为 transient，内置规则注册为 singleton 枚举项。
+    /// 测试 - NPOI 注册入口应返回原始服务集合并拒绝 null 参数。
     /// </summary>
     [Fact]
-    public void AddNpoi_ServiceLifetimes_ShouldPreserveReplacementAndRequestIsolation()
+    public void AddBingOfficesNpoi_NullAndChainContract_ShouldBeEnforced()
     {
         // Arrange
         var services = new ServiceCollection();
 
         // Act
-        services.AddNpoi();
+        var returned = services.AddBingOfficesNpoi();
+        var exception = Assert.Throws<ArgumentNullException>(() =>
+            ExcelNpoiServiceCollectionExtensions.AddBingOfficesNpoi(null));
+
+        // Assert
+        Assert.Same(services, returned);
+        Assert.Equal("services", exception.ParamName);
+    }
+
+    /// <summary>
+    /// 测试 - NPOI 注册应将请求处理服务注册为 transient，内置规则注册为 singleton 枚举项。
+    /// </summary>
+    [Fact]
+    public void AddBingOfficesNpoi_ServiceLifetimes_ShouldPreserveReplacementAndRequestIsolation()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+
+        // Act
+        services.AddBingOfficesNpoi();
 
         // Assert
         Assert.Equal(ServiceLifetime.Transient, Assert.Single(services.Where(descriptor =>
@@ -79,14 +97,14 @@ public class StreamPipelineTest
     }
 
     /// <summary>
-    /// 测试 - AddNpoi 应注册与直接构造相同的全部内置校验规则，包括最大值规则。
+    /// 测试 - NPOI 注册应提供与直接构造相同的全部内置校验规则，包括最大值规则。
     /// </summary>
     [Fact]
-    public void AddNpoi_DefaultValidationRules_ShouldMatchDirectConstruction()
+    public void AddBingOfficesNpoi_DefaultValidationRules_ShouldMatchDirectConstruction()
     {
         // Arrange
         var services = new ServiceCollection();
-        services.AddNpoi();
+        services.AddBingOfficesNpoi();
         using var provider = services.BuildServiceProvider();
 
         // Act
@@ -165,10 +183,10 @@ public class StreamPipelineTest
     }
 
     /// <summary>
-    /// 测试 - AddNpoi 应注册可被调用方替换的无状态映射配置加载器。
+    /// 测试 - NPOI 注册应提供可被调用方替换的无状态映射配置加载器。
     /// </summary>
     [Fact]
-    public void AddNpoi_MappingConfigurationLoader_ShouldBeResolvableAndReplaceable()
+    public void AddBingOfficesNpoi_MappingConfigurationLoader_ShouldBeResolvableAndReplaceable()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -176,7 +194,7 @@ public class StreamPipelineTest
 
         // Act
         services.AddSingleton<IExcelMappingConfigurationLoader>(replacement);
-        services.AddNpoi();
+        services.AddBingOfficesNpoi();
         using var provider = services.BuildServiceProvider();
 
         // Assert
@@ -1096,33 +1114,6 @@ public class StreamPipelineTest
     }
 
     /// <summary>
-    /// 测试 - 旧版文本转换器应仅作为输入文本薄桥参与 Stream-first 导入。
-    /// </summary>
-    [Fact]
-    public void Import_LegacyCellValueConverter_ShouldAdaptTextOnly()
-    {
-        // Arrange
-        using var source = new MemoryStream(CreateWorkbook(workbook =>
-        {
-            var sheet = workbook.CreateSheet("Data");
-            sheet.CreateRow(0).CreateCell(0).SetCellValue(nameof(StreamRow.Name));
-            sheet.CreateRow(1).CreateCell(0).SetCellValue("legacy");
-        }));
-
-        // Act
-#pragma warning disable CS0618
-        var result = new NpoiExcelImporter(legacyValueConverters: new ICellValueConverter[]
-        {
-            new PrefixLegacyCellValueConverter()
-        }).Import(source, CreateSingleSheetRequest<StreamRow>());
-#pragma warning restore CS0618
-
-        // Assert
-        Assert.Empty(result.Errors);
-        Assert.Equal("adapted-legacy", Assert.Single(result.Workbook.Items).Name);
-    }
-
-    /// <summary>
     /// 测试 - 格式化数值应以不变区域性写入，确保可被导入器无损解析。
     /// </summary>
     [Fact]
@@ -1310,28 +1301,28 @@ public class StreamPipelineTest
     /// 测试 - 自定义值映射的显示文本和业务值均必须唯一，确保导入导出可逆。
     /// </summary>
     [Fact]
-    public void TypeMap_DuplicateCustomValueMappings_ShouldThrowOfficeException()
+    public void TypeMap_DuplicateCustomValueMappings_ShouldThrowArgumentException()
     {
         // Act
         var duplicateText = () => ExcelTypeMapFactory.Get<DuplicateTextMappingRow>();
         var duplicateValue = () => ExcelTypeMapFactory.Get<DuplicateValueMappingRow>();
 
         // Assert
-        Assert.Throws<OfficeException>(duplicateText);
-        Assert.Throws<OfficeException>(duplicateValue);
+        Assert.Throws<ArgumentException>(duplicateText);
+        Assert.Throws<ArgumentException>(duplicateValue);
     }
 
     /// <summary>
     /// 测试 - 动态列属性必须使用可写的对象字典，避免导入导出能力不对称。
     /// </summary>
     [Fact]
-    public void TypeMap_InvalidDynamicColumnType_ShouldThrowOfficeException()
+    public void TypeMap_InvalidDynamicColumnType_ShouldThrowArgumentException()
     {
         // Arrange
         var action = () => ExcelTypeMapFactory.Get<InvalidDynamicRow>();
 
         // Act and Assert
-        Assert.Throws<OfficeException>(action);
+        Assert.Throws<ArgumentException>(action);
     }
 
     /// <summary>
@@ -2558,8 +2549,8 @@ public class StreamPipelineTest
         /// <summary>
         /// 业务编码。
         /// </summary>
-        [Required]
-        [Duplication]
+        [ExcelRequired]
+        [ExcelUnique]
         public string Code { get; set; }
 
         /// <summary>
@@ -2720,17 +2711,6 @@ public class StreamPipelineTest
             return false;
         }
     }
-
-    /// <summary>
-    /// 历史文本转换器测试实现。
-    /// </summary>
-#pragma warning disable CS0618
-    private sealed class PrefixLegacyCellValueConverter : ICellValueConverter
-    {
-        /// <inheritdoc />
-        public string GetStringValue(object cell) => $"adapted-{((ICell)cell).GetStringValue()}";
-    }
-#pragma warning restore CS0618
 
     /// <summary>
     /// 映射配置加载器替换测试实现。

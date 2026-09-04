@@ -49,9 +49,9 @@ internal static class DocsExamples
         return migrated;
     }
 
-    internal static CsvImportResult<ValidatedRow> Validation(Stream source)
+    internal static CsvImportResult<ValidatedRow> Validation(Stream source, ICsvImporter importer)
     {
-        var result = new CsvEntityImporter().Import<ValidatedRow>(source);
+        var result = importer.Import<ValidatedRow>(source);
         return result;
     }
 
@@ -71,9 +71,9 @@ internal static class DocsExamples
         }
     }
 
-    internal static CsvImportResult<DynamicRow> Dynamic(Stream input)
+    internal static CsvImportResult<DynamicRow> Dynamic(Stream input, ICsvImporter importer)
     {
-        var result = new CsvEntityImporter().Import<DynamicRow>(input);
+        var result = importer.Import<DynamicRow>(input);
         return result;
     }
 

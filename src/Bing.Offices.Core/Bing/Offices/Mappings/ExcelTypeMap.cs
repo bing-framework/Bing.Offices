@@ -4,7 +4,7 @@
 /// Excel 类型的不可变静态映射。
 /// </summary>
 /// <typeparam name="T">实体类型。</typeparam>
-public sealed class ExcelTypeMap<T>
+internal sealed class ExcelTypeMap<T>
 {
     /// <summary>
     /// 初始化一个<see cref="ExcelTypeMap{T}"/>类型的实例。

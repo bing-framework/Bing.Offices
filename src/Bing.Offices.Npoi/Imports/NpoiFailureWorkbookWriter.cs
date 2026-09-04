@@ -85,7 +85,7 @@ internal static class NpoiFailureWorkbookWriter
                     throw new IOException("失败工作簿临时文件创建失败。", exception);
                 }
                 using (output)
-                using (var limitedOutput = new LimitedWriteStream(output, options.MaxBytes))
+                using (var limitedOutput = new LimitedWriteStream(output, options.MaxSerializedBytes))
                 {
                     try
                     {
@@ -99,8 +99,8 @@ internal static class NpoiFailureWorkbookWriter
                         throw new InvalidOperationException("失败工作簿序列化失败。", exception);
                     }
                     limitedOutput.Flush();
-                    if (options.MaxBytes.HasValue && output.Length > options.MaxBytes.Value)
-                        throw new InvalidOperationException($"失败工作簿超过最大字节数: {options.MaxBytes.Value}");
+                    if (options.MaxSerializedBytes.HasValue && output.Length > options.MaxSerializedBytes.Value)
+                        throw new InvalidOperationException($"失败工作簿超过最大序列化字节数: {options.MaxSerializedBytes.Value}");
                     cancellationToken.ThrowIfCancellationRequested();
                     output.Position = 0;
                     try
@@ -640,7 +640,7 @@ internal static class NpoiFailureWorkbookWriter
         while (exception != null)
         {
             if (exception is InvalidOperationException invalidOperationException
-                && invalidOperationException.Message.StartsWith("失败工作簿超过最大字节数:",
+                && invalidOperationException.Message.StartsWith("失败工作簿超过最大序列化字节数:",
                     StringComparison.Ordinal))
                 return invalidOperationException;
             exception = exception.InnerException;
@@ -701,7 +701,7 @@ internal static class NpoiFailureWorkbookWriter
         public override void SetLength(long value)
         {
             if (_maxBytes.HasValue && value > _maxBytes.Value)
-                throw new InvalidOperationException($"失败工作簿超过最大字节数: {_maxBytes.Value}");
+                throw new InvalidOperationException($"失败工作簿超过最大序列化字节数: {_maxBytes.Value}");
             _inner.SetLength(value);
         }
 
@@ -709,7 +709,7 @@ internal static class NpoiFailureWorkbookWriter
         public override void Write(byte[] buffer, int offset, int count)
         {
             if (_maxBytes.HasValue && Position > _maxBytes.Value - count)
-                throw new InvalidOperationException($"失败工作簿超过最大字节数: {_maxBytes.Value}");
+                throw new InvalidOperationException($"失败工作簿超过最大序列化字节数: {_maxBytes.Value}");
             _inner.Write(buffer, offset, count);
         }
 

@@ -8,7 +8,7 @@ public class Issue8
     /// 编码
     /// </summary>
     [ColumnName("编码")]
-    [Required(ErrorMsg = "编码为必填项")]
+    [ExcelRequired(ErrorMsg = "编码为必填项")]
     public string Code { get; set; }
 
     /// <summary>

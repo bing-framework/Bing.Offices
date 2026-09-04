@@ -350,10 +350,10 @@ public static class ExcelMappingConfigurationLoader
             Version = 2,
             Import = direction == MappingDirection.Import
                 ? MappingConfigurationMerger.Merge(null, configuration, MappingSourceKind.Document)
-                : new ExcelMappingConfiguration(),
+                : null,
             Export = direction == MappingDirection.Export
                 ? MappingConfigurationMerger.Merge(null, configuration, MappingSourceKind.Document)
-                : new ExcelMappingConfiguration()
+                : null
         };
     }
 
@@ -501,7 +501,7 @@ public static class ExcelMappingConfigurationLoader
 /// <summary>
 /// 映射配置加载器的默认服务实现。
 /// </summary>
-public sealed class DefaultExcelMappingConfigurationLoader : IExcelMappingConfigurationLoader
+internal sealed class DefaultExcelMappingConfigurationLoader : IExcelMappingConfigurationLoader
 {
     /// <inheritdoc />
     public ExcelMappingDocument FromJsonDocument(string json) => ExcelMappingConfigurationLoader.FromJsonDocument(json);

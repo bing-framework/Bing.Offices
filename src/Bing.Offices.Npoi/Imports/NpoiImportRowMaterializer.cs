@@ -15,16 +15,11 @@ namespace Bing.Offices.Npoi.Imports;
 /// </summary>
 internal sealed class NpoiImportRowMaterializer
 {
-    /// <summary>按顺序重写单元格文本的旧版转换器集合。</summary>
-    private readonly IReadOnlyList<ICellValueConverter> _legacyValueConverters;
-
     /// <summary>
     /// 初始化行物化器。
     /// </summary>
-    /// <param name="legacyValueConverters">旧版文本单元格转换器集合。</param>
-    internal NpoiImportRowMaterializer(IReadOnlyList<ICellValueConverter> legacyValueConverters)
+    internal NpoiImportRowMaterializer()
     {
-        _legacyValueConverters = legacyValueConverters ?? Array.Empty<ICellValueConverter>();
     }
 
     /// <summary>
@@ -100,8 +95,7 @@ internal sealed class NpoiImportRowMaterializer
         foreach (var column in columns)
         {
             var cell = row.GetCell(column.Key);
-            var cellValue = NormalizeCellValue(ApplyLegacyTextConverters(cell,
-                    NpoiExcelImporter.ReadCellValue(cell)),
+            var cellValue = NormalizeCellValue(NpoiExcelImporter.ReadCellValue(cell),
                 column.Value.Property.ImportWhitespace ?? bodyWhitespace);
             var value = cellValue.Text;
             foreach (var binding in column.Value.ValidationBindings.Where(binding => binding.IsRaw))
@@ -184,7 +178,7 @@ internal sealed class NpoiImportRowMaterializer
                 }
                 var image = images?.FirstOrDefault();
                 cellValue = image == null
-                    ? NormalizeCellValue(ApplyLegacyTextConverters(cell, NpoiExcelImporter.ReadCellValue(cell)),
+                    ? NormalizeCellValue(NpoiExcelImporter.ReadCellValue(cell),
                         column.Value.Property.ImportWhitespace ?? bodyWhitespace)
                     : new ExcelCellValue(image, string.Empty, ExcelCellKind.Empty);
                 var value = cellValue.Text;
@@ -246,26 +240,6 @@ internal sealed class NpoiImportRowMaterializer
                 columns.Values.First(column => column.IsDynamic).Setter(item, dynamicValues);
         }
         return true;
-    }
-
-    /// <summary>
-    /// 使用旧版文本转换器读取单元格文本，同时保留 typed cell 元数据。
-    /// </summary>
-    private ExcelCellValue ApplyLegacyTextConverters(ICell cell, ExcelCellValue cellValue)
-    {
-        if (cell == null || _legacyValueConverters.Count == 0)
-            return cellValue;
-        var text = cellValue.Text;
-        foreach (var converter in _legacyValueConverters)
-        {
-            var converted = converter.GetStringValue(cell);
-            if (converted != null)
-                text = converted;
-        }
-        return text == cellValue.Text
-            ? cellValue
-            : new ExcelCellValue(cellValue.Value, text, cellValue.Kind, cellValue.CachedKind,
-                cellValue.Formula, cellValue.ErrorCode, cellValue.FormatIndex);
     }
 
     /// <summary>

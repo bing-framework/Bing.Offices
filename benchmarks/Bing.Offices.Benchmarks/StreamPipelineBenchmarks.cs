@@ -55,7 +55,7 @@ public class StreamPipelineBenchmarks
     public void Setup()
     {
         var services = new ServiceCollection();
-        services.AddNpoi();
+        services.AddBingOfficesNpoi();
         _serviceProvider = services.BuildServiceProvider();
         _importer = _serviceProvider.GetRequiredService<IExcelImporter>();
         _exporter = _serviceProvider.GetRequiredService<IExcelExporter>();
@@ -169,7 +169,7 @@ public class FailureWorkbookBenchmarks
     public void Setup()
     {
         var services = new ServiceCollection();
-        services.AddNpoi();
+        services.AddBingOfficesNpoi();
         _serviceProvider = services.BuildServiceProvider();
         _importer = _serviceProvider.GetRequiredService<IExcelImporter>();
         using var workbook = new NPOI.XSSF.UserModel.XSSFWorkbook();
@@ -234,7 +234,7 @@ public class HeaderStyleBenchmarks
     public void Setup()
     {
         var services = new ServiceCollection();
-        services.AddNpoi();
+        services.AddBingOfficesNpoi();
         _serviceProvider = services.BuildServiceProvider();
         _exporter = _serviceProvider.GetRequiredService<IExcelExporter>();
         _rows = Enumerable.Range(0, RowCount)
@@ -303,7 +303,7 @@ public class ValidationRangeBenchmarks
     public void Setup()
     {
         var services = new ServiceCollection();
-        services.AddNpoi();
+        services.AddBingOfficesNpoi();
         _serviceProvider = services.BuildServiceProvider();
         _importer = _serviceProvider.GetRequiredService<IExcelImporter>();
         _request = ExcelImport.Workbook<ValidationWorkbook>(workbook =>

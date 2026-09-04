@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Runtime.ExceptionServices;
 using System.Threading;
 using Bing.Offices.Imports;
 
@@ -27,9 +28,17 @@ internal static class NpoiRelationBinder
     {
         var method = typeof(NpoiRelationBinder).GetMethod(nameof(BindCore),
             BindingFlags.Static | BindingFlags.NonPublic);
-        method.MakeGenericMethod(typeof(TWorkbook), request.ParentType, request.ChildType,
-            request.ParentKey.Method.ReturnType).Invoke(null,
-            new object[] { root, request, errors, sourceLocations, cancellationToken });
+        try
+        {
+            method.MakeGenericMethod(typeof(TWorkbook), request.ParentType, request.ChildType,
+                request.ParentKey.Method.ReturnType).Invoke(null,
+                new object[] { root, request, errors, sourceLocations, cancellationToken });
+        }
+        catch (TargetInvocationException exception) when (exception.InnerException != null)
+        {
+            ExceptionDispatchInfo.Capture(exception.InnerException).Throw();
+            throw;
+        }
     }
 
     /// <summary>使用具体泛型类型执行父子键关联并写入导航集合。</summary>

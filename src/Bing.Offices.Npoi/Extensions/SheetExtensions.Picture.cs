@@ -67,7 +67,7 @@ internal static partial class SheetExtensions
             case XSSFSheet xssfSheet:
                 return GetAllPictureInfos(xssfSheet, minRow, maxRow, minCol, maxCol, onlyInternal);
         }
-        throw new NotImplementedException($"尚未实现该[{sheet.GetType()}]类型的[{nameof(GetAllPictureInfos)}]扩展方法");
+        throw new NotSupportedException($"不支持该[{sheet.GetType()}]类型的[{nameof(GetAllPictureInfos)}]扩展方法");
     }
 
     /// <summary>
@@ -183,7 +183,7 @@ internal static partial class SheetExtensions
                 RemovePictures(xssfSheet, minRow, maxRow, minCol, maxCol, onlyInternal);
                 return;
         }
-        throw new NotImplementedException($"尚未实现该[{sheet.GetType()}]类型的[{nameof(RemovePictures)}]扩展方法");
+        throw new NotSupportedException($"不支持该[{sheet.GetType()}]类型的[{nameof(RemovePictures)}]扩展方法");
     }
 
     /// <summary>

@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Reflection;
 using Bing.Offices.Configurations;
 using Bing.Offices.Attributes;
 using Bing.Offices.Mappings;
@@ -22,7 +23,7 @@ public class MappingValidationBenchmarks
 {
     private const long PeakWorkingSetCeilingBytes = 1024L * 1024 * 1024;
     private static int _workingSetEvidenceWritten;
-    private ExcelMappingPlanFactory _planFactory = null!;
+    private IExcelMappingPlanFactory _planFactory = null!;
     private ExcelMappingConfiguration _configuration = null!;
     private ExcelMappingDocument _document = null!;
     private string _json = string.Empty;
@@ -42,7 +43,7 @@ public class MappingValidationBenchmarks
         var namedRules = Enumerable.Range(0, 10000)
             .Select(index => (INamedExcelValidationRule)new BenchmarkNamedValidationRule($"rule-{index}"))
             .ToArray();
-        _planFactory = new ExcelMappingPlanFactory(namedValidationRules: namedRules);
+        _planFactory = ExcelMappingPlanFactoryProvider.CreateDefault(namedValidationRules: namedRules);
         _cacheKeySerializerOptions = new JsonSerializerOptions { IgnoreNullValues = false };
         _configuration = new ExcelMappingConfiguration
         {
@@ -204,13 +205,13 @@ public class DynamicPlanBenchmarks
     [Params(100, 500)]
     public int PlanBuildCount { get; set; }
 
-    private ExcelMappingPlanFactory _planFactory = null!;
+    private IExcelMappingPlanFactory _planFactory = null!;
     private ExcelMappingConfiguration _profileConfiguration = null!;
 
     [GlobalSetup]
     public void Setup()
     {
-        _planFactory = new ExcelMappingPlanFactory(namedValidationRules:
+        _planFactory = ExcelMappingPlanFactoryProvider.CreateDefault(namedValidationRules:
             Enumerable.Range(0, 10000)
                 .Select(index => (INamedExcelValidationRule)new BenchmarkNamedValidationRule($"rule-{index}"))
                 .ToArray());
@@ -249,7 +250,7 @@ public class DynamicPlanBenchmarks
         return count;
     }
 
-    private ExcelMappingPlanFactory CreatePlanFactory() => new(namedValidationRules:
+    private IExcelMappingPlanFactory CreatePlanFactory() => ExcelMappingPlanFactoryProvider.CreateDefault(namedValidationRules:
         Enumerable.Range(0, 10000)
             .Select(index => (INamedExcelValidationRule)new BenchmarkNamedValidationRule($"rule-{index}"))
             .ToArray());
@@ -279,11 +280,65 @@ public class DynamicPlanBenchmarks
 }
 
 /// <summary>
+/// 编译属性访问器与反射属性访问器的热路径对照基准。
+/// </summary>
+[MemoryDiagnoser]
+public class PropertyAccessorBenchmarks
+{
+    private static readonly PropertyInfo CodeProperty = typeof(AccessorRow).GetProperty(nameof(AccessorRow.Code))!;
+    private AccessorRow _row = null!;
+    private Func<object, object> _compiledGetter = null!;
+    private Action<object, object> _compiledSetter = null!;
+
+    /// <summary>初始化同一实体和编译访问器。</summary>
+    [GlobalSetup]
+    public void Setup()
+    {
+        _row = new AccessorRow { Code = "initial" };
+        var instance = System.Linq.Expressions.Expression.Parameter(typeof(object), "instance");
+        var value = System.Linq.Expressions.Expression.Property(
+            System.Linq.Expressions.Expression.Convert(instance, typeof(AccessorRow)), CodeProperty);
+        _compiledGetter = System.Linq.Expressions.Expression.Lambda<Func<object, object>>(
+            System.Linq.Expressions.Expression.Convert(value, typeof(object)), instance).Compile();
+        var input = System.Linq.Expressions.Expression.Parameter(typeof(object), "value");
+        var setter = System.Linq.Expressions.Expression.Assign(
+            System.Linq.Expressions.Expression.Property(
+                System.Linq.Expressions.Expression.Convert(instance, typeof(AccessorRow)), CodeProperty),
+            System.Linq.Expressions.Expression.Convert(input, typeof(string)));
+        _compiledSetter = System.Linq.Expressions.Expression.Lambda<Action<object, object>>(
+            setter, instance, input).Compile();
+    }
+
+    /// <summary>测量编译属性读取器。</summary>
+    [Benchmark]
+    public object CompiledGetter() => _compiledGetter(_row) ?? string.Empty;
+
+    /// <summary>测量反射属性读取器。</summary>
+    [Benchmark]
+    public object ReflectionGetter() => CodeProperty.GetValue(_row) ?? string.Empty;
+
+    /// <summary>测量编译属性写入器。</summary>
+    [Benchmark]
+    public void CompiledSetter() => _compiledSetter(_row, "compiled");
+
+    /// <summary>测量反射属性写入器。</summary>
+    [Benchmark]
+    public void ReflectionSetter() => CodeProperty.SetValue(_row, "reflection");
+
+    private sealed class AccessorRow
+    {
+        public string Code { get; set; } = string.Empty;
+    }
+}
+
+/// <summary>
 /// 租户映射计划缓存隔离与淘汰基准。
 /// </summary>
 [MemoryDiagnoser]
 public class TenantPlanCacheBenchmarks
 {
+    private const int CacheCapacity = 256;
+
     [Params(100, 1000)]
     public int TenantCount { get; set; }
 
@@ -302,7 +357,7 @@ public class TenantPlanCacheBenchmarks
     [Benchmark]
     public int TenantPlanCache()
     {
-        var factory = new ExcelMappingPlanFactory(cacheCapacity: TenantCount);
+        var factory = ExcelMappingPlanFactoryProvider.CreateDefault(cacheCapacity: CacheCapacity);
         var count = 0;
         for (var index = 0; index < TenantCount; index++)
             count += factory.Create<BenchmarkRow>(CreateTenantDocument(index), MappingDirection.Import).Columns.Count;
@@ -312,14 +367,17 @@ public class TenantPlanCacheBenchmarks
     [Benchmark]
     public int TenantPlanCacheEviction()
     {
-        var capacity = Math.Max(1, TenantCount / 2);
-        var factory = new ExcelMappingPlanFactory(cacheCapacity: capacity);
+        var capacity = Math.Max(1, Math.Min(CacheCapacity, TenantCount / 2));
+        var factory = ExcelMappingPlanFactoryProvider.CreateDefault(cacheCapacity: capacity);
         var first = factory.Create<BenchmarkRow>(CreateTenantDocument(0), MappingDirection.Import);
         var count = first.Columns.Count;
         for (var index = 0; index < TenantCount; index++)
             count += factory.Create<BenchmarkRow>(CreateTenantDocument(index), MappingDirection.Import).Columns.Count;
         var rebuilt = factory.Create<BenchmarkRow>(CreateTenantDocument(0), MappingDirection.Import);
         var evictedAndRebuilt = ReferenceEquals(first, rebuilt) ? 0 : 1;
+        var expectedEviction = TenantCount > capacity;
+        if ((evictedAndRebuilt == 1) != expectedEviction)
+            throw new InvalidOperationException($"CACHE_EVICTION unexpected observed={evictedAndRebuilt == 1} capacity={capacity} tenants={TenantCount}");
         Console.WriteLine($"CACHE_EVICTION observed={evictedAndRebuilt == 1} capacity={capacity} tenants={TenantCount}");
         return count + rebuilt.Columns.Count + evictedAndRebuilt;
     }

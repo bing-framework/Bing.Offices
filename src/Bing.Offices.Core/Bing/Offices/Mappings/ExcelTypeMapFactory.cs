@@ -7,7 +7,6 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 using Bing.Offices.Attributes;
 using Bing.Offices.Configurations;
-using Bing.Offices.Exceptions;
 using Bing.Offices.Extensions;
 using Bing.Offices.Imports;
 using Bing.Reflection;
@@ -17,7 +16,7 @@ namespace Bing.Offices.Mappings;
 /// <summary>
 /// Excel 类型映射工厂。
 /// </summary>
-public static class ExcelTypeMapFactory
+internal static class ExcelTypeMapFactory
 {
     /// <summary>
     /// 类型静态映射缓存。
@@ -189,15 +188,13 @@ public static class ExcelTypeMapFactory
     {
         foreach (var attribute in property.GetCustomAttributes<ExcelRegexAttribute>())
             _ = new Regex(attribute.Pattern, RegexOptions.Compiled, TimeSpan.FromSeconds(1));
-        foreach (var attribute in property.GetCustomAttributes<RegexAttribute>())
-            _ = new Regex(attribute.RegexString, RegexOptions.Compiled, TimeSpan.FromSeconds(1));
         var isDynamicColumn = property.IsDefined(typeof(DynamicColumnAttribute));
         if (isDynamicColumn &&
             (!property.CanWrite || !typeof(IDictionary<string, object>).IsAssignableFrom(property.PropertyType)))
-            throw new OfficeException($"【{property.Name}】动态列属性必须是可写的 IDictionary<string, object> 类型");
+            throw new ArgumentException($"【{property.Name}】动态列属性必须是可写的 IDictionary<string, object> 类型");
         var mappings = property.GetCustomAttributes<ValueMappingAttribute>().ToList();
         if (isDynamicColumn && mappings.Any())
-            throw new OfficeException($"【{property.Name}】该属性已设置动态列，无法再设置值映射");
+            throw new ArgumentException($"【{property.Name}】该属性已设置动态列，无法再设置值映射");
 
         var values = new Dictionary<string, object>(StringComparer.Ordinal);
         foreach (var mapping in mappings)
@@ -261,9 +258,9 @@ public static class ExcelTypeMapFactory
     private static void AddMapping(IDictionary<string, object> values, string propertyName, string text, object value)
     {
         if (values.ContainsKey(text))
-            throw new OfficeException($"【{propertyName}】存在重复的值映射文本: {text}");
+            throw new ArgumentException($"【{propertyName}】存在重复的值映射文本: {text}");
         if (values.Values.Any(mappedValue => Equals(mappedValue, value)))
-            throw new OfficeException($"【{propertyName}】存在重复的值映射业务值: {value}");
+            throw new ArgumentException($"【{propertyName}】存在重复的值映射业务值: {value}");
         values.Add(text, value);
     }
 

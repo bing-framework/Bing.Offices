@@ -61,8 +61,7 @@ internal sealed class ExcelColumnPlan
         ValueMap = property.ValueMap;
         Ignored = property.Ignored;
         var attributes = reflectionProperty.GetCustomAttributes<Attribute>().ToArray();
-        IsUnique = isUnique ?? attributes.Any(attribute => attribute is DuplicationAttribute
-            || attribute is ExcelUniqueAttribute);
+        IsUnique = isUnique ?? attributes.Any(attribute => attribute is ExcelUniqueAttribute);
         UniqueIgnoreEmpty = isUnique.HasValue ? uniqueIgnoreEmpty
             : attributes.OfType<ExcelUniqueAttribute>().FirstOrDefault()?.IgnoreEmpty ?? true;
         IsMerged = attributes.Any(attribute => attribute is MergeColumnsAttribute);

@@ -5,8 +5,6 @@ using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using System.Collections.ObjectModel;
-using System.Security.Cryptography;
-using System.Text.Json;
 using Bing.Offices.Attributes;
 using Bing.Offices.Conversions;
 using Bing.Offices.Configurations;
@@ -18,7 +16,7 @@ namespace Bing.Offices.Mappings;
 /// <summary>
 /// Core 对 Provider-neutral 计划契约的实现。
 /// </summary>
-public sealed class ExcelMappingPlanFactory : IExcelMappingPlanFactory
+internal sealed class ExcelMappingPlanFactory : IExcelMappingPlanFactory
 {
     /// <summary>按名称解析映射 Profile 的注册表。</summary>
     private readonly Configurations.IMappingProfileResolver _profileRegistry;
@@ -98,7 +96,7 @@ public sealed class ExcelMappingPlanFactory : IExcelMappingPlanFactory
         if (document == null)
             throw new ArgumentNullException(nameof(document));
         var resolved = ResolveDocument<T>(document, configuration, direction);
-        var key = CreateCacheKey<T>(document, direction, resolved.Configuration);
+        var key = ExcelMappingPlanCacheKey.Create<T>(document, direction, resolved.Configuration);
         if (_planCache.TryGetValue(key, out var existing))
             return existing.Value;
         var created = new Lazy<IExcelMappingPlan>(() => CreatePlan<T>(resolved.Configuration, resolved.ProfileName,
@@ -372,27 +370,6 @@ public sealed class ExcelMappingPlanFactory : IExcelMappingPlanFactory
         }
         var rule = _validationRules.FirstOrDefault(candidate => candidate.CanValidate(attribute));
         return rule ?? throw new InvalidOperationException($"未找到特性对应的校验规则: {attribute.GetType().FullName}");
-    }
-
-    /// <summary>根据模型、方向、租户和规范化配置创建稳定缓存键。</summary>
-    /// <typeparam name="T">目标实体类型。</typeparam>
-    /// <param name="document">原始映射文档。</param>
-    /// <param name="direction">导入或导出方向。</param>
-    /// <param name="configuration">已解析的方向配置。</param>
-    /// <returns>配置内容的 SHA-256 Base64 缓存键。</returns>
-    private static string CreateCacheKey<T>(ExcelMappingDocument document, MappingDirection direction,
-        ExcelMappingConfiguration configuration) where T : class, new()
-    {
-        var payload = JsonSerializer.SerializeToUtf8Bytes(new
-        {
-            document.TenantId,
-            ModelType = typeof(T).AssemblyQualifiedName,
-            Direction = direction,
-            document.ConfigurationVersion,
-            Configuration = configuration
-        }, new JsonSerializerOptions { IgnoreNullValues = false });
-        using var sha256 = SHA256.Create();
-        return Convert.ToBase64String(sha256.ComputeHash(payload));
     }
 
     private sealed class ResolvedMapping

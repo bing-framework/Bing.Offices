@@ -88,5 +88,13 @@ public sealed class CsvImportOptions<T> where T : class, new()
             throw new ArgumentOutOfRangeException(nameof(MaxFieldLength));
         if (MaxColumns <= 0)
             throw new ArgumentOutOfRangeException(nameof(MaxColumns));
+        if (MaxTrackedUniqueValues <= 0)
+            throw new ArgumentOutOfRangeException(nameof(MaxTrackedUniqueValues));
+        if (UniqueComparison != StringComparison.Ordinal && UniqueComparison != StringComparison.OrdinalIgnoreCase
+            && UniqueComparison != StringComparison.InvariantCulture
+            && UniqueComparison != StringComparison.InvariantCultureIgnoreCase
+            && UniqueComparison != StringComparison.CurrentCulture
+            && UniqueComparison != StringComparison.CurrentCultureIgnoreCase)
+            throw new ArgumentOutOfRangeException(nameof(UniqueComparison));
     }
 }

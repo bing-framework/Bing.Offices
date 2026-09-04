@@ -4,6 +4,8 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using Bing.Offices.Attributes;
@@ -501,7 +503,7 @@ public sealed class ExcelP0RegressionTest
     public void RangeValidation_FrenchCulture_ShouldParseDecimalText()
     {
         // Arrange
-        var attribute = new RangeAttribute(1, 2);
+        var attribute = new ExcelRangeAttribute(1, 2);
         var context = new ExcelValidationContext("1,5", "Data", 2, 1, "Amount",
             null, typeof(decimal), null, CultureInfo.GetCultureInfo("fr-FR"));
 
@@ -800,10 +802,10 @@ public sealed class ExcelP0RegressionTest
     }
 
     /// <summary>
-    /// 测试 - 失败工作簿超过 MaxBytes 时应在临时输出阶段失败且不污染调用方目标流。
+    /// 测试 - 失败工作簿超过 MaxSerializedBytes 时应在临时输出阶段失败且不污染调用方目标流。
     /// </summary>
     [Fact]
-    public void Import_FailureWorkbook_ExceedingMaxBytes_ShouldNotWriteDestination()
+    public void Import_FailureWorkbook_ExceedingMaxSerializedBytes_ShouldNotWriteDestination()
     {
         // Arrange
         using var source = new MemoryStream(CreateWorkbook(workbook =>
@@ -818,7 +820,7 @@ public sealed class ExcelP0RegressionTest
             {
                 Mode = ExcelImportFailureWorkbookMode.AnnotatedOriginal,
                 Destination = failure,
-                MaxBytes = 1
+                MaxSerializedBytes = 1
             })
             .Sheet("Data", root => root.Rows));
 
@@ -851,7 +853,7 @@ public sealed class ExcelP0RegressionTest
             {
                 Mode = ExcelImportFailureWorkbookMode.AnnotatedOriginal,
                 Destination = failure,
-                MaxBytes = 1,
+                MaxSerializedBytes = 1,
                 TemporaryDirectory = temporaryDirectory
             })
             .Sheet("Data", root => root.Rows));
@@ -1397,8 +1399,15 @@ public sealed class ExcelP0RegressionTest
         return;
 #else
         // Arrange
-        var directory = Path.Combine(Path.GetTempPath(), $"Bing.Offices.Probe.{Guid.NewGuid():N}");
+        var artifactDirectory = Environment.GetEnvironmentVariable("BING_OFFICES_RESOURCE_PROBE_ARTIFACT");
+        var persistArtifacts = !string.IsNullOrWhiteSpace(artifactDirectory);
+        var directory = persistArtifacts
+            ? Path.GetFullPath(artifactDirectory)
+            : Path.Combine(Path.GetTempPath(), $"Bing.Offices.Probe.{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
+        var artifactPath = Path.Combine(directory, "excel-resource-probe-rerun.jsonl");
+        if (persistArtifacts)
+            File.WriteAllText(artifactPath, string.Empty, Encoding.UTF8);
         var paths = new Dictionary<string, string>
         {
             ["zip"] = Path.Combine(directory, "zip.xlsx"),
@@ -1430,12 +1439,16 @@ public sealed class ExcelP0RegressionTest
                 ["drawings"] = RunResourceProbe(paths["drawings"], "drawings"),
                 ["ole"] = RunResourceProbe(paths["ole"], "ole")
             };
+            if (persistArtifacts)
+                foreach (var pair in outputs)
+                    AppendProbeArtifact(artifactPath, pair.Key, paths[pair.Key], pair.Value);
 
             // Assert
             Assert.Equal("success", outputs["zip"].Status);
             Assert.Equal("success", outputs["dom"].Status);
             Assert.Equal("resource-limit", outputs["dom-limit"].Status);
             Assert.Equal(250, outputs["dom-limit"].Rows);
+            Assert.Equal(100, outputs["dom-limit"].ImportedRows);
             Assert.True(outputs["dom"].Rows > outputs["zip"].Rows);
             Assert.True(outputs["shared-strings"].SharedStrings >= 400);
             Assert.True(outputs["styles"].Styles >= 80);
@@ -1450,7 +1463,7 @@ public sealed class ExcelP0RegressionTest
         }
         finally
         {
-            if (Directory.Exists(directory))
+            if (!persistArtifacts && Directory.Exists(directory))
                 Directory.Delete(directory, true);
         }
 #endif
@@ -1655,7 +1668,9 @@ public sealed class ExcelP0RegressionTest
         Assert.True(process.Start());
         Assert.True(process.WaitForExit(30000), $"Resource probe timed out: {mode}");
         var output = process.StandardOutput.ReadToEnd();
-        Assert.True(process.ExitCode == 0, output + process.StandardError.ReadToEnd());
+        var error = process.StandardError.ReadToEnd();
+        var exitCode = process.ExitCode;
+        Assert.True(exitCode == 0, output + error);
         var values = output.Trim().Split(';')
             .Select(part => part.Split(new[] { '=' }, 2))
             .Where(parts => parts.Length == 2)
@@ -1664,13 +1679,58 @@ public sealed class ExcelP0RegressionTest
             values["mode"],
             values["status"],
             long.Parse(values["inputBytes"], CultureInfo.InvariantCulture),
+            int.Parse(values["sheets"], CultureInfo.InvariantCulture),
             int.Parse(values["rows"], CultureInfo.InvariantCulture),
-            int.Parse(values["sharedStrings"], CultureInfo.InvariantCulture),
-            int.Parse(values["styles"], CultureInfo.InvariantCulture),
-            int.Parse(values["pictures"], CultureInfo.InvariantCulture),
+            int.Parse(values["columns"], CultureInfo.InvariantCulture),
+            int.Parse(values["cells"], CultureInfo.InvariantCulture),
+            int.Parse(values["importedRows"], CultureInfo.InvariantCulture),
+            ParseUnknownMetric(values["sharedStrings"]),
+            ParseUnknownMetric(values["styles"]),
+            ParseUnknownMetric(values["pictures"]),
             long.Parse(values["elapsedMs"], CultureInfo.InvariantCulture),
-            long.Parse(values["peakWorkingSet"], CultureInfo.InvariantCulture));
+            long.Parse(values["peakWorkingSet"], CultureInfo.InvariantCulture),
+            exitCode,
+            ComputeSha256(inputPath));
     }
+
+    private static void AppendProbeArtifact(string artifactPath, string scenario, string inputPath,
+        ProbeOutput output)
+    {
+        var line = "{"
+            + $"\"scenario\":\"{EscapeJson(scenario)}\","
+            + $"\"inputPath\":\"{EscapeJson(inputPath)}\","
+            + $"\"inputSha256\":\"{output.InputSha256}\","
+            + $"\"inputBytes\":{output.InputBytes},"
+            + $"\"mode\":\"{EscapeJson(output.Mode)}\","
+            + $"\"status\":\"{EscapeJson(output.Status)}\","
+            + $"\"exitCode\":{output.ExitCode},"
+            + $"\"sheets\":{output.Sheets},"
+            + $"\"rows\":{output.Rows},"
+            + $"\"columns\":{output.Columns},"
+            + $"\"cells\":{output.Cells},"
+            + $"\"importedRows\":{output.ImportedRows},"
+            + $"\"sharedStrings\":{output.SharedStrings},"
+            + $"\"styles\":{output.Styles},"
+            + $"\"pictures\":{output.Pictures},"
+            + $"\"elapsedMs\":{output.ElapsedMilliseconds},"
+            + $"\"peakWorkingSet\":{output.PeakWorkingSet}"
+            + "}";
+        File.AppendAllText(artifactPath, line + Environment.NewLine, Encoding.UTF8);
+    }
+
+    private static string ComputeSha256(string path)
+    {
+        using var sha256 = SHA256.Create();
+        using var stream = File.OpenRead(path);
+        return BitConverter.ToString(sha256.ComputeHash(stream)).Replace("-", string.Empty);
+    }
+
+    private static string EscapeJson(string value) => value.Replace("\\", "\\\\")
+        .Replace("\"", "\\\"").Replace("\r", "\\r").Replace("\n", "\\n");
+
+    private static int ParseUnknownMetric(string value) => value == "-1"
+        ? -1
+        : int.Parse(value, CultureInfo.InvariantCulture);
 
     private static byte[] CreateProbeWorkbook(int rows, int columns, int uniqueStrings, int styles,
         int pictures = 0) => CreateProbeWorkbook<XSSFWorkbook>(rows, columns, uniqueStrings, styles, pictures);
@@ -1721,29 +1781,42 @@ public sealed class ExcelP0RegressionTest
 
     private sealed class ProbeOutput
     {
-        public ProbeOutput(string mode, string status, long inputBytes, int rows, int sharedStrings,
-            int styles, int pictures, long elapsedMilliseconds, long peakWorkingSet)
+        public ProbeOutput(string mode, string status, long inputBytes, int sheets, int rows, int columns,
+            int cells, int importedRows, int sharedStrings, int styles, int pictures, long elapsedMilliseconds,
+            long peakWorkingSet, int exitCode, string inputSha256)
         {
             Mode = mode;
             Status = status;
             InputBytes = inputBytes;
+            Sheets = sheets;
             Rows = rows;
+            Columns = columns;
+            Cells = cells;
+            ImportedRows = importedRows;
             SharedStrings = sharedStrings;
             Styles = styles;
             Pictures = pictures;
             ElapsedMilliseconds = elapsedMilliseconds;
             PeakWorkingSet = peakWorkingSet;
+            ExitCode = exitCode;
+            InputSha256 = inputSha256;
         }
 
         public string Mode { get; }
         public string Status { get; }
         public long InputBytes { get; }
+        public int Sheets { get; }
         public int Rows { get; }
+        public int Columns { get; }
+        public int Cells { get; }
+        public int ImportedRows { get; }
         public int SharedStrings { get; }
         public int Styles { get; }
         public int Pictures { get; }
         public long ElapsedMilliseconds { get; }
         public long PeakWorkingSet { get; }
+        public int ExitCode { get; }
+        public string InputSha256 { get; }
     }
 
     private static byte[] CreateWorkbook<TWorkbook>(Action<TWorkbook> configure)

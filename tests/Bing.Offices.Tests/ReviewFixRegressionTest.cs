@@ -135,6 +135,29 @@ public sealed class ReviewFixRegressionTest
     }
 
     /// <summary>
+    /// 测试 - Document Factory 应合并请求级配置并保留非目标方向的文档配置。
+    /// </summary>
+    [Fact]
+    public void MappingDocumentFactory_RequestConfiguration_ShouldMergeOnlySelectedDirection()
+    {
+        // Arrange
+        var document = new ExcelMappingDocument
+        {
+            Import = Configuration("文档标题"),
+            Export = Configuration("导出标题")
+        };
+        var requestConfiguration = Configuration("请求标题");
+
+        // Act
+        var result = ExcelMappingDocumentFactory.Create<ReviewRow>(document, requestConfiguration,
+            MappingDirection.Import);
+
+        // Assert
+        Assert.Equal("请求标题", Assert.Single(result.Import.Columns).Title);
+        Assert.Equal("导出标题", Assert.Single(result.Export.Columns).Title);
+    }
+
+    /// <summary>
     /// 测试 - JSON/XML writer 输出的 v2 文档应能重新加载为等价模型。
     /// </summary>
     [Fact]
@@ -456,6 +479,58 @@ public sealed class ReviewFixRegressionTest
     }
 
     /// <summary>
+    /// 测试 - Provider SPI 默认缓存应保留命中，并在默认容量后重建租户计划。
+    /// </summary>
+    [Fact]
+    public void MappingPlan_ProviderDefaultCache_ShouldRetainThenEvictPlans()
+    {
+        // Arrange
+        var factory = ExcelMappingPlanFactoryProvider.CreateDefault();
+        var firstDocument = new ExcelMappingDocument { TenantId = "tenant-a", Import = Configuration("A") };
+
+        // Act
+        var first = factory.Create<ReviewRow>(firstDocument, MappingDirection.Import);
+        var hit = factory.Create<ReviewRow>(firstDocument, MappingDirection.Import);
+        foreach (var index in Enumerable.Range(1, 256))
+            _ = factory.Create<ReviewRow>(new ExcelMappingDocument
+            {
+                TenantId = $"tenant-{index}",
+                Import = Configuration($"Column-{index}")
+            }, MappingDirection.Import);
+        var rebuilt = factory.Create<ReviewRow>(firstDocument, MappingDirection.Import);
+
+        // Assert
+        Assert.Same(first, hit);
+        Assert.NotSame(first, rebuilt);
+        Assert.Equal("A", Assert.Single(rebuilt.Columns).Title);
+    }
+
+    /// <summary>
+    /// 测试 - Provider SPI 的显式缓存容量应实际生效，并在容量不足时重建最早的租户计划。
+    /// </summary>
+    [Fact]
+    public void MappingPlan_ProviderCacheCapacity_ShouldDriveEviction()
+    {
+        // Arrange
+        var factory = ExcelMappingPlanFactoryProvider.CreateDefault(cacheCapacity: 2);
+        var firstDocument = new ExcelMappingDocument { TenantId = "tenant-a", Import = Configuration("A") };
+        var secondDocument = new ExcelMappingDocument { TenantId = "tenant-b", Import = Configuration("B") };
+        var thirdDocument = new ExcelMappingDocument { TenantId = "tenant-c", Import = Configuration("C") };
+
+        // Act
+        var first = factory.Create<ReviewRow>(firstDocument, MappingDirection.Import);
+        var second = factory.Create<ReviewRow>(secondDocument, MappingDirection.Import);
+        var secondHit = factory.Create<ReviewRow>(secondDocument, MappingDirection.Import);
+        _ = factory.Create<ReviewRow>(thirdDocument, MappingDirection.Import);
+        var rebuilt = factory.Create<ReviewRow>(firstDocument, MappingDirection.Import);
+
+        // Assert
+        Assert.Same(second, secondHit);
+        Assert.NotSame(first, rebuilt);
+        Assert.Equal("A", Assert.Single(rebuilt.Columns).Title);
+    }
+
+    /// <summary>
     /// 测试 - v1 JSON/XML 归一化时应返回非阻断迁移诊断。
     /// </summary>
     [Fact]
@@ -476,6 +551,8 @@ public sealed class ReviewFixRegressionTest
         Assert.Equal(2, xmlDocument.Version);
         Assert.NotNull(jsonDocument.Import);
         Assert.NotNull(xmlDocument.Export);
+        Assert.Null(jsonDocument.Export);
+        Assert.Null(xmlDocument.Import);
         Assert.Contains(jsonDiagnostics, diagnostic => diagnostic.Code == "V1_MIGRATED"
             && diagnostic.Path == "$");
         Assert.Contains(xmlDiagnostics, diagnostic => diagnostic.Code == "V1_MIGRATED"
@@ -750,21 +827,21 @@ public sealed class ReviewFixRegressionTest
     }
 
     /// <summary>
-    /// 测试 - Core 默认注册应提供计划工厂，且 AddNpoi 不得覆盖调用方预注册的替换实现。
+    /// 测试 - Core 默认注册应提供计划工厂，且 NPOI 注册不得覆盖调用方预注册的替换实现。
     /// </summary>
     [Fact]
     public void MappingPlanFactory_DiDefaultAndReplacement_ShouldPreserveOwnershipBoundary()
     {
         // Arrange
         var defaultServices = new ServiceCollection();
-        defaultServices.AddNpoi();
+        defaultServices.AddBingOfficesNpoi();
         using var defaultProvider = defaultServices.BuildServiceProvider();
         var replacement = new ExcelMappingPlanFactory(cacheCapacity: 3);
         var replacementServices = new ServiceCollection();
         replacementServices.AddSingleton<IExcelMappingPlanFactory>(replacement);
 
         // Act
-        replacementServices.AddNpoi();
+        replacementServices.AddBingOfficesNpoi();
         using var replacementProvider = replacementServices.BuildServiceProvider();
 
         // Assert

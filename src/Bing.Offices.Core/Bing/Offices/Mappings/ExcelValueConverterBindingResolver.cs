@@ -10,7 +10,7 @@ namespace Bing.Offices.Mappings;
 /// <summary>
 /// 统一解析并缓存值转换器能力。
 /// </summary>
-public static class ExcelValueConverterBindingResolver
+internal static class ExcelValueConverterBindingResolver
 {
     private static readonly ConditionalWeakTable<IExcelValueConverter,
         ConcurrentDictionary<Type, bool>> Capabilities = new();

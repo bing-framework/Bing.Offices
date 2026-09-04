@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Reflection;
 using System.Text;
 using Bing.Offices.Attributes;
@@ -16,7 +16,7 @@ namespace Bing.Offices.Csv;
 /// <summary>
 /// 基于类型映射的 CSV 流式导出器。
 /// </summary>
-public sealed class CsvEntityExporter : ICsvExporter
+internal sealed partial class CsvEntityExporter : ICsvExporter
 {
     /// <summary>按优先级用于导出字段的值转换器集合。</summary>
     private readonly IReadOnlyList<IExcelValueConverter> _valueConverters;
@@ -216,11 +216,10 @@ public sealed class CsvEntityExporter : ICsvExporter
         public IExcelDynamicMappingColumn DynamicColumn { get; }
     }
 }
-
 /// <summary>
 /// 基于类型映射的 CSV 流式导入器。
 /// </summary>
-public sealed class CsvEntityImporter : ICsvImporter
+internal sealed partial class CsvEntityImporter : ICsvImporter
 {
     /// <summary>按优先级用于导入字段的值转换器集合。</summary>
     private readonly IReadOnlyList<IExcelValueConverter> _valueConverters;
@@ -616,151 +615,4 @@ public sealed class CsvEntityImporter : ICsvImporter
         StringComparison.CurrentCultureIgnoreCase => StringComparer.CurrentCultureIgnoreCase,
         _ => throw new ArgumentOutOfRangeException(nameof(comparison))
     };
-
-}
-
-/// <summary>表示 CSV 表头无法与当前映射计划匹配。</summary>
-internal sealed class CsvInvalidHeaderException : InvalidOperationException
-{
-    /// <summary>使用表头结构错误消息初始化异常。</summary>
-    /// <param name="message">描述无效表头的消息。</param>
-    public CsvInvalidHeaderException(string message) : base(message) { }
-}
-
-/// <summary>表示 CSV 输入超出配置的资源限制。</summary>
-internal sealed class CsvResourceLimitException : InvalidOperationException
-{
-    /// <summary>使用资源限制错误消息初始化异常。</summary>
-    /// <param name="message">描述超出资源限制的消息。</param>
-    public CsvResourceLimitException(string message) : base(message) { }
-}
-
-/// <summary>
-/// RFC 4180 风格 CSV 记录读取器。
-/// </summary>
-internal static class CsvRecordReader
-{
-    /// <summary>按 RFC 4180 规则延迟读取调用方拥有的文本读取器。</summary>
-    /// <param name="reader">调用方负责释放的源文本读取器。</param>
-    /// <param name="delimiter">字段分隔符。</param>
-    /// <param name="quote">字段引用字符。</param>
-    /// <param name="cancellationToken">每条记录读取前检查的取消令牌。</param>
-    /// <returns>按出现顺序产生的 CSV 记录字段集合。</returns>
-    public static IEnumerable<IReadOnlyList<string>> Read(TextReader reader, char delimiter, char quote,
-        CancellationToken cancellationToken)
-    {
-        var configuration = new CsvConfiguration(CultureInfo.InvariantCulture)
-        {
-            Delimiter = delimiter.ToString(),
-            Quote = quote,
-            HasHeaderRecord = false,
-            Mode = CsvMode.RFC4180,
-            BadDataFound = _ => throw new InvalidOperationException("CSV 包含不符合 RFC 4180 的字段。")
-        };
-        using var parser = new CsvParser(reader, configuration, true);
-        while (parser.Read())
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            yield return parser.Record;
-        }
-    }
-}
-
-/// <summary>对不可定位的 CSV 源流施加读取字节上限且不拥有底层流的包装器。</summary>
-internal sealed class CsvLimitedReadStream : Stream
-{
-    /// <summary>由调用方拥有且不会由包装器释放的底层输入流。</summary>
-    private readonly Stream _inner;
-    /// <summary>允许从底层流读取的最大字节数。</summary>
-    private readonly long _maxBytes;
-    /// <summary>当前已从底层流读取的累计字节数。</summary>
-    private long _readBytes;
-
-    /// <summary>创建对底层输入流实施字节上限的包装器。</summary>
-    /// <param name="inner">由调用方负责释放的底层输入流。</param>
-    /// <param name="maxBytes">允许读取的最大字节数。</param>
-    public CsvLimitedReadStream(Stream inner, long maxBytes)
-    {
-        _inner = inner;
-        _maxBytes = maxBytes;
-    }
-
-    /// <inheritdoc />
-    public override bool CanRead => _inner.CanRead;
-    /// <inheritdoc />
-    public override bool CanSeek => false;
-    /// <inheritdoc />
-    public override bool CanWrite => false;
-    /// <inheritdoc />
-    public override long Length => throw new NotSupportedException();
-    /// <inheritdoc />
-    public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
-
-    /// <inheritdoc />
-    public override int Read(byte[] buffer, int offset, int count)
-    {
-        if (_readBytes == _maxBytes)
-        {
-            var probe = _inner.ReadByte();
-            if (probe >= 0)
-                throw new CsvResourceLimitException($"CSV 输入超过最大字节数: {_maxBytes}");
-            return 0;
-        }
-        var allowed = (int)Math.Min(count, _maxBytes - _readBytes);
-        var read = _inner.Read(buffer, offset, allowed);
-        _readBytes += read;
-        return read;
-    }
-
-    /// <inheritdoc />
-    public override void Flush() => throw new NotSupportedException();
-    /// <inheritdoc />
-    public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
-    /// <inheritdoc />
-    public override void SetLength(long value) => throw new NotSupportedException();
-    /// <inheritdoc />
-    public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
-    /// <summary>不释放调用方拥有的底层输入流。</summary>
-    /// <param name="disposing">指示释放流程是否由 Dispose 调用触发。</param>
-    protected override void Dispose(bool disposing) { }
-}
-
-/// <summary>
-/// 基于 CsvHelper 的 CSV 记录写入器。
-/// </summary>
-internal static class CsvRecordWriter
-{
-    /// <summary>
-    /// 将一个记录写入调用方拥有的文本写入器。
-    /// </summary>
-    /// <param name="writer">目标文本写入器。</param>
-    /// <param name="fields">记录字段。</param>
-    /// <param name="delimiter">字段分隔符。</param>
-    /// <param name="quote">字段引用字符。</param>
-    /// <param name="newLine">记录换行符。</param>
-    /// <param name="formulaInjectionPolicy">潜在公式字段的处理策略。</param>
-    public static void Write(TextWriter writer, IEnumerable<string> fields, char delimiter, char quote, string newLine,
-        CsvFormulaInjectionPolicy formulaInjectionPolicy)
-    {
-        var configuration = new CsvConfiguration(CultureInfo.InvariantCulture)
-        {
-            Delimiter = delimiter.ToString(),
-            Quote = quote,
-            HasHeaderRecord = false,
-            NewLine = newLine
-        };
-        using var csv = new CsvWriter(writer, configuration, true);
-        foreach (var field in fields)
-            csv.WriteField(ProtectFormula(field ?? string.Empty, formulaInjectionPolicy));
-        csv.NextRecord();
-    }
-
-    /// <summary>按照配置策略转义可能被电子表格解释为公式的字段。</summary>
-    /// <param name="value">待写入的字段文本。</param>
-    /// <param name="policy">潜在公式字段的处理策略。</param>
-    /// <returns>安全写入 CSV 的字段文本。</returns>
-    private static string ProtectFormula(string value, CsvFormulaInjectionPolicy policy) =>
-        policy == CsvFormulaInjectionPolicy.Escape && value.Length > 0 && "=+-@".IndexOf(value[0]) >= 0
-            ? $"'{value}"
-            : value;
 }

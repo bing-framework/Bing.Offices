@@ -33,6 +33,8 @@ public static class ExcelMappingDocumentFactory
 
         var directionConfiguration = document == null ? null :
             direction == MappingDirection.Import ? document.Import : document.Export;
+        var normalizedDirectionConfiguration = MappingConfigurationMerger.Merge(directionConfiguration,
+            requestConfiguration, MappingSourceKind.Request);
         return new ExcelMappingDocument
         {
             Version = document?.Version ?? 2,
@@ -40,10 +42,10 @@ public static class ExcelMappingDocumentFactory
             ConfigurationVersion = document?.ConfigurationVersion,
             UseConventionFallback = document?.UseConventionFallback ?? false,
             Import = direction == MappingDirection.Import
-                ? CloneOrNull(directionConfiguration)
+                ? CloneOrNull(normalizedDirectionConfiguration)
                 : CloneOrNull(document?.Import),
             Export = direction == MappingDirection.Export
-                ? CloneOrNull(directionConfiguration)
+                ? CloneOrNull(normalizedDirectionConfiguration)
                 : CloneOrNull(document?.Export)
         };
     }
