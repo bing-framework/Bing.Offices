@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.ExceptionServices;
 using Bing.Offices.Conversions;
 using Bing.Offices.Imports;
 using Bing.Offices.Mappings;
@@ -89,7 +90,24 @@ internal sealed class CsvPropertyBinding
         if (property == null)
             throw new InvalidOperationException($"无法解析映射属性: {mapping.Name}");
         return new CsvPropertyBinding(mapping, property, instance => property.GetValue(instance),
-            (instance, value) => property.SetValue(instance, value),
+            (instance, value) => SetPropertyValue(property, instance, value),
             property.GetCustomAttributes<Attribute>().ToArray());
+    }
+
+    /// <summary>写入 CSV 实体属性并解包反射调用产生的目标异常。</summary>
+    /// <param name="property">目标属性。</param>
+    /// <param name="instance">目标实体。</param>
+    /// <param name="value">待写入的值。</param>
+    private static void SetPropertyValue(PropertyInfo property, object instance, object value)
+    {
+        try
+        {
+            property.SetValue(instance, value);
+        }
+        catch (TargetInvocationException exception) when (exception.InnerException != null)
+        {
+            ExceptionDispatchInfo.Capture(exception.InnerException).Throw();
+            throw;
+        }
     }
 }

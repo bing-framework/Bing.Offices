@@ -171,21 +171,20 @@ public sealed class ExcelSheetImportBuilder<TItem> where TItem : class, new()
     private int _dataRowStartIndex = 1;
     private IReadOnlyList<Exports.ExcelDynamicColumnDefinition> _dynamicColumns =
         Array.Empty<Exports.ExcelDynamicColumnDefinition>();
-    private bool _headerMatch = true;
+    private bool _requireExpectedHeaders = true;
     private ValidateMode _validateMode = ValidateMode.StopOnFirstFailure;
     private System.Globalization.CultureInfo _culture = System.Globalization.CultureInfo.InvariantCulture;
-    private Configurations.ExcelMappingConfiguration _documentMappingConfiguration;
     private Configurations.ExcelMappingConfiguration _requestMappingConfiguration;
     private Configurations.ExcelMappingDocument _mappingDocument;
     private Expression<Func<TItem, IDictionary<string, object>>> _dynamicTarget;
-    private int _maxColumnLength = 100;
+    private int _maxReadColumns = 100;
     private ExcelReadColumnRange _readColumnRange;
     private ExcelNameComparison _headerComparison = ExcelNameComparison.OrdinalIgnoreCase;
     private ExcelWhitespacePolicy _headerWhitespace = ExcelWhitespacePolicy.Trim;
     private ExcelWhitespacePolicy _bodyWhitespace = ExcelWhitespacePolicy.Trim;
     private bool _failOnUnknownDynamicColumns;
-    private bool _enabledEmptyLine;
-    private bool _ignoreEmptyLineAfterData;
+    private bool _reportEmptyRows;
+    private bool _stopAtFirstEmptyRow;
 
     internal ExcelSheetImportBuilder(ExcelSheetSelector selector, Expression target)
     {
@@ -229,18 +228,18 @@ public sealed class ExcelSheetImportBuilder<TItem> where TItem : class, new()
     /// <summary>
     /// 设置是否要求固定列全部存在。
     /// </summary>
-    public ExcelSheetImportBuilder<TItem> HeaderMatch(bool value)
+    public ExcelSheetImportBuilder<TItem> RequireExpectedHeaders(bool value)
     {
-        _headerMatch = value;
+        _requireExpectedHeaders = value;
         return this;
     }
 
     /// <summary>
     /// 设置最大表头列数安全上限。
     /// </summary>
-    public ExcelSheetImportBuilder<TItem> MaxColumnCount(int value)
+    public ExcelSheetImportBuilder<TItem> MaxReadColumns(int value)
     {
-        _maxColumnLength = value;
+        _maxReadColumns = value;
         return this;
     }
 
@@ -292,18 +291,18 @@ public sealed class ExcelSheetImportBuilder<TItem> where TItem : class, new()
     /// <summary>
     /// 设置是否报告空数据行。
     /// </summary>
-    public ExcelSheetImportBuilder<TItem> EnabledEmptyLine(bool value = true)
+    public ExcelSheetImportBuilder<TItem> ReportEmptyRows(bool value = true)
     {
-        _enabledEmptyLine = value;
+        _reportEmptyRows = value;
         return this;
     }
 
     /// <summary>
     /// 设置是否在首个空行后停止读取。
     /// </summary>
-    public ExcelSheetImportBuilder<TItem> IgnoreEmptyLineAfterData(bool value = true)
+    public ExcelSheetImportBuilder<TItem> StopAtFirstEmptyRow(bool value = true)
     {
-        _ignoreEmptyLineAfterData = value;
+        _stopAtFirstEmptyRow = value;
         return this;
     }
 
@@ -342,16 +341,14 @@ public sealed class ExcelSheetImportBuilder<TItem> where TItem : class, new()
     {
         if (document == null)
             throw new ArgumentNullException(nameof(document));
-        _documentMappingConfiguration = document.Import == null ? null :
-            Configurations.MappingConfigurationCloner.Clone(document.Import, Configurations.MappingSourceKind.Document);
         _mappingDocument = Configurations.MappingDocumentCloner.Clone(document);
         return this;
     }
 
     internal ExcelSheetImportRequest Build()
     {
-        if (_maxColumnLength <= 0)
-            throw new ArgumentOutOfRangeException(nameof(_maxColumnLength));
+        if (_maxReadColumns <= 0)
+            throw new ArgumentOutOfRangeException(nameof(_maxReadColumns));
         if (_headerRowIndex < 0 || _dataRowStartIndex < 0 || _dataRowStartIndex <= _headerRowIndex)
             throw new ArgumentOutOfRangeException(nameof(_dataRowStartIndex));
         if (!Enum.IsDefined(typeof(ValidateMode), _validateMode))
@@ -375,11 +372,11 @@ public sealed class ExcelSheetImportBuilder<TItem> where TItem : class, new()
         var requestConfiguration = Exports.ExcelDynamicColumnCloner.MergeIntoConfiguration(
             _requestMappingConfiguration, _dynamicColumns);
         return new ExcelSheetImportRequest(_name, _selector, typeof(TItem), targetGetter,
-        _headerRowIndex, _dataRowStartIndex, Exports.ExcelDynamicColumnCloner.Clone(_dynamicColumns), _dynamicTarget, _headerMatch, _validateMode, _culture,
+        _headerRowIndex, _dataRowStartIndex, Exports.ExcelDynamicColumnCloner.Clone(_dynamicColumns), _dynamicTarget, _requireExpectedHeaders, _validateMode, _culture,
         requestConfiguration, _mappingDocument,
         dynamicGetter,
-        _maxColumnLength,
-        _failOnUnknownDynamicColumns, _enabledEmptyLine, _ignoreEmptyLineAfterData, _readColumnRange,
+        _maxReadColumns,
+        _failOnUnknownDynamicColumns, _reportEmptyRows, _stopAtFirstEmptyRow, _readColumnRange,
         _headerComparison, _headerWhitespace, _bodyWhitespace);
     }
 }

@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Xml;
 using System.Xml.Linq;
 using System.Xml.Serialization;
+using Bing.Offices.Exceptions;
 
 namespace Bing.Offices.Configurations;
 
@@ -34,7 +35,7 @@ public static class ExcelMappingConfigurationLoader
     /// <param name="json">待加载的 JSON 文本。</param>
     /// <returns>已通过结构和业务规则验证的映射文档。</returns>
     public static ExcelMappingDocument FromJsonDocument(string json)
-        => LoadJsonDocument(json, null, null);
+        => ExecuteConfiguration(() => LoadJsonDocument(json, null, null));
 
 
     /// <summary>
@@ -59,8 +60,7 @@ public static class ExcelMappingConfigurationLoader
     {
         ValidateDirection(direction);
         var items = new List<ExcelMappingDiagnostic>();
-        var configuration = DeserializeV1Json(json);
-        var result = CreateMigratedDocument(configuration, direction);
+        var result = ExecuteConfiguration(() => CreateMigratedDocument(DeserializeV1Json(json), direction));
         items.Add(new ExcelMappingDiagnostic("V1_MIGRATED", "$",
             $"检测到 v1 平铺 JSON，已显式迁移为 v2 {direction} 方向文档。"));
         diagnostics = items;
@@ -91,7 +91,7 @@ public static class ExcelMappingConfigurationLoader
         out IReadOnlyList<ExcelMappingDiagnostic> diagnostics)
     {
         var items = new List<ExcelMappingDiagnostic>();
-        var result = LoadJsonDocument(json, null, items);
+        var result = ExecuteConfiguration(() => LoadJsonDocument(json, null, items));
         diagnostics = items;
         return result;
     }
@@ -103,7 +103,7 @@ public static class ExcelMappingConfigurationLoader
     /// <param name="modelAliases">用于校验模型别名的注册表。</param>
     /// <returns>已通过结构和业务规则验证的映射文档。</returns>
     public static ExcelMappingDocument FromJsonDocument(string json, ExcelModelAliasRegistry modelAliases)
-        => LoadJsonDocument(json, modelAliases, null);
+        => ExecuteConfiguration(() => LoadJsonDocument(json, modelAliases, null));
 
     /// <summary>解析、验证并反序列化 v2 JSON 映射文档。</summary>
     /// <param name="json">待加载的 JSON 文本。</param>
@@ -188,7 +188,7 @@ public static class ExcelMappingConfigurationLoader
     /// <param name="xml">待加载的 XML 文本。</param>
     /// <returns>已通过结构和业务规则验证的映射文档。</returns>
     public static ExcelMappingDocument FromXmlDocument(string xml)
-        => LoadXmlDocument(xml, null, null);
+        => ExecuteConfiguration(() => LoadXmlDocument(xml, null, null));
 
 
     /// <summary>
@@ -213,8 +213,7 @@ public static class ExcelMappingConfigurationLoader
     {
         ValidateDirection(direction);
         var items = new List<ExcelMappingDiagnostic>();
-        var configuration = DeserializeV1Xml(xml);
-        var result = CreateMigratedDocument(configuration, direction);
+        var result = ExecuteConfiguration(() => CreateMigratedDocument(DeserializeV1Xml(xml), direction));
         items.Add(new ExcelMappingDiagnostic("V1_MIGRATED", "/ExcelMappingConfiguration",
             $"检测到 v1 平铺 XML，已显式迁移为 v2 {direction} 方向文档。"));
         diagnostics = items;
@@ -245,7 +244,7 @@ public static class ExcelMappingConfigurationLoader
         out IReadOnlyList<ExcelMappingDiagnostic> diagnostics)
     {
         var items = new List<ExcelMappingDiagnostic>();
-        var result = LoadXmlDocument(xml, null, items);
+        var result = ExecuteConfiguration(() => LoadXmlDocument(xml, null, items));
         diagnostics = items;
         return result;
     }
@@ -257,7 +256,7 @@ public static class ExcelMappingConfigurationLoader
     /// <param name="modelAliases">用于校验模型别名的注册表。</param>
     /// <returns>已通过结构和业务规则验证的映射文档。</returns>
     public static ExcelMappingDocument FromXmlDocument(string xml, ExcelModelAliasRegistry modelAliases)
-        => LoadXmlDocument(xml, modelAliases, null);
+        => ExecuteConfiguration(() => LoadXmlDocument(xml, modelAliases, null));
 
     /// <summary>在禁止 DTD 和外部解析器的设置下解析并验证 v2 XML 映射文档。</summary>
     /// <param name="xml">待加载的 XML 文本。</param>
@@ -314,26 +313,53 @@ public static class ExcelMappingConfigurationLoader
     /// 将 normalized v2 文档写为 JSON。
     /// </summary>
     public static string ToJson(ExcelMappingDocument document)
-    {
-        ExcelMappingDocumentValidator.ValidateDocument(document, null);
-        return JsonSerializer.Serialize(document, new JsonSerializerOptions
+        => ExecuteConfiguration(() =>
         {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            IgnoreNullValues = true,
-            WriteIndented = true
+            ExcelMappingDocumentValidator.ValidateDocument(document, null);
+            return JsonSerializer.Serialize(document, new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                IgnoreNullValues = true,
+                WriteIndented = true
+            });
         });
-    }
 
     /// <summary>
     /// 将 normalized v2 文档写为 XML。
     /// </summary>
     public static string ToXml(ExcelMappingDocument document)
+        => ExecuteConfiguration(() =>
+        {
+            ExcelMappingDocumentValidator.ValidateDocument(document, null);
+            var serializer = new XmlSerializer(typeof(ExcelMappingDocument));
+            using var writer = new Utf8StringWriter();
+            serializer.Serialize(writer, document);
+            return writer.ToString();
+        });
+
+    private static T ExecuteConfiguration<T>(Func<T> action)
     {
-        ExcelMappingDocumentValidator.ValidateDocument(document, null);
-        var serializer = new XmlSerializer(typeof(ExcelMappingDocument));
-        using var writer = new Utf8StringWriter();
-        serializer.Serialize(writer, document);
-        return writer.ToString();
+        try
+        {
+            return action();
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (ArgumentException)
+        {
+            throw;
+        }
+        catch (BingOfficesException)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException
+            && exception is not StackOverflowException)
+        {
+            throw new BingOfficesConfigurationException("映射配置无效。", exception);
+        }
     }
 
     /// <summary>将 v1 平铺方向配置包装为 v2 双方向映射文档。</summary>

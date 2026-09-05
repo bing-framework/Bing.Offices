@@ -4,7 +4,9 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Runtime.ExceptionServices;
 using Bing.Offices.Configurations;
+using Bing.Offices.Exceptions;
 using Bing.Offices.Imports;
 using Bing.Offices.Metadata;
 using Bing.Offices.Npoi.Extensions;
@@ -55,13 +57,47 @@ internal static class NpoiFailureWorkbookWriter
         IWorkbook independentWorkbook = null;
         try
         {
-            if (options.Mode == ExcelImportFailureWorkbookMode.ErrorRowsOnly)
-                outputWorkbook = independentWorkbook = CreateErrorRowsWorkbook(workbook, errors, resolvedSheetRequests,
-                    cancellationToken);
-            else
-                AnnotateErrors(outputWorkbook, errors, options.CommentConflictPolicy);
+            try
+            {
+                if (options.Mode == ExcelImportFailureWorkbookMode.ErrorRowsOnly)
+                    outputWorkbook = independentWorkbook = CreateErrorRowsWorkbook(workbook, errors,
+                        resolvedSheetRequests, cancellationToken);
+                else
+                    AnnotateErrors(outputWorkbook, errors, options.CommentConflictPolicy);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (BingOfficesException)
+            {
+                throw;
+            }
+            catch (Exception exception) when (exception is not OutOfMemoryException
+                && exception is not StackOverflowException)
+            {
+                throw new BingOfficesImportException("失败工作簿内容生成失败。", exception, "NPOI",
+                    BingOfficesStage.Write);
+            }
 
-            WriteFailureSummary(outputWorkbook, errors, cancellationToken);
+            try
+            {
+                WriteFailureSummary(outputWorkbook, errors, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (BingOfficesException)
+            {
+                throw;
+            }
+            catch (Exception exception) when (exception is not OutOfMemoryException
+                && exception is not StackOverflowException)
+            {
+                throw new BingOfficesImportException("失败工作簿错误摘要写入失败。", exception, "NPOI",
+                    BingOfficesStage.Write);
+            }
             var temporaryDirectory = options.TemporaryDirectory ?? Path.GetTempPath();
             try
             {
@@ -69,7 +105,8 @@ internal static class NpoiFailureWorkbookWriter
             }
             catch (Exception exception) when (exception is IOException || exception is UnauthorizedAccessException)
             {
-                throw new IOException("失败工作簿临时目录创建失败。", exception);
+                throw new BingOfficesImportException("失败工作簿临时目录创建失败。", exception, "NPOI",
+                    BingOfficesStage.Open);
             }
             var temporaryPath = Path.Combine(temporaryDirectory, $"bing-offices-failure-{Guid.NewGuid():N}.tmp");
             try
@@ -82,7 +119,8 @@ internal static class NpoiFailureWorkbookWriter
                 }
                 catch (Exception exception) when (exception is IOException || exception is UnauthorizedAccessException)
                 {
-                    throw new IOException("失败工作簿临时文件创建失败。", exception);
+                    throw new BingOfficesImportException("失败工作簿临时文件创建失败。", exception, "NPOI",
+                        BingOfficesStage.Open);
                 }
                 using (output)
                 using (var limitedOutput = new LimitedWriteStream(output, options.MaxSerializedBytes))
@@ -91,29 +129,88 @@ internal static class NpoiFailureWorkbookWriter
                     {
                         outputWorkbook.Write(limitedOutput, false);
                     }
-                    catch (Exception exception)
+                    catch (OperationCanceledException)
                     {
+                        throw;
+                    }
+                    catch (Exception exception) when (exception is not OutOfMemoryException
+                        && exception is not StackOverflowException)
+                    {
+                        var fatalException = FindFatalException(exception);
+                        if (fatalException != null)
+                        {
+                            ExceptionDispatchInfo.Capture(fatalException).Throw();
+                            throw;
+                        }
                         var limitException = FindLimitException(exception);
                         if (limitException != null)
                             throw limitException;
-                        throw new InvalidOperationException("失败工作簿序列化失败。", exception);
+                        if (exception is BingOfficesException)
+                            throw;
+                        throw new BingOfficesImportException("失败工作簿序列化失败。", exception, "NPOI",
+                            BingOfficesStage.Serialize);
                     }
-                    limitedOutput.Flush();
+                    try
+                    {
+                        limitedOutput.Flush();
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
+                    catch (BingOfficesException)
+                    {
+                        throw;
+                    }
+                    catch (Exception exception) when (exception is not OutOfMemoryException
+                        && exception is not StackOverflowException)
+                    {
+                        throw new BingOfficesImportException("失败工作簿序列化写入失败。", exception, "NPOI",
+                            BingOfficesStage.Serialize);
+                    }
                     if (options.MaxSerializedBytes.HasValue && output.Length > options.MaxSerializedBytes.Value)
-                        throw new InvalidOperationException($"失败工作簿超过最大序列化字节数: {options.MaxSerializedBytes.Value}");
+                        throw new BingOfficesResourceLimitException(
+                            $"失败工作簿超过最大序列化字节数: {options.MaxSerializedBytes.Value}",
+                            provider: "NPOI", operation: BingOfficesOperation.Import,
+                            stage: BingOfficesStage.Serialize);
                     cancellationToken.ThrowIfCancellationRequested();
-                    output.Position = 0;
+                    try
+                    {
+                        output.Position = 0;
+                    }
+                    catch (Exception exception) when (exception is not OperationCanceledException
+                        && exception is not OutOfMemoryException && exception is not StackOverflowException)
+                    {
+                        throw new BingOfficesImportException("失败工作簿临时文件读取准备失败。", exception, "NPOI",
+                            BingOfficesStage.Write);
+                    }
                     try
                     {
                         WriteStream(options.Destination, output, cancellationToken);
                     }
-                    catch (Exception exception) when (!(exception is OperationCanceledException))
+                    catch (OperationCanceledException)
                     {
-                        throw new InvalidOperationException("失败工作簿复制到目标流失败。", exception);
+                        throw;
+                    }
+                    catch (BingOfficesException)
+                    {
+                        throw;
+                    }
+                    catch (Exception exception) when (exception is not OutOfMemoryException
+                        && exception is not StackOverflowException)
+                    {
+                        throw new BingOfficesImportException("失败工作簿复制到目标流失败。", exception, "NPOI",
+                            BingOfficesStage.Write);
                     }
                 }
             }
-            catch (Exception exception)
+            catch (OperationCanceledException exception)
+            {
+                DeleteTemporaryFile(options, temporaryPath, exception, fileSystem);
+                throw;
+            }
+            catch (Exception exception) when (exception is not OutOfMemoryException
+                && exception is not StackOverflowException)
             {
                 DeleteTemporaryFile(options, temporaryPath, exception, fileSystem);
                 throw;
@@ -143,24 +240,28 @@ internal static class NpoiFailureWorkbookWriter
         {
             var diagnostic = new ExcelImportFailureDiagnostic("FailureWorkbookTemporaryCleanupFailed",
                 temporaryPath, cleanupException);
+            if (primaryException != null)
+                primaryException.Data["Bing.Offices.FailureWorkbook.TemporaryCleanupException"] = cleanupException;
             if (options.DiagnosticSink != null)
             {
                 try
                 {
                     options.DiagnosticSink(diagnostic);
                 }
-                catch (Exception diagnosticException)
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception diagnosticException) when (diagnosticException is not OutOfMemoryException
+                    && diagnosticException is not StackOverflowException)
                 {
                     Trace.WriteLine($"失败工作簿诊断接收器执行失败: {diagnosticException.GetType().Name}");
                 }
             }
-            else if (primaryException != null)
+            else if (primaryException == null)
             {
-                primaryException.Data["Bing.Offices.FailureWorkbook.TemporaryCleanupException"] = cleanupException;
-            }
-            else
-            {
-                throw new IOException("失败工作簿临时文件清理失败。", cleanupException);
+                throw new BingOfficesImportException("失败工作簿临时文件清理失败。", cleanupException, "NPOI",
+                    BingOfficesStage.Cleanup);
             }
         }
     }
@@ -589,7 +690,8 @@ internal static class NpoiFailureWorkbookWriter
             if (existing != null && conflictPolicy == ExcelImportCommentConflictPolicy.Preserve)
                 continue;
             if (existing != null && conflictPolicy == ExcelImportCommentConflictPolicy.Fail)
-                throw new InvalidOperationException($"单元格已有失败批注目标: {cell.Address}");
+                throw new BingOfficesConfigurationException($"单元格已有失败批注目标: {cell.Address}",
+                    stage: BingOfficesStage.Plan);
             var text = error.Message ?? string.Empty;
             if (existing != null && conflictPolicy == ExcelImportCommentConflictPolicy.Append)
                 text = existing.String.String + Environment.NewLine + text;
@@ -635,14 +737,33 @@ internal static class NpoiFailureWorkbookWriter
     /// </summary>
     /// <param name="exception">待检查的异常。</param>
     /// <returns>找到的大小限制异常；否则返回 null。</returns>
-    private static InvalidOperationException FindLimitException(Exception exception)
+    private static BingOfficesResourceLimitException FindLimitException(Exception exception)
     {
         while (exception != null)
         {
+            if (exception is BingOfficesResourceLimitException resourceLimitException)
+                return resourceLimitException;
             if (exception is InvalidOperationException invalidOperationException
                 && invalidOperationException.Message.StartsWith("失败工作簿超过最大序列化字节数:",
                     StringComparison.Ordinal))
-                return invalidOperationException;
+                return new BingOfficesResourceLimitException(invalidOperationException.Message,
+                    invalidOperationException, "NPOI", BingOfficesOperation.Import,
+                    BingOfficesStage.Serialize);
+            exception = exception.InnerException;
+        }
+        return null;
+    }
+
+    /// <summary>查找被 NPOI 包装的取消或致命异常。</summary>
+    /// <param name="exception">序列化阶段捕获的异常。</param>
+    /// <returns>内部取消或致命异常；不存在时返回 null。</returns>
+    private static Exception FindFatalException(Exception exception)
+    {
+        while (exception != null)
+        {
+            if (exception is OperationCanceledException || exception is OutOfMemoryException
+                || exception is StackOverflowException)
+                return exception;
             exception = exception.InnerException;
         }
         return null;

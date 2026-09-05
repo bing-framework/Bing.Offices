@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 using Bing.Offices.Attributes;
 using Bing.Offices.Exports;
+using Bing.Offices.Exceptions;
 using Bing.Offices.Mappings;
 using Bing.Offices.Providers;
 using Bing.Offices.Npoi.Extensions;
@@ -50,7 +51,27 @@ internal sealed class NpoiExportSheetWriter
         {
             cancellationToken.ThrowIfCancellationRequested();
             var row = sheet.GetRow(rowIndex) ?? sheet.CreateRow(rowIndex);
-            var dynamicValues = request.DynamicGetter?.Invoke(item);
+            IDictionary<string, object> dynamicValues;
+            try
+            {
+                dynamicValues = request.DynamicGetter?.Invoke(item);
+            }
+            catch (BingOfficesException)
+            {
+                throw;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception exception) when (exception is not OutOfMemoryException
+                && exception is not StackOverflowException)
+            {
+                var dynamicProperty = columns.FirstOrDefault(column => column.IsDynamic)?.Property.Name;
+                throw new BingOfficesExportException("Excel 动态值读取器执行失败。", exception, "NPOI",
+                    BingOfficesStage.Validate, sheet.SheetName, rowIndex + 1, null, dynamicProperty,
+                    BingOfficesErrorCode.UserExtensionFailed);
+            }
             ValidateUnknownDynamicValues(request, dynamicValues, dynamicKeys);
             for (var columnIndex = 0; columnIndex < columns.Count; columnIndex++)
             {
@@ -83,7 +104,8 @@ internal sealed class NpoiExportSheetWriter
             return;
         var unknown = values.Keys.FirstOrDefault(key => !dynamicKeys.Contains(key));
         if (unknown != null)
-            throw new InvalidOperationException($"动态值未声明: {unknown}");
+            throw new BingOfficesConfigurationException($"动态值未声明: {unknown}",
+                stage: BingOfficesStage.Validate);
     }
 
     /// <summary>
@@ -242,7 +264,8 @@ internal sealed class NpoiExportSheetWriter
         if (string.Equals(key, "body", StringComparison.OrdinalIgnoreCase)
             || string.Equals(key, "default", StringComparison.OrdinalIgnoreCase))
             return new Bing.Offices.Styles.ExcelCellStyle();
-        throw new InvalidOperationException($"未注册的{(header ? "表头" : "正文")}样式键: {key}");
+        throw new BingOfficesConfigurationException($"未注册的{(header ? "表头" : "正文")}样式键: {key}",
+            stage: BingOfficesStage.Plan);
     }
 
     /// <summary>
@@ -297,7 +320,8 @@ internal sealed class NpoiExportSheetWriter
                 case ExcelCommentConflictPolicy.Preserve:
                     return;
                 case ExcelCommentConflictPolicy.Fail:
-                    throw new InvalidOperationException($"单元格已有批注: {cell.Address}");
+                    throw new BingOfficesConfigurationException($"单元格已有批注: {cell.Address}",
+                        stage: BingOfficesStage.Plan);
                 case ExcelCommentConflictPolicy.Append:
                     comment = new ExcelComment(existing.String.String + Environment.NewLine + comment.Text,
                         string.IsNullOrWhiteSpace(comment.Author) ? existing.Author : comment.Author, comment.Visible);
@@ -454,16 +478,56 @@ internal sealed class NpoiExportSheetWriter
         CultureInfo culture) where T : class, new()
     {
         object value;
-        if (column.IsDynamic)
+        try
         {
-            var values = dynamicValues ?? column.Getter(item) as IDictionary<string, object>;
-            value = values != null && values.TryGetValue(column.Key, out var dynamicValue)
-                ? dynamicValue
-                : null;
+            if (column.IsDynamic)
+            {
+                var values = dynamicValues ?? column.Getter(item) as IDictionary<string, object>;
+                value = values != null && values.TryGetValue(column.Key, out var dynamicValue)
+                    ? dynamicValue
+                    : null;
+            }
+            else
+                value = column.Getter(item);
         }
-        else
-            value = column.Getter(item);
+        catch (BingOfficesException)
+        {
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException
+            && exception is not StackOverflowException)
+        {
+            throw new BingOfficesExportException("Excel 属性读取器执行失败。", exception, "NPOI",
+                BingOfficesStage.Validate, sheetName, rowIndex, columnIndex, column.Property.Name,
+                BingOfficesErrorCode.UserExtensionFailed);
+        }
         value = column.ConvertTo(value, sheetName, rowIndex, columnIndex, culture);
-        column.WriteValue(cell, value);
+        try
+        {
+            column.WriteValue(cell, value);
+        }
+        catch (BingOfficesException)
+        {
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (NotSupportedException)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException
+            && exception is not StackOverflowException)
+        {
+            throw new BingOfficesExportException("Excel 值格式化写入失败。", exception, "NPOI",
+                BingOfficesStage.Write, sheetName, rowIndex, columnIndex, column.Property.Name,
+                BingOfficesErrorCode.UserExtensionFailed);
+        }
     }
 }

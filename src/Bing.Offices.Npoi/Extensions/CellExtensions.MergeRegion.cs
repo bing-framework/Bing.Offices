@@ -6,7 +6,7 @@ namespace Bing.Offices.Npoi.Extensions;
 /// <summary>
 /// 单元格合并和合并区域解析扩展。
 /// </summary>
-internal static partial class CellExtensions
+public static partial class CellExtensions
 {
     /// <summary>
     /// 合并两个单元格所在区域，并按选项删除或吸收相交的既有合并区域。

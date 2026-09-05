@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Bing.Offices.Attributes;
 using Bing.Offices.Configurations;
+using Bing.Offices.Exceptions;
 using Bing.Offices.Imports;
 using Bing.Offices.Mappings;
 using Xunit;
@@ -399,8 +400,13 @@ public sealed class MappingConfigurationPatchTest
         const string valueMapping = "{\"version\":2,\"import\":{\"columns\":[{\"propertyName\":\"Name\",\"valueMappingMergeMode\":99}]}}";
 
         // Act / Assert
-        Assert.Throws<InvalidOperationException>(() => ExcelMappingConfigurationLoader.FromJsonDocument(validation));
-        Assert.Throws<InvalidOperationException>(() => ExcelMappingConfigurationLoader.FromJsonDocument(valueMapping));
+        var validationException = Assert.Throws<BingOfficesConfigurationException>(() =>
+            ExcelMappingConfigurationLoader.FromJsonDocument(validation));
+        var valueMappingException = Assert.Throws<BingOfficesConfigurationException>(() =>
+            ExcelMappingConfigurationLoader.FromJsonDocument(valueMapping));
+
+        Assert.Equal(BingOfficesErrorCode.ConfigurationInvalid, validationException.Code);
+        Assert.Equal(BingOfficesErrorCode.ConfigurationInvalid, valueMappingException.Code);
     }
 
     private sealed class PatchRow

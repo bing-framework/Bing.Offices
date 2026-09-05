@@ -8,7 +8,7 @@ namespace Bing.Offices.Npoi.Extensions;
 /// <summary>
 /// NPOI单元格(<see cref="NPOI.SS.UserModel.ICell"/>) 扩展
 /// </summary>
-internal static partial class CellExtensions
+public static partial class CellExtensions
 {
     /// <summary>
     /// IEEE 754 双精度可精确表示的最大整数。

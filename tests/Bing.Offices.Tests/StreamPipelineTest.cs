@@ -13,6 +13,7 @@ using Bing.Offices.Conversions;
 using Bing.Offices.Csv;
 using Bing.Offices.Exports;
 using Bing.Offices.Extensions;
+using Bing.Offices.Exceptions;
 using Bing.Offices.Imports;
 using Bing.Offices.Mappings;
 using Bing.Offices.Npoi;
@@ -156,7 +157,10 @@ public class StreamPipelineTest
         var action = () => NpoiStreamCopier.Copy(source, destination, CancellationToken.None, 2);
 
         // Assert
-        var exception = Assert.Throws<InvalidOperationException>(action);
+        var exception = Assert.Throws<BingOfficesResourceLimitException>(action);
+        Assert.Equal(BingOfficesErrorCode.ResourceLimitExceeded, exception.Code);
+        Assert.Equal(BingOfficesOperation.Import, exception.Operation);
+        Assert.Equal(BingOfficesStage.Open, exception.Stage);
         Assert.Equal("输入工作簿超过最大字节数: 2", exception.Message);
         Assert.Empty(destination.ToArray());
     }
@@ -398,15 +402,179 @@ public class StreamPipelineTest
         }));
 
         // Act
-        var result = new NpoiExcelImporter(new IExcelValidationRule[] { new ThrowingExcelValidationRule() })
-            .Import(source, CreateSingleSheetRequest<ThrowingValidationRow>());
+        var exception = Assert.Throws<BingOfficesImportException>(() =>
+            new NpoiExcelImporter(new IExcelValidationRule[] { new ThrowingExcelValidationRule() })
+                .Import(source, CreateSingleSheetRequest<ThrowingValidationRow>()));
 
         // Assert
-        Assert.Empty(result.Workbook.Items);
-        var error = Assert.Single(result.Errors);
-        Assert.Equal(ExcelImportErrorCode.Validation, error.Code);
-        Assert.Equal(nameof(ThrowingValidationRow.Code), error.PropertyName);
-        Assert.Equal("校验器异常", error.Message);
+        Assert.Equal(BingOfficesErrorCode.UserExtensionFailed, exception.Code);
+        Assert.Equal(BingOfficesOperation.Import, exception.Operation);
+        Assert.Equal(BingOfficesStage.Validate, exception.Stage);
+        Assert.Equal(nameof(ThrowingValidationRow.Code), exception.PropertyName);
+        Assert.IsType<InvalidOperationException>(exception.InnerException);
+        Assert.Equal("校验器异常", exception.InnerException.Message);
+    }
+
+    /// <summary>
+    /// 测试 - Excel 导入值转换器抛出取消或致命内存异常时，应保留原始异常。
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Import_ValueConverterFatalOrCancellation_ShouldPreserveOriginalException(bool outOfMemory)
+    {
+        // Arrange
+        using var cancellation = new CancellationTokenSource();
+        Exception expected = outOfMemory
+            ? new OutOfMemoryException("Excel 导入转换器内存异常")
+            : new OperationCanceledException(cancellation.Token);
+        var mapping = new ExcelMappingConfiguration
+        {
+            Columns = new List<ExcelColumnConfiguration>
+            {
+                new() { PropertyName = nameof(StreamRow.Name), ConverterName = "propagating" }
+            }
+        };
+        using var source = new MemoryStream(CreateWorkbook(workbook =>
+        {
+            var sheet = workbook.CreateSheet("Data");
+            sheet.CreateRow(0).CreateCell(0).SetCellValue(nameof(StreamRow.Name));
+            sheet.CreateRow(1).CreateCell(0).SetCellValue("value");
+        }));
+
+        // Act
+        var action = () => new NpoiExcelImporter(
+            valueConverters: new IExcelValueConverter[] { new PropagatingValueConverter(expected) })
+            .Import(source, CreateSingleSheetRequest<StreamRow>(sheet => sheet.Mapping(mapping)));
+
+        // Assert
+        if (outOfMemory)
+            Assert.Same(expected, Assert.Throws<OutOfMemoryException>(action));
+        else
+        {
+            var exception = Assert.Throws<OperationCanceledException>(action);
+            Assert.Same(expected, exception);
+            Assert.Equal(cancellation.Token, exception.CancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// 测试 - Excel 导出值转换器抛出取消或致命内存异常时，应保留原始异常。
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Export_ValueConverterFatalOrCancellation_ShouldPreserveOriginalException(bool outOfMemory)
+    {
+        // Arrange
+        using var cancellation = new CancellationTokenSource();
+        Exception expected = outOfMemory
+            ? new OutOfMemoryException("Excel 导出转换器内存异常")
+            : new OperationCanceledException(cancellation.Token);
+        var mapping = new ExcelMappingConfiguration
+        {
+            Columns = new List<ExcelColumnConfiguration>
+            {
+                new() { PropertyName = nameof(StreamRow.Name), ConverterName = "propagating" }
+            }
+        };
+        var request = CreateSingleSheetExportRequest(new[] { new StreamRow { Name = "value" } },
+            configure: sheet => sheet.Mapping(mapping));
+        using var destination = new MemoryStream();
+
+        // Act
+        var action = () => new NpoiExcelExporter(
+            new IExcelValueConverter[] { new PropagatingValueConverter(expected) })
+            .Export(request, destination, cancellation.Token);
+
+        // Assert
+        if (outOfMemory)
+            Assert.Same(expected, Assert.Throws<OutOfMemoryException>(action));
+        else
+        {
+            var exception = Assert.Throws<OperationCanceledException>(action);
+            Assert.Same(expected, exception);
+            Assert.Equal(cancellation.Token, exception.CancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// 测试 - Excel 自定义校验器抛出取消或致命内存异常时，应保留原始异常。
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Import_ValidationExtensionFatalOrCancellation_ShouldPreserveOriginalException(bool outOfMemory)
+    {
+        // Arrange
+        using var cancellation = new CancellationTokenSource();
+        Exception expected = outOfMemory
+            ? new OutOfMemoryException("Excel 校验器内存异常")
+            : new OperationCanceledException(cancellation.Token);
+        using var source = new MemoryStream(CreateWorkbook(workbook =>
+        {
+            var sheet = workbook.CreateSheet("Data");
+            sheet.CreateRow(0).CreateCell(0).SetCellValue(nameof(PropagatingValidationRow.Code));
+            sheet.CreateRow(1).CreateCell(0).SetCellValue("value");
+        }));
+
+        // Act
+        var action = () => new NpoiExcelImporter(
+            validationRules: new IExcelValidationRule[] { new PropagatingValidationRule(expected) })
+            .Import(source, CreateSingleSheetRequest<PropagatingValidationRow>());
+
+        // Assert
+        if (outOfMemory)
+            Assert.Same(expected, Assert.Throws<OutOfMemoryException>(action));
+        else
+        {
+            var exception = Assert.Throws<OperationCanceledException>(action);
+            Assert.Same(expected, exception);
+            Assert.Equal(cancellation.Token, exception.CancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// 测试 - Excel 属性 setter 抛出取消或致命内存异常时，应保留原始异常。
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Import_PropertySetterFatalOrCancellation_ShouldPreserveOriginalException(bool outOfMemory)
+    {
+        // Arrange
+        using var cancellation = new CancellationTokenSource();
+        Exception expected = outOfMemory
+            ? new OutOfMemoryException("Excel setter 内存异常")
+            : new OperationCanceledException(cancellation.Token);
+        PropagatingSetterRow.SetterException = expected;
+        using var source = new MemoryStream(CreateWorkbook(workbook =>
+        {
+            var sheet = workbook.CreateSheet("Data");
+            sheet.CreateRow(0).CreateCell(0).SetCellValue(nameof(PropagatingSetterRow.Code));
+            sheet.CreateRow(1).CreateCell(0).SetCellValue("value");
+        }));
+
+        try
+        {
+            // Act
+            var action = () => new NpoiExcelImporter().Import(source,
+                CreateSingleSheetRequest<PropagatingSetterRow>());
+
+            // Assert
+            if (outOfMemory)
+                Assert.Same(expected, Assert.Throws<OutOfMemoryException>(action));
+            else
+            {
+                var exception = Assert.Throws<OperationCanceledException>(action);
+                Assert.Same(expected, exception);
+                Assert.Equal(cancellation.Token, exception.CancellationToken);
+            }
+        }
+        finally
+        {
+            PropagatingSetterRow.SetterException = null;
+        }
     }
 
     /// <summary>
@@ -427,7 +595,11 @@ public class StreamPipelineTest
         var action = () => new NpoiExcelImporter().Import(source, CreateSingleSheetRequest<UnboundValidationRow>());
 
         // Assert
-        Assert.Throws<InvalidOperationException>(action);
+        var exception = Assert.Throws<BingOfficesConfigurationException>(action);
+        Assert.Equal(BingOfficesErrorCode.ConfigurationInvalid, exception.Code);
+        Assert.Equal(BingOfficesOperation.Configuration, exception.Operation);
+        Assert.Equal(BingOfficesStage.Plan, exception.Stage);
+        Assert.IsType<InvalidOperationException>(exception.InnerException);
     }
 
     /// <summary>
@@ -659,7 +831,10 @@ public class StreamPipelineTest
         // Assert
         Assert.Equal("JSON 名称", Assert.Single(jsonConfiguration.Columns).Title);
         Assert.Equal("XML 名称", Assert.Single(xmlConfiguration.Columns).Title);
-            Assert.Throws<System.Xml.XmlException>(() => ExcelMappingConfigurationLoader.FromXmlDocument(unsafeXml));
+            var exception = Assert.Throws<BingOfficesConfigurationException>(() =>
+                ExcelMappingConfigurationLoader.FromXmlDocument(unsafeXml));
+            Assert.IsType<System.Xml.XmlException>(exception.InnerException);
+            Assert.Equal(BingOfficesErrorCode.ConfigurationInvalid, exception.Code);
     }
 
     /// <summary>
@@ -724,10 +899,10 @@ public class StreamPipelineTest
         try
         {
             // Act / Assert
-            Assert.Throws<InvalidOperationException>(() => ExcelMappingConfigurationLoader.FromJsonDocument(
-                File.ReadAllText(jsonPath, Encoding.UTF8)));
-            Assert.Throws<InvalidOperationException>(() => ExcelMappingConfigurationLoader.FromXmlDocument(
-                File.ReadAllText(xmlPath, Encoding.UTF8)));
+            Assert.Throws<BingOfficesConfigurationException>(() =>
+                ExcelMappingConfigurationLoader.FromJsonDocument(File.ReadAllText(jsonPath, Encoding.UTF8)));
+            Assert.Throws<BingOfficesConfigurationException>(() =>
+                ExcelMappingConfigurationLoader.FromXmlDocument(File.ReadAllText(xmlPath, Encoding.UTF8)));
         }
         finally
         {
@@ -778,9 +953,13 @@ public class StreamPipelineTest
         Assert.Equal("orders", document.Import.Profile);
         Assert.Equal("名称", Assert.Single(document.Import.Columns).Title);
         Assert.Equal("导出名称", Assert.Single(document.Export.Columns).Title);
-        var exception = Assert.Throws<InvalidOperationException>(() =>
+        var exception = Assert.Throws<BingOfficesConfigurationException>(() =>
             ExcelMappingConfigurationLoader.FromXmlDocument(unknownXml));
-        Assert.Contains("/ExcelMappingDocument/Unknown", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(BingOfficesErrorCode.ConfigurationInvalid, exception.Code);
+        Assert.Equal(BingOfficesStage.Plan, exception.Stage);
+        Assert.IsType<InvalidOperationException>(exception.InnerException);
+        Assert.Contains("/ExcelMappingDocument/Unknown", exception.InnerException.Message,
+            StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -796,11 +975,11 @@ public class StreamPipelineTest
         var oversized = new string('x', 1024 * 1024 + 1);
 
         // Act / Assert
-        var unknownException = Assert.Throws<InvalidOperationException>(() => ExcelMappingConfigurationLoader.FromJsonDocument(unknown));
-        Assert.Contains("$.columns[0].unknown", unknownException.Message);
-        Assert.Throws<InvalidOperationException>(() => ExcelMappingConfigurationLoader.FromJsonDocument(longTitle));
+        var unknownException = Assert.Throws<BingOfficesConfigurationException>(() => ExcelMappingConfigurationLoader.FromJsonDocument(unknown));
+        Assert.Contains("$.columns[0].unknown", unknownException.InnerException.Message);
+        Assert.Throws<BingOfficesConfigurationException>(() => ExcelMappingConfigurationLoader.FromJsonDocument(longTitle));
         Assert.ThrowsAny<Exception>(() => ExcelMappingConfigurationLoader.FromJsonDocument(deep));
-        Assert.Throws<InvalidOperationException>(() => ExcelMappingConfigurationLoader.FromJsonDocument(oversized));
+        Assert.Throws<BingOfficesConfigurationException>(() => ExcelMappingConfigurationLoader.FromJsonDocument(oversized));
     }
 
     /// <summary>
@@ -825,7 +1004,9 @@ public class StreamPipelineTest
         Assert.Equal("row", xmlDocument.Import.ModelAlias);
         Assert.True(jsonStream.CanRead);
         Assert.True(xmlStream.CanRead);
-        Assert.Throws<System.Xml.XmlException>(() => ExcelMappingConfigurationLoader.FromXmlDocument(unsafeXml));
+        var exception = Assert.Throws<BingOfficesConfigurationException>(() =>
+            ExcelMappingConfigurationLoader.FromXmlDocument(unsafeXml));
+        Assert.IsType<System.Xml.XmlException>(exception.InnerException);
     }
 
     /// <summary>
@@ -1343,7 +1524,10 @@ public class StreamPipelineTest
         var action = () => new NpoiExcelImporter().Import(source, CreateSingleSheetRequest<ReadOnlyRow>());
 
         // Assert
-        Assert.Throws<InvalidOperationException>(action);
+        var exception = Assert.Throws<BingOfficesConfigurationException>(action);
+        Assert.Equal(BingOfficesErrorCode.ConfigurationInvalid, exception.Code);
+        Assert.Equal(BingOfficesStage.Plan, exception.Stage);
+        Assert.IsType<InvalidOperationException>(exception.InnerException);
     }
 
     /// <summary>
@@ -1566,14 +1750,15 @@ public class StreamPipelineTest
 
         // Act
         var invalidLength = () => new NpoiExcelImporter().Import(source,
-            CreateSingleSheetRequest<StreamRow>(sheet => sheet.MaxColumnCount(0)));
+            CreateSingleSheetRequest<StreamRow>(sheet => sheet.MaxReadColumns(0)));
         source.Position = 0;
         var multipleDynamic = () => new NpoiExcelImporter().Import(source,
-            CreateSingleSheetRequest<MultipleDynamicRow>(sheet => sheet.HeaderMatch(false)));
+            CreateSingleSheetRequest<MultipleDynamicRow>(sheet => sheet.RequireExpectedHeaders(false)));
 
         // Assert
         Assert.Throws<ArgumentOutOfRangeException>(invalidLength);
-        Assert.Throws<InvalidOperationException>(multipleDynamic);
+        var multipleDynamicException = Assert.Throws<BingOfficesConfigurationException>(multipleDynamic);
+        Assert.Equal(BingOfficesStage.Plan, multipleDynamicException.Stage);
     }
 
     /// <summary>
@@ -1659,7 +1844,9 @@ public class StreamPipelineTest
                 }))));
 
         // Assert
-        Assert.Throws<InvalidOperationException>(import);
+        var exception = Assert.Throws<BingOfficesConfigurationException>(import);
+        Assert.Equal(BingOfficesErrorCode.ConfigurationInvalid, exception.Code);
+        Assert.Equal(BingOfficesStage.Plan, exception.Stage);
     }
 
     /// <summary>
@@ -1706,8 +1893,12 @@ public class StreamPipelineTest
         };
 
         // Assert
-        Assert.Throws<ArgumentException>(importUnknownProperty);
-        Assert.Throws<ArgumentException>(importDuplicateHeader);
+        var unknownException = Assert.Throws<BingOfficesConfigurationException>(importUnknownProperty);
+        Assert.Equal(BingOfficesStage.Plan, unknownException.Stage);
+        var duplicateException = Assert.Throws<BingOfficesConfigurationException>(importDuplicateHeader);
+        Assert.Equal(BingOfficesErrorCode.ConfigurationInvalid, duplicateException.Code);
+        Assert.Equal(BingOfficesStage.Plan, duplicateException.Stage);
+        Assert.IsType<ArgumentException>(duplicateException.InnerException);
     }
 
     /// <summary>
@@ -1884,7 +2075,10 @@ public class StreamPipelineTest
         // Assert
         Assert.Throws<ArgumentOutOfRangeException>(invalidDataRow);
         Assert.Throws<ArgumentException>(invalidSheetName);
-        Assert.Throws<ArgumentException>(duplicateColumns);
+        var duplicateException = Assert.Throws<BingOfficesConfigurationException>(duplicateColumns);
+        Assert.Equal(BingOfficesErrorCode.ConfigurationInvalid, duplicateException.Code);
+        Assert.Equal(BingOfficesOperation.Configuration, duplicateException.Operation);
+        Assert.Equal(BingOfficesStage.Plan, duplicateException.Stage);
     }
 
     /// <summary>
@@ -2365,7 +2559,11 @@ public class StreamPipelineTest
         var action = () => new NpoiExcelImporter().Import(source, request);
 
         // Assert
-        Assert.Throws<InvalidOperationException>(action);
+        var exception = Assert.Throws<BingOfficesResourceLimitException>(action);
+        Assert.Equal(BingOfficesErrorCode.ResourceLimitExceeded, exception.Code);
+        Assert.Equal(BingOfficesOperation.Import, exception.Operation);
+        Assert.Equal("NPOI", exception.Provider);
+        Assert.Equal(BingOfficesStage.Open, exception.Stage);
         Assert.True(source.CanRead);
     }
 
@@ -2386,12 +2584,231 @@ public class StreamPipelineTest
         var importer = new NpoiExcelImporter(mappingPlanFactory: new ThrowingMappingPlanFactory());
 
         // Act
-        var exception = Assert.Throws<ArgumentException>(() => importer.Import(source, request));
+        var exception = Assert.Throws<BingOfficesConfigurationException>(() => importer.Import(source, request));
 
         // Assert
-        Assert.Equal("映射工厂原始异常", exception.Message);
-        Assert.IsNotType<TargetInvocationException>(exception);
+        Assert.Equal(BingOfficesErrorCode.ConfigurationInvalid, exception.Code);
+        Assert.Equal(BingOfficesOperation.Configuration, exception.Operation);
+        Assert.Equal(BingOfficesStage.Plan, exception.Stage);
+        Assert.Equal("映射工厂原始异常", exception.InnerException.Message);
+        Assert.IsType<ArgumentException>(exception.InnerException);
         Assert.True(source.CanRead);
+    }
+
+    /// <summary>
+    /// 测试 - Excel 导出映射工厂失败时应归类为配置计划错误并保留内部异常。
+    /// </summary>
+    [Fact]
+    public void Export_MappingFactoryFailure_ShouldClassifyAsConfigurationPlanError()
+    {
+        // Arrange
+        var request = CreateSingleSheetExportRequest(new[] { new StreamRow { Name = "Value" } });
+        var exporter = new NpoiExcelExporter(mappingPlanFactory: new ThrowingMappingPlanFactory());
+
+        // Act
+        var exception = Assert.Throws<BingOfficesConfigurationException>(() =>
+            exporter.Export(request, new MemoryStream()));
+
+        // Assert
+        Assert.Equal(BingOfficesErrorCode.ConfigurationInvalid, exception.Code);
+        Assert.Equal(BingOfficesOperation.Configuration, exception.Operation);
+        Assert.Equal(BingOfficesStage.Plan, exception.Stage);
+        Assert.Equal("映射工厂原始异常", exception.InnerException.Message);
+        Assert.IsType<ArgumentException>(exception.InnerException);
+    }
+
+    /// <summary>
+    /// 测试 - Excel 导出值转换器失败时应归类为用户扩展错误并保留单元格位置。
+    /// </summary>
+    [Fact]
+    public void Export_ValueConverterFailure_ShouldPreserveLocationAndInnerException()
+    {
+        // Arrange
+        var request = CreateSingleSheetExportRequest(new[] { new StreamRow { Name = "Value" } },
+            configure: sheet => sheet.Mapping(new ExcelMappingConfiguration
+            {
+                Columns = new List<ExcelColumnConfiguration>
+                {
+                    new() { PropertyName = nameof(StreamRow.Name), ConverterName = "throwing-export" }
+                }
+            }));
+        var exporter = new NpoiExcelExporter(new IExcelValueConverter[] { new ThrowingExportConverter() });
+
+        // Act
+        var exception = Assert.Throws<BingOfficesExportException>(() =>
+            exporter.Export(request, new MemoryStream()));
+
+        // Assert
+        Assert.Equal(BingOfficesErrorCode.UserExtensionFailed, exception.Code);
+        Assert.Equal(BingOfficesOperation.Export, exception.Operation);
+        Assert.Equal("NPOI", exception.Provider);
+        Assert.Equal(BingOfficesStage.Validate, exception.Stage);
+        Assert.Equal("Data", exception.SheetName);
+        Assert.Equal(2, exception.RowIndex);
+        Assert.Equal(1, exception.ColumnIndex);
+        Assert.Equal(nameof(StreamRow.Name), exception.PropertyName);
+        Assert.Equal("导出转换器异常", exception.InnerException.Message);
+    }
+
+    /// <summary>
+    /// 测试 - Excel 导出动态值读取器失败时应归类为用户扩展错误并保留工作表位置。
+    /// </summary>
+    [Fact]
+    public void Export_DynamicGetterFailure_ShouldPreserveLocationAndInnerException()
+    {
+        // Arrange
+        var request = ExcelExport.Workbook(builder => builder.AddSheet("Data",
+            new[] { new ThrowingDynamicRow() }, sheet => sheet.DynamicColumns(row => row.Values,
+                new[] { new ExcelDynamicColumnDefinition { Key = "extra", Title = "Extra" } })));
+
+        // Act
+        var exception = Assert.Throws<BingOfficesExportException>(() =>
+            new NpoiExcelExporter().Export(request, new MemoryStream()));
+
+        // Assert
+        Assert.Equal(BingOfficesErrorCode.UserExtensionFailed, exception.Code);
+        Assert.Equal(BingOfficesOperation.Export, exception.Operation);
+        Assert.Equal(BingOfficesStage.Validate, exception.Stage);
+        Assert.Equal("Data", exception.SheetName);
+        Assert.Equal(2, exception.RowIndex);
+        Assert.Equal(nameof(ThrowingDynamicRow.Values), exception.PropertyName);
+        Assert.Equal("动态读取器异常", exception.InnerException.Message);
+    }
+
+    /// <summary>
+    /// 测试 - 异常分发器对空异常和空观察器应安全忽略，不影响调用方流程。
+    /// </summary>
+    [Fact]
+    public void ExceptionDispatcher_NullInputs_ShouldBeIgnored()
+    {
+        // Arrange
+        var dispatcher = new BingOfficesExceptionDispatcher(new IBingOfficesExceptionObserver[] { null });
+
+        // Act
+        dispatcher.Observe(null);
+
+        // Assert
+        Assert.True(true);
+    }
+
+    /// <summary>
+    /// 测试 - 同一公共异常被重复观察时，观察器只能收到一次通知。
+    /// </summary>
+    [Fact]
+    public void ExceptionDispatcher_RepeatedObservation_ShouldNotifyOnce()
+    {
+        // Arrange
+        var observer = new CountingExceptionObserver();
+        var dispatcher = new BingOfficesExceptionDispatcher(new[] { observer });
+        var exception = new BingOfficesImportException("导入失败");
+
+        // Act
+        dispatcher.Observe(exception);
+        dispatcher.Observe(exception);
+
+        // Assert
+        Assert.Equal(1, observer.Count);
+        Assert.True(exception.Data.Contains(BingOfficesExceptionDispatcher.ObservedKey));
+    }
+
+    /// <summary>
+    /// 测试 - 并发观察同一公共异常时，分发器应保持单次通知语义。
+    /// </summary>
+    [Fact]
+    public void ExceptionDispatcher_ConcurrentObservation_ShouldNotifyOnce()
+    {
+        // Arrange
+        var observer = new CountingExceptionObserver();
+        var dispatcher = new BingOfficesExceptionDispatcher(new[] { observer });
+        var exception = new BingOfficesImportException("导入失败");
+
+        // Act
+        var tasks = Enumerable.Range(0, 64)
+            .Select(_ => Task.Run(() => dispatcher.Observe(exception)))
+            .ToArray();
+        Task.WaitAll(tasks);
+
+        // Assert
+        Assert.Equal(1, observer.Count);
+    }
+
+    /// <summary>
+    /// 测试 - 观察器失败不得替换主异常，并应保留首个观察器异常诊断。
+    /// </summary>
+    [Fact]
+    public void ExceptionDispatcher_ObserverFailure_ShouldPreservePrimaryException()
+    {
+        // Arrange
+        var dispatcher = new BingOfficesExceptionDispatcher(new IBingOfficesExceptionObserver[]
+        {
+            new ThrowingExceptionObserver()
+        });
+        var exception = new BingOfficesImportException("导入失败");
+
+        // Act
+        dispatcher.Observe(exception);
+
+        // Assert
+        Assert.Equal("导入失败", exception.Message);
+        Assert.IsType<InvalidOperationException>(
+            exception.Data[BingOfficesExceptionDispatcher.ObserverFailureKey]);
+    }
+
+    /// <summary>
+    /// 测试 - 多个观察器均失败时应继续通知后续观察器，且只保留首个失败诊断。
+    /// </summary>
+    [Fact]
+    public void ExceptionDispatcher_MultipleObserverFailures_ShouldKeepFirstDiagnostic()
+    {
+        // Arrange
+        var first = new ThrowingExceptionObserver("第一个观察器失败");
+        var second = new ThrowingExceptionObserver("第二个观察器失败");
+        var dispatcher = new BingOfficesExceptionDispatcher(new IBingOfficesExceptionObserver[] { first, second });
+        var exception = new BingOfficesImportException("导入失败");
+
+        // Act
+        dispatcher.Observe(exception);
+
+        // Assert
+        Assert.Equal(1, first.Count);
+        Assert.Equal(1, second.Count);
+        var failure = Assert.IsType<InvalidOperationException>(
+            exception.Data[BingOfficesExceptionDispatcher.ObserverFailureKey]);
+        Assert.Equal("第一个观察器失败", failure.Message);
+    }
+
+    /// <summary>
+    /// 测试 - 导出公共边界应对已分类异常只通知一次。
+    /// </summary>
+    [Fact]
+    public void Export_ExceptionObserver_ShouldNotifyOnceAtPublicBoundary()
+    {
+        // Arrange
+        var observer = new CountingExceptionObserver();
+        var request = CreateSingleSheetExportRequest(new[] { new StreamRow { Name = "Value" } },
+            format: ExcelFormat.Xls,
+            configure: sheet => sheet.Chart(new ExcelChartDefinition
+            {
+                Categories = new ExcelChartRange { ColumnKey = nameof(StreamRow.Name) },
+                Series = new[]
+                {
+                    new ExcelChartSeries
+                    {
+                        Name = "Values",
+                        Values = new ExcelChartRange { ColumnKey = nameof(StreamRow.Name) }
+                    }
+                },
+                Anchor = new ExcelChartAnchor { StartRow = 0, StartColumn = 2, EndRow = 8, EndColumn = 8 }
+            }));
+
+        // Act
+        var exception = Assert.Throws<BingOfficesUnsupportedFeatureException>(() =>
+            new NpoiExcelExporter(exceptionObservers: new[] { observer }).Export(request, new MemoryStream()));
+
+        // Assert
+        Assert.Equal(BingOfficesErrorCode.UnsupportedFeature, exception.Code);
+        Assert.Equal(BingOfficesOperation.Export, exception.Operation);
+        Assert.Equal(1, observer.Count);
     }
 
     /// <summary>
@@ -2572,6 +2989,45 @@ public class StreamPipelineTest
     }
 
     /// <summary>
+    /// 包含会传播测试异常的 Excel 校验特性的测试模型。
+    /// </summary>
+    private class PropagatingValidationRow
+    {
+        /// <summary>
+        /// 业务编码。
+        /// </summary>
+        [PropagatingValidationAttribute]
+        public string Code { get; set; }
+    }
+
+    /// <summary>
+    /// 包含会传播测试异常的属性 setter 测试模型。
+    /// </summary>
+    private sealed class PropagatingSetterRow
+    {
+        private string _code;
+
+        /// <summary>
+        /// setter 当前应抛出的测试异常。
+        /// </summary>
+        public static Exception SetterException { private get; set; }
+
+        /// <summary>
+        /// 业务编码。
+        /// </summary>
+        public string Code
+        {
+            get => _code;
+            set
+            {
+                if (SetterException != null)
+                    throw SetterException;
+                _code = value;
+            }
+        }
+    }
+
+    /// <summary>
     /// 包含领域值对象的转换测试模型。
     /// </summary>
     private class ConvertedRow
@@ -2713,6 +3169,54 @@ public class StreamPipelineTest
     }
 
     /// <summary>
+    /// 按测试要求抛出指定异常的 Excel 值转换器。
+    /// </summary>
+    private sealed class PropagatingValueConverter : INamedExcelValueConverter
+    {
+        private readonly Exception _exception;
+
+        public PropagatingValueConverter(Exception exception) => _exception = exception;
+
+        public string Name => "propagating";
+
+        public bool CanConvert(Type propertyType) => propertyType == typeof(string);
+
+        public bool TryConvertFrom(ExcelConversionContext context, out object value)
+        {
+            value = null;
+            throw _exception;
+        }
+
+        public bool TryConvertTo(ExcelConversionContext context, out object value)
+        {
+            value = null;
+            throw _exception;
+        }
+    }
+
+    /// <summary>
+    /// 会抛出指定异常的 Excel 自定义校验特性。
+    /// </summary>
+    [BindFilter(typeof(PropagatingValidationRule))]
+    private sealed class PropagatingValidationAttribute : FilterAttributeBase
+    {
+    }
+
+    /// <summary>
+    /// 按测试要求抛出指定异常的 Excel 自定义校验规则。
+    /// </summary>
+    private sealed class PropagatingValidationRule : IExcelValidationRule
+    {
+        private readonly Exception _exception;
+
+        public PropagatingValidationRule(Exception exception) => _exception = exception;
+
+        public bool CanValidate(FilterAttributeBase attribute) => attribute is PropagatingValidationAttribute;
+
+        public bool Validate(FilterAttributeBase attribute, ExcelValidationContext context) => throw _exception;
+    }
+
+    /// <summary>
     /// 映射配置加载器替换测试实现。
     /// </summary>
     private sealed class TestMappingConfigurationLoader : IExcelMappingConfigurationLoader
@@ -2780,6 +3284,34 @@ public class StreamPipelineTest
             CultureName = context.Culture.Name;
             PropertyName = context.PropertyName;
             return true;
+        }
+    }
+
+    private sealed class CountingExceptionObserver : IBingOfficesExceptionObserver
+    {
+        private int _count;
+
+        public int Count => _count;
+
+        public void Observe(BingOfficesException exception)
+        {
+            Interlocked.Increment(ref _count);
+        }
+    }
+
+    private sealed class ThrowingExceptionObserver : IBingOfficesExceptionObserver
+    {
+        private readonly string _message;
+        private int _count;
+
+        public ThrowingExceptionObserver(string message = "观察器失败") => _message = message;
+
+        public int Count => _count;
+
+        public void Observe(BingOfficesException exception)
+        {
+            Interlocked.Increment(ref _count);
+            throw new InvalidOperationException(_message);
         }
     }
 
@@ -3064,6 +3596,41 @@ public class StreamPipelineTest
         /// </summary>
         [DynamicColumn]
         public IDictionary<string, object> Values { get; set; }
+    }
+
+    /// <summary>
+    /// 动态值读取器失败的导出测试模型。
+    /// </summary>
+    private sealed class ThrowingDynamicRow
+    {
+        /// <summary>
+        /// 读取时抛出异常的动态列数据。
+        /// </summary>
+        [DynamicColumn]
+        public IDictionary<string, object> Values
+        {
+            get => throw new InvalidOperationException("动态读取器异常");
+            set { }
+        }
+    }
+
+    /// <summary>
+    /// 导出阶段抛出异常的值转换器。
+    /// </summary>
+    private sealed class ThrowingExportConverter : INamedExcelValueConverter
+    {
+        public string Name => "throwing-export";
+
+        public bool CanConvert(Type propertyType) => propertyType == typeof(string);
+
+        public bool TryConvertFrom(ExcelConversionContext context, out object value)
+        {
+            value = null;
+            return false;
+        }
+
+        public bool TryConvertTo(ExcelConversionContext context, out object value) =>
+            throw new InvalidOperationException("导出转换器异常");
     }
 
     /// <summary>

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Threading;
+using Bing.Offices.Exceptions;
 
 namespace Bing.Offices.Npoi;
 
@@ -30,7 +31,8 @@ internal static class NpoiStreamCopier
                 break;
             total += count;
             if (maxBytes.HasValue && total > maxBytes.Value)
-                throw new InvalidOperationException($"输入工作簿超过最大字节数: {maxBytes.Value}");
+                throw new BingOfficesResourceLimitException($"输入工作簿超过最大字节数: {maxBytes.Value}",
+                    provider: "NPOI", operation: BingOfficesOperation.Import, stage: BingOfficesStage.Open);
             cancellationToken.ThrowIfCancellationRequested();
             destination.Write(buffer, 0, count);
         }

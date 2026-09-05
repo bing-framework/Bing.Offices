@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Threading;
+using Bing.Offices.Exceptions;
 
 namespace Bing.Offices.IO;
 
@@ -48,10 +49,18 @@ internal static class AtomicFileCommitter
                 fileSystem.Move(temporaryPath, path);
             temporaryPath = null;
         }
-        catch (Exception exception)
+        catch (OperationCanceledException exception)
         {
             Cleanup(temporaryPath, format, exception, fileSystem);
             throw;
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException
+            && exception is not StackOverflowException)
+        {
+            var translated = new BingOfficesFileCommitException(
+                $"{format} 文件提交失败。", exception, format, BingOfficesStage.Commit);
+            Cleanup(temporaryPath, format, translated, fileSystem);
+            throw translated;
         }
     }
 

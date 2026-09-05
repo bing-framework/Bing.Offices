@@ -24,7 +24,6 @@ public sealed class ExcelSheetExportBuilder<T> where T : class, new()
     private bool _hidden;
     private readonly List<ExcelChartDefinition> _charts = new List<ExcelChartDefinition>();
     private IReadOnlyList<ExcelHeaderRow> _headerRows = Array.Empty<ExcelHeaderRow>();
-    private Configurations.ExcelMappingConfiguration _documentMappingConfiguration;
     private Configurations.ExcelMappingConfiguration _requestMappingConfiguration;
     private Configurations.ExcelMappingDocument _mappingDocument;
     private System.Globalization.CultureInfo _culture = System.Globalization.CultureInfo.InvariantCulture;
@@ -137,8 +136,6 @@ public sealed class ExcelSheetExportBuilder<T> where T : class, new()
     {
         if (document == null)
             throw new ArgumentNullException(nameof(document));
-        _documentMappingConfiguration = document.Export == null ? null :
-            Configurations.MappingConfigurationCloner.Clone(document.Export, Configurations.MappingSourceKind.Document);
         _mappingDocument = Configurations.MappingDocumentCloner.Clone(document);
         return this;
     }

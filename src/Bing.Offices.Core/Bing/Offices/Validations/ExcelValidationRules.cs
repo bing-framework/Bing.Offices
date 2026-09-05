@@ -2,6 +2,8 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Bing.Offices.Attributes;
+using Bing.Offices.Conversions;
+using Bing.Offices.Dates;
 
 namespace Bing.Offices.Validations;
 
@@ -148,30 +150,33 @@ public sealed class DateTimeExcelValidationRule : IExcelValidationRule
     /// <inheritdoc />
     public bool Validate(FilterAttributeBase attribute, ExcelValidationContext context)
     {
-        var v2 = attribute as ExcelDateAttribute;
-        var culture = context.Culture;
-        if (!string.IsNullOrWhiteSpace(v2?.CultureName))
-            culture = CultureInfo.GetCultureInfo(v2.CultureName);
-        if (!string.IsNullOrWhiteSpace(v2?.Format))
-            return DateTime.TryParseExact(context.Value, v2.Format, culture, DateTimeStyles.None, out _);
-        if (context.ConvertedValue is DateTime || context.ConvertedValue is DateTimeOffset)
-            return true;
-        if (context.Cell?.Value is DateTime || context.Cell?.Value is DateTimeOffset)
-            return true;
-        if (context.Cell?.Value is double serial)
-        {
-            try
-            {
-                DateTime.FromOADate(serial);
-                return true;
-            }
-            catch (ArgumentException)
-            {
-                return false;
-            }
-        }
-        return DateTime.TryParse(context.Value, culture, DateTimeStyles.AllowWhiteSpaces, out _);
+        var attributeValue = (ExcelDateAttribute)attribute;
+        return TryParseValue(context.Cell, context.Value, context.PropertyType ?? typeof(DateTime),
+            context.Culture, attributeValue, out _);
     }
+
+    /// <summary>按统一日期转换合同返回日期值，供 Provider 转换边界复用。</summary>
+    /// <param name="cell">原始单元格值。</param>
+    /// <param name="text">规范化文本。</param>
+    /// <param name="targetType">目标日期类型。</param>
+    /// <param name="culture">请求区域性。</param>
+    /// <param name="attribute">日期输入配置。</param>
+    /// <param name="value">解析后的日期值。</param>
+    /// <returns>能够转换时为 true。</returns>
+    public bool TryParseValue(ExcelCellValue cell, string text, Type targetType, CultureInfo culture,
+        ExcelDateAttribute attribute, out object value) =>
+        ExcelDateParser.TryParse(cell, text, targetType, culture, attribute, out value);
+
+    /// <summary>按 Workbook Data Validation 语义解析日期或时间值，供 Provider 校验边界复用。</summary>
+    /// <param name="cell">原始单元格值。</param>
+    /// <param name="text">单元格或约束的文本值。</param>
+    /// <param name="timeOnly">是否只解析时间部分。</param>
+    /// <param name="isDate1904">当前工作簿是否使用 1904 日期系统。</param>
+    /// <param name="value">解析后的无时区日期时间。</param>
+    /// <returns>解析成功时为 true。</returns>
+    public bool TryParseWorkbookDate(ExcelCellValue cell, string text, bool timeOnly, bool isDate1904,
+        out DateTime value) =>
+        ExcelDateParser.TryParseValidation(cell, text, timeOnly, isDate1904, out value);
 }
 
 /// <summary>

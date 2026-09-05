@@ -2,8 +2,10 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using Bing.Offices.Attributes;
 using Bing.Offices.Conversions;
 using Bing.Offices.Imports;
+using Bing.Offices.Validations;
 using NPOI.HSSF.UserModel;
 using NPOI.SS.UserModel;
 
@@ -27,21 +29,23 @@ internal static class NpoiWorkbookValidationPipeline
     /// <param name="validateMode">发生校验失败后的继续策略。</param>
     /// <param name="unsupportedFeaturePolicy">不支持的原生校验规则的处理策略。</param>
     /// <param name="errors">接收工作簿校验错误的收集器。</param>
+    /// <param name="isDate1904">当前工作簿是否使用 1904 日期系统。</param>
     /// <returns>当前行所有可执行规则均通过时为 true。</returns>
     public static bool Validate(IRow row, IReadOnlyDictionary<int, ExcelColumnPlan> columns,
         ValidationRangeIndex validationIndex, ISheet sheet, string sheetName, int rowIndex,
         ExcelWhitespacePolicy bodyWhitespace, ValidateMode validateMode,
-        ExcelUnsupportedFeaturePolicy unsupportedFeaturePolicy, ExcelImportErrorCollector errors)
+        ExcelUnsupportedFeaturePolicy unsupportedFeaturePolicy, ExcelImportErrorCollector errors,
+        bool isDate1904)
     {
         var valid = true;
         foreach (var column in columns)
         {
             var cell = row.GetCell(column.Key);
-            var cellValue = NpoiExcelImporter.ReadCellValue(cell);
+            var cellValue = NpoiExcelImporter.ReadCellValue(cell, isDate1904);
             var value = NpoiExcelImporter.NormalizeText(cellValue.Text, bodyWhitespace);
             foreach (var validation in validationIndex.Get(rowIndex, column.Key))
             {
-                if (ValidateValue(validation, cellValue, value, sheet, out var message))
+                if (ValidateValue(validation, cellValue, value, sheet, isDate1904, out var message))
                     continue;
                 errors.Add(new ExcelImportError(ExcelImportErrorCode.WorkbookValidation, message, sheetName,
                     rowIndex + 1, column.Key + 1, column.Value.Property.Name, column.Value.DynamicDefinition?.Key
@@ -63,10 +67,11 @@ internal static class NpoiWorkbookValidationPipeline
     /// <param name="cellValue">保留原始类型信息的单元格值。</param>
     /// <param name="value">按正文空白策略规范化后的文本值。</param>
     /// <param name="sheet">解析列表区域时使用的当前工作表。</param>
+    /// <param name="isDate1904">当前工作簿是否使用 1904 日期系统。</param>
     /// <param name="message">校验失败或不支持时返回的说明消息。</param>
     /// <returns>规则通过时为 true。</returns>
     private static bool ValidateValue(IDataValidation validation, ExcelCellValue cellValue,
-        string value, ISheet sheet, out string message)
+        string value, ISheet sheet, bool isDate1904, out string message)
     {
         var constraint = validation.ValidationConstraint;
         value ??= string.Empty;
@@ -124,10 +129,16 @@ internal static class NpoiWorkbookValidationPipeline
         }
         if (type == NPOI.SS.UserModel.ValidationType.DATE || type == NPOI.SS.UserModel.ValidationType.TIME)
         {
-            var parsed = TryGetExcelDate(cellValue, value, type == NPOI.SS.UserModel.ValidationType.TIME, out var date);
-            var first = TryGetExcelDate(GetFormula1(constraint), type == NPOI.SS.UserModel.ValidationType.TIME,
+            var parsed = TryGetExcelDate(cellValue, value, type == NPOI.SS.UserModel.ValidationType.TIME,
+                isDate1904, out var date);
+            var timeOnly = type == NPOI.SS.UserModel.ValidationType.TIME;
+            var firstText = GetFormula1(constraint);
+            var first = TryGetExcelDate(new ExcelCellValue(firstText, firstText, ExcelCellKind.Text,
+                    isDate1904: isDate1904), firstText, timeOnly, isDate1904,
                 out var minimum);
-            var second = TryGetExcelDate(GetFormula2(constraint), type == NPOI.SS.UserModel.ValidationType.TIME,
+            var secondText = GetFormula2(constraint);
+            var second = TryGetExcelDate(new ExcelCellValue(secondText, secondText, ExcelCellKind.Text,
+                    isDate1904: isDate1904), secondText, timeOnly, isDate1904,
                 out var maximum);
             var valid = parsed && first && Compare(date, minimum, maximum, second, constraint.Operator);
             message = valid ? null : "不符合 Workbook 日期/时间校验。";
@@ -256,54 +267,20 @@ internal static class NpoiWorkbookValidationPipeline
     /// <param name="cellValue">保留原始数值或日期类型的单元格值。</param>
     /// <param name="text">单元格文本后备值。</param>
     /// <param name="timeOnly">是否仅比较时间部分。</param>
+    /// <param name="isDate1904">当前工作簿是否使用 1904 日期系统。</param>
     /// <param name="ticks">成功时返回日期或时间的刻度值。</param>
     /// <returns>成功解析日期或时间时为 true。</returns>
-    private static bool TryGetExcelDate(ExcelCellValue cellValue, string text, bool timeOnly, out long ticks)
+    private static bool TryGetExcelDate(ExcelCellValue cellValue, string text, bool timeOnly, bool isDate1904,
+        out long ticks)
     {
-        if (cellValue?.Value is DateTime date)
+        var parser = new DateTimeExcelValidationRule();
+        if (!parser.TryParseWorkbookDate(cellValue, text, timeOnly, isDate1904, out var parsed))
         {
-            ticks = timeOnly ? date.TimeOfDay.Ticks : date.Ticks;
-            return true;
+            ticks = 0;
+            return false;
         }
-        if (cellValue?.Value is double number)
-        {
-            ticks = ExcelSerialToDateTime(number, timeOnly).Ticks;
-            return true;
-        }
-        return TryGetExcelDate(text, timeOnly, out ticks);
-    }
-
-    /// <summary>从 ISO 兼容文本或 Excel 序列号解析日期/时间为比较刻度。</summary>
-    /// <param name="text">待解析的文本或数字序列号。</param>
-    /// <param name="timeOnly">是否仅比较时间部分。</param>
-    /// <param name="ticks">成功时返回日期或时间的刻度值。</param>
-    /// <returns>成功解析日期或时间时为 true。</returns>
-    private static bool TryGetExcelDate(string text, bool timeOnly, out long ticks)
-    {
-        if (DateTime.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AllowWhiteSpaces,
-                out var date))
-        {
-            ticks = timeOnly ? date.TimeOfDay.Ticks : date.Ticks;
-            return true;
-        }
-        if (decimal.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var serial))
-        {
-            var converted = ExcelSerialToDateTime((double)serial, timeOnly);
-            ticks = timeOnly ? converted.TimeOfDay.Ticks : converted.Ticks;
-            return true;
-        }
-        ticks = 0;
-        return false;
-    }
-
-    /// <summary>按 Excel 1900 日期系统将序列号转换为日期时间。</summary>
-    /// <param name="serial">Excel 日期或时间序列号。</param>
-    /// <param name="timeOnly">是否将日期部分归一为当天。</param>
-    /// <returns>转换后的日期时间。</returns>
-    private static DateTime ExcelSerialToDateTime(double serial, bool timeOnly)
-    {
-        var date = new DateTime(1899, 12, 30).AddDays(serial);
-        return timeOnly ? DateTime.Today.Add(date.TimeOfDay) : date;
+        ticks = ((DateTime)parsed).Ticks;
+        return true;
     }
 
     /// <summary>表示两个边界之间的比较操作。</summary>

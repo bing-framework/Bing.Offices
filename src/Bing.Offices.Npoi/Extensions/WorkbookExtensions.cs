@@ -7,7 +7,7 @@ namespace Bing.Offices.Npoi.Extensions;
 /// <summary>
 /// NPOI工作簿(<see cref="NPOI.SS.UserModel.IWorkbook"/>) 扩展
 /// </summary>
-internal static class WorkbookExtensions
+public static class WorkbookExtensions
 {
     #region GetExcelFormat(获取Excel格式类型)
 

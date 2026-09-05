@@ -8,25 +8,42 @@ using Bing.Offices.Imports;
 using Bing.Offices.Npoi.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using System.Xml;
+using Bing.Offices.Exceptions;
 
 if (args.Length != 2)
     return 2;
 
 var inputPath = Path.GetFullPath(args[0]);
 var mode = args[1];
-if (!new[] { "zip", "dom", "dom-limit", "shared-strings", "styles", "drawings", "ole" }
+if (!new[] { "zip", "dom", "dom-limit", "shared-strings", "styles", "drawings", "ole",
+    "zip-total-limit", "zip-ratio-limit", "shared-strings-limit", "styles-limit", "worksheet-limit",
+    "xml-depth-limit", "xml-character-limit" }
         .Contains(mode, StringComparer.Ordinal))
     return 2;
 
+var limits = mode switch
+{
+    "dom-limit" => new ExcelResourceLimits { MaxRows = 100 },
+    "zip-total-limit" => new ExcelResourceLimits { MaxZipTotalUncompressedBytes = 1 },
+    "zip-ratio-limit" => new ExcelResourceLimits { MaxZipCompressionRatio = 1 },
+    "shared-strings-limit" => new ExcelResourceLimits { MaxSharedStringsBytes = 32 },
+    "styles-limit" => new ExcelResourceLimits { MaxStylesBytes = 32 },
+    "worksheet-limit" => new ExcelResourceLimits { MaxWorksheetBytes = 32 },
+    "xml-depth-limit" => new ExcelResourceLimits { MaxXmlDepth = 2 },
+    "xml-character-limit" => new ExcelResourceLimits { MaxXmlCharacters = 32 },
+    _ => null
+};
 var request = ExcelImport.Workbook<ProbeWorkbook>(builder => builder
-    .ResourceLimits(mode == "dom-limit" ? new ExcelResourceLimits { MaxRows = 100 } : null)
+    .ResourceLimits(limits)
     .Sheet("Data", root => root.Rows));
+var stopwatch = Stopwatch.StartNew();
+var inputBytes = new FileInfo(inputPath).Length;
 
 try
 {
-    var stopwatch = Stopwatch.StartNew();
-    var inputBytes = new FileInfo(inputPath).Length;
-    var metrics = ReadPreflightMetrics(inputPath, inputBytes);
+    var metrics = IsPreflightLimitMode(mode)
+        ? new PreflightMetrics(inputBytes, -1, -1, -1, -1, -1, -1, -1, true)
+        : ReadPreflightMetrics(inputPath, inputBytes);
 
     using var input = File.OpenRead(inputPath);
     var serviceCollection = new ServiceCollection();
@@ -37,11 +54,19 @@ try
     var resourceLimit = result.Errors.Any(error => error.Code == ExcelImportErrorCode.ResourceLimit);
     var status = resourceLimit ? "resource-limit" : result.IsSuccess ? "success" : "errors";
     var importedRows = result.Sheets.Sum(sheet => sheet.SourceRows.Count);
-    Console.WriteLine($"mode={mode};status={status};inputBytes={metrics.InputBytes};sheets={metrics.Sheets};rows={metrics.Rows};"
+    Console.WriteLine($"mode={mode};status={status};rejectStage=none;inputBytes={metrics.InputBytes};sheets={metrics.Sheets};rows={metrics.Rows};"
         + $"importedRows={importedRows};columns={metrics.Columns};cells={metrics.Cells};"
         + $"sharedStrings={metrics.SharedStrings};styles={metrics.Styles};pictures={metrics.Pictures};"
         + $"elapsedMs={stopwatch.ElapsedMilliseconds};peakWorkingSet={Process.GetCurrentProcess().PeakWorkingSet64};"
         + $"errors={result.Errors.Count}");
+    return 0;
+}
+catch (BingOfficesResourceLimitException exception)
+{
+    stopwatch.Stop();
+    Console.WriteLine($"mode={mode};status=resource-limit;rejectStage={exception.Stage};inputBytes={inputBytes};"
+        + "sheets=-1;rows=-1;importedRows=0;columns=-1;cells=-1;sharedStrings=-1;styles=-1;pictures=-1;"
+        + $"elapsedMs={stopwatch.ElapsedMilliseconds};peakWorkingSet={Process.GetCurrentProcess().PeakWorkingSet64};errors=0");
     return 0;
 }
 catch (Exception exception)
@@ -83,6 +108,14 @@ static PreflightMetrics ReadPreflightMetrics(string inputPath, long inputBytes)
         .Sum(entry => CountElements(entry, "pic"));
     return new PreflightMetrics(inputBytes, sheets, rows, columns, cells, sharedStrings, styles, pictures, true);
 }
+
+static bool IsPreflightLimitMode(string mode) => mode == "zip-total-limit"
+    || mode == "zip-ratio-limit"
+    || mode == "shared-strings-limit"
+    || mode == "styles-limit"
+    || mode == "worksheet-limit"
+    || mode == "xml-depth-limit"
+    || mode == "xml-character-limit";
 
 static WorksheetMetrics ReadWorksheetMetrics(ZipArchiveEntry entry)
 {

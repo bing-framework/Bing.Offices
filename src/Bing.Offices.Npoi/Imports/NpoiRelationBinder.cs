@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Runtime.ExceptionServices;
 using System.Threading;
+using Bing.Offices.Exceptions;
 using Bing.Offices.Imports;
 
 namespace Bing.Offices.Npoi.Imports;
@@ -58,8 +59,23 @@ internal static class NpoiRelationBinder
         where TParent : class
         where TChild : class
     {
-        var parents = (ICollection<TParent>)request.Parents(root);
-        var children = (ICollection<TChild>)request.Children(root);
+        ICollection<TParent> parents;
+        ICollection<TChild> children;
+        try
+        {
+            parents = (ICollection<TParent>)request.Parents(root);
+            children = (ICollection<TChild>)request.Children(root);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException
+            && exception is not StackOverflowException)
+        {
+            throw new BingOfficesImportException("Excel 关系集合读取器执行失败。", exception, "NPOI",
+                BingOfficesStage.Validate, code: BingOfficesErrorCode.UserExtensionFailed);
+        }
         if (parents == null || children == null)
             throw new InvalidOperationException("关系绑定的父集合或子集合不可写入。");
         var parentByKey = new Dictionary<TKey, TParent>((IEqualityComparer<TKey>)request.Comparer);
@@ -71,7 +87,21 @@ internal static class NpoiRelationBinder
                 errors.MarkTruncated();
                 break;
             }
-            var key = ((Func<TParent, TKey>)request.ParentKey)(parent);
+            TKey key;
+            try
+            {
+                key = ((Func<TParent, TKey>)request.ParentKey)(parent);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception exception) when (exception is not OutOfMemoryException
+                && exception is not StackOverflowException)
+            {
+                throw new BingOfficesImportException("Excel 父项键选择器执行失败。", exception, "NPOI",
+                    BingOfficesStage.Validate, code: BingOfficesErrorCode.UserExtensionFailed);
+            }
             if (key == null)
             {
                 errors.Add(CreateError("父项键为空。", sourceLocations, parent, key));
@@ -90,7 +120,21 @@ internal static class NpoiRelationBinder
                 errors.MarkTruncated();
                 break;
             }
-            var key = ((Func<TChild, TKey>)request.ChildKey)(child);
+            TKey key;
+            try
+            {
+                key = ((Func<TChild, TKey>)request.ChildKey)(child);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception exception) when (exception is not OutOfMemoryException
+                && exception is not StackOverflowException)
+            {
+                throw new BingOfficesImportException("Excel 子项键选择器执行失败。", exception, "NPOI",
+                    BingOfficesStage.Validate, code: BingOfficesErrorCode.UserExtensionFailed);
+            }
             if (key == null)
             {
                 errors.Add(CreateError("子项键为空。", sourceLocations, child, key));
@@ -114,14 +158,43 @@ internal static class NpoiRelationBinder
                 errors.MarkTruncated();
                 break;
             }
-            var target = (ICollection<TChild>)request.Navigation(pair.Key);
+            ICollection<TChild> target;
+            try
+            {
+                target = (ICollection<TChild>)request.Navigation(pair.Key);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception exception) when (exception is not OutOfMemoryException
+                && exception is not StackOverflowException)
+            {
+                throw new BingOfficesImportException("Excel 关系导航集合读取器执行失败。", exception, "NPOI",
+                    BingOfficesStage.Validate, code: BingOfficesErrorCode.UserExtensionFailed);
+            }
             if (target == null)
             {
                 errors.Add(CreateError("导航集合为空且不可写入。", sourceLocations, pair.Key, null));
                 continue;
             }
             foreach (var child in pair.Value)
-                target.Add(child);
+            {
+                try
+                {
+                    target.Add(child);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception exception) when (exception is not OutOfMemoryException
+                    && exception is not StackOverflowException)
+                {
+                    throw new BingOfficesImportException("Excel 关系导航集合写入器执行失败。", exception, "NPOI",
+                        BingOfficesStage.Validate, code: BingOfficesErrorCode.UserExtensionFailed);
+                }
+            }
         }
     }
 

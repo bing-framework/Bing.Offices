@@ -56,12 +56,12 @@ public sealed class ExcelSheetImportRequest
     internal ExcelSheetImportRequest(string name, ExcelSheetSelector selector, Type itemType, Func<object, object> target,
         int headerRowIndex,
         int dataRowStartIndex, IReadOnlyList<Exports.ExcelDynamicColumnDefinition> dynamicColumns,
-        Expression dynamicTarget, bool headerMatch, ValidateMode validateMode,
+        Expression dynamicTarget, bool requireExpectedHeaders, ValidateMode validateMode,
         System.Globalization.CultureInfo culture, Configurations.ExcelMappingConfiguration mappingConfiguration,
         Configurations.ExcelMappingDocument mappingDocument,
-        Func<object, object> dynamicTargetGetter, int maxColumnLength,
+        Func<object, object> dynamicTargetGetter, int maxReadColumns,
         bool failOnUnknownDynamicColumns,
-        bool enabledEmptyLine, bool ignoreEmptyLineAfterData, ExcelReadColumnRange readColumnRange,
+        bool reportEmptyRows, bool stopAtFirstEmptyRow, ExcelReadColumnRange readColumnRange,
         ExcelNameComparison headerComparison, ExcelWhitespacePolicy headerWhitespace,
         ExcelWhitespacePolicy bodyWhitespace)
     {
@@ -73,17 +73,17 @@ public sealed class ExcelSheetImportRequest
         DataRowStartIndex = dataRowStartIndex;
         DynamicColumns = dynamicColumns?.ToArray() ?? Array.Empty<Exports.ExcelDynamicColumnDefinition>();
         DynamicTarget = dynamicTarget;
-        HeaderMatch = headerMatch;
+        RequireExpectedHeaders = requireExpectedHeaders;
         ValidateMode = validateMode;
         Culture = culture;
         MappingConfiguration = mappingConfiguration == null ? null :
             MappingConfigurationCloner.Clone(mappingConfiguration, mappingConfiguration.SourceKind);
         MappingDocument = Configurations.MappingDocumentCloner.Clone(mappingDocument);
         DynamicTargetGetter = dynamicTargetGetter;
-        MaxColumnLength = maxColumnLength;
+        MaxReadColumns = maxReadColumns;
         FailOnUnknownDynamicColumns = failOnUnknownDynamicColumns;
-        EnabledEmptyLine = enabledEmptyLine;
-        IgnoreEmptyLineAfterData = ignoreEmptyLineAfterData;
+        ReportEmptyRows = reportEmptyRows;
+        StopAtFirstEmptyRow = stopAtFirstEmptyRow;
         ReadColumnRange = readColumnRange;
         HeaderComparison = headerComparison;
         HeaderWhitespace = headerWhitespace;
@@ -124,7 +124,7 @@ public sealed class ExcelSheetImportRequest
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Expression DynamicTarget { get; }
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public bool HeaderMatch { get; }
+    public bool RequireExpectedHeaders { get; }
     [EditorBrowsable(EditorBrowsableState.Never)]
     public ValidateMode ValidateMode { get; }
     [EditorBrowsable(EditorBrowsableState.Never)]
@@ -136,7 +136,7 @@ public sealed class ExcelSheetImportRequest
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Func<object, object> DynamicTargetGetter { get; }
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public int MaxColumnLength { get; }
+    public int MaxReadColumns { get; }
     [EditorBrowsable(EditorBrowsableState.Never)]
     public ExcelReadColumnRange ReadColumnRange { get; }
     [EditorBrowsable(EditorBrowsableState.Never)]
@@ -148,9 +148,9 @@ public sealed class ExcelSheetImportRequest
     [EditorBrowsable(EditorBrowsableState.Never)]
     public bool FailOnUnknownDynamicColumns { get; }
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public bool EnabledEmptyLine { get; }
+    public bool ReportEmptyRows { get; }
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public bool IgnoreEmptyLineAfterData { get; }
+    public bool StopAtFirstEmptyRow { get; }
 }
 
 /// <summary>

@@ -7,6 +7,7 @@ using Bing.Offices.Attributes;
 using Bing.Offices.Conversions;
 using Bing.Offices.Configurations;
 using Bing.Offices.Csv;
+using Bing.Offices.Exceptions;
 using Bing.Offices.Exports;
 using Bing.Offices.Imports;
 using Bing.Offices.Extensions;
@@ -43,8 +44,9 @@ public class ExcelImporterIntegrationTest
         try
         {
             // Act
-            Assert.ThrowsAny<IOException>(() => provider.GetRequiredService<IExcelExporter>()
+            var exception = Assert.Throws<BingOfficesFileCommitException>(() => provider.GetRequiredService<IExcelExporter>()
                 .ExportToFile(request, path));
+            Assert.IsType<IOException>(exception.InnerException);
 
             // Assert
             Assert.Equal("原始内容", File.ReadAllText(path, System.Text.Encoding.UTF8));
@@ -87,7 +89,7 @@ public class ExcelImporterIntegrationTest
         try
         {
             // Act
-            var exception = Assert.Throws<IOException>(() => provider.GetRequiredService<IExcelImporter>()
+            var exception = Assert.Throws<BingOfficesImportException>(() => provider.GetRequiredService<IExcelImporter>()
                 .Import(source, request));
 
             // Assert
@@ -136,7 +138,7 @@ public class ExcelImporterIntegrationTest
         try
         {
             // Act
-            var exception = Assert.Throws<InvalidOperationException>(() => provider.GetRequiredService<IExcelImporter>()
+            var exception = Assert.Throws<BingOfficesImportException>(() => provider.GetRequiredService<IExcelImporter>()
                 .Import(source, request));
 
             // Assert

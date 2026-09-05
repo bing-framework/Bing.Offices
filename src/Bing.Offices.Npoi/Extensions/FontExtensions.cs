@@ -5,7 +5,7 @@ namespace Bing.Offices.Npoi.Extensions;
 /// <summary>
 /// 字体属性配置扩展，返回同一字体以支持链式调用。
 /// </summary>
-internal static class FontExtensions
+public static class FontExtensions
 {
     #region SetFontHeightInPoints(设置字体大小)
 

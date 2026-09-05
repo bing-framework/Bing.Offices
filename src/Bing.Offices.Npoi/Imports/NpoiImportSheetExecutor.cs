@@ -2,6 +2,7 @@
 using System.Reflection;
 using Bing.Offices.Attributes;
 using Bing.Offices.Configurations;
+using Bing.Offices.Exceptions;
 using Bing.Offices.Exports;
 using Bing.Offices.Imports;
 using Bing.Offices.Mappings;
@@ -34,8 +35,8 @@ internal sealed class NpoiImportSheetExecutor
     {
         var header = sheet.GetRow(options.HeaderRowIndex)
             ?? throw new NpoiSheetStructureException("导入的模板不正确，未匹配表头。");
-        if (header.LastCellNum > options.MaxColumnLength)
-            throw new NpoiSheetStructureException($"导入表头超过最大列长度: {options.MaxColumnLength}");
+        if (header.LastCellNum > options.MaxReadColumns)
+            throw new NpoiSheetStructureException($"导入表头超过最大列长度: {options.MaxReadColumns}");
 
         var columns = CreateColumns<T>(header, options);
         if (runtime.RowLimitReached)
@@ -84,9 +85,9 @@ internal sealed class NpoiImportSheetExecutor
             var row = sheet.GetRow(rowIndex);
             if (NpoiImportRowMaterializer.IsEmpty(row, options.BodyWhitespace, imageRows, rowIndex))
             {
-                if (options.IgnoreEmptyLineAfterData)
+                if (options.StopAtFirstEmptyRow)
                     break;
-                if (options.EnabledEmptyLine)
+                if (options.ReportEmptyRows)
                 {
                     errors.Add(new ExcelImportError(ExcelImportErrorCode.InvalidInput, "导入数据存在空行", sheet.SheetName,
                         rowIndex + 1, 0, null));
@@ -102,7 +103,7 @@ internal sealed class NpoiImportSheetExecutor
                 uniqueTracker.BeginRow();
             var workbookValid = NpoiWorkbookValidationPipeline.Validate(row, columns, validationIndex, sheet,
                 sheet.SheetName, rowIndex, options.BodyWhitespace, options.ValidateMode,
-                options.UnsupportedFeaturePolicy, errors);
+                options.UnsupportedFeaturePolicy, errors, options.IsDate1904);
             if (!workbookValid)
             {
                 if (configuredValidationEnabled)
@@ -115,7 +116,8 @@ internal sealed class NpoiImportSheetExecutor
                 continue;
             }
             if (configuredValidationEnabled && !_rowMaterializer.ValidateRawValues(row, columns, duplicateValues,
-                    sheet.SheetName, rowIndex, options.ValidateMode, options.Culture, options.BodyWhitespace, errors))
+                    sheet.SheetName, rowIndex, options.ValidateMode, options.Culture, options.BodyWhitespace, errors,
+                    options.IsDate1904))
             {
                 uniqueTracker.RollbackRow();
                 if (errors.IsLimitReached)
@@ -127,7 +129,8 @@ internal sealed class NpoiImportSheetExecutor
             }
             if (_rowMaterializer.TryCreateItem(row, columns, duplicateValues, uniqueTracker, sheet.SheetName,
                     rowIndex, options.ValidateMode, configuredValidationEnabled, errors, options.Culture,
-                    options.BodyWhitespace, options.DynamicTargetGetter, imageIndex, out T item))
+                    options.BodyWhitespace, options.DynamicTargetGetter, imageIndex, options.IsDate1904,
+                    out T item))
             {
                 items.Add(item);
                 sourceRows?.Add(rowIndex);
@@ -153,11 +156,13 @@ internal sealed class NpoiImportSheetExecutor
     {
         var map = options.MappingPlan;
         if (map == null)
-            throw new InvalidOperationException("工作表导入计划不可用。");
+            throw new BingOfficesConfigurationException("工作表导入计划不可用。",
+                stage: BingOfficesStage.Plan);
         var dynamicProperties = map.Columns.Where(property => property.IsDynamicColumn).ToList();
         var dynamicPlans = map.DynamicColumns;
         if (dynamicProperties.Count > 1)
-            throw new InvalidOperationException($"导入模板 {typeof(T).FullName} 只能声明一个动态列属性。");
+            throw new BingOfficesConfigurationException(
+                $"导入模板 {typeof(T).FullName} 只能声明一个动态列属性。", stage: BingOfficesStage.Plan);
         var fixedProperties = map.Columns.Where(property => !property.Ignored && !property.IsDynamicColumn).ToList();
         var headerNames = new HashSet<string>(options.HeaderComparison == ExcelNameComparison.Ordinal
             ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase);
@@ -192,9 +197,11 @@ internal sealed class NpoiImportSheetExecutor
             var isUnspecifiedDynamicColumn = property.IsDynamicColumn && dynamicDefinition == null;
             var reflectionProperty = typeof(T).GetProperty(property.Name, BindingFlags.Instance | BindingFlags.Public);
             if (reflectionProperty == null)
-                throw new InvalidOperationException($"无法解析映射属性: {property.Name}");
+                throw new BingOfficesConfigurationException($"无法解析映射属性: {property.Name}",
+                    stage: BingOfficesStage.Plan);
             if (!property.IsDynamicColumn && !reflectionProperty.CanWrite)
-                throw new InvalidOperationException($"属性不可写入: {property.Name}");
+                throw new BingOfficesConfigurationException($"属性不可写入: {property.Name}",
+                    stage: BingOfficesStage.Plan);
             var valueConverters = isUnspecifiedDynamicColumn
                 ? (IReadOnlyList<Bing.Offices.Conversions.IExcelValueConverter>)Array.Empty<Bing.Offices.Conversions.IExcelValueConverter>()
                 : property.IsDynamicColumn ? dynamicPlan.ValueConverters : property.ValueConverters;
@@ -205,7 +212,7 @@ internal sealed class NpoiImportSheetExecutor
                 reflectionProperty: reflectionProperty, isUnique: dynamicPlan?.IsUnique,
                 uniqueIgnoreEmpty: dynamicPlan?.UniqueIgnoreEmpty ?? true);
         }
-        if (options.HeaderMatch)
+        if (options.RequireExpectedHeaders)
         {
             var missing = fixedProperties.Where(property => !columns.Values.Any(column => column.Property == property)
                 && (options.ReadColumnRange == null || !header.Cells.Any(cell =>

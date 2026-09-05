@@ -5,7 +5,7 @@ namespace Bing.Offices.Npoi.Extensions;
 /// <summary>
 /// NPOI单元格(<see cref="NPOI.SS.UserModel.ICell"/>) 扩展
 /// </summary>
-internal static partial class CellExtensions
+public static partial class CellExtensions
 {
     #region AddConditionalFormattingRules(添加条件格式规则)
 

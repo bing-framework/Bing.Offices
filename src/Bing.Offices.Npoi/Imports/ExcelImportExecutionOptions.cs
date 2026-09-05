@@ -21,7 +21,7 @@ internal sealed class ExcelImportExecutionOptions<T> where T : class, new()
     /// <summary>获取或设置数据开始所在的零基行索引。</summary>
     internal int DataRowIndex { get; set; } = 1;
     /// <summary>获取或设置允许读取的最大列数。</summary>
-    internal int MaxColumnLength { get; set; } = 100;
+    internal int MaxReadColumns { get; set; } = 100;
     /// <summary>获取或设置允许读取的列索引范围。</summary>
     internal ExcelReadColumnRange ReadColumnRange { get; set; }
     /// <summary>获取或设置表头名称的比较规则。</summary>
@@ -37,7 +37,7 @@ internal sealed class ExcelImportExecutionOptions<T> where T : class, new()
     /// <summary>获取或设置从导入实体取得动态列字典的委托。</summary>
     internal Func<object, object> DynamicTargetGetter { get; set; }
     /// <summary>获取或设置是否要求全部固定映射列均出现在表头中。</summary>
-    internal bool HeaderMatch { get; set; } = true;
+    internal bool RequireExpectedHeaders { get; set; } = true;
     /// <summary>获取或设置请求声明的动态列定义。</summary>
     internal IReadOnlyList<ExcelDynamicColumnDefinition> DynamicColumns { get; set; } =
         System.Array.Empty<ExcelDynamicColumnDefinition>();
@@ -46,9 +46,9 @@ internal sealed class ExcelImportExecutionOptions<T> where T : class, new()
     /// <summary>获取或设置单行校验失败后的继续策略。</summary>
     internal ValidateMode ValidateMode { get; set; } = ValidateMode.StopOnFirstFailure;
     /// <summary>获取或设置是否将数据区空行记录为错误。</summary>
-    internal bool EnabledEmptyLine { get; set; }
+    internal bool ReportEmptyRows { get; set; }
     /// <summary>获取或设置遇到首个数据区空行后是否停止读取。</summary>
-    internal bool IgnoreEmptyLineAfterData { get; set; }
+    internal bool StopAtFirstEmptyRow { get; set; }
     /// <summary>获取或设置请求级映射配置。</summary>
     internal ExcelMappingConfiguration MappingConfiguration { get; set; }
     /// <summary>获取或设置映射计划的来源文档。</summary>
@@ -61,4 +61,6 @@ internal sealed class ExcelImportExecutionOptions<T> where T : class, new()
     internal StringComparison UniqueComparison { get; set; } = StringComparison.OrdinalIgnoreCase;
     /// <summary>获取或设置文本转换和校验使用的区域性。</summary>
     internal CultureInfo Culture { get; set; } = CultureInfo.InvariantCulture;
+    /// <summary>获取或设置当前工作簿是否使用 1904 日期系统。</summary>
+    internal bool IsDate1904 { get; set; }
 }

@@ -14,13 +14,13 @@ internal static class CsvHeaderBinder
     /// <param name="properties">可绑定的固定属性集合。</param>
     /// <param name="dynamicProperties">可绑定的动态字典属性集合。</param>
     /// <param name="dynamicColumns">已编译的动态列表头映射。</param>
-    /// <param name="headerMatch">是否要求所有固定属性均出现在表头中。</param>
+    /// <param name="requireExpectedHeaders">是否要求所有固定属性均出现在表头中。</param>
     /// <param name="maxColumns">允许读取的最大表头列数。</param>
     /// <returns>按源 CSV 列索引排列的绑定列集合。</returns>
     public static IReadOnlyList<CsvColumn> Bind(IEnumerator<IReadOnlyList<string>> records,
         IReadOnlyCollection<CsvPropertyBinding> properties,
         IReadOnlyCollection<CsvPropertyBinding> dynamicProperties,
-        IReadOnlyList<IExcelDynamicMappingColumn> dynamicColumns, bool headerMatch, int? maxColumns = null)
+        IReadOnlyList<IExcelDynamicMappingColumn> dynamicColumns, bool requireExpectedHeaders, int? maxColumns = null)
     {
         if (records == null)
             throw new ArgumentNullException(nameof(records));
@@ -56,7 +56,7 @@ internal static class CsvHeaderBinder
                 throw new CsvInvalidHeaderException($"导入模板属性不可写入: {property.Name}");
             columns.Add(new CsvColumn(index, property, header, property.IsDynamicColumn, dynamicColumn));
         }
-        if (headerMatch)
+        if (requireExpectedHeaders)
         {
             var missing = properties.Where(property => columns.All(column => column.Property != property))
                 .Select(property => property.Title);

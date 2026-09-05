@@ -15,8 +15,10 @@ public sealed class ExcelCellValue
     /// <param name="formula">公式文本。</param>
     /// <param name="errorCode">错误码。</param>
     /// <param name="formatIndex">提供程序格式索引。</param>
+    /// <param name="isDate1904">当前工作簿是否使用 1904 日期系统。</param>
     public ExcelCellValue(object value, string text, ExcelCellKind kind, ExcelCellKind? cachedKind = null,
-        string formula = null, int? errorCode = null, int? formatIndex = null)
+        string formula = null, int? errorCode = null, int? formatIndex = null,
+        bool isDate1904 = false)
     {
         Value = value;
         Text = text ?? string.Empty;
@@ -25,6 +27,7 @@ public sealed class ExcelCellValue
         Formula = formula;
         ErrorCode = errorCode;
         FormatIndex = formatIndex;
+        IsDate1904 = isDate1904;
     }
 
     /// <summary>
@@ -61,4 +64,7 @@ public sealed class ExcelCellValue
     /// 获取提供程序格式索引。
     /// </summary>
     public int? FormatIndex { get; }
+
+    /// <summary>获取当前工作簿是否使用 1904 日期系统。</summary>
+    public bool IsDate1904 { get; }
 }

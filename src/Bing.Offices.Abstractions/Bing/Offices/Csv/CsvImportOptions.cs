@@ -38,7 +38,7 @@ public sealed class CsvImportOptions<T> where T : class, new()
     /// <summary>
     /// 获取或设置是否要求固定属性表头完整匹配。
     /// </summary>
-    public bool HeaderMatch { get; set; } = true;
+    public bool RequireExpectedHeaders { get; set; } = true;
 
     /// <summary>
     /// 获取或设置本次导入的请求级映射配置。

@@ -1,4 +1,5 @@
 ﻿using Bing.Offices.Exports;
+using Bing.Offices.Exceptions;
 using Bing.Offices.Attributes;
 using Bing.Offices.Conversions;
 using Bing.Offices.Configurations;
@@ -33,19 +34,24 @@ internal sealed class NpoiExcelExporter : IExcelExporter
     /// 根据列计划将实体数据写入 NPOI 工作表的写入器。
     /// </summary>
     private readonly NpoiExportSheetWriter _sheetWriter;
+    /// <summary>观察并记录公共 Excel 导出异常。</summary>
+    private readonly BingOfficesExceptionDispatcher _exceptionDispatcher;
 
     /// <summary>
     /// 初始化一个<see cref="NpoiExcelExporter"/>类型的实例。
     /// </summary>
     /// <param name="valueConverters">值转换器集合。</param>
     /// <param name="mappingPlanFactory">方向化映射计划工厂。</param>
+    /// <param name="exceptionObservers">接收公共运行异常的观察器集合。</param>
     public NpoiExcelExporter(IEnumerable<IExcelValueConverter> valueConverters = null,
-        IExcelMappingPlanFactory mappingPlanFactory = null)
+        IExcelMappingPlanFactory mappingPlanFactory = null,
+        IEnumerable<IBingOfficesExceptionObserver> exceptionObservers = null)
     {
         _valueConverters = valueConverters?.ToArray() ?? Array.Empty<IExcelValueConverter>();
         _planBuilder = new NpoiExportPlanBuilder(mappingPlanFactory ?? NpoiMappingPlanFactoryResolver.CreateDefault(
             _valueConverters));
         _sheetWriter = new NpoiExportSheetWriter();
+        _exceptionDispatcher = new BingOfficesExceptionDispatcher(exceptionObservers);
     }
 
     /// <inheritdoc />
@@ -62,8 +68,6 @@ internal sealed class NpoiExcelExporter : IExcelExporter
 
         try
         {
-            using var workbook = CreateWorkbook(request);
-            var planBySheet = _planBuilder.Create(request);
             var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var sheetRequest in request.Sheets)
             {
@@ -71,6 +75,30 @@ internal sealed class NpoiExcelExporter : IExcelExporter
                 ValidateSheetName(sheetRequest.Name);
                 if (!names.Add(sheetRequest.Name))
                     throw new ArgumentException($"Workbook 包含重复 Sheet 名称: {sheetRequest.Name}");
+            }
+            using var workbook = CreateWorkbook(request);
+            Dictionary<ExcelSheetExportRequest, IExcelMappingPlan> planBySheet;
+            try
+            {
+                planBySheet = _planBuilder.Create(request);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (BingOfficesException)
+            {
+                throw;
+            }
+            catch (Exception exception) when (exception is not OutOfMemoryException
+                && exception is not StackOverflowException)
+            {
+                throw new BingOfficesConfigurationException("Excel 导出映射配置无效。", exception,
+                    BingOfficesStage.Plan);
+            }
+            foreach (var sheetRequest in request.Sheets)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
                 WriteSheet(workbook, sheetRequest, request.Template != null, cancellationToken,
                     planBySheet[sheetRequest]);
             }
@@ -86,6 +114,34 @@ internal sealed class NpoiExcelExporter : IExcelExporter
                 throw new OperationCanceledException(cancellationToken);
             }
             cancellationToken.ThrowIfCancellationRequested();
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (ArgumentException)
+        {
+            throw;
+        }
+        catch (BingOfficesException exception)
+        {
+            _exceptionDispatcher.Observe(exception);
+            throw;
+        }
+        catch (NotSupportedException exception)
+        {
+            var translated = new BingOfficesUnsupportedFeatureException("当前 Excel 导出功能不受 NPOI 支持。",
+                exception, "NPOI", BingOfficesOperation.Export, BingOfficesStage.Write);
+            _exceptionDispatcher.Observe(translated);
+            throw translated;
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException
+            && exception is not StackOverflowException)
+        {
+            var translated = new BingOfficesExportException("Excel 导出失败。", exception, "NPOI",
+                BingOfficesStage.Write);
+            _exceptionDispatcher.Observe(translated);
+            throw translated;
         }
         finally
         {
@@ -161,22 +217,38 @@ internal sealed class NpoiExcelExporter : IExcelExporter
     {
         var sheet = workbook.GetSheet(request.Name);
         if (sheet == null && isTemplate)
-            throw new InvalidOperationException($"模板缺少请求的 Sheet: {request.Name}");
+            throw new BingOfficesConfigurationException($"模板缺少请求的 Sheet: {request.Name}",
+                stage: BingOfficesStage.Plan);
         sheet ??= workbook.CreateSheet(request.Name);
         if (request.Hidden)
             workbook.SetSheetVisibility(workbook.GetSheetIndex(sheet), NPOI.SS.UserModel.SheetVisibility.Hidden);
         if (request.HeaderRowIndex < 0 || request.DataRowStartIndex <= request.HeaderRowIndex)
             throw new ArgumentOutOfRangeException(nameof(request.DataRowStartIndex));
 
-        var templateOrigin = ResolveTemplateOrigin(workbook, sheet, request, isTemplate);
+        (int Row, int Column) templateOrigin;
+        IReadOnlyList<ExcelColumnPlan> columns;
+        try
+        {
+            templateOrigin = ResolveTemplateOrigin(workbook, sheet, request, isTemplate);
+            var dynamicDefinitions = map.DynamicColumns.Select(column => CreateDynamicDefinition(column,
+                request.DynamicColumns.FirstOrDefault(item => string.Equals(item.Key, column.Key,
+                    StringComparison.OrdinalIgnoreCase)), map)).ToArray();
+            ValidateDynamicDefinitions(dynamicDefinitions);
+            columns = CreateColumns<T>(map, dynamicDefinitions);
+            ValidateDynamicColumns(dynamicDefinitions, columns);
+        }
+        catch (BingOfficesException)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException
+            && exception is not OutOfMemoryException && exception is not StackOverflowException)
+        {
+            throw new BingOfficesConfigurationException("Excel 导出映射配置无效。", exception,
+                BingOfficesStage.Plan);
+        }
         var headerRowIndex = templateOrigin.Row + request.HeaderRowIndex;
         var firstColumnIndex = templateOrigin.Column;
-        var dynamicDefinitions = map.DynamicColumns.Select(column => CreateDynamicDefinition(column,
-            request.DynamicColumns.FirstOrDefault(item => string.Equals(item.Key, column.Key,
-                StringComparison.OrdinalIgnoreCase)), map)).ToArray();
-        ValidateDynamicDefinitions(dynamicDefinitions);
-        var columns = CreateColumns<T>(map, dynamicDefinitions);
-        ValidateDynamicColumns(dynamicDefinitions, columns);
         _sheetWriter.Write<T>(workbook, request, cancellationToken, map, columns, templateOrigin.Row,
             firstColumnIndex);
     }

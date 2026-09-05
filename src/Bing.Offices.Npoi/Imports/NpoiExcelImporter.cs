@@ -4,6 +4,7 @@ using Bing.Offices.Attributes;
 using Bing.Offices.Conversions;
 using Bing.Offices.Configurations;
 using Bing.Offices.Exports;
+using Bing.Offices.Exceptions;
 using Bing.Offices.Imports;
 using Bing.Offices.Mappings;
 using Bing.Offices.Providers;
@@ -49,6 +50,8 @@ internal sealed class NpoiExcelImporter : IExcelImporter
     private readonly NpoiImportRowMaterializer _rowMaterializer;
     /// <summary>执行单个工作表的表头、资源、校验和逐行导入。</summary>
     private readonly NpoiImportSheetExecutor _sheetExecutor;
+    /// <summary>观察并记录公共 Excel 导入异常。</summary>
+    private readonly BingOfficesExceptionDispatcher _exceptionDispatcher;
 
     /// <summary>
     /// 初始化一个<see cref="NpoiExcelImporter"/>类型的实例。
@@ -57,10 +60,12 @@ internal sealed class NpoiExcelImporter : IExcelImporter
     /// <param name="valueConverters">值转换器集合。</param>
     /// <param name="namedValidationRules">命名配置校验规则集合。</param>
     /// <param name="mappingPlanFactory">方向化映射计划工厂。</param>
+    /// <param name="exceptionObservers">接收公共运行异常的观察器集合。</param>
     public NpoiExcelImporter(IEnumerable<IExcelValidationRule> validationRules = null,
         IEnumerable<IExcelValueConverter> valueConverters = null,
         IEnumerable<INamedExcelValidationRule> namedValidationRules = null,
-        IExcelMappingPlanFactory mappingPlanFactory = null)
+        IExcelMappingPlanFactory mappingPlanFactory = null,
+        IEnumerable<IBingOfficesExceptionObserver> exceptionObservers = null)
     {
         _validationRules = validationRules?.ToArray() ?? ExcelValidationRules.CreateDefault();
         _valueConverters = valueConverters?.ToArray() ?? Array.Empty<IExcelValueConverter>();
@@ -70,6 +75,7 @@ internal sealed class NpoiExcelImporter : IExcelImporter
         _planBuilder = new NpoiImportPlanBuilder(_mappingPlanFactory);
         _rowMaterializer = new NpoiImportRowMaterializer();
         _sheetExecutor = new NpoiImportSheetExecutor(_rowMaterializer);
+        _exceptionDispatcher = new BingOfficesExceptionDispatcher(exceptionObservers);
     }
 
     /// <inheritdoc />
@@ -85,10 +91,58 @@ internal sealed class NpoiExcelImporter : IExcelImporter
             throw new ArgumentException("输入流不可读取。", nameof(source));
         cancellationToken.ThrowIfCancellationRequested();
 
+        try
+        {
+            return ImportCore(source, request, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (ArgumentException)
+        {
+            throw;
+        }
+        catch (BingOfficesResourceLimitException exception)
+        {
+            _exceptionDispatcher.Observe(exception);
+            throw;
+        }
+        catch (BingOfficesException exception)
+        {
+            _exceptionDispatcher.Observe(exception);
+            throw;
+        }
+        catch (ImageResourceLimitException exception)
+        {
+            var translated = new BingOfficesResourceLimitException("Excel 导入超过图片资源限制。", exception,
+                "NPOI", BingOfficesOperation.Import, BingOfficesStage.Read);
+            _exceptionDispatcher.Observe(translated);
+            throw translated;
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException
+            && exception is not StackOverflowException)
+        {
+            var translated = new BingOfficesImportException("Excel 导入失败。", exception, "NPOI",
+                BingOfficesStage.Read);
+            _exceptionDispatcher.Observe(translated);
+            throw translated;
+        }
+    }
+
+    private ExcelWorkbookImportResult<TWorkbook> ImportCore<TWorkbook>(Stream source,
+        ExcelWorkbookImportRequest<TWorkbook> request, CancellationToken cancellationToken)
+        where TWorkbook : class, new()
+    {
+
         using var bufferedSource = new MemoryStream();
         NpoiStreamCopier.Copy(source, bufferedSource, cancellationToken, request.ResourceLimits?.MaxInputBytes);
         bufferedSource.Position = 0;
+        NpoiXlsxZipPreflight.Validate(bufferedSource, request.ResourceLimits ?? new ExcelResourceLimits(),
+            cancellationToken);
+        bufferedSource.Position = 0;
         using var workbook = WorkbookFactory.Create(bufferedSource);
+        var isDate1904 = workbook.IsDate1904();
         var root = new TWorkbook();
         var sheetResults = new List<ExcelSheetImportResult>();
         var errors = new ExcelImportErrorCollector(request.ResourceLimits?.MaxErrors);
@@ -110,7 +164,21 @@ internal sealed class NpoiExcelImporter : IExcelImporter
             throw new ArgumentException(
                 $"多个 Sheet selector 指向同一物理 Sheet: {selectors}; 实际 Sheet=#{physicalIndex} {physicalName}");
         }
-        var plans = _planBuilder.Create(existingSheets);
+        Dictionary<ExcelSheetImportRequest, IExcelMappingPlan> plans;
+        try
+        {
+            plans = _planBuilder.Create(existingSheets);
+        }
+        catch (BingOfficesException)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException
+            && exception is not OutOfMemoryException && exception is not StackOverflowException)
+        {
+            throw new BingOfficesConfigurationException("Excel 映射配置无效。", exception,
+                BingOfficesStage.Plan);
+        }
         var resolvedSheetRequests = resolvedSheets.Where(sheet => sheet.Exists &&
                 !workbook.IsSheetHidden(sheet.Index) && !workbook.IsSheetVeryHidden(sheet.Index))
             .ToDictionary(sheet => sheet.Name, sheet => sheet.Request, StringComparer.OrdinalIgnoreCase);
@@ -139,7 +207,7 @@ internal sealed class NpoiExcelImporter : IExcelImporter
             {
                 ImportTypedSheet(sheet, sheetRequest, root, sheetResults, errors, request.ValidationMode,
                     request.ResourceLimits, request.UnsupportedFeaturePolicy, sourceLocations, runtime,
-                    cancellationToken, plans[sheetRequest]);
+                    cancellationToken, plans[sheetRequest], isDate1904);
             }
             catch (NpoiSheetStructureException exception)
             {
@@ -215,7 +283,7 @@ internal sealed class NpoiExcelImporter : IExcelImporter
         ExcelUnsupportedFeaturePolicy unsupportedFeaturePolicy,
         IDictionary<object, SourceLocation> sourceLocations,
         ExcelImportRuntime runtime,
-        CancellationToken cancellationToken, IExcelMappingPlan mappingPlan)
+        CancellationToken cancellationToken, IExcelMappingPlan mappingPlan, bool isDate1904)
         where TWorkbook : class, new()
     {
         var method = GetType().GetMethod(nameof(ImportTypedSheetCore), BindingFlags.Instance | BindingFlags.NonPublic);
@@ -223,7 +291,7 @@ internal sealed class NpoiExcelImporter : IExcelImporter
         {
             method.MakeGenericMethod(typeof(TWorkbook), request.ItemType).Invoke(this,
                 new object[] { sheet, request, root, sheetResults, errors, validationMode, resourceLimits,
-                    unsupportedFeaturePolicy, sourceLocations, runtime, cancellationToken, mappingPlan });
+                    unsupportedFeaturePolicy, sourceLocations, runtime, isDate1904, cancellationToken, mappingPlan });
         }
         catch (TargetInvocationException exception) when (exception.InnerException != null)
         {
@@ -241,7 +309,7 @@ internal sealed class NpoiExcelImporter : IExcelImporter
         ExcelUnsupportedFeaturePolicy unsupportedFeaturePolicy,
         IDictionary<object, SourceLocation> sourceLocations,
         ExcelImportRuntime runtime,
-        CancellationToken cancellationToken, IExcelMappingPlan mappingPlan)
+        bool isDate1904, CancellationToken cancellationToken, IExcelMappingPlan mappingPlan)
         where TWorkbook : class, new()
         where TItem : class, new()
     {
@@ -249,7 +317,7 @@ internal sealed class NpoiExcelImporter : IExcelImporter
         {
             HeaderRowIndex = request.HeaderRowIndex,
             DataRowIndex = request.DataRowStartIndex,
-            MaxColumnLength = request.MaxColumnLength,
+            MaxReadColumns = request.MaxReadColumns,
             ReadColumnRange = request.ReadColumnRange,
             HeaderComparison = request.HeaderComparison,
             HeaderWhitespace = request.HeaderWhitespace,
@@ -257,42 +325,60 @@ internal sealed class NpoiExcelImporter : IExcelImporter
             ValidationMode = validationMode,
             UnsupportedFeaturePolicy = unsupportedFeaturePolicy,
             DynamicTargetGetter = request.DynamicTargetGetter,
-            HeaderMatch = request.HeaderMatch,
+            RequireExpectedHeaders = request.RequireExpectedHeaders,
             ValidateMode = request.ValidateMode,
             Culture = request.Culture,
             DynamicColumns = request.DynamicColumns,
             FailOnUnknownDynamicColumns = request.FailOnUnknownDynamicColumns,
-            EnabledEmptyLine = request.EnabledEmptyLine,
-            IgnoreEmptyLineAfterData = request.IgnoreEmptyLineAfterData,
+            ReportEmptyRows = request.ReportEmptyRows,
+            StopAtFirstEmptyRow = request.StopAtFirstEmptyRow,
             MappingConfiguration = request.MappingConfiguration,
             MappingDocument = request.MappingDocument,
             MappingPlan = mappingPlan,
             MaxTrackedUniqueValues = resourceLimits?.MaxTrackedUniqueValues,
             UniqueComparison = resourceLimits?.UniqueComparison ?? StringComparison.OrdinalIgnoreCase
         };
+        options.IsDate1904 = isDate1904;
         if (mappingPlan == null)
         {
-            mappingPlan = _mappingPlanFactory.CreateWorkbook<TItem>(options.MappingDocument ?? new ExcelMappingDocument
+            try
             {
-                UseConventionFallback = true
-            }, options.MappingConfiguration, MappingDirection.Import, new[] { sheet.SheetName }).Sheets[0].Mapping;
-            options.MappingPlan = mappingPlan;
+                mappingPlan = _mappingPlanFactory.CreateWorkbook<TItem>(options.MappingDocument
+                    ?? new ExcelMappingDocument { UseConventionFallback = true }, options.MappingConfiguration,
+                    MappingDirection.Import, new[] { sheet.SheetName }).Sheets[0].Mapping;
+                options.MappingPlan = mappingPlan;
+            }
+            catch (BingOfficesException)
+            {
+                throw;
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException
+                && exception is not OutOfMemoryException && exception is not StackOverflowException)
+            {
+                throw new BingOfficesConfigurationException("Excel 映射配置无效。", exception,
+                    BingOfficesStage.Plan);
+            }
         }
         var dynamicProperties = mappingPlan.Columns.Count(property => property.IsDynamicColumn);
         if (dynamicProperties > 1)
-            throw new InvalidOperationException($"导入模板 {typeof(TItem).FullName} 只能声明一个动态列属性。");
+            throw new BingOfficesConfigurationException(
+                $"导入模板 {typeof(TItem).FullName} 只能声明一个动态列属性。", stage: BingOfficesStage.Plan);
         var readOnlyProperty = mappingPlan.Columns.FirstOrDefault(property => !property.Ignored
             && !property.IsDynamicColumn
             && !typeof(TItem).GetProperty(property.Name, BindingFlags.Instance | BindingFlags.Public).CanWrite);
         if (readOnlyProperty != null)
-            throw new InvalidOperationException($"属性不可写入: {readOnlyProperty.Name}");
+        {
+            var cause = new InvalidOperationException($"属性不可写入: {readOnlyProperty.Name}");
+            throw new BingOfficesConfigurationException(cause.Message, cause, BingOfficesStage.Plan);
+        }
         var items = new List<TItem>();
         var rows = new List<int>();
         var sheetErrors = errors.CreateChild();
         _sheetExecutor.Execute(sheet, options, items, sheetErrors, runtime, cancellationToken, rows);
         var target = (ICollection<TItem>)request.Target(root);
         if (target == null)
-            throw new InvalidOperationException($"Workbook 导入目标集合不可写入: {request.Name}");
+            throw new BingOfficesConfigurationException($"Workbook 导入目标集合不可写入: {request.Name}",
+                stage: BingOfficesStage.Plan);
         foreach (var item in items)
             target.Add(item);
         if (sourceLocations != null)
@@ -354,8 +440,9 @@ internal sealed class NpoiExcelImporter : IExcelImporter
     /// 读取不依赖 NPOI 的单元格值描述。
     /// </summary>
     /// <param name="cell">待读取的单元格。</param>
+    /// <param name="isDate1904">当前工作簿是否使用 1904 日期系统。</param>
     /// <returns>用于转换器和默认转换的单元格值描述。</returns>
-    internal static ExcelCellValue ReadCellValue(ICell cell)
+    internal static ExcelCellValue ReadCellValue(ICell cell, bool isDate1904 = false)
     {
         if (cell == null)
             return new ExcelCellValue(null, string.Empty, ExcelCellKind.Empty);
@@ -373,7 +460,8 @@ internal sealed class NpoiExcelImporter : IExcelImporter
         };
         return new ExcelCellValue(value, GetRawStringValue(cell), isFormula ? ExcelCellKind.Formula : effectiveKind,
             isFormula ? effectiveKind : null, isFormula ? cell.CellFormula : null,
-            effectiveType == CellType.Error ? cell.ErrorCellValue : null, cell.CellStyle?.DataFormat);
+            effectiveType == CellType.Error ? cell.ErrorCellValue : null, cell.CellStyle?.DataFormat,
+            isDate1904);
     }
 
     /// <summary>

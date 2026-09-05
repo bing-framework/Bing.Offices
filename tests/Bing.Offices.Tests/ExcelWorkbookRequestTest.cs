@@ -14,6 +14,7 @@ using Bing.Offices.Mappings;
 using Bing.Offices.Npoi.Exports;
 using Bing.Offices.Npoi.Imports;
 using Bing.Offices.Npoi;
+using Bing.Offices.Exceptions;
 using Bing.Offices.Providers;
 using Bing.Offices.Styles;
 using Bing.Offices.Validations;
@@ -285,8 +286,12 @@ public sealed class ExcelWorkbookRequestTest
         try
         {
             // Act
-            Assert.Throws<InvalidOperationException>(() => new ThrowingExcelExporter()
+            var commitException = Assert.Throws<BingOfficesFileCommitException>(() => new ThrowingExcelExporter()
                 .ExportToFile(request, filePath));
+            Assert.Equal(BingOfficesErrorCode.FileCommitFailed, commitException.Code);
+            Assert.Equal(BingOfficesOperation.FileCommit, commitException.Operation);
+            Assert.Equal(BingOfficesStage.Commit, commitException.Stage);
+            Assert.IsType<InvalidOperationException>(commitException.InnerException);
 
             // Assert
             Assert.Equal("原始内容", File.ReadAllText(filePath, Encoding.UTF8));
@@ -385,7 +390,11 @@ public sealed class ExcelWorkbookRequestTest
         try
         {
             // Act
-            Assert.ThrowsAny<IOException>(() => new NpoiExcelExporter().ExportToFile(request, directoryPath));
+            var exception = Assert.Throws<BingOfficesFileCommitException>(() =>
+                new NpoiExcelExporter().ExportToFile(request, directoryPath));
+            Assert.Equal(BingOfficesErrorCode.FileCommitFailed, exception.Code);
+            Assert.Equal(BingOfficesStage.Commit, exception.Stage);
+            Assert.IsType<IOException>(exception.InnerException);
 
             // Assert
             Assert.True(Directory.Exists(directoryPath));
@@ -620,13 +629,75 @@ public sealed class ExcelWorkbookRequestTest
             null);
 
         // Act
-        var exception = Assert.Throws<InvalidOperationException>(() =>
+        var exception = Assert.Throws<BingOfficesImportException>(() =>
             NpoiRelationBinder.Bind(root, request, new ExcelImportErrorCollector(null), null,
                 CancellationToken.None));
 
         // Assert
-        Assert.Equal($"关系异常: {failurePoint}", exception.Message);
+        Assert.Equal($"关系异常: {failurePoint}", exception.InnerException.Message);
+        Assert.Equal(BingOfficesErrorCode.UserExtensionFailed, exception.Code);
+        Assert.Equal(BingOfficesOperation.Import, exception.Operation);
+        Assert.Equal(BingOfficesStage.Validate, exception.Stage);
         Assert.IsNotType<TargetInvocationException>(exception);
+    }
+
+    /// <summary>
+    /// 测试 - 关系委托抛出取消或致命内存异常时，应直接保留原始异常实例。
+    /// </summary>
+    [Theory]
+    [InlineData("parents", false)]
+    [InlineData("children", false)]
+    [InlineData("parent-key", false)]
+    [InlineData("child-key", false)]
+    [InlineData("navigation", false)]
+    [InlineData("parents", true)]
+    [InlineData("children", true)]
+    [InlineData("parent-key", true)]
+    [InlineData("child-key", true)]
+    [InlineData("navigation", true)]
+    public void Import_RelationDelegateFatalOrCancellation_ShouldPreserveOriginalException(
+        string failurePoint, bool outOfMemory)
+    {
+        // Arrange
+        var root = new ThrowingRelationWorkbook();
+        root.Parents.Add(new ThrowingRelationParent { Id = 1 });
+        root.Children.Add(new ThrowingRelationChild { ParentId = 1 });
+        using var cancellation = new CancellationTokenSource();
+        Exception expected = outOfMemory
+            ? new OutOfMemoryException($"关系异常: {failurePoint}")
+            : new OperationCanceledException(cancellation.Token);
+        var request = ExcelRelationRequest.Create<ThrowingRelationWorkbook, ThrowingRelationParent,
+            ThrowingRelationChild, int>(
+            failurePoint == "parents"
+                ? value => ThrowRelationException<ThrowingRelationParent>(expected)
+                : value => value.Parents,
+            failurePoint == "children"
+                ? value => ThrowRelationException<ThrowingRelationChild>(expected)
+                : value => value.Children,
+            failurePoint == "parent-key"
+                ? parent => ThrowRelationKeyException(parent, expected)
+                : parent => parent.Id,
+            failurePoint == "child-key"
+                ? child => ThrowRelationKeyException(child, expected)
+                : child => child.ParentId,
+            failurePoint == "navigation"
+                ? parent => ThrowRelationException<ThrowingRelationChild>(expected)
+                : parent => parent.Children,
+            null);
+
+        // Act
+        var action = () => NpoiRelationBinder.Bind(root, request, new ExcelImportErrorCollector(null), null,
+            cancellation.Token);
+
+        // Assert
+        if (outOfMemory)
+            Assert.Same(expected, Assert.Throws<OutOfMemoryException>(action));
+        else
+        {
+            var exception = Assert.Throws<OperationCanceledException>(action);
+            Assert.Same(expected, exception);
+            Assert.Equal(cancellation.Token, exception.CancellationToken);
+        }
     }
 
     /// <summary>
@@ -717,7 +788,10 @@ public sealed class ExcelWorkbookRequestTest
         var action = () => new NpoiExcelExporter().Export(request, destination);
 
         // Assert
-        Assert.Throws<InvalidOperationException>(action);
+        var exception = Assert.Throws<BingOfficesConfigurationException>(action);
+        Assert.Equal(BingOfficesErrorCode.ConfigurationInvalid, exception.Code);
+        Assert.Equal(BingOfficesOperation.Configuration, exception.Operation);
+        Assert.Equal(BingOfficesStage.Validate, exception.Stage);
 
         var validRequest = ExcelExport.Workbook(workbook => workbook.AddSheet("订单",
             new[] { new ExportOrder { OrderNo = "O-1", CustomFields = new Dictionary<string, object>
@@ -1309,7 +1383,12 @@ public sealed class ExcelWorkbookRequestTest
         using var workbook = (HSSFWorkbook)WorkbookFactory.Create(supportedOutput);
         Assert.Equal(IndexedColors.Red.Index, workbook.GetSheet("客户").GetRow(1).GetCell(0)
             .CellStyle.FillForegroundColor);
-        Assert.Throws<NotSupportedException>(() => new NpoiExcelExporter().Export(unsupported, unsupportedOutput));
+        var exception = Assert.Throws<BingOfficesUnsupportedFeatureException>(() =>
+            new NpoiExcelExporter().Export(unsupported, unsupportedOutput));
+        Assert.Equal(BingOfficesErrorCode.UnsupportedFeature, exception.Code);
+        Assert.Equal(BingOfficesOperation.Export, exception.Operation);
+        Assert.Equal(BingOfficesStage.Write, exception.Stage);
+        Assert.IsType<NotSupportedException>(exception.InnerException);
     }
 
     /// <summary>
@@ -1640,7 +1719,7 @@ public sealed class ExcelWorkbookRequestTest
         Assert.Equal(2, dynamicPlan.ValidationBindings.Count);
         var xlsxResult = new NpoiExcelImporter(namedValidationRules: validators).Import(xlsx, request);
         var csvResult = new CsvEntityImporter(namedValidationRules: validators).Import<DynamicTargetRow>(csv,
-            new CsvImportOptions<DynamicTargetRow> { MappingDocument = document, HeaderMatch = false });
+            new CsvImportOptions<DynamicTargetRow> { MappingDocument = document, RequireExpectedHeaders = false });
 
         // Assert
         Assert.Single(xlsxResult.Errors);
@@ -1702,7 +1781,7 @@ public sealed class ExcelWorkbookRequestTest
         var plan = new ExcelMappingPlanFactory().Create<DynamicTargetRow>(document, MappingDirection.Import);
         var xlsxResult = new NpoiExcelImporter().Import(xlsx, request);
         var csvResult = new CsvEntityImporter().Import<DynamicTargetRow>(csv,
-            new CsvImportOptions<DynamicTargetRow> { MappingDocument = document, HeaderMatch = false });
+            new CsvImportOptions<DynamicTargetRow> { MappingDocument = document, RequireExpectedHeaders = false });
 
         // Assert
         Assert.Equal(7, plan.DynamicColumns.Count);
@@ -1758,7 +1837,7 @@ public sealed class ExcelWorkbookRequestTest
         var ignoredCsv = ImportDynamicUniqueCsv(csvText, ignoredDocument,
             new CsvImportOptions<DynamicTargetRow>
             {
-                HeaderMatch = false,
+                RequireExpectedHeaders = false,
                 UniqueComparison = StringComparison.OrdinalIgnoreCase
             });
 
@@ -1768,7 +1847,7 @@ public sealed class ExcelWorkbookRequestTest
         var trackedCsv = ImportDynamicUniqueCsv(csvText, trackedDocument,
             new CsvImportOptions<DynamicTargetRow>
             {
-                HeaderMatch = false,
+                RequireExpectedHeaders = false,
                 UniqueComparison = StringComparison.OrdinalIgnoreCase
             });
 
@@ -1790,7 +1869,7 @@ public sealed class ExcelWorkbookRequestTest
         var limitedCsv = ImportDynamicUniqueCsv("唯一\r\nABC\r\nDEF\r\n", limitedDocument,
             new CsvImportOptions<DynamicTargetRow>
             {
-                HeaderMatch = false,
+                RequireExpectedHeaders = false,
                 MaxTrackedUniqueValues = 1,
                 UniqueComparison = StringComparison.OrdinalIgnoreCase
             });
@@ -1883,7 +1962,7 @@ public sealed class ExcelWorkbookRequestTest
         // Act
         var xlsxResult = new NpoiExcelImporter().Import(xlsx, request);
         var csvResult = new CsvEntityImporter().Import<FixedValidationRow>(csv,
-            new CsvImportOptions<FixedValidationRow> { MappingDocument = document, HeaderMatch = false });
+            new CsvImportOptions<FixedValidationRow> { MappingDocument = document, RequireExpectedHeaders = false });
 
         // Assert
         Assert.Equal(7, xlsxResult.Errors.Count);
@@ -2679,9 +2758,19 @@ public sealed class ExcelWorkbookRequestTest
         throw new InvalidOperationException($"关系异常: {failurePoint}");
     }
 
+    private static ICollection<T> ThrowRelationException<T>(Exception exception)
+    {
+        throw exception;
+    }
+
     private static int ThrowRelationKey<T>(T value, string failurePoint)
     {
         throw new InvalidOperationException($"关系异常: {failurePoint}");
+    }
+
+    private static int ThrowRelationKeyException<T>(T value, Exception exception)
+    {
+        throw exception;
     }
 
     private sealed class SelectorWorkbook

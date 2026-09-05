@@ -1,9 +1,11 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Reflection;
 using System.Text;
 using Bing.Offices.Attributes;
 using Bing.Offices.Conversions;
 using Bing.Offices.Configurations;
+using Bing.Offices.Dates;
+using Bing.Offices.Exceptions;
 using Bing.Offices.Imports;
 using Bing.Offices.Mappings;
 using Bing.Offices.Providers;
@@ -22,23 +24,58 @@ internal sealed partial class CsvEntityExporter : ICsvExporter
     private readonly IReadOnlyList<IExcelValueConverter> _valueConverters;
     /// <summary>将 CSV 请求编译为不可变列映射计划的工厂。</summary>
     private readonly IExcelMappingPlanFactory _mappingPlanFactory;
+    /// <summary>观察并记录公共 CSV 运行异常。</summary>
+    private readonly BingOfficesExceptionDispatcher _exceptionDispatcher;
 
     /// <summary>
     /// 初始化一个<see cref="CsvEntityExporter"/>类型的实例。
     /// </summary>
     /// <param name="valueConverters">值转换器集合。</param>
     /// <param name="mappingPlanFactory">方向化映射计划工厂。</param>
+    /// <param name="exceptionObservers">接收公共运行异常的观察器集合。</param>
     public CsvEntityExporter(IEnumerable<IExcelValueConverter> valueConverters = null,
-        IExcelMappingPlanFactory mappingPlanFactory = null)
+        IExcelMappingPlanFactory mappingPlanFactory = null,
+        IEnumerable<IBingOfficesExceptionObserver> exceptionObservers = null)
     {
         _valueConverters = valueConverters?.ToArray() ?? Array.Empty<IExcelValueConverter>();
         _mappingPlanFactory = mappingPlanFactory ?? new ExcelMappingPlanFactory(
             valueConverters: _valueConverters);
+        _exceptionDispatcher = new BingOfficesExceptionDispatcher(exceptionObservers);
     }
 
     /// <inheritdoc />
     public void Export<T>(IEnumerable<T> data, Stream destination, CsvExportOptions<T> options = null,
         CancellationToken cancellationToken = default) where T : class, new()
+    {
+        try
+        {
+            ExportCore(data, destination, options, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (ArgumentException)
+        {
+            throw;
+        }
+        catch (BingOfficesException exception)
+        {
+            _exceptionDispatcher.Observe(exception);
+            throw;
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException
+            && exception is not StackOverflowException)
+        {
+            var translated = new BingOfficesExportException("CSV 导出失败。", exception, "Core",
+                BingOfficesStage.Write);
+            _exceptionDispatcher.Observe(translated);
+            throw translated;
+        }
+    }
+
+    private void ExportCore<T>(IEnumerable<T> data, Stream destination, CsvExportOptions<T> options,
+        CancellationToken cancellationToken) where T : class, new()
     {
         if (data == null)
             throw new ArgumentNullException(nameof(data));
@@ -54,19 +91,32 @@ internal sealed partial class CsvEntityExporter : ICsvExporter
         {
             UseConventionFallback = true
         };
-        var map = _mappingPlanFactory.Create<T>(document, options.MappingConfiguration, MappingDirection.Export);
-        var columns = CreateColumns<T>(map,
-            options.DynamicColumns);
+        IExcelMappingPlan map;
+        try
+        {
+            map = _mappingPlanFactory.Create<T>(document, options.MappingConfiguration, MappingDirection.Export);
+        }
+        catch (BingOfficesException)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException
+            && exception is not OutOfMemoryException && exception is not StackOverflowException)
+        {
+            throw new BingOfficesConfigurationException("CSV 映射配置无效。", exception);
+        }
+        var columns = CreateColumns<T>(map, options.DynamicColumns);
         using var writer = new StreamWriter(destination, options.Encoding, 1024, true);
         if (options.IncludeHeader)
-            CsvRecordWriter.Write(writer, columns.Select(column => column.Title), options.Delimiter, options.Quote, options.NewLine,
-                options.FormulaInjectionPolicy);
+            CsvRecordWriter.Write(writer, columns.Select(column => column.Title), options.Delimiter, options.Quote,
+                options.NewLine, options.FormulaInjectionPolicy);
         var rowIndex = options.IncludeHeader ? 2 : 1;
         foreach (var item in data)
         {
             cancellationToken.ThrowIfCancellationRequested();
-                CsvRecordWriter.Write(writer, columns.Select((column, index) => FormatValue(column, item, rowIndex, index + 1,
-                    options.Culture)), options.Delimiter, options.Quote, options.NewLine, options.FormulaInjectionPolicy);
+            CsvRecordWriter.Write(writer, columns.Select((column, index) => FormatValue(column, item, rowIndex,
+                index + 1, options.Culture)), options.Delimiter, options.Quote, options.NewLine,
+                options.FormulaInjectionPolicy);
             rowIndex++;
         }
         writer.Flush();
@@ -111,8 +161,18 @@ internal sealed partial class CsvEntityExporter : ICsvExporter
             columnIndex, culture);
         foreach (var converter in column.ValueConverters)
         {
-            if (converter.TryConvertTo(context, out var convertedValue))
-                return Convert.ToString(convertedValue, culture) ?? string.Empty;
+            try
+            {
+                if (converter.TryConvertTo(context, out var convertedValue))
+                    return Convert.ToString(convertedValue, culture) ?? string.Empty;
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException
+                && exception is not OutOfMemoryException && exception is not StackOverflowException)
+            {
+                throw new BingOfficesExportException("CSV 值转换器执行失败。", exception, "Core",
+                    BingOfficesStage.Validate, propertyName: column.Name, rowIndex: rowIndex,
+                    columnIndex: columnIndex, code: BingOfficesErrorCode.UserExtensionFailed);
+            }
         }
         if (!string.IsNullOrWhiteSpace(column.Formatter) && value is IFormattable formattable)
             return formattable.ToString(column.Formatter, culture);
@@ -133,7 +193,19 @@ internal sealed partial class CsvEntityExporter : ICsvExporter
     {
         if (!column.IsDynamic)
             return FormatValue(column.Property, column.Property.Getter(item), rowIndex, columnIndex, culture);
-        var values = column.Property.Getter(item) as IDictionary<string, object>;
+        object rawValue;
+        try
+        {
+            rawValue = column.Property.Getter(item);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException
+            && exception is not OutOfMemoryException && exception is not StackOverflowException)
+        {
+            throw new BingOfficesExportException("CSV 属性读取器执行失败。", exception, "Core",
+                BingOfficesStage.Validate, propertyName: column.Property.Name, rowIndex: rowIndex,
+                columnIndex: columnIndex, code: BingOfficesErrorCode.UserExtensionFailed);
+        }
+        var values = rawValue as IDictionary<string, object>;
         if (values == null || !values.TryGetValue(column.DynamicColumn?.Key ?? column.Title, out var value))
             return string.Empty;
         var type = CsvDynamicTypeResolver.Resolve(column.DynamicColumn?.DataTypeName);
@@ -141,8 +213,18 @@ internal sealed partial class CsvEntityExporter : ICsvExporter
             null, rowIndex, columnIndex, culture);
         foreach (var converter in column.DynamicColumn?.ValueConverters ?? Array.Empty<IExcelValueConverter>())
         {
-            if (converter.TryConvertTo(context, out var convertedValue))
-                return Convert.ToString(convertedValue, culture) ?? string.Empty;
+            try
+            {
+                if (converter.TryConvertTo(context, out var convertedValue))
+                    return Convert.ToString(convertedValue, culture) ?? string.Empty;
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException
+                && exception is not OutOfMemoryException && exception is not StackOverflowException)
+            {
+                throw new BingOfficesExportException("CSV 动态值转换器执行失败。", exception, "Core",
+                    BingOfficesStage.Validate, propertyName: column.Property.Name, rowIndex: rowIndex,
+                    columnIndex: columnIndex, code: BingOfficesErrorCode.UserExtensionFailed);
+            }
         }
         return Convert.ToString(value, culture) ?? string.Empty;
     }
@@ -229,6 +311,8 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
     private readonly IReadOnlyList<INamedExcelValidationRule> _namedValidationRules;
     /// <summary>将 CSV 请求编译为不可变列映射计划的工厂。</summary>
     private readonly IExcelMappingPlanFactory _mappingPlanFactory;
+    /// <summary>观察并记录公共 CSV 运行异常。</summary>
+    private readonly BingOfficesExceptionDispatcher _exceptionDispatcher;
 
     /// <summary>
     /// 初始化一个<see cref="CsvEntityImporter"/>类型的实例。
@@ -237,10 +321,12 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
     /// <param name="validationRules">属性校验规则集合。</param>
     /// <param name="namedValidationRules">命名配置校验规则集合。</param>
     /// <param name="mappingPlanFactory">方向化映射计划工厂。</param>
+    /// <param name="exceptionObservers">接收公共运行异常的观察器集合。</param>
     public CsvEntityImporter(IEnumerable<IExcelValueConverter> valueConverters = null,
         IEnumerable<IExcelValidationRule> validationRules = null,
         IEnumerable<INamedExcelValidationRule> namedValidationRules = null,
-        IExcelMappingPlanFactory mappingPlanFactory = null)
+        IExcelMappingPlanFactory mappingPlanFactory = null,
+        IEnumerable<IBingOfficesExceptionObserver> exceptionObservers = null)
     {
         _valueConverters = valueConverters?.ToArray() ?? Array.Empty<IExcelValueConverter>();
         _validationRules = validationRules?.ToArray() ?? ExcelValidationRules.CreateDefault();
@@ -249,11 +335,42 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
             valueConverters: _valueConverters,
             validationRules: _validationRules,
             namedValidationRules: _namedValidationRules);
+        _exceptionDispatcher = new BingOfficesExceptionDispatcher(exceptionObservers);
     }
 
     /// <inheritdoc />
     public CsvImportResult<T> Import<T>(Stream source, CsvImportOptions<T> options = null,
         CancellationToken cancellationToken = default) where T : class, new()
+    {
+        try
+        {
+            return ImportCore(source, options, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (ArgumentException)
+        {
+            throw;
+        }
+        catch (BingOfficesException exception)
+        {
+            _exceptionDispatcher.Observe(exception);
+            throw;
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException
+            && exception is not StackOverflowException)
+        {
+            var translated = new BingOfficesImportException("CSV 导入失败。", exception, "Core",
+                BingOfficesStage.Read);
+            _exceptionDispatcher.Observe(translated);
+            throw translated;
+        }
+    }
+
+    private CsvImportResult<T> ImportCore<T>(Stream source, CsvImportOptions<T> options,
+        CancellationToken cancellationToken) where T : class, new()
     {
         if (source == null)
             throw new ArgumentNullException(nameof(source));
@@ -293,7 +410,7 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
         try
         {
             columns = options.HasHeader
-                ? CsvHeaderBinder.Bind(records, properties, dynamicProperties, map.DynamicColumns, options.HeaderMatch,
+                ? CsvHeaderBinder.Bind(records, properties, dynamicProperties, map.DynamicColumns, options.RequireExpectedHeaders,
                     options.MaxColumns)
                 : CsvHeaderBinder.BindByPosition(properties);
         }
@@ -374,9 +491,29 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
                         var converted = ConvertValue(value, column.Property, rowIndex, column.Index + 1, options.Culture);
                         ValidateConvertedValue(value, converted, column, rowIndex, duplicateValues, uniqueTracker,
                             options.Culture);
-                        column.Property.Setter(item, converted);
+                        try
+                        {
+                            column.Property.Setter(item, converted);
+                        }
+                        catch (Exception exception) when (exception is not OperationCanceledException
+                            && exception is not OutOfMemoryException && exception is not StackOverflowException)
+                        {
+                            throw new BingOfficesImportException("CSV 属性写入器执行失败。", exception, "Core",
+                                BingOfficesStage.Validate, rowIndex: rowIndex,
+                                columnIndex: column.Index + 1, propertyName: column.Property.Name,
+                                code: BingOfficesErrorCode.UserExtensionFailed);
+                        }
                     }
-                    catch (Exception exception)
+                    catch (BingOfficesException)
+                    {
+                        throw;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
+                    catch (Exception exception) when (exception is not OutOfMemoryException
+                        && exception is not StackOverflowException)
                     {
                         int? firstRowNumber = null;
                         var errorColumnKey = column.DynamicColumn?.Key ?? column.Property.Name;
@@ -391,7 +528,20 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
                 if (valid)
                 {
                     if (dynamicValues != null)
-                        dynamicProperties[0].Setter(item, dynamicValues);
+                    {
+                        try
+                        {
+                            dynamicProperties[0].Setter(item, dynamicValues);
+                        }
+                        catch (Exception exception) when (exception is not OperationCanceledException
+                            && exception is not OutOfMemoryException && exception is not StackOverflowException)
+                        {
+                            throw new BingOfficesImportException("CSV 动态属性写入器执行失败。", exception, "Core",
+                                BingOfficesStage.Validate, rowIndex: rowIndex,
+                                propertyName: dynamicProperties[0].Name,
+                                code: BingOfficesErrorCode.UserExtensionFailed);
+                        }
+                    }
                     items.Add(item);
                     uniqueTracker.CommitRow();
                 }
@@ -450,8 +600,18 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
         var context = new ExcelConversionContext(value, property.Name, type, null, rowIndex, columnIndex, culture);
         foreach (var converter in property.ValueConverters)
         {
-            if (converter.TryConvertFrom(context, out var convertedValue))
-                return convertedValue;
+            try
+            {
+                if (converter.TryConvertFrom(context, out var convertedValue))
+                    return convertedValue;
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException
+                && exception is not OutOfMemoryException && exception is not StackOverflowException)
+            {
+                throw new BingOfficesImportException("CSV 值转换器执行失败。", exception, "Core",
+                    BingOfficesStage.Validate, rowIndex: rowIndex, columnIndex: columnIndex,
+                    propertyName: property.Name, code: BingOfficesErrorCode.UserExtensionFailed);
+            }
         }
         if (string.IsNullOrWhiteSpace(value))
         {
@@ -460,7 +620,8 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
             throw new InvalidCastException($"值转换失败。输入值为空，目标类型为: {type.FullName}");
         }
         if (property.ValueMap.TryGetValue(value, out var mappedValue))
-            return ConvertMappedValue(mappedValue, type, culture);
+            return ConvertMappedValue(mappedValue, type, culture, property.Attributes.OfType<ExcelDateAttribute>()
+                .FirstOrDefault());
         var targetType = Nullable.GetUnderlyingType(type) ?? type;
         if (targetType.IsEnum)
             return Enum.Parse(targetType, value, true);
@@ -468,6 +629,13 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
             return Guid.Parse(value);
         if (targetType == typeof(Version))
             return new Version(value);
+        if (targetType == typeof(DateTime) || targetType == typeof(DateTimeOffset))
+        {
+            if (ExcelDateParser.TryParse(new ExcelCellValue(value, value, ExcelCellKind.Text), value,
+                    type, culture, property.Attributes.OfType<ExcelDateAttribute>().FirstOrDefault(), out var parsed))
+                return parsed;
+            throw new FormatException($"值不是受支持的日期格式: {value}");
+        }
         return Convert.ChangeType(value, targetType, culture);
     }
 
@@ -486,8 +654,18 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
             column.Index + 1, culture, new ExcelCellValue(value, value, ExcelCellKind.Text));
         foreach (var converter in column.DynamicColumn.ValueConverters)
         {
-            if (converter.TryConvertFrom(context, out var convertedValue))
-                return convertedValue;
+            try
+            {
+                if (converter.TryConvertFrom(context, out var convertedValue))
+                    return convertedValue;
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException
+                && exception is not OutOfMemoryException && exception is not StackOverflowException)
+            {
+                throw new BingOfficesImportException("CSV 动态值转换器执行失败。", exception, "Core",
+                    BingOfficesStage.Validate, rowIndex: rowIndex, columnIndex: column.Index + 1,
+                    propertyName: column.DynamicColumn.Key, code: BingOfficesErrorCode.UserExtensionFailed);
+            }
         }
         if (string.IsNullOrWhiteSpace(value))
         {
@@ -497,8 +675,13 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
         }
         var targetType = Nullable.GetUnderlyingType(type) ?? type;
         if (targetType == typeof(Guid)) return Guid.Parse(value);
-        if (targetType == typeof(DateTime)) return DateTime.Parse(value, culture);
-        if (targetType == typeof(DateTimeOffset)) return DateTimeOffset.Parse(value, culture);
+        if (targetType == typeof(DateTime) || targetType == typeof(DateTimeOffset))
+        {
+            if (ExcelDateParser.TryParse(new ExcelCellValue(value, value, ExcelCellKind.Text), value,
+                    targetType, culture, null, out var parsed))
+                return parsed;
+            throw new FormatException($"值不是受支持的日期格式: {value}");
+        }
         return Convert.ChangeType(value, targetType, culture);
     }
 
@@ -514,8 +697,29 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
         var context = CreateValidationContext(value, null, column, rowIndex, duplicateValues, culture);
         foreach (var binding in GetValidationBindings(column).Where(binding => binding.IsRaw))
         {
-            if (!binding.Validate(context))
-                throw new InvalidOperationException(binding.ErrorMessage);
+            try
+            {
+                var isValid = binding.Validate(context);
+                if (!isValid)
+                    throw new ValidationFailedException(binding.ErrorMessage);
+            }
+            catch (BingOfficesException)
+            {
+                throw;
+            }
+            catch (ValidationFailedException exception)
+            {
+                throw new InvalidOperationException(exception.Message);
+            }
+            catch (Exception exception) when (binding.Kind == ExcelValidationBindingKind.Custom
+                && exception is not OperationCanceledException && exception is not OutOfMemoryException
+                && exception is not StackOverflowException)
+            {
+                throw new BingOfficesImportException("CSV 自定义校验器执行失败。", exception, "Core",
+                    BingOfficesStage.Validate, rowIndex: rowIndex, columnIndex: column.Index + 1,
+                    propertyName: column.DynamicColumn?.Key ?? column.Property.Name,
+                    code: BingOfficesErrorCode.UserExtensionFailed);
+            }
         }
     }
 
@@ -534,8 +738,29 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
         foreach (var binding in GetValidationBindings(column).Where(binding => !binding.IsRaw
                      && binding.Kind != ExcelValidationBindingKind.Unique))
         {
-            if (!binding.Validate(context))
-                throw new InvalidOperationException(binding.ErrorMessage);
+            try
+            {
+                var isValid = binding.Validate(context);
+                if (!isValid)
+                    throw new ValidationFailedException(binding.ErrorMessage);
+            }
+            catch (BingOfficesException)
+            {
+                throw;
+            }
+            catch (ValidationFailedException exception)
+            {
+                throw new InvalidOperationException(exception.Message);
+            }
+            catch (Exception exception) when (binding.Kind == ExcelValidationBindingKind.Custom
+                && exception is not OperationCanceledException && exception is not OutOfMemoryException
+                && exception is not StackOverflowException)
+            {
+                throw new BingOfficesImportException("CSV 自定义校验器执行失败。", exception, "Core",
+                    BingOfficesStage.Validate, rowIndex: rowIndex, columnIndex: column.Index + 1,
+                    propertyName: column.DynamicColumn?.Key ?? column.Property.Name,
+                    code: BingOfficesErrorCode.UserExtensionFailed);
+            }
         }
         var uniqueKey = column.DynamicColumn?.Key ?? column.Property.Name;
         var isUnique = column.DynamicColumn?.IsUnique ?? column.Property.IsUnique;
@@ -565,12 +790,21 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
     private static IReadOnlyList<IExcelValidationBinding> GetValidationBindings(CsvColumn column) =>
         column.DynamicColumn?.ValidationBindings ?? column.Property.ValidationBindings;
 
+    private sealed class ValidationFailedException : Exception
+    {
+        public ValidationFailedException(string message) : base(message)
+        {
+        }
+    }
+
     /// <summary>将配置的显示值映射文本转换为目标属性类型。</summary>
     /// <param name="value">映射配置中的文本值。</param>
     /// <param name="type">目标属性类型。</param>
     /// <param name="culture">文本转换使用的区域性。</param>
+    /// <param name="dateAttribute">目标属性上的日期输入配置。</param>
     /// <returns>目标类型的映射值。</returns>
-    private static object ConvertMappedValue(string value, Type type, CultureInfo culture)
+    private static object ConvertMappedValue(string value, Type type, CultureInfo culture,
+        ExcelDateAttribute dateAttribute = null)
     {
         var targetType = Nullable.GetUnderlyingType(type) ?? type;
         if (targetType == typeof(string))
@@ -581,8 +815,13 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
             return Guid.Parse(value);
         if (targetType == typeof(Version))
             return new Version(value);
-        if (targetType == typeof(DateTime))
-            return DateTime.Parse(value, culture);
+        if (targetType == typeof(DateTime) || targetType == typeof(DateTimeOffset))
+        {
+            if (ExcelDateParser.TryParse(new ExcelCellValue(value, value, ExcelCellKind.Text), value,
+                    type, culture, dateAttribute, out var parsed))
+                return parsed;
+            throw new FormatException($"值不是受支持的日期格式: {value}");
+        }
         return Convert.ChangeType(value, targetType, culture);
     }
 

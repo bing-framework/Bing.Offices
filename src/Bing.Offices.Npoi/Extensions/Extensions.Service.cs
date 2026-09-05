@@ -1,4 +1,5 @@
 ﻿using Bing.Offices.Exports;
+using Bing.Offices.Exceptions;
 using Bing.Offices.Imports;
 using Bing.Offices.Conversions;
 using Bing.Offices.Configurations;
@@ -29,8 +30,16 @@ public static class ExcelNpoiServiceCollectionExtensions
         foreach (var rule in ExcelValidationRules.CreateDefault())
             services.TryAddEnumerable(ServiceDescriptor.Singleton(typeof(IExcelValidationRule), rule.GetType()));
         ExcelMappingPlanFactoryProvider.RegisterDefault(services);
-        services.TryAddTransient<IExcelImporter, NpoiExcelImporter>();
-        services.TryAddTransient<IExcelExporter, NpoiExcelExporter>();
+        services.TryAddTransient<IExcelImporter>(provider => new NpoiExcelImporter(
+            provider.GetServices<IExcelValidationRule>(),
+            provider.GetServices<IExcelValueConverter>(),
+            provider.GetServices<INamedExcelValidationRule>(),
+            provider.GetService<IExcelMappingPlanFactory>(),
+            provider.GetServices<IBingOfficesExceptionObserver>()));
+        services.TryAddTransient<IExcelExporter>(provider => new NpoiExcelExporter(
+            provider.GetServices<IExcelValueConverter>(),
+            provider.GetService<IExcelMappingPlanFactory>(),
+            provider.GetServices<IBingOfficesExceptionObserver>()));
         return services;
     }
 }

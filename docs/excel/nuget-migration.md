@@ -25,12 +25,12 @@
 
 | 当前 2.x 入口 | 新代码建议 | 当前兼容策略 | 批准状态 |
 | --- | --- | --- | --- |
-| `ExcelMapping.For<T>()` | 按导入/导出方向使用对应 Builder | 保留 | 待批准 |
-| `Mapping(configuration)` / `Mapping(document)` | 使用具名的 MappingConfiguration/MappingDocument 入口 | 保留 | 待批准 |
-| `HeaderMatch` | `RequireExpectedHeaders` | 保留 | 待批准 |
-| `MaxColumnCount` | `MaxReadColumns` | 保留 | 待批准 |
-| `EnabledEmptyLine` | `ReportEmptyRows` | 保留 | 待批准 |
-| `IgnoreEmptyLineAfterData` | `StopAtFirstEmptyRow` | 保留 | 待批准 |
+| `ExcelMapping.For<T>()` | 按导入/导出方向使用对应 Builder | 保留 | 已确认方向中立映射入口 |
+| `Mapping(configuration)` / `Mapping(document)` | 使用具名的 `MappingConfiguration(...)` / `MappingDocument(...)` 入口 | 迁移中 | 当前 Major 仍使用 `Mapping(...)` |
+| `HeaderMatch` | `RequireExpectedHeaders` | 删除 | Major 已迁移 |
+| `MaxColumnCount` | `MaxReadColumns` | 删除 | Major 已迁移 |
+| `EnabledEmptyLine` | `ReportEmptyRows` | 删除 | Major 已迁移 |
+| `IgnoreEmptyLineAfterData` | `StopAtFirstEmptyRow` | 删除 | Major 已迁移 |
 | `AddNavigationSheet` | `AddSheet(name, parents.SelectMany(...))` | 保留 | 待批准 |
 | `ExcelSetting` / `SheetSetting` | `ExcelWorkbookMetadataOptions` 与 Sheet request | 已移除 | Round 6 已批准 |
 | `OfficeException` 异常层级 | 标准参数/状态异常与结构化导入错误 | 已移除 | Round 6 已批准 |

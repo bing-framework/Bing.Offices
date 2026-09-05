@@ -5,7 +5,7 @@ namespace Bing.Offices.Npoi.Extensions;
 /// <summary>
 /// 工作表行、合并区域和图片相关操作扩展。
 /// </summary>
-internal static partial class SheetExtensions
+public static partial class SheetExtensions
 {
     /// <summary>
     /// 获取工作表全部合并区域的零基边界，列顺序为起始行、起始列、结束行、结束列。

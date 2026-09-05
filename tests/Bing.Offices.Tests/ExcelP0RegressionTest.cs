@@ -10,6 +10,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using Bing.Offices.Attributes;
 using Bing.Offices.Configurations;
+using Bing.Offices.Exceptions;
 using Bing.Offices.Exports;
 using Bing.Offices.Imports;
 using Bing.Offices.Npoi.Exports;
@@ -755,7 +756,10 @@ public sealed class ExcelP0RegressionTest
         // Assert
         if (shouldThrow)
         {
-            Assert.Throws<InvalidOperationException>(action);
+            var exception = Assert.Throws<BingOfficesConfigurationException>(action);
+            Assert.Equal(BingOfficesErrorCode.ConfigurationInvalid, exception.Code);
+            Assert.Equal(BingOfficesOperation.Configuration, exception.Operation);
+            Assert.Equal(BingOfficesStage.Plan, exception.Stage);
             return;
         }
         action();
@@ -828,7 +832,10 @@ public sealed class ExcelP0RegressionTest
         var action = () => new NpoiExcelImporter().Import(source, request);
 
         // Assert
-        Assert.Throws<InvalidOperationException>(action);
+        var exception = Assert.Throws<BingOfficesResourceLimitException>(action);
+        Assert.Equal(BingOfficesErrorCode.ResourceLimitExceeded, exception.Code);
+        Assert.Equal(BingOfficesOperation.Import, exception.Operation);
+        Assert.Equal(BingOfficesStage.Serialize, exception.Stage);
         Assert.Equal(0, failure.Length);
     }
 
@@ -861,9 +868,11 @@ public sealed class ExcelP0RegressionTest
         try
         {
             // Act
-            Assert.Throws<InvalidOperationException>(() => new NpoiExcelImporter().Import(source, request));
+            var exception = Assert.Throws<BingOfficesResourceLimitException>(() =>
+                new NpoiExcelImporter().Import(source, request));
 
             // Assert
+            Assert.Equal(BingOfficesStage.Serialize, exception.Stage);
             Assert.Empty(Directory.GetFiles(temporaryDirectory));
         }
         finally
@@ -898,10 +907,14 @@ public sealed class ExcelP0RegressionTest
         try
         {
             // Act
-            var noSinkException = Assert.Throws<IOException>(() => NpoiFailureWorkbookWriter.Write(noSinkWorkbook,
+            var noSinkException = Assert.Throws<BingOfficesImportException>(() => NpoiFailureWorkbookWriter.Write(noSinkWorkbook,
                 noSinkOptions, errors, resolved, CancellationToken.None, noSinkFileSystem));
 
             // Assert
+            Assert.Equal(BingOfficesErrorCode.ImportFailed, noSinkException.Code);
+            Assert.Equal(BingOfficesOperation.Import, noSinkException.Operation);
+            Assert.Equal(BingOfficesStage.Cleanup, noSinkException.Stage);
+            Assert.IsType<IOException>(noSinkException.InnerException);
             Assert.Contains("清理失败", noSinkException.Message);
             Assert.NotNull(noSinkFileSystem.CreatedPath);
             Assert.True(File.Exists(noSinkFileSystem.CreatedPath));
@@ -935,6 +948,97 @@ public sealed class ExcelP0RegressionTest
     }
 
     /// <summary>
+    /// 测试 - Failure Workbook 序列化流抛出取消或致命内存异常时，应保留原始异常实例。
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void FailureWorkbook_SerializerFatalOrCancellation_ShouldPreserveOriginalException(bool outOfMemory)
+    {
+        // Arrange
+        using var cancellation = new CancellationTokenSource();
+        Exception expected = outOfMemory
+            ? new OutOfMemoryException("失败工作簿序列化内存异常")
+            : new OperationCanceledException(cancellation.Token);
+        using var workbook = new XSSFWorkbook();
+        workbook.CreateSheet("Data");
+        using var destination = new MemoryStream();
+        var options = new ExcelImportFailureOptions
+        {
+            Mode = ExcelImportFailureWorkbookMode.AnnotatedOriginal,
+            Destination = destination,
+            TemporaryDirectory = Path.Combine(Path.GetTempPath(), $"Bing.Offices.Failure.{Guid.NewGuid():N}")
+        };
+        var fileSystem = new ExceptionWriteFileSystem(expected);
+        var error = new ExcelImportError(ExcelImportErrorCode.InvalidInput, "invalid", "Data", 2, 1, "Value");
+
+        try
+        {
+            // Act
+            var action = () => NpoiFailureWorkbookWriter.Write(workbook, options, new[] { error },
+                new Dictionary<string, ExcelSheetImportRequest>(), cancellation.Token, fileSystem);
+
+            // Assert
+            if (outOfMemory)
+                Assert.Same(expected, Assert.Throws<OutOfMemoryException>(action));
+            else
+                Assert.Same(expected, Assert.Throws<OperationCanceledException>(action));
+        }
+        finally
+        {
+            if (Directory.Exists(options.TemporaryDirectory))
+                Directory.Delete(options.TemporaryDirectory, true);
+        }
+    }
+
+    /// <summary>
+    /// 测试 - Failure Workbook 诊断回调抛出取消或致命内存异常时，应保留原始异常实例。
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void FailureWorkbook_DiagnosticSinkFatalOrCancellation_ShouldPreserveOriginalException(bool outOfMemory)
+    {
+        // Arrange
+        using var cancellation = new CancellationTokenSource();
+        Exception expected = outOfMemory
+            ? new OutOfMemoryException("失败工作簿诊断内存异常")
+            : new OperationCanceledException(cancellation.Token);
+        var temporaryDirectory = Path.Combine(Path.GetTempPath(), $"Bing.Offices.Failure.{Guid.NewGuid():N}");
+        using var workbook = new XSSFWorkbook();
+        workbook.CreateSheet("Data");
+        var options = new ExcelImportFailureOptions
+        {
+            Mode = ExcelImportFailureWorkbookMode.AnnotatedOriginal,
+            Destination = new MemoryStream(),
+            TemporaryDirectory = temporaryDirectory,
+            DiagnosticSink = _ => throw expected
+        };
+        var fileSystem = new FailingDeleteFileSystem();
+        var error = new ExcelImportError(ExcelImportErrorCode.InvalidInput, "invalid", "Data", 2, 1, "Value");
+
+        try
+        {
+            // Act
+            var action = () => NpoiFailureWorkbookWriter.Write(workbook, options, new[] { error },
+                new Dictionary<string, ExcelSheetImportRequest>(), cancellation.Token, fileSystem);
+
+            // Assert
+            if (outOfMemory)
+                Assert.Same(expected, Assert.Throws<OutOfMemoryException>(action));
+            else
+                Assert.Same(expected, Assert.Throws<OperationCanceledException>(action));
+        }
+        finally
+        {
+            if (fileSystem.CreatedPath != null && File.Exists(fileSystem.CreatedPath))
+                File.Delete(fileSystem.CreatedPath);
+            if (Directory.Exists(temporaryDirectory))
+                Directory.Delete(temporaryDirectory, true);
+        }
+    }
+
+    /// <summary>
     /// 测试 - Failure Workbook 主异常优先时仍应保留清理异常诊断。
     /// </summary>
     [Fact]
@@ -954,11 +1058,12 @@ public sealed class ExcelP0RegressionTest
         };
 
         // Act
-        var exception = Assert.Throws<InvalidOperationException>(() => NpoiFailureWorkbookWriter.Write(workbook,
+        var exception = Assert.Throws<BingOfficesImportException>(() => NpoiFailureWorkbookWriter.Write(workbook,
             options, new[] { error }, new Dictionary<string, ExcelSheetImportRequest>(), CancellationToken.None,
             fileSystem));
 
         // Assert
+        Assert.Equal(BingOfficesStage.Serialize, exception.Stage);
         Assert.Contains("序列化失败", exception.Message);
         Assert.IsType<IOException>(exception.Data["Bing.Offices.FailureWorkbook.TemporaryCleanupException"]);
     }
@@ -1020,11 +1125,12 @@ public sealed class ExcelP0RegressionTest
 
         // Act
         var fileSystem = new DirectoryCreationFailingFileSystem();
-        var exception = Assert.Throws<IOException>(() => NpoiFailureWorkbookWriter.Write(workbook, options,
+        var exception = Assert.Throws<BingOfficesImportException>(() => NpoiFailureWorkbookWriter.Write(workbook, options,
             new[] { error }, new Dictionary<string, ExcelSheetImportRequest>(), CancellationToken.None,
             fileSystem));
 
         // Assert
+        Assert.Equal(BingOfficesStage.Open, exception.Stage);
         Assert.Equal("失败工作簿临时目录创建失败。", exception.Message);
         Assert.IsType<UnauthorizedAccessException>(exception.InnerException);
         Assert.Equal(1, destination.Length);
@@ -1051,11 +1157,12 @@ public sealed class ExcelP0RegressionTest
 
         // Act
         var fileSystem = new FileCreationFailingFileSystem();
-        var exception = Assert.Throws<IOException>(() => NpoiFailureWorkbookWriter.Write(workbook, options,
+        var exception = Assert.Throws<BingOfficesImportException>(() => NpoiFailureWorkbookWriter.Write(workbook, options,
             new[] { error }, new Dictionary<string, ExcelSheetImportRequest>(), CancellationToken.None,
             fileSystem));
 
         // Assert
+        Assert.Equal(BingOfficesStage.Open, exception.Stage);
         Assert.Equal("失败工作簿临时文件创建失败。", exception.Message);
         Assert.IsType<IOException>(exception.InnerException);
         Assert.Equal(1, destination.Length);
@@ -1083,10 +1190,11 @@ public sealed class ExcelP0RegressionTest
         var error = new ExcelImportError(ExcelImportErrorCode.InvalidInput, "invalid", "Data", 2, 1, "Value");
 
         // Act
-        var exception = Assert.Throws<InvalidOperationException>(() => NpoiFailureWorkbookWriter.Write(workbook, options,
+        var exception = Assert.Throws<BingOfficesImportException>(() => NpoiFailureWorkbookWriter.Write(workbook, options,
             new[] { error }, new Dictionary<string, ExcelSheetImportRequest>(), CancellationToken.None, fileSystem));
 
         // Assert
+        Assert.Equal(BingOfficesStage.Write, exception.Stage);
         Assert.Equal("失败工作簿复制到目标流失败。", exception.Message);
         Assert.IsType<IOException>(exception.InnerException);
         Assert.True(fileSystem.DeleteCalled);
@@ -1238,7 +1346,8 @@ public sealed class ExcelP0RegressionTest
         var action = () => new NpoiExcelImporter().Import(source, request);
 
         // Assert
-        Assert.Throws<InvalidOperationException>(action);
+        var exception = Assert.Throws<BingOfficesResourceLimitException>(action);
+        Assert.Equal(BingOfficesStage.Open, exception.Stage);
     }
 
     /// <summary>
@@ -1416,7 +1525,14 @@ public sealed class ExcelP0RegressionTest
             ["shared-strings"] = Path.Combine(directory, "shared-strings.xlsx"),
             ["styles"] = Path.Combine(directory, "styles.xlsx"),
             ["drawings"] = Path.Combine(directory, "drawings.xlsx"),
-            ["ole"] = Path.Combine(directory, "ole.xls")
+            ["ole"] = Path.Combine(directory, "ole.xls"),
+            ["zip-total-limit"] = Path.Combine(directory, "dom.xlsx"),
+            ["zip-ratio-limit"] = Path.Combine(directory, "dom.xlsx"),
+            ["shared-strings-limit"] = Path.Combine(directory, "shared-strings.xlsx"),
+            ["styles-limit"] = Path.Combine(directory, "styles.xlsx"),
+            ["worksheet-limit"] = Path.Combine(directory, "dom.xlsx"),
+            ["xml-depth-limit"] = Path.Combine(directory, "xml-depth-limit.xlsx"),
+            ["xml-character-limit"] = Path.Combine(directory, "xml-character-limit.xlsx")
         };
         File.WriteAllBytes(paths["zip"], CreateProbeWorkbook(4, 2, 0, 0));
         File.WriteAllBytes(paths["dom"], CreateProbeWorkbook(250, 4, 0, 0));
@@ -1425,6 +1541,10 @@ public sealed class ExcelP0RegressionTest
         File.WriteAllBytes(paths["styles"], CreateProbeWorkbook(20, 20, 0, 80));
         File.WriteAllBytes(paths["drawings"], CreateProbeWorkbook(10, 4, 0, 0, 6));
         File.WriteAllBytes(paths["ole"], CreateProbeWorkbook<HSSFWorkbook>(4, 2, 0, 0));
+        File.WriteAllBytes(paths["xml-depth-limit"], CreateProbeXmlBudgetWorkbook(
+            "<workbook><a><b><c /></b></a></workbook>"));
+        File.WriteAllBytes(paths["xml-character-limit"], CreateProbeXmlBudgetWorkbook(
+            "<workbook>1234567890123456789012345678901234567890</workbook>"));
 
         try
         {
@@ -1437,7 +1557,14 @@ public sealed class ExcelP0RegressionTest
                 ["shared-strings"] = RunResourceProbe(paths["shared-strings"], "shared-strings"),
                 ["styles"] = RunResourceProbe(paths["styles"], "styles"),
                 ["drawings"] = RunResourceProbe(paths["drawings"], "drawings"),
-                ["ole"] = RunResourceProbe(paths["ole"], "ole")
+                ["ole"] = RunResourceProbe(paths["ole"], "ole"),
+                ["zip-total-limit"] = RunResourceProbe(paths["dom"], "zip-total-limit"),
+                ["zip-ratio-limit"] = RunResourceProbe(paths["dom"], "zip-ratio-limit"),
+                ["shared-strings-limit"] = RunResourceProbe(paths["shared-strings"], "shared-strings-limit"),
+                ["styles-limit"] = RunResourceProbe(paths["styles"], "styles-limit"),
+                ["worksheet-limit"] = RunResourceProbe(paths["dom"], "worksheet-limit"),
+                ["xml-depth-limit"] = RunResourceProbe(paths["xml-depth-limit"], "xml-depth-limit"),
+                ["xml-character-limit"] = RunResourceProbe(paths["xml-character-limit"], "xml-character-limit")
             };
             if (persistArtifacts)
                 foreach (var pair in outputs)
@@ -1454,6 +1581,12 @@ public sealed class ExcelP0RegressionTest
             Assert.True(outputs["styles"].Styles >= 80);
             Assert.True(outputs["drawings"].Pictures >= 6);
             Assert.Equal("ole", outputs["ole"].Mode);
+            Assert.All(new[] { "zip-total-limit", "zip-ratio-limit", "shared-strings-limit",
+                "styles-limit", "worksheet-limit", "xml-depth-limit", "xml-character-limit" }, mode =>
+            {
+                Assert.Equal("resource-limit", outputs[mode].Status);
+                Assert.Equal("Preflight", outputs[mode].RejectStage);
+            });
             Assert.All(outputs.Values, output =>
             {
                 Assert.True(output.InputBytes > 0);
@@ -1648,6 +1781,32 @@ public sealed class ExcelP0RegressionTest
         return stream.ToArray();
     }
 
+    private static byte[] CreateProbeXmlBudgetWorkbook(string workbookXml)
+    {
+        var bytes = CreateProbeWorkbook(1, 1, 0, 0);
+        using var source = new MemoryStream(bytes, writable: false);
+        using var archive = new System.IO.Compression.ZipArchive(source, System.IO.Compression.ZipArchiveMode.Read);
+        using var output = new MemoryStream();
+        using (var destination = new System.IO.Compression.ZipArchive(output,
+                   System.IO.Compression.ZipArchiveMode.Create, true))
+        {
+            foreach (var entry in archive.Entries)
+            {
+                var replacement = destination.CreateEntry(entry.FullName);
+                using var input = entry.Open();
+                using var target = replacement.Open();
+                if (string.Equals(entry.FullName, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase))
+                {
+                    using var writer = new StreamWriter(target, Encoding.UTF8, 1024, true);
+                    writer.Write(workbookXml);
+                }
+                else
+                    input.CopyTo(target);
+            }
+        }
+        return output.ToArray();
+    }
+
     private static ProbeOutput RunResourceProbe(string inputPath, string mode)
     {
         var probePath = Path.Combine(AppContext.BaseDirectory, "Bing.Offices.ResourceProbe.dll");
@@ -1678,6 +1837,7 @@ public sealed class ExcelP0RegressionTest
         return new ProbeOutput(
             values["mode"],
             values["status"],
+            values["rejectStage"],
             long.Parse(values["inputBytes"], CultureInfo.InvariantCulture),
             int.Parse(values["sheets"], CultureInfo.InvariantCulture),
             int.Parse(values["rows"], CultureInfo.InvariantCulture),
@@ -1781,12 +1941,13 @@ public sealed class ExcelP0RegressionTest
 
     private sealed class ProbeOutput
     {
-        public ProbeOutput(string mode, string status, long inputBytes, int sheets, int rows, int columns,
+        public ProbeOutput(string mode, string status, string rejectStage, long inputBytes, int sheets, int rows, int columns,
             int cells, int importedRows, int sharedStrings, int styles, int pictures, long elapsedMilliseconds,
             long peakWorkingSet, int exitCode, string inputSha256)
         {
             Mode = mode;
             Status = status;
+            RejectStage = rejectStage;
             InputBytes = inputBytes;
             Sheets = sheets;
             Rows = rows;
@@ -1804,6 +1965,7 @@ public sealed class ExcelP0RegressionTest
 
         public string Mode { get; }
         public string Status { get; }
+        public string RejectStage { get; }
         public long InputBytes { get; }
         public int Sheets { get; }
         public int Rows { get; }
@@ -2091,6 +2253,32 @@ public sealed class ExcelP0RegressionTest
     private sealed class ThrowingWriteStream : MemoryStream
     {
         public override void Write(byte[] buffer, int offset, int count) => throw new IOException("注入的写入失败");
+    }
+
+    private sealed class ExceptionWriteFileSystem : IFailureWorkbookFileSystem
+    {
+        private readonly Exception _exception;
+
+        public ExceptionWriteFileSystem(Exception exception) => _exception = exception;
+
+        public void CreateDirectory(string path) => Directory.CreateDirectory(path);
+
+        public Stream CreateFile(string path) => new ExceptionWriteStream(_exception);
+
+        public void Delete(string path)
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+    }
+
+    private sealed class ExceptionWriteStream : MemoryStream
+    {
+        private readonly Exception _exception;
+
+        public ExceptionWriteStream(Exception exception) => _exception = exception;
+
+        public override void Write(byte[] buffer, int offset, int count) => throw _exception;
     }
 
     private sealed class CancelOnWriteStream : MemoryStream

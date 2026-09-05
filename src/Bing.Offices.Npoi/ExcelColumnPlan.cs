@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.ExceptionServices;
 using Bing.Offices.Attributes;
 using Bing.Offices.Conversions;
+using Bing.Offices.Exceptions;
 using Bing.Offices.Exports;
 using Bing.Offices.Imports;
 using Bing.Offices.Providers;
@@ -51,7 +53,7 @@ internal sealed class ExcelColumnPlan
         if (reflectionProperty == null)
             throw new InvalidOperationException($"无法解析映射属性: {property.Name}");
         Getter = instance => reflectionProperty.GetValue(instance);
-        Setter = (instance, value) => reflectionProperty.SetValue(instance, value);
+        Setter = (instance, value) => SetPropertyValue(reflectionProperty, instance, value);
         ConverterName = dynamicDefinition?.ConverterName ?? property.ConverterName;
         ValidationRuleNames = property.ValidationRuleNames;
         ValidatorName = dynamicDefinition?.ValidatorName;
@@ -61,6 +63,7 @@ internal sealed class ExcelColumnPlan
         ValueMap = property.ValueMap;
         Ignored = property.Ignored;
         var attributes = reflectionProperty.GetCustomAttributes<Attribute>().ToArray();
+        DateAttribute = attributes.OfType<ExcelDateAttribute>().FirstOrDefault();
         IsUnique = isUnique ?? attributes.Any(attribute => attribute is ExcelUniqueAttribute);
         UniqueIgnoreEmpty = isUnique.HasValue ? uniqueIgnoreEmpty
             : attributes.OfType<ExcelUniqueAttribute>().FirstOrDefault()?.IgnoreEmpty ?? true;
@@ -124,6 +127,8 @@ internal sealed class ExcelColumnPlan
     internal IReadOnlyList<IExcelValueConverter> ValueConverters { get; }
     /// <summary>获取按配置绑定的校验规则。</summary>
     internal IReadOnlyList<IExcelValidationBinding> ValidationBindings { get; }
+    /// <summary>获取属性声明的日期输入配置。</summary>
+    internal ExcelDateAttribute DateAttribute { get; }
 
     /// <summary>将导入文本转换为当前列的目标值。</summary>
     /// <param name="value">规范化后的文本值。</param>
@@ -142,9 +147,32 @@ internal sealed class ExcelColumnPlan
             culture, cellValue);
         foreach (var converter in ValueConverters)
         {
-            if (converter.TryConvertFrom(context, out var convertedValue))
-                return convertedValue;
+            try
+            {
+                if (converter.TryConvertFrom(context, out var convertedValue))
+                    return convertedValue;
+            }
+            catch (BingOfficesException)
+            {
+                throw;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception exception) when (exception is not OutOfMemoryException
+                && exception is not StackOverflowException)
+            {
+                throw new BingOfficesImportException("Excel 值转换器执行失败。", exception, "NPOI",
+                    BingOfficesStage.Validate, sheetName, rowIndex, columnIndex, Key,
+                    code: BingOfficesErrorCode.UserExtensionFailed);
+            }
         }
+        if (ValueType != null && (Nullable.GetUnderlyingType(ValueType) ?? ValueType) is var dateType
+            && (dateType == typeof(DateTime) || dateType == typeof(DateTimeOffset))
+            && new DateTimeExcelValidationRule().TryParseValue(cellValue, value, ValueType, culture,
+                DateAttribute, out var dateValue))
+            return dateValue;
         if (string.IsNullOrWhiteSpace(value))
         {
             if (!ValueType.IsValueType || Nullable.GetUnderlyingType(ValueType) != null)
@@ -160,9 +188,21 @@ internal sealed class ExcelColumnPlan
             return Guid.Parse(value);
         if (targetType == typeof(Version))
             return new Version(value);
-        if (targetType == typeof(DateTime))
-            return DateTime.Parse(value, culture);
         return Convert.ChangeType(value, targetType, culture);
+    }
+
+    /// <summary>写入属性并解包反射调用产生的目标异常。</summary>
+    private static void SetPropertyValue(PropertyInfo property, object instance, object value)
+    {
+        try
+        {
+            property.SetValue(instance, value);
+        }
+        catch (TargetInvocationException exception) when (exception.InnerException != null)
+        {
+            ExceptionDispatchInfo.Capture(exception.InnerException).Throw();
+            throw;
+        }
     }
 
     /// <summary>将实体属性值转换为可写入工作表的值。</summary>
@@ -177,8 +217,26 @@ internal sealed class ExcelColumnPlan
         var context = new ExcelConversionContext(value, Key, ValueType, sheetName, rowIndex, columnIndex, culture);
         foreach (var converter in ValueConverters)
         {
-            if (converter.TryConvertTo(context, out var convertedValue))
-                return convertedValue;
+            try
+            {
+                if (converter.TryConvertTo(context, out var convertedValue))
+                    return convertedValue;
+            }
+            catch (BingOfficesException)
+            {
+                throw;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception exception) when (exception is not OutOfMemoryException
+                && exception is not StackOverflowException)
+            {
+                throw new BingOfficesExportException("Excel 值转换器执行失败。", exception, "NPOI",
+                    BingOfficesStage.Validate, sheetName, rowIndex, columnIndex, Key,
+                    code: BingOfficesErrorCode.UserExtensionFailed);
+            }
         }
         if (string.IsNullOrWhiteSpace(Formatter) && ValueMap.Count > 0)
         {
@@ -198,10 +256,26 @@ internal sealed class ExcelColumnPlan
             if (targetType == typeof(Guid))
                 return Guid.Parse(Convert.ToString(value, culture));
             if (targetType == typeof(DateTime))
-                return value is DateTime date ? date : DateTime.Parse(Convert.ToString(value, culture), culture);
+            {
+                if (value is DateTime date)
+                    return DateTime.SpecifyKind(date, DateTimeKind.Unspecified);
+                if (value is DateTimeOffset offset)
+                    return DateTime.SpecifyKind(offset.DateTime, DateTimeKind.Unspecified);
+            }
+            if (targetType == typeof(DateTimeOffset) && value is DateTime dateTime)
+                return new DateTimeOffset(DateTime.SpecifyKind(dateTime, DateTimeKind.Unspecified));
             return Convert.ChangeType(value, targetType, culture);
         }
-        catch (Exception exception)
+        catch (BingOfficesException)
+        {
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException
+            && exception is not StackOverflowException)
         {
             throw new InvalidOperationException($"列 {Key} 的值无法转换为 {targetType.FullName}: {exception.Message}",
                 exception);
@@ -236,8 +310,11 @@ internal sealed class ExcelColumnPlan
             return Guid.Parse(value);
         if (targetType == typeof(Version))
             return new Version(value);
-        if (targetType == typeof(DateTime))
-            return DateTime.Parse(value, culture);
+        if ((targetType == typeof(DateTime) || targetType == typeof(DateTimeOffset))
+            && new DateTimeExcelValidationRule().TryParseValue(
+                new ExcelCellValue(value, value, ExcelCellKind.Text), value, ValueType, culture,
+                DateAttribute, out var dateValue))
+            return dateValue;
         return Convert.ChangeType(value, targetType, culture);
     }
 

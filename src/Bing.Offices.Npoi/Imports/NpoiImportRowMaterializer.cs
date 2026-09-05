@@ -1,6 +1,7 @@
 ﻿using System.Globalization;
 using Bing.Offices.Attributes;
 using Bing.Offices.Conversions;
+using Bing.Offices.Exceptions;
 using Bing.Offices.Imports;
 using Bing.Offices.Metadata;
 using Bing.Offices.Providers;
@@ -85,17 +86,18 @@ internal sealed class NpoiImportRowMaterializer
     /// <param name="culture">校验上下文使用的区域性。</param>
     /// <param name="bodyWhitespace">正文单元格文本的空白处理策略。</param>
     /// <param name="errors">接收原始值校验错误的收集器。</param>
+    /// <param name="isDate1904">当前工作簿是否使用 1904 日期系统。</param>
     /// <returns>当前行全部原始值校验通过时为 true。</returns>
     internal bool ValidateRawValues(IRow row, IReadOnlyDictionary<int, ExcelColumnPlan> columns,
         IDictionary<string, HashSet<string>> duplicateValues, string sheetName, int rowIndex,
         ValidateMode validateMode, CultureInfo culture, ExcelWhitespacePolicy bodyWhitespace,
-        ExcelImportErrorCollector errors)
+        ExcelImportErrorCollector errors, bool isDate1904)
     {
         var valid = true;
         foreach (var column in columns)
         {
             var cell = row.GetCell(column.Key);
-            var cellValue = NormalizeCellValue(NpoiExcelImporter.ReadCellValue(cell),
+            var cellValue = NormalizeCellValue(NpoiExcelImporter.ReadCellValue(cell, isDate1904),
                 column.Value.Property.ImportWhitespace ?? bodyWhitespace);
             var value = cellValue.Text;
             foreach (var binding in column.Value.ValidationBindings.Where(binding => binding.IsRaw))
@@ -107,7 +109,24 @@ internal sealed class NpoiImportRowMaterializer
                 {
                     isValid = binding.Validate(context);
                 }
-                catch (Exception exception)
+                catch (BingOfficesException)
+                {
+                    throw;
+                }
+                catch (Exception exception) when (binding.Kind == ExcelValidationBindingKind.Custom
+                    && exception is not OperationCanceledException && exception is not OutOfMemoryException
+                    && exception is not StackOverflowException)
+                {
+                    throw new BingOfficesImportException("Excel 自定义校验器执行失败。", exception, "NPOI",
+                        BingOfficesStage.Validate, sheetName, rowIndex + 1, column.Key + 1,
+                        column.Value.Property.Name, BingOfficesErrorCode.UserExtensionFailed);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception exception) when (exception is not OutOfMemoryException
+                    && exception is not StackOverflowException)
                 {
                     errors.Add(new ExcelImportError(ExcelImportErrorCode.Validation, exception.Message, sheetName,
                         rowIndex + 1, column.Key + 1, column.Value.Property.Name, GetErrorColumnKey(column.Value),
@@ -147,6 +166,7 @@ internal sealed class NpoiImportRowMaterializer
     /// <param name="bodyWhitespace">正文单元格文本的空白处理策略。</param>
     /// <param name="dynamicTargetGetter">从实体取得动态值目标字典的委托。</param>
     /// <param name="imageIndex">按行列坐标索引的图片集合。</param>
+    /// <param name="isDate1904">当前工作簿是否使用 1904 日期系统。</param>
     /// <param name="item">成功时返回已物化的实体；失败时为 null。</param>
     /// <returns>当前行成功转换并通过校验时为 true。</returns>
     internal bool TryCreateItem<T>(IRow row, IReadOnlyDictionary<int, ExcelColumnPlan> columns,
@@ -154,7 +174,8 @@ internal sealed class NpoiImportRowMaterializer
         string sheetName, int rowIndex, ValidateMode validateMode, bool configuredValidationEnabled,
         ExcelImportErrorCollector errors, CultureInfo culture, ExcelWhitespacePolicy bodyWhitespace,
         Func<object, object> dynamicTargetGetter,
-        IReadOnlyDictionary<(int Row, int Column), IReadOnlyList<PictureInfo>> imageIndex, out T item)
+        IReadOnlyDictionary<(int Row, int Column), IReadOnlyList<PictureInfo>> imageIndex,
+        bool isDate1904, out T item)
         where T : class, new()
     {
         item = new T();
@@ -178,7 +199,7 @@ internal sealed class NpoiImportRowMaterializer
                 }
                 var image = images?.FirstOrDefault();
                 cellValue = image == null
-                    ? NormalizeCellValue(NpoiExcelImporter.ReadCellValue(cell),
+                    ? NormalizeCellValue(NpoiExcelImporter.ReadCellValue(cell, isDate1904),
                         column.Value.Property.ImportWhitespace ?? bodyWhitespace)
                     : new ExcelCellValue(image, string.Empty, ExcelCellKind.Empty);
                 var value = cellValue.Text;
@@ -217,9 +238,36 @@ internal sealed class NpoiImportRowMaterializer
                     item = null;
                     return false;
                 }
-                column.Value.Setter(item, converted);
+                try
+                {
+                    column.Value.Setter(item, converted);
+                }
+                catch (BingOfficesException)
+                {
+                    throw;
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception exception) when (exception is not OutOfMemoryException
+                    && exception is not StackOverflowException)
+                {
+                    throw new BingOfficesImportException("Excel 属性写入器执行失败。", exception, "NPOI",
+                        BingOfficesStage.Validate, sheetName, rowIndex + 1, column.Key + 1,
+                        column.Value.Property.Name, BingOfficesErrorCode.UserExtensionFailed);
+                }
             }
-            catch (Exception exception)
+            catch (BingOfficesException)
+            {
+                throw;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception exception) when (exception is not OutOfMemoryException
+                && exception is not StackOverflowException)
             {
                 errors.Add(new ExcelImportError(ExcelImportErrorCode.ValueConversion, exception.Message, sheetName,
                     rowIndex + 1, column.Key + 1, column.Value.Property.Name, GetErrorColumnKey(column.Value),
@@ -230,14 +278,76 @@ internal sealed class NpoiImportRowMaterializer
         }
         if (dynamicValues != null)
         {
-            var target = dynamicTargetGetter?.Invoke(item) as IDictionary<string, object>;
+            object rawTarget;
+            try
+            {
+                rawTarget = dynamicTargetGetter?.Invoke(item);
+            }
+            catch (BingOfficesException)
+            {
+                throw;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception exception) when (exception is not OutOfMemoryException
+                && exception is not StackOverflowException)
+            {
+                throw new BingOfficesImportException("Excel 动态属性读取器执行失败。", exception, "NPOI",
+                    BingOfficesStage.Validate, propertyName: columns.Values.First(column => column.IsDynamic).Property.Name,
+                    code: BingOfficesErrorCode.UserExtensionFailed);
+            }
+            var target = rawTarget as IDictionary<string, object>;
             if (target != null)
             {
                 foreach (var pair in dynamicValues)
-                    target[pair.Key] = pair.Value;
+                {
+                    try
+                    {
+                        target[pair.Key] = pair.Value;
+                    }
+                    catch (BingOfficesException)
+                    {
+                        throw;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
+                    catch (Exception exception) when (exception is not OutOfMemoryException
+                        && exception is not StackOverflowException)
+                    {
+                        throw new BingOfficesImportException("Excel 动态属性写入器执行失败。", exception, "NPOI",
+                            BingOfficesStage.Validate,
+                            propertyName: columns.Values.First(column => column.IsDynamic).Property.Name,
+                            code: BingOfficesErrorCode.UserExtensionFailed);
+                    }
+                }
             }
             else
-                columns.Values.First(column => column.IsDynamic).Setter(item, dynamicValues);
+            {
+                var dynamicColumn = columns.Values.First(column => column.IsDynamic);
+                try
+                {
+                    dynamicColumn.Setter(item, dynamicValues);
+                }
+                catch (BingOfficesException)
+                {
+                    throw;
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception exception) when (exception is not OutOfMemoryException
+                    && exception is not StackOverflowException)
+                {
+                    throw new BingOfficesImportException("Excel 动态属性写入器执行失败。", exception, "NPOI",
+                        BingOfficesStage.Validate, propertyName: dynamicColumn.Property.Name,
+                        code: BingOfficesErrorCode.UserExtensionFailed);
+                }
+            }
         }
         return true;
     }
@@ -262,7 +372,24 @@ internal sealed class NpoiImportRowMaterializer
             {
                 isValid = binding.Validate(context);
             }
-            catch (Exception exception)
+            catch (BingOfficesException)
+            {
+                throw;
+            }
+            catch (Exception exception) when (binding.Kind == ExcelValidationBindingKind.Custom
+                && exception is not OperationCanceledException && exception is not OutOfMemoryException
+                && exception is not StackOverflowException)
+            {
+                throw new BingOfficesImportException("Excel 自定义校验器执行失败。", exception, "NPOI",
+                    BingOfficesStage.Validate, sheetName, rowIndex + 1, column.ColumnIndex + 1,
+                    property.Name, BingOfficesErrorCode.UserExtensionFailed);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception exception) when (exception is not OutOfMemoryException
+                && exception is not StackOverflowException)
             {
                 errors.Add(new ExcelImportError(ExcelImportErrorCode.Validation, exception.Message, sheetName,
                     rowIndex + 1, column.ColumnIndex + 1, property.Name, GetErrorColumnKey(column),
@@ -289,7 +416,16 @@ internal sealed class NpoiImportRowMaterializer
                 reserved = uniqueTracker.TryReserve(column.Key, value, false, column.UniqueIgnoreEmpty,
                     rowIndex + 1);
             }
-            catch (Exception exception)
+            catch (BingOfficesException)
+            {
+                throw;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception exception) when (exception is not OutOfMemoryException
+                && exception is not StackOverflowException)
             {
                 errors.Add(new ExcelImportError(ExcelImportErrorCode.ResourceLimit, exception.Message, sheetName,
                     rowIndex + 1, column.ColumnIndex + 1, property.Name, GetErrorColumnKey(column),
@@ -321,7 +457,7 @@ internal sealed class NpoiImportRowMaterializer
         return text == cellValue.Text
             ? cellValue
             : new ExcelCellValue(cellValue.Value, text, cellValue.Kind, cellValue.CachedKind,
-                cellValue.Formula, cellValue.ErrorCode, cellValue.FormatIndex);
+                cellValue.Formula, cellValue.ErrorCode, cellValue.FormatIndex, cellValue.IsDate1904);
     }
 
     /// <summary>

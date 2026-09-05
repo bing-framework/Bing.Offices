@@ -6,7 +6,7 @@ namespace Bing.Offices.Npoi.Extensions;
 /// <summary>
 /// NPOI工作表(<see cref="NPOI.SS.UserModel.ISheet"/>) 扩展
 /// </summary>
-internal static partial class SheetExtensions
+public static partial class SheetExtensions
 {
     /// <summary>
     /// 添加合并区域

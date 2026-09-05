@@ -10,7 +10,7 @@ namespace Bing.Offices.Npoi.Extensions;
 /// <summary>
 /// NPOI工作表(<see cref="NPOI.SS.UserModel.ISheet"/>) 扩展
 /// </summary>
-internal static partial class SheetExtensions
+public static partial class SheetExtensions
 {
     /// <summary>
     /// 将图片数据按指定锚点和样式添加到工作表绘图区。

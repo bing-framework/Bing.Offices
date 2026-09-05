@@ -13,6 +13,7 @@ using Bing.Offices.Mappings;
 using Bing.Offices.Providers;
 using Bing.Offices.Validations;
 using Bing.Offices.Extensions;
+using Bing.Offices.Exceptions;
 using Bing.Offices.Npoi.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -34,11 +35,14 @@ public sealed class ReviewFixRegressionTest
         var fileSystem = new FailingAtomicFileSystem { FailWrite = true, FailDelete = true };
 
         // Act
-        var exception = Assert.Throws<InvalidOperationException>(() => AtomicFileCommitter.Commit(
+        var exception = Assert.Throws<BingOfficesFileCommitException>(() => AtomicFileCommitter.Commit(
             "target.xlsx", stream => stream.Write(new byte[] { 1 }, 0, 1), default, "Excel", fileSystem));
 
         // Assert
-        Assert.Equal("写入失败", exception.Message);
+        Assert.Equal(BingOfficesErrorCode.FileCommitFailed, exception.Code);
+        Assert.Equal(BingOfficesOperation.FileCommit, exception.Operation);
+        Assert.Equal(BingOfficesStage.Commit, exception.Stage);
+        Assert.Equal("写入失败", exception.InnerException.Message);
         Assert.IsType<IOException>(exception.Data["Bing.Offices.Excel.TemporaryCleanupException"]);
         Assert.True(fileSystem.DeleteCalled);
     }
@@ -53,11 +57,11 @@ public sealed class ReviewFixRegressionTest
         var fileSystem = new FailingAtomicFileSystem { FailMove = true };
 
         // Act
-        var exception = Assert.Throws<InvalidOperationException>(() => AtomicFileCommitter.Commit(
+        var exception = Assert.Throws<BingOfficesFileCommitException>(() => AtomicFileCommitter.Commit(
             "target.xlsx", stream => stream.WriteByte(1), default, "CSV", fileSystem));
 
         // Assert
-        Assert.Equal("提交失败", exception.Message);
+        Assert.Equal("提交失败", exception.InnerException.Message);
         Assert.True(fileSystem.DeleteCalled);
         Assert.False(fileSystem.Replaced);
     }
@@ -72,11 +76,11 @@ public sealed class ReviewFixRegressionTest
         var fileSystem = new FailingAtomicFileSystem { FailMove = true, FailDelete = true };
 
         // Act
-        var exception = Assert.Throws<InvalidOperationException>(() => AtomicFileCommitter.Commit(
+        var exception = Assert.Throws<BingOfficesFileCommitException>(() => AtomicFileCommitter.Commit(
             "target.xlsx", stream => stream.Write(new byte[] { 1 }, 0, 1), default, format, fileSystem));
 
         // Assert
-        Assert.Equal("提交失败", exception.Message);
+        Assert.Equal("提交失败", exception.InnerException.Message);
         Assert.IsType<IOException>(exception.Data[$"Bing.Offices.{format}.TemporaryCleanupException"]);
         Assert.True(fileSystem.DeleteCalled);
         Assert.False(fileSystem.TargetChanged);
@@ -98,11 +102,11 @@ public sealed class ReviewFixRegressionTest
         };
 
         // Act
-        var exception = Assert.Throws<InvalidOperationException>(() => AtomicFileCommitter.Commit(
+        var exception = Assert.Throws<BingOfficesFileCommitException>(() => AtomicFileCommitter.Commit(
             "target.xlsx", stream => stream.Write(new byte[] { 1 }, 0, 1), default, format, fileSystem));
 
         // Assert
-        Assert.Equal("替换失败", exception.Message);
+        Assert.Equal("替换失败", exception.InnerException.Message);
         Assert.IsType<IOException>(exception.Data[$"Bing.Offices.{format}.TemporaryCleanupException"]);
         Assert.True(fileSystem.DeleteCalled);
         Assert.False(fileSystem.TargetChanged);
@@ -246,11 +250,12 @@ public sealed class ReviewFixRegressionTest
         const string xml = "<ExcelMappingDocument><Version>2</Version><Import><Columns><ExcelColumnConfiguration><Unknown /></ExcelColumnConfiguration></Columns></Import><Export><Columns /></Export></ExcelMappingDocument>";
 
         // Act
-        var exception = Assert.Throws<InvalidOperationException>(() =>
+        var exception = Assert.Throws<BingOfficesConfigurationException>(() =>
             ExcelMappingConfigurationLoader.FromXmlDocument(xml));
 
         // Assert
-        Assert.Contains("/ExcelMappingDocument/Import/Columns/ExcelColumnConfiguration/Unknown", exception.Message);
+        Assert.Contains("/ExcelMappingDocument/Import/Columns/ExcelColumnConfiguration/Unknown",
+            exception.InnerException.Message);
     }
 
     /// <summary>
@@ -265,8 +270,8 @@ public sealed class ReviewFixRegressionTest
         const string unknown = "{\"version\":2,\"import\":{\"modelAlias\":\"unknown-row\",\"columns\":[]},\"export\":{\"columns\":[]}}";
 
         // Act / Assert
-        Assert.Throws<InvalidOperationException>(() => ExcelMappingConfigurationLoader.FromJsonDocument(clr));
-        Assert.Throws<InvalidOperationException>(() => ExcelMappingConfigurationLoader.FromJsonDocument(unknown, aliases));
+        Assert.Throws<BingOfficesConfigurationException>(() => ExcelMappingConfigurationLoader.FromJsonDocument(clr));
+        Assert.Throws<BingOfficesConfigurationException>(() => ExcelMappingConfigurationLoader.FromJsonDocument(unknown, aliases));
     }
 
     /// <summary>

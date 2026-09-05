@@ -10,6 +10,7 @@ using Bing.Offices.Attributes;
 using Bing.Offices.Configurations;
 using Bing.Offices.Conversions;
 using Bing.Offices.Extensions;
+using Bing.Offices.Exceptions;
 using Bing.Offices.Imports;
 using Bing.Offices.Validations;
 using Xunit;
@@ -296,7 +297,7 @@ public class CsvTest
         try
         {
             // Act
-            Assert.Throws<InvalidOperationException>(() => new ThrowingCsvExporter()
+            Assert.Throws<BingOfficesFileCommitException>(() => new ThrowingCsvExporter()
                 .ExportToFile(new[] { new CsvRow() }, filePath));
 
             // Assert
@@ -449,15 +450,151 @@ public class CsvTest
         });
 
         // Act
-        var result = importer.Import<CsvRow>(source, new CsvImportOptions<CsvRow> { MappingConfiguration = mapping });
+        var exception = Assert.Throws<BingOfficesImportException>(() => importer.Import<CsvRow>(source,
+            new CsvImportOptions<CsvRow> { MappingConfiguration = mapping }));
 
         // Assert
-        Assert.Empty(result.Items);
-        var error = Assert.Single(result.Errors);
-        Assert.Equal(2, error.RowIndex);
-        Assert.Equal(1, error.ColumnIndex);
-        Assert.Equal(nameof(CsvRow.Name), error.PropertyName);
-        Assert.Equal("校验器异常", error.Message);
+        Assert.Equal(BingOfficesErrorCode.UserExtensionFailed, exception.Code);
+        Assert.Equal(BingOfficesStage.Validate, exception.Stage);
+        Assert.Equal(2, exception.RowIndex);
+        Assert.Equal(1, exception.ColumnIndex);
+        Assert.Equal(nameof(CsvRow.Name), exception.PropertyName);
+        Assert.Equal("校验器异常", exception.InnerException.Message);
+    }
+
+    /// <summary>
+    /// 测试 - CSV 值转换器抛出取消异常时，应保留原始异常实例和取消令牌。
+    /// </summary>
+    [Fact]
+    public void EntityPipeline_ValueConverterCancellation_ShouldPreserveOriginalException()
+    {
+        // Arrange
+        using var cancellation = new CancellationTokenSource();
+        var expected = new OperationCanceledException(cancellation.Token);
+        var mapping = new ExcelMappingConfiguration
+        {
+            Columns = new List<ExcelColumnConfiguration>
+            {
+                new ExcelColumnConfiguration { PropertyName = nameof(CsvRow.Name), ConverterName = "propagating" }
+            }
+        };
+        using var source = new MemoryStream(Encoding.UTF8.GetBytes("Name,Count,Description\r\nvalue,1,说明\r\n"));
+
+        // Act
+        var exception = Assert.Throws<OperationCanceledException>(() => new CsvEntityImporter(
+            valueConverters: new IExcelValueConverter[] { new PropagatingCsvConverter(expected) })
+            .Import<CsvRow>(source, new CsvImportOptions<CsvRow> { MappingConfiguration = mapping }));
+
+        // Assert
+        Assert.Same(expected, exception);
+        Assert.Equal(cancellation.Token, exception.CancellationToken);
+    }
+
+    /// <summary>
+    /// 测试 - CSV 值转换器抛出致命内存异常时，不应被包装为导入异常。
+    /// </summary>
+    [Fact]
+    public void EntityPipeline_ValueConverterOutOfMemory_ShouldPreserveOriginalException()
+    {
+        // Arrange
+        var expected = new OutOfMemoryException("转换器内存异常");
+        var mapping = new ExcelMappingConfiguration
+        {
+            Columns = new List<ExcelColumnConfiguration>
+            {
+                new ExcelColumnConfiguration { PropertyName = nameof(CsvRow.Name), ConverterName = "propagating" }
+            }
+        };
+        using var source = new MemoryStream(Encoding.UTF8.GetBytes("Name,Count,Description\r\nvalue,1,说明\r\n"));
+
+        // Act
+        var exception = Assert.Throws<OutOfMemoryException>(() => new CsvEntityImporter(
+            valueConverters: new IExcelValueConverter[] { new PropagatingCsvConverter(expected) })
+            .Import<CsvRow>(source, new CsvImportOptions<CsvRow> { MappingConfiguration = mapping }));
+
+        // Assert
+        Assert.Same(expected, exception);
+    }
+
+    /// <summary>
+    /// 测试 - CSV 自定义校验器抛出取消或致命内存异常时，应直接向调用方传播。
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void EntityPipeline_ValidationExtensionFatalOrCancellation_ShouldPreserveOriginalException(
+        bool outOfMemory)
+    {
+        // Arrange
+        using var cancellation = new CancellationTokenSource();
+        Exception expected = outOfMemory
+            ? new OutOfMemoryException("校验器内存异常")
+            : new OperationCanceledException(cancellation.Token);
+        var mapping = new ExcelMappingConfiguration
+        {
+            Columns = new List<ExcelColumnConfiguration>
+            {
+                new ExcelColumnConfiguration
+                {
+                    PropertyName = nameof(CsvRow.Name),
+                    ValidationRuleNames = new List<string> { "propagating" }
+                }
+            }
+        };
+        using var source = new MemoryStream(Encoding.UTF8.GetBytes("Name,Count,Description\r\nvalue,1,说明\r\n"));
+
+        // Act
+        var action = () => new CsvEntityImporter(namedValidationRules: new INamedExcelValidationRule[]
+        {
+            new PropagatingCsvValidationRule(expected)
+        }).Import<CsvRow>(source, new CsvImportOptions<CsvRow> { MappingConfiguration = mapping });
+
+        // Assert
+        if (outOfMemory)
+            Assert.Same(expected, Assert.Throws<OutOfMemoryException>(action));
+        else
+        {
+            var exception = Assert.Throws<OperationCanceledException>(action);
+            Assert.Same(expected, exception);
+            Assert.Equal(cancellation.Token, exception.CancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// 测试 - CSV 实体属性 setter 抛出取消或致命内存异常时，应保留原始异常。
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void EntityPipeline_PropertySetterFatalOrCancellation_ShouldPreserveOriginalException(bool outOfMemory)
+    {
+        // Arrange
+        using var cancellation = new CancellationTokenSource();
+        Exception expected = outOfMemory
+            ? new OutOfMemoryException("CSV setter 内存异常")
+            : new OperationCanceledException(cancellation.Token);
+        CsvSetterRow.SetterException = expected;
+        using var source = new MemoryStream(Encoding.UTF8.GetBytes("Code\r\nvalue\r\n"));
+
+        try
+        {
+            // Act
+            var action = () => new CsvEntityImporter().Import<CsvSetterRow>(source);
+
+            // Assert
+            if (outOfMemory)
+                Assert.Same(expected, Assert.Throws<OutOfMemoryException>(action));
+            else
+            {
+                var exception = Assert.Throws<OperationCanceledException>(action);
+                Assert.Same(expected, exception);
+                Assert.Equal(cancellation.Token, exception.CancellationToken);
+            }
+        }
+        finally
+        {
+            CsvSetterRow.SetterException = null;
+        }
     }
 
     /// <summary>
@@ -660,7 +797,11 @@ public class CsvTest
         var action = () => new CsvEntityImporter().Import<CsvRow>(source);
 
         // Assert
-        Assert.Throws<InvalidOperationException>(action);
+        var exception = Assert.Throws<BingOfficesImportException>(action);
+        Assert.Equal(BingOfficesErrorCode.ImportFailed, exception.Code);
+        Assert.Equal(BingOfficesOperation.Import, exception.Operation);
+        Assert.Equal(BingOfficesStage.Read, exception.Stage);
+        Assert.Equal("CSV 包含不符合 RFC 4180 的字段。", exception.InnerException.Message);
     }
 
     /// <summary>
@@ -1081,6 +1222,69 @@ public class CsvTest
 
         /// <inheritdoc />
         public bool Validate(ExcelValidationContext context) => throw new InvalidOperationException("校验器异常");
+    }
+
+    /// <summary>
+    /// 按测试要求抛出指定异常的 CSV 值转换器。
+    /// </summary>
+    private sealed class PropagatingCsvConverter : INamedExcelValueConverter
+    {
+        private readonly Exception _exception;
+
+        public PropagatingCsvConverter(Exception exception) => _exception = exception;
+
+        public string Name => "propagating";
+
+        public bool CanConvert(Type propertyType) => propertyType == typeof(string);
+
+        public bool TryConvertFrom(ExcelConversionContext context, out object value)
+        {
+            value = null;
+            throw _exception;
+        }
+
+        public bool TryConvertTo(ExcelConversionContext context, out object value)
+        {
+            value = null;
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 按测试要求抛出指定异常的 CSV 命名校验器。
+    /// </summary>
+    private sealed class PropagatingCsvValidationRule : INamedExcelValidationRule
+    {
+        private readonly Exception _exception;
+
+        public PropagatingCsvValidationRule(Exception exception) => _exception = exception;
+
+        public string Name => "propagating";
+
+        public string ErrorMessage => "不应返回结构化错误";
+
+        public bool Validate(ExcelValidationContext context) => throw _exception;
+    }
+
+    /// <summary>
+    /// 包含会传播测试异常的 CSV 属性 setter 测试模型。
+    /// </summary>
+    private sealed class CsvSetterRow
+    {
+        private string _code;
+
+        public static Exception SetterException { private get; set; }
+
+        public string Code
+        {
+            get => _code;
+            set
+            {
+                if (SetterException != null)
+                    throw SetterException;
+                _code = value;
+            }
+        }
     }
 
     /// <summary>
