@@ -26,7 +26,7 @@ namespace Bing.Offices.Tests;
 public sealed class ReviewFixRegressionTest
 {
     /// <summary>
-    /// 测试 - 原子文件提交主异常与临时文件清理异常同时发生时，应保留主异常和结构化诊断。
+    /// 测试 - 内容写入主异常与临时文件清理异常同时发生时，应原样保留主异常和结构化诊断。
     /// </summary>
     [Fact]
     public void AtomicFileCommitter_PrimaryFailureWithCleanupFailure_ShouldPreserveBothExceptions()
@@ -35,15 +35,35 @@ public sealed class ReviewFixRegressionTest
         var fileSystem = new FailingAtomicFileSystem { FailWrite = true, FailDelete = true };
 
         // Act
-        var exception = Assert.Throws<BingOfficesFileCommitException>(() => AtomicFileCommitter.Commit(
+        var exception = Assert.Throws<InvalidOperationException>(() => AtomicFileCommitter.Commit(
             "target.xlsx", stream => stream.Write(new byte[] { 1 }, 0, 1), default, "Excel", fileSystem));
 
         // Assert
-        Assert.Equal(BingOfficesErrorCode.FileCommitFailed, exception.Code);
-        Assert.Equal(BingOfficesOperation.FileCommit, exception.Operation);
-        Assert.Equal(BingOfficesStage.Commit, exception.Stage);
-        Assert.Equal("写入失败", exception.InnerException.Message);
+        Assert.Equal("写入失败", exception.Message);
         Assert.IsType<IOException>(exception.Data["Bing.Offices.Excel.TemporaryCleanupException"]);
+        Assert.True(fileSystem.DeleteCalled);
+    }
+
+    /// <summary>
+    /// 测试 - 内容写入产生专属异常时，文件便利入口必须保留同一异常实例和分类。
+    /// </summary>
+    [Fact]
+    public void AtomicFileCommitter_ContentFailure_ShouldPreserveExceptionInstance()
+    {
+        // Arrange
+        var fileSystem = new FailingAtomicFileSystem();
+        var expected = new BingOfficesExportException("序列化失败。", provider: "Test",
+            stage: BingOfficesStage.Serialize);
+
+        // Act
+        var actual = Assert.Throws<BingOfficesExportException>(() => AtomicFileCommitter.Commit(
+            "target.xlsx", _ => throw expected, default, "Excel", fileSystem));
+
+        // Assert
+        Assert.Same(expected, actual);
+        Assert.Equal(BingOfficesErrorCode.ExportFailed, actual.Code);
+        Assert.Equal(BingOfficesOperation.Export, actual.Operation);
+        Assert.Equal(BingOfficesStage.Serialize, actual.Stage);
         Assert.True(fileSystem.DeleteCalled);
     }
 
@@ -533,35 +553,6 @@ public sealed class ReviewFixRegressionTest
         Assert.Same(second, secondHit);
         Assert.NotSame(first, rebuilt);
         Assert.Equal("A", Assert.Single(rebuilt.Columns).Title);
-    }
-
-    /// <summary>
-    /// 测试 - v1 JSON/XML 归一化时应返回非阻断迁移诊断。
-    /// </summary>
-    [Fact]
-    public void MappingDocument_V1Migration_ShouldReturnDiagnostic()
-    {
-        // Arrange
-        const string json = "{\"columns\":[]}";
-        const string xml = "<ExcelMappingConfiguration><Columns /></ExcelMappingConfiguration>";
-
-        // Act
-        var jsonDocument = ExcelMappingConfigurationLoader.MigrateV1Json(json, MappingDirection.Import,
-            out var jsonDiagnostics);
-        var xmlDocument = ExcelMappingConfigurationLoader.MigrateV1Xml(xml, MappingDirection.Export,
-            out var xmlDiagnostics);
-
-        // Assert
-        Assert.Equal(2, jsonDocument.Version);
-        Assert.Equal(2, xmlDocument.Version);
-        Assert.NotNull(jsonDocument.Import);
-        Assert.NotNull(xmlDocument.Export);
-        Assert.Null(jsonDocument.Export);
-        Assert.Null(xmlDocument.Import);
-        Assert.Contains(jsonDiagnostics, diagnostic => diagnostic.Code == "V1_MIGRATED"
-            && diagnostic.Path == "$");
-        Assert.Contains(xmlDiagnostics, diagnostic => diagnostic.Code == "V1_MIGRATED"
-            && diagnostic.Path == "/ExcelMappingConfiguration");
     }
 
     /// <summary>

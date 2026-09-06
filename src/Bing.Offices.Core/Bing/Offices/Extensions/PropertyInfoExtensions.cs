@@ -7,7 +7,7 @@ namespace Bing.Offices.Extensions;
 /// <summary>
 /// 属性信息(<see cref="PropertyInfo"/>) 扩展
 /// </summary>
-public static class PropertyInfoExtensions
+internal static class PropertyInfoExtensions
 {
     /// <summary>
     /// 是否有忽略属性

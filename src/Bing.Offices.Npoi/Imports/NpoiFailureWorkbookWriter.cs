@@ -61,7 +61,7 @@ internal static class NpoiFailureWorkbookWriter
             {
                 if (options.Mode == ExcelImportFailureWorkbookMode.ErrorRowsOnly)
                     outputWorkbook = independentWorkbook = CreateErrorRowsWorkbook(workbook, errors,
-                        resolvedSheetRequests, cancellationToken);
+                        resolvedSheetRequests, options, cancellationToken);
                 else
                     AnnotateErrors(outputWorkbook, errors, options.CommentConflictPolicy);
             }
@@ -307,11 +307,12 @@ internal static class NpoiFailureWorkbookWriter
     /// <param name="source">原始导入工作簿。</param>
     /// <param name="errors">用于筛选错误行的导入错误集合。</param>
     /// <param name="resolvedSheetRequests">实际工作表到请求的映射。</param>
+    /// <param name="options">失败工作簿输出与诊断选项。</param>
     /// <param name="cancellationToken">复制过程中检查的取消令牌。</param>
     /// <returns>与原始格式匹配的错误行工作簿。</returns>
     private static IWorkbook CreateErrorRowsWorkbook(IWorkbook source, IReadOnlyCollection<ExcelImportError> errors,
         IReadOnlyDictionary<string, ExcelSheetImportRequest> resolvedSheetRequests,
-        CancellationToken cancellationToken)
+        ExcelImportFailureOptions options, CancellationToken cancellationToken)
     {
         var destination = source is NPOI.HSSF.UserModel.HSSFWorkbook
             ? (IWorkbook)new NPOI.HSSF.UserModel.HSSFWorkbook()
@@ -341,7 +342,7 @@ internal static class NpoiFailureWorkbookWriter
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 CopyRow(source, sourceSheet.GetRow(pair.Key), destinationSheet.CreateRow(pair.Value),
-                    destination, styleCache);
+                    destination, styleCache, options);
             }
             CopySheetMetadata(sourceSheet, destinationSheet, sourceRows);
             AddFailureColumns(destinationSheet, group.Value, rowMap,
@@ -359,33 +360,19 @@ internal static class NpoiFailureWorkbookWriter
     /// <param name="destinationRow">目标数据行。</param>
     /// <param name="destination">目标工作簿。</param>
     /// <param name="styleCache">按源样式索引缓存目标样式的字典。</param>
+    /// <param name="options">失败工作簿输出与诊断选项。</param>
     private static void CopyRow(IWorkbook source, IRow sourceRow, IRow destinationRow, IWorkbook destination,
-        IDictionary<short, ICellStyle> styleCache)
+        IDictionary<short, ICellStyle> styleCache, ExcelImportFailureOptions options)
     {
         if (sourceRow == null)
             return;
         destinationRow.Height = sourceRow.Height;
-        try
-        {
-            destinationRow.Hidden = sourceRow.Hidden;
-        }
-        catch (NotImplementedException)
-        {
-        }
-        try
-        {
-            destinationRow.ZeroHeight = sourceRow.ZeroHeight;
-        }
-        catch (NotImplementedException)
-        {
-        }
-        try
-        {
-            destinationRow.Collapsed = sourceRow.Collapsed;
-        }
-        catch (NotImplementedException)
-        {
-        }
+        NpoiFailureWorkbookDiagnostics.CopyOptionalRowMetadata(() => destinationRow.Hidden = sourceRow.Hidden,
+            "Hidden", sourceRow.RowNum, options?.DiagnosticSink);
+        NpoiFailureWorkbookDiagnostics.CopyOptionalRowMetadata(() => destinationRow.ZeroHeight = sourceRow.ZeroHeight,
+            "ZeroHeight", sourceRow.RowNum, options?.DiagnosticSink);
+        NpoiFailureWorkbookDiagnostics.CopyOptionalRowMetadata(() => destinationRow.Collapsed = sourceRow.Collapsed,
+            "Collapsed", sourceRow.RowNum, options?.DiagnosticSink);
         if (sourceRow.RowStyle != null)
             destinationRow.RowStyle = CloneStyle(sourceRow.RowStyle, destination, styleCache);
         foreach (var sourceCell in sourceRow.Cells)

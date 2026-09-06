@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+﻿using Bing.Offices.Exceptions;
 using Bing.Offices.Metadata;
 using NPOI.HSSF.UserModel;
 using NPOI.OpenXmlFormats.Dml.Spreadsheet;
@@ -255,6 +255,8 @@ public static partial class SheetExtensions
     public static void MovePictures(this NPOI.SS.UserModel.ISheet sheet, int? minRow, int? maxRow, int? minCol,
         int? maxCol, bool onlyInternal = true, int moveRowCount = 0, int moveColCount = 0)
     {
+        if (sheet is null)
+            throw new ArgumentNullException(nameof(sheet));
         switch (sheet)
         {
             case HSSFSheet hssfSheet:
@@ -264,6 +266,9 @@ public static partial class SheetExtensions
                 MovePictures(xssfSheet, minRow, maxRow, minCol, maxCol, onlyInternal, moveRowCount, moveColCount);
                 return;
         }
+        throw new BingOfficesUnsupportedFeatureException(
+            $"当前 Sheet 类型不支持移动图片: {sheet.GetType().FullName}", provider: "NPOI",
+            operation: BingOfficesOperation.Export, stage: BingOfficesStage.Write);
     }
 
     /// <summary>
@@ -387,7 +392,12 @@ public static partial class SheetExtensions
     /// <param name="col">列索引</param>
     /// <param name="pictureData">图片数据</param>
     /// <returns>图片成功添加时为 true；NPOI 拒绝图片数据或创建绘图区失败时为 false。</returns>
-    public static bool TryAddPicture(this ISheet sheet, int row, int col, IPictureData pictureData) => TryAddPicture(sheet, row, col, pictureData.Data, pictureData.PictureType);
+    public static bool TryAddPicture(this ISheet sheet, int row, int col, IPictureData pictureData)
+    {
+        if (pictureData is null)
+            throw new ArgumentNullException(nameof(pictureData));
+        return TryAddPicture(sheet, row, col, pictureData.Data, pictureData.PictureType);
+    }
 
     /// <summary>
     /// 将图片字节添加到工作表并自动调整图片大小；失败时返回 false。
@@ -403,6 +413,16 @@ public static partial class SheetExtensions
     {
         if (sheet is null)
             throw new ArgumentNullException(nameof(sheet));
+        if (row < 0)
+            throw new ArgumentOutOfRangeException(nameof(row));
+        if (col < 0)
+            throw new ArgumentOutOfRangeException(nameof(col));
+        if (pictureBytes is null)
+            throw new ArgumentNullException(nameof(pictureBytes));
+        if (pictureBytes.Length == 0)
+            throw new ArgumentException("图片数据不能为空。", nameof(pictureBytes));
+        if (!Enum.IsDefined(typeof(PictureType), pictureType))
+            throw new ArgumentOutOfRangeException(nameof(pictureType));
 
         try
         {
@@ -417,10 +437,13 @@ public static partial class SheetExtensions
             picture.Resize();
             return true;
         }
-        catch (Exception e)
+        catch (ArgumentException)
         {
-            Debug.WriteLine(e);
+            return false;
         }
-        return false;
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
     }
 }

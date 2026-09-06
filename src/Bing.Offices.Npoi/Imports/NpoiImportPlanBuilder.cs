@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Linq;
 using System.Reflection;
 using Bing.Offices.Configurations;
@@ -47,6 +48,10 @@ internal sealed class NpoiResolvedSheet
 /// </summary>
 internal sealed class NpoiImportPlanBuilder
 {
+    private delegate IExcelMappingWorkbookPlan CreatePlanInvoker(NpoiImportPlanBuilder target,
+        ExcelSheetImportRequest request, IReadOnlyList<string> sheetNames);
+
+    private static readonly ConcurrentDictionary<Type, CreatePlanInvoker> CreatePlanInvokers = new();
     /// <summary>将请求映射文档编译为不可变工作簿映射计划的工厂。</summary>
     private readonly IExcelMappingPlanFactory _mappingPlanFactory;
 
@@ -94,17 +99,14 @@ internal sealed class NpoiImportPlanBuilder
     private IExcelMappingWorkbookPlan CreateWorkbookPlan(ExcelSheetImportRequest request,
         IReadOnlyList<string> sheetNames)
     {
-        var method = GetType().GetMethod(nameof(CreateTypedWorkbookPlan), BindingFlags.Instance
-            | BindingFlags.NonPublic).MakeGenericMethod(request.ItemType);
-        try
-        {
-            return (IExcelMappingWorkbookPlan)method.Invoke(this, new object[] { request, sheetNames });
-        }
-        catch (TargetInvocationException exception) when (exception.InnerException != null)
-        {
-            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(exception.InnerException).Throw();
-            throw;
-        }
+        return CreatePlanInvokers.GetOrAdd(request.ItemType, CreatePlanInvokerForType)(this, request, sheetNames);
+    }
+
+    private static CreatePlanInvoker CreatePlanInvokerForType(Type itemType)
+    {
+        var method = typeof(NpoiImportPlanBuilder).GetMethod(nameof(CreateTypedWorkbookPlan),
+            BindingFlags.Instance | BindingFlags.NonPublic)!.MakeGenericMethod(itemType);
+        return (CreatePlanInvoker)method.CreateDelegate(typeof(CreatePlanInvoker));
     }
 
     /// <summary>为具体实体类型创建导入方向的工作簿映射计划。</summary>

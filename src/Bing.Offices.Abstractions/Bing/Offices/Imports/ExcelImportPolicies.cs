@@ -203,8 +203,8 @@ public enum ExcelUnsupportedFeaturePolicy
 /// </summary>
 public sealed class ExcelResourceLimits
 {
-    /// <summary>输入流最大字节数；null 表示不额外限制。</summary>
-    public long? MaxInputBytes { get; init; }
+    /// <summary>输入流最大字节数，默认 128 MiB；显式设置 null 可关闭该限制。</summary>
+    public long? MaxInputBytes { get; init; } = 128L * 1024 * 1024;
 
     /// <summary>最大数据行数；null 表示不额外限制。</summary>
     public int? MaxRows { get; init; }

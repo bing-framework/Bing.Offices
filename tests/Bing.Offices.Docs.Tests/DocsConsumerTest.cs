@@ -122,23 +122,6 @@ public sealed class DocsConsumerTest
     }
 
     /// <summary>
-    /// 测试 - 当前 2.x 包消费者仍可编译旧映射入口和兼容校验特性，迁移不依赖隐式删除。
-    /// </summary>
-    [Fact]
-    public void LegacyCompatibility_ExternalConsumer_ShouldKeepCurrentMajorEntrypoints()
-    {
-        // Arrange
-        var legacyBuilder = ExcelMapping.For<DocsRow>();
-        legacyBuilder.Property(row => row.Name).HasTitle("名称");
-        var legacyMapping = legacyBuilder.Build();
-        var regex = new ExcelRegexAttribute("^consumer$");
-
-        // Assert
-        Assert.Equal("名称", legacyMapping.Columns[0].Title);
-        Assert.Equal("^consumer$", regex.Pattern);
-    }
-
-    /// <summary>
     /// 测试 - 外部消费者应能使用 v2 文档和双模型 Profile 构建方向隔离的请求与 Registry。
     /// </summary>
     [Fact]
@@ -172,25 +155,23 @@ public sealed class DocsConsumerTest
     }
 
     /// <summary>
-    /// 测试 - 文档消费者应能读取 v1/v2 JSON/XML，且加载器不关闭调用方流。
+    /// 测试 - 文档消费者应能读取 v2 JSON/XML，且加载器不关闭调用方流。
     /// </summary>
     [Fact]
-    public void MappingDocuments_ExternalConsumer_ShouldMigrateAndPreserveStreams()
+    public void MappingDocuments_ExternalConsumer_ShouldLoadV2AndPreserveStreams()
     {
         // Arrange
-        using var jsonStream = new MemoryStream(Encoding.UTF8.GetBytes("{\"columns\":[]}"));
+        using var jsonStream = new MemoryStream(Encoding.UTF8.GetBytes(
+            "{\"version\":2,\"import\":{\"columns\":[]},\"export\":{\"columns\":[]}}"));
         using var xmlStream = new MemoryStream(Encoding.UTF8.GetBytes(
             "<ExcelMappingDocument><Version>2</Version><Import><Columns /></Import><Export><Columns /></Export></ExcelMappingDocument>"));
 
         // Act
-        var json = ExcelMappingConfigurationLoader.MigrateV1Json(jsonStream, MappingDirection.Import);
-        _ = ExcelMappingConfigurationLoader.MigrateV1Json("{\"columns\":[]}", MappingDirection.Export,
-            out var diagnostics);
+        var json = ExcelMappingConfigurationLoader.FromJsonDocument(jsonStream);
         var xml = ExcelMappingConfigurationLoader.FromXmlDocument(xmlStream);
 
         // Assert
         Assert.Equal(2, json.Version);
-        Assert.Contains(diagnostics, diagnostic => diagnostic.Code == "V1_MIGRATED");
         Assert.Equal(2, xml.Version);
         Assert.True(jsonStream.CanRead);
         Assert.True(xmlStream.CanRead);
@@ -286,7 +267,8 @@ public sealed class DocsConsumerTest
     {
         // Arrange
         var documents = new[] { "README.md", "mapping-profile.md", "mapping-json-xml.md",
-            "import-validation.md", "dynamic-columns.md", "nuget-migration.md" };
+            "import-validation.md", "dynamic-columns.md", "exceptions-and-observers.md", "dates.md",
+            "npoi-extensions.md", "nuget-migration.md" };
         var fences = System.Linq.Enumerable.SelectMany(documents, document => ExtractFences(document)).ToArray();
 
         // Act / Assert

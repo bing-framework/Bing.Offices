@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Runtime.ExceptionServices;
 using Bing.Offices.Attributes;
 using Bing.Offices.Conversions;
+using Bing.Offices.Dates;
 using Bing.Offices.Exceptions;
 using Bing.Offices.Exports;
 using Bing.Offices.Imports;
@@ -263,7 +264,13 @@ internal sealed class ExcelColumnPlan
                     return DateTime.SpecifyKind(offset.DateTime, DateTimeKind.Unspecified);
             }
             if (targetType == typeof(DateTimeOffset) && value is DateTime dateTime)
-                return new DateTimeOffset(DateTime.SpecifyKind(dateTime, DateTimeKind.Unspecified));
+            {
+                if (DateAttribute?.OffsetPolicy != ExcelDateOffsetPolicy.UseFixedOffset
+                    || !DateAttribute.OffsetMinutes.HasValue)
+                    throw new InvalidOperationException($"列 {Key} 将 DateTime 转换为 DateTimeOffset 时必须配置固定 offset。");
+                return new DateTimeOffset(DateTime.SpecifyKind(dateTime, DateTimeKind.Unspecified),
+                    TimeSpan.FromMinutes(DateAttribute.OffsetMinutes.Value));
+            }
             return Convert.ChangeType(value, targetType, culture);
         }
         catch (BingOfficesException)

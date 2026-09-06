@@ -1,8 +1,11 @@
 ﻿namespace Bing.Offices.Configurations;
 
+using System.ComponentModel;
+
 /// <summary>
 /// 线程安全的 Mapping Profile 注册表。
 /// </summary>
+[EditorBrowsable(EditorBrowsableState.Never)]
 public sealed class MappingProfileRegistry : IMappingProfileRegistry
 {
     private readonly Dictionary<MappingProfileKey, ProfileDescriptor> _descriptors =

@@ -89,6 +89,24 @@ public sealed class ExportColumnMappingBuilder<T, TProperty> where T : class, ne
         return this;
     }
 
+    /// <summary>设置导出值转换器名称。</summary>
+    public ExportColumnMappingBuilder<T, TProperty> HasConverter(string converterName)
+    {
+        _configuration.ConverterName = converterName;
+        return this;
+    }
+
+    /// <summary>设置属性值到导出显示文本的映射。</summary>
+    public ExportColumnMappingBuilder<T, TProperty> Map(string text, TProperty value)
+    {
+        _configuration.ValueMappings.Add(new ExcelValueMappingConfiguration
+        {
+            Text = text,
+            Value = Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture)
+        });
+        return this;
+    }
+
     /// <summary>
     /// 设置是否忽略导出属性。
     /// </summary>

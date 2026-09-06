@@ -5,6 +5,7 @@ var arguments = ParseArguments(args);
 var root = Path.GetFullPath(arguments.GetValueOrDefault("root") ?? "output/release");
 var baselinePath = Path.GetFullPath(arguments.GetValueOrDefault("baseline") ?? "build/api-snapshot-baseline.json");
 var output = arguments.GetValueOrDefault("output");
+var dependencies = arguments.GetValueOrDefault("dependencies");
 var baseline = JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, string>>>(
     File.ReadAllText(baselinePath, System.Text.Encoding.UTF8))
     ?? throw new InvalidOperationException("API snapshot baseline is empty.");
@@ -19,7 +20,15 @@ foreach (var tfm in new[] { "netcoreapp3.1", "net6.0", "net8.0" })
         Path.Combine(root, tfm, "Bing.Offices.Npoi.dll")
     };
     var additionalPaths = paths.Select(Path.GetDirectoryName).Where(path => path is not null)
-        .SelectMany(path => Directory.EnumerateFiles(path!, "*.dll"));
+        .SelectMany(path => Directory.EnumerateFiles(path!, "*.dll")).ToList();
+    if (!string.IsNullOrWhiteSpace(dependencies))
+    {
+        var dependencyDirectory = Path.GetFullPath(dependencies);
+        if (!Directory.Exists(dependencyDirectory))
+            throw new DirectoryNotFoundException($"Dependency directory does not exist: {dependencyDirectory}");
+        additionalPaths.AddRange(Directory.EnumerateFiles(dependencyDirectory, "*.dll",
+            SearchOption.AllDirectories));
+    }
     var snapshots = paths.Select(path => PublicApiSnapshot.Load(path, additionalPaths)).ToDictionary(
         snapshot => snapshot.AssemblyName, snapshot => snapshot, StringComparer.Ordinal);
 

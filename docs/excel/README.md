@@ -31,6 +31,9 @@ exporter.Export(request, stream);
 - [mapping-json-xml.md](mapping-json-xml.md)：JSON/XML 映射文档
 - [import-validation.md](import-validation.md)：Workbook 原生校验、配置校验和错误收集
 - [dynamic-columns.md](dynamic-columns.md)：动态列与物理布局
+- [exceptions-and-observers.md](exceptions-and-observers.md)：异常分类、Observer 与文件提交边界
+- [dates.md](dates.md)：日期、DateTimeOffset 与跨时区合同
+- [npoi-extensions.md](npoi-extensions.md)：七个 NPOI 用户扩展容器和 Try/Throw 行为
 - [nuget-migration.md](nuget-migration.md)：包身份、当前兼容边界和迁移注意事项
 
 迁移与使用：
@@ -39,6 +42,9 @@ exporter.Export(request, stream);
 - [mapping-json-xml.md](mapping-json-xml.md)
 - [import-validation.md](import-validation.md)
 - [dynamic-columns.md](dynamic-columns.md)
+- [exceptions-and-observers.md](exceptions-and-observers.md)
+- [dates.md](dates.md)
+- [npoi-extensions.md](npoi-extensions.md)
 - [nuget-migration.md](nuget-migration.md)
 
-ASP.NET Core 上传示例见 `import-validation.md`；公开示例由 `Bing.Offices.Docs.Tests` 使用本地打包的三个 NuGet 包持续编译和执行。
+ASP.NET Core 上传示例见 `import-validation.md`；公开示例由 `Bing.Offices.Docs.Tests` 对当前源码持续编译和执行，真实 nupkg 可消费性由发布任务中的独立 PackageConsumer 验证。

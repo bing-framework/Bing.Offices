@@ -28,8 +28,6 @@ public class MappingValidationBenchmarks
     private ExcelMappingDocument _document = null!;
     private string _json = string.Empty;
     private string _xml = string.Empty;
-    private string _jsonV1 = string.Empty;
-    private string _xmlV1 = string.Empty;
     private ExcelMappingConfiguration _multiRuleConfiguration = null!;
     private ExcelMappingConfiguration _profileConfiguration = null!;
     private JsonSerializerOptions _cacheKeySerializerOptions = null!;
@@ -67,8 +65,6 @@ public class MappingValidationBenchmarks
         };
         _json = ExcelMappingConfigurationLoader.ToJson(_document);
         _xml = ExcelMappingConfigurationLoader.ToXml(_document);
-        _jsonV1 = "{\"columns\":[{\"propertyName\":\"Code\",\"title\":\"编码\"}]}";
-        _xmlV1 = "<ExcelMappingConfiguration><Columns><ExcelColumnConfiguration><PropertyName>Code</PropertyName><Title>编码</Title></ExcelColumnConfiguration></Columns></ExcelMappingConfiguration>";
         _multiRuleConfiguration = new ExcelMappingConfiguration
         {
             Columns =
@@ -89,16 +85,6 @@ public class MappingValidationBenchmarks
     /// <summary>测量 XML v2 配置解析。</summary>
     [Benchmark]
     public int ParseXmlV2() => ExcelMappingConfigurationLoader.FromXmlDocument(_xml).Import.Columns.Count;
-
-    /// <summary>测量 JSON v1 迁移解析。</summary>
-    [Benchmark]
-    public int ParseJsonV1() => ExcelMappingConfigurationLoader.MigrateV1Json(_jsonV1,
-        MappingDirection.Import).Import.Columns.Count;
-
-    /// <summary>测量 XML v1 迁移解析。</summary>
-    [Benchmark]
-    public int ParseXmlV1() => ExcelMappingConfigurationLoader.MigrateV1Xml(_xmlV1,
-        MappingDirection.Import).Import.Columns.Count;
 
     /// <summary>测量 10K 命名规则配置的不可变计划构建。</summary>
     [Benchmark]
@@ -408,7 +394,8 @@ public class RegexCacheBenchmarks
 {
     private readonly ExcelValidationContext _context = new("CODE-123", "Sheet1", 2, 1, "Code");
     private readonly ExcelRegexAttribute _attribute = new("^CODE-[0-9]+$");
-    private readonly RegexExcelValidationRule _rule = new();
+    private readonly IExcelValidationRule _rule = ExcelValidationRules.CreateDefault()
+        .Single(rule => rule.CanValidate(new ExcelRegexAttribute("^CODE-[0-9]+$")));
 
     /// <summary>
     /// 测量重复命中有界 Regex 缓存的校验成本。

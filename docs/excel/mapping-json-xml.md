@@ -56,12 +56,10 @@ XML 使用同名元素：`ExcelMappingDocument/Version/Import/Profile/ModelAlias
 }
 ```
 
-v1 迁移可以保留诊断信息：
+运行时只接受 v2 `ExcelMappingDocument`。历史 v1 平铺配置必须在升级前离线转换，不能由核心运行时包迁移。
 
 ```csharp
-var document = ExcelMappingConfigurationLoader.MigrateV1Json(
-  "{\"columns\":[{\"propertyName\":\"Code\",\"title\":\"编码\"}]}",
-  MappingDirection.Import,
-  out var diagnostics);
-// diagnostics 中包含 V1_MIGRATED，document 已归一化为 Version = 2 的 Import 方向文档。
+var document = ExcelMappingConfigurationLoader.FromJsonDocument(
+  "{\"version\":2,\"import\":{\"columns\":[{\"propertyName\":\"Code\",\"title\":\"编码\"}]}}");
+var importMapping = document.Import;
 ```

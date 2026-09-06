@@ -1,7 +1,7 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Reflection;
-using System.Runtime.ExceptionServices;
 using System.Threading;
 using Bing.Offices.Exceptions;
 using Bing.Offices.Imports;
@@ -13,6 +13,13 @@ namespace Bing.Offices.Npoi.Imports;
 /// </summary>
 internal static class NpoiRelationBinder
 {
+    private delegate void BindInvoker(object root, ExcelRelationRequest request,
+        ExcelImportErrorCollector errors, IReadOnlyDictionary<object, SourceLocation> sourceLocations,
+        CancellationToken cancellationToken);
+
+    private static readonly ConcurrentDictionary<(Type Workbook, Type Parent, Type Child, Type Key), BindInvoker>
+        BindInvokers = new();
+
     /// <summary>
     /// 绑定一个具体的父子关系请求。
     /// </summary>
@@ -27,20 +34,29 @@ internal static class NpoiRelationBinder
         CancellationToken cancellationToken)
         where TWorkbook : class, new()
     {
-        var method = typeof(NpoiRelationBinder).GetMethod(nameof(BindCore),
-            BindingFlags.Static | BindingFlags.NonPublic);
-        try
-        {
-            method.MakeGenericMethod(typeof(TWorkbook), request.ParentType, request.ChildType,
-                request.ParentKey.Method.ReturnType).Invoke(null,
-                new object[] { root, request, errors, sourceLocations, cancellationToken });
-        }
-        catch (TargetInvocationException exception) when (exception.InnerException != null)
-        {
-            ExceptionDispatchInfo.Capture(exception.InnerException).Throw();
-            throw;
-        }
+        var key = (typeof(TWorkbook), request.ParentType, request.ChildType, request.ParentKey.Method.ReturnType);
+        BindInvokers.GetOrAdd(key, CreateBindInvoker)(root, request, errors, sourceLocations, cancellationToken);
     }
+
+    /// <summary>检查指定关系类型组合是否已有缓存委托，仅供职责级测试验证缓存合同。</summary>
+    internal static bool IsCached(Type workbookType, Type parentType, Type childType, Type keyType) =>
+        BindInvokers.ContainsKey((workbookType, parentType, childType, keyType));
+
+    private static BindInvoker CreateBindInvoker((Type Workbook, Type Parent, Type Child, Type Key) key)
+    {
+        var method = typeof(NpoiRelationBinder).GetMethod(nameof(CreateTypedBindInvoker),
+            BindingFlags.Static | BindingFlags.NonPublic)!.MakeGenericMethod(
+            key.Workbook, key.Parent, key.Child, key.Key);
+        return (BindInvoker)method.Invoke(null, null)!;
+    }
+
+    private static BindInvoker CreateTypedBindInvoker<TWorkbook, TParent, TChild, TKey>()
+        where TWorkbook : class, new()
+        where TParent : class
+        where TChild : class =>
+        (root, request, errors, sourceLocations, cancellationToken) =>
+            BindCore<TWorkbook, TParent, TChild, TKey>((TWorkbook)root, request, errors,
+                sourceLocations, cancellationToken);
 
     /// <summary>使用具体泛型类型执行父子键关联并写入导航集合。</summary>
     /// <typeparam name="TWorkbook">包含父子集合的工作簿根实体类型。</typeparam>

@@ -66,7 +66,7 @@ public interface IBingOfficesExceptionObserver
 }
 
 /// <summary>Bing.Offices 公共运行异常基类。</summary>
-public class BingOfficesException : InvalidOperationException
+public abstract class BingOfficesException : InvalidOperationException
 {
     /// <summary>初始化公共运行异常。</summary>
     public BingOfficesException(BingOfficesErrorCode code, BingOfficesOperation operation,

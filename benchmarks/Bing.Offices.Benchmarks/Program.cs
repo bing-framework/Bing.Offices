@@ -39,6 +39,8 @@ public static class Program
             new[]
             {
                 typeof(StreamPipelineBenchmarks),
+                typeof(CsvPipelineBenchmarks),
+                typeof(GenericSheetDispatchBenchmarks),
                 typeof(FailureWorkbookBenchmarks),
                 typeof(HeaderStyleBenchmarks),
                 typeof(ValidationRangeBenchmarks),

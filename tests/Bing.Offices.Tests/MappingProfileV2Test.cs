@@ -116,7 +116,7 @@ public class MappingProfileV2Test
     public void MappingConfiguration_MergeOperations_ShouldApplyExplicitly()
     {
         // Arrange
-        var configuration = ExcelMapping.For<ImportModel>()
+        var configuration = new ImportMappingBuilder<ImportModel>()
             .Property(model => model.Name)
             .HasValidationRule("legacy")
             .And()

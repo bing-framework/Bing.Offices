@@ -9,6 +9,7 @@ using Bing.Offices.Npoi.Extensions;
 using Bing.Offices.Npoi.Internals;
 using Bing.Offices.Npoi.Resolvers;
 using System.Globalization;
+using System.Collections.Concurrent;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using NPOI.SS.Util;
@@ -22,6 +23,11 @@ namespace Bing.Offices.Npoi.Exports;
 /// </summary>
 internal sealed class NpoiExcelExporter : IExcelExporter
 {
+    private delegate void WriteSheetInvoker(NpoiExcelExporter target, NPOI.SS.UserModel.IWorkbook workbook,
+        ExcelSheetExportRequest request, bool isTemplate, CancellationToken cancellationToken,
+        IExcelMappingPlan mapping);
+
+    private static readonly ConcurrentDictionary<Type, WriteSheetInvoker> WriteSheetInvokers = new();
     /// <summary>
     /// 当前导出器使用的值转换器。
     /// </summary>
@@ -190,17 +196,15 @@ internal sealed class NpoiExcelExporter : IExcelExporter
     private void WriteSheet(NPOI.SS.UserModel.IWorkbook workbook, ExcelSheetExportRequest request,
         bool isTemplate, CancellationToken cancellationToken, IExcelMappingPlan mapping)
     {
-        var method = GetType().GetMethod(nameof(WriteTypedSheet), BindingFlags.Instance | BindingFlags.NonPublic);
-        try
-        {
-            method.MakeGenericMethod(request.ItemType).Invoke(this,
-                new object[] { workbook, request, isTemplate, cancellationToken, mapping });
-        }
-        catch (TargetInvocationException exception) when (exception.InnerException != null)
-        {
-            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(exception.InnerException).Throw();
-            throw;
-        }
+        WriteSheetInvokers.GetOrAdd(request.ItemType, CreateWriteSheetInvoker)(this, workbook, request,
+            isTemplate, cancellationToken, mapping);
+    }
+
+    private static WriteSheetInvoker CreateWriteSheetInvoker(Type itemType)
+    {
+        var method = typeof(NpoiExcelExporter).GetMethod(nameof(WriteTypedSheet),
+            BindingFlags.Instance | BindingFlags.NonPublic)!.MakeGenericMethod(itemType);
+        return (WriteSheetInvoker)method.CreateDelegate(typeof(WriteSheetInvoker));
     }
 
     /// <summary>

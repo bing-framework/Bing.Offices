@@ -109,6 +109,13 @@ public static partial class CellExtensions
             return;
         }
 
+        if (value is DateTimeOffset dateTimeOffsetValue)
+        {
+            // Excel 数值日期无法保存 offset；默认使用稳定的往返文本合同。
+            cell.SetCellValue(dateTimeOffsetValue.ToString("O", CultureInfo.InvariantCulture));
+            return;
+        }
+
         if (value is long longValue && (longValue > MaxSafeInteger || longValue < -MaxSafeInteger))
         {
             cell.SetCellValue(longValue.ToString(CultureInfo.InvariantCulture));

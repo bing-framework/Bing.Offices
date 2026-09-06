@@ -32,12 +32,15 @@ internal static class AtomicFileCommitter
         if (fileSystem == null)
             throw new ArgumentNullException(nameof(fileSystem));
         var temporaryPath = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        var writingContent = false;
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
             using (var destination = fileSystem.CreateFile(temporaryPath))
             {
+                writingContent = true;
                 write(destination);
+                writingContent = false;
                 fileSystem.Flush(destination);
                 cancellationToken.ThrowIfCancellationRequested();
             }
@@ -51,6 +54,12 @@ internal static class AtomicFileCommitter
         }
         catch (OperationCanceledException exception)
         {
+            Cleanup(temporaryPath, format, exception, fileSystem);
+            throw;
+        }
+        catch (Exception exception) when (writingContent)
+        {
+            // 内容生成属于导出公共边界，不能伪装成文件系统提交失败。
             Cleanup(temporaryPath, format, exception, fileSystem);
             throw;
         }

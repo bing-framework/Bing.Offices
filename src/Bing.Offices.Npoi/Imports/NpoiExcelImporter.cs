@@ -1,5 +1,6 @@
 ﻿using System.Globalization;
 using System.Reflection;
+using System.Collections.Concurrent;
 using Bing.Offices.Attributes;
 using Bing.Offices.Conversions;
 using Bing.Offices.Configurations;
@@ -21,6 +22,17 @@ namespace Bing.Offices.Npoi.Imports;
 /// </summary>
 internal sealed class NpoiExcelImporter : IExcelImporter
 {
+    private delegate void ImportSheetInvoker<TWorkbook>(NpoiExcelImporter target, ISheet sheet,
+        ExcelSheetImportRequest request, TWorkbook root, ICollection<ExcelSheetImportResult> sheetResults,
+        ExcelImportErrorCollector errors, ExcelImportValidationMode validationMode,
+        ExcelResourceLimits resourceLimits, ExcelUnsupportedFeaturePolicy unsupportedFeaturePolicy,
+        IDictionary<object, SourceLocation> sourceLocations, ExcelImportRuntime runtime, bool isDate1904,
+        CancellationToken cancellationToken, IExcelMappingPlan mappingPlan) where TWorkbook : class, new();
+
+    private static class ImportSheetInvokerCache<TWorkbook> where TWorkbook : class, new()
+    {
+        internal static readonly ConcurrentDictionary<Type, ImportSheetInvoker<TWorkbook>> Invokers = new();
+    }
     /// <summary>
     /// 当前导入器使用的校验规则。
     /// </summary>
@@ -286,18 +298,18 @@ internal sealed class NpoiExcelImporter : IExcelImporter
         CancellationToken cancellationToken, IExcelMappingPlan mappingPlan, bool isDate1904)
         where TWorkbook : class, new()
     {
-        var method = GetType().GetMethod(nameof(ImportTypedSheetCore), BindingFlags.Instance | BindingFlags.NonPublic);
-        try
-        {
-            method.MakeGenericMethod(typeof(TWorkbook), request.ItemType).Invoke(this,
-                new object[] { sheet, request, root, sheetResults, errors, validationMode, resourceLimits,
-                    unsupportedFeaturePolicy, sourceLocations, runtime, isDate1904, cancellationToken, mappingPlan });
-        }
-        catch (TargetInvocationException exception) when (exception.InnerException != null)
-        {
-            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(exception.InnerException).Throw();
-            throw;
-        }
+        ImportSheetInvokerCache<TWorkbook>.Invokers.GetOrAdd(request.ItemType,
+            CreateImportSheetInvoker<TWorkbook>)(this, sheet, request, root, sheetResults, errors,
+            validationMode, resourceLimits, unsupportedFeaturePolicy, sourceLocations, runtime,
+            isDate1904, cancellationToken, mappingPlan);
+    }
+
+    private static ImportSheetInvoker<TWorkbook> CreateImportSheetInvoker<TWorkbook>(Type itemType)
+        where TWorkbook : class, new()
+    {
+        var method = typeof(NpoiExcelImporter).GetMethod(nameof(ImportTypedSheetCore),
+            BindingFlags.Instance | BindingFlags.NonPublic)!.MakeGenericMethod(typeof(TWorkbook), itemType);
+        return (ImportSheetInvoker<TWorkbook>)method.CreateDelegate(typeof(ImportSheetInvoker<TWorkbook>));
     }
 
     /// <summary>

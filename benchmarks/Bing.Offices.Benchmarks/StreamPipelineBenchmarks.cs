@@ -1,5 +1,6 @@
 ﻿using BenchmarkDotNet.Attributes;
 using Bing.Offices.Attributes;
+using Bing.Offices.Csv;
 using Bing.Offices.Exports;
 using Bing.Offices.Imports;
 using Bing.Offices.Extensions;
@@ -149,6 +150,129 @@ public class StreamPipelineBenchmarks
     private sealed class BenchmarkWorkbook
     {
         public List<BenchmarkRow> Items { get; } = new();
+    }
+}
+
+/// <summary>强类型 CSV 公开导入导出调用链基准。</summary>
+[MemoryDiagnoser]
+public class CsvPipelineBenchmarks
+{
+    [Params(1000, 10000, 100000)]
+    public int RowCount { get; set; }
+
+    private IServiceProvider _serviceProvider = null!;
+    private ICsvImporter _importer = null!;
+    private ICsvExporter _exporter = null!;
+    private IReadOnlyList<CsvBenchmarkRow> _rows = Array.Empty<CsvBenchmarkRow>();
+    private byte[] _sourceBytes = Array.Empty<byte>();
+
+    [GlobalSetup]
+    public void Setup()
+    {
+        _serviceProvider = new ServiceCollection().AddBingOfficesNpoi().BuildServiceProvider();
+        _importer = _serviceProvider.GetRequiredService<ICsvImporter>();
+        _exporter = _serviceProvider.GetRequiredService<ICsvExporter>();
+        _rows = Enumerable.Range(0, RowCount).Select(index => new CsvBenchmarkRow
+        {
+            Code = $"CSV-{index:D6}",
+            Quantity = index,
+            OccurredAt = new DateTimeOffset(2026, 9, 6, 12, 0, 0, TimeSpan.FromHours(8))
+                .AddMinutes(index)
+        }).ToArray();
+        using var source = new MemoryStream();
+        _exporter.Export(_rows, source);
+        _sourceBytes = source.ToArray();
+    }
+
+    [GlobalCleanup]
+    public void Cleanup() => (_serviceProvider as IDisposable)?.Dispose();
+
+    [Benchmark]
+    public int Import()
+    {
+        using var source = new MemoryStream(_sourceBytes, writable: false);
+        return _importer.Import<CsvBenchmarkRow>(source).Items.Count;
+    }
+
+    [Benchmark]
+    public long Export()
+    {
+        using var destination = new MemoryStream();
+        _exporter.Export(_rows, destination);
+        return destination.Length;
+    }
+
+    private sealed class CsvBenchmarkRow
+    {
+        public string Code { get; set; } = string.Empty;
+        public int Quantity { get; set; }
+        public DateTimeOffset OccurredAt { get; set; }
+    }
+}
+
+/// <summary>同一实体类型跨多个 Sheet 时的泛型委托缓存生产调用链基准。</summary>
+[MemoryDiagnoser]
+public class GenericSheetDispatchBenchmarks
+{
+    [Params(1, 8)]
+    public int SheetCount { get; set; }
+
+    private IServiceProvider _serviceProvider = null!;
+    private IExcelExporter _exporter = null!;
+    private IExcelImporter _importer = null!;
+    private ExcelWorkbookExportRequest _exportRequest = null!;
+    private ExcelWorkbookImportRequest<DispatchWorkbook> _importRequest = null!;
+    private byte[] _sourceBytes = Array.Empty<byte>();
+
+    [GlobalSetup]
+    public void Setup()
+    {
+        _serviceProvider = new ServiceCollection().AddBingOfficesNpoi().BuildServiceProvider();
+        _exporter = _serviceProvider.GetRequiredService<IExcelExporter>();
+        _importer = _serviceProvider.GetRequiredService<IExcelImporter>();
+        _exportRequest = ExcelExport.Workbook(workbook =>
+        {
+            for (var index = 0; index < SheetCount; index++)
+                workbook.AddSheet($"Sheet{index}", new[] { new DispatchRow { Code = $"C-{index}" } });
+        });
+        _importRequest = ExcelImport.Workbook<DispatchWorkbook>(workbook =>
+        {
+            for (var index = 0; index < SheetCount; index++)
+                workbook.Sheet($"Sheet{index}", root => root.Items);
+        });
+        using var source = new MemoryStream();
+        _exporter.Export(_exportRequest, source);
+        _sourceBytes = source.ToArray();
+    }
+
+    [GlobalCleanup]
+    public void Cleanup() => (_serviceProvider as IDisposable)?.Dispose();
+
+    /// <summary>测量缓存命中后的多 Sheet 导出分派与真实 NPOI 序列化。</summary>
+    [Benchmark]
+    public long Export()
+    {
+        using var destination = new MemoryStream();
+        _exporter.Export(_exportRequest, destination);
+        return destination.Length;
+    }
+
+    /// <summary>测量缓存命中后的多 Sheet 导入分派与真实 NPOI 读取。</summary>
+    [Benchmark]
+    public int Import()
+    {
+        using var source = new MemoryStream(_sourceBytes, writable: false);
+        return _importer.Import(source, _importRequest).Workbook.Items.Count;
+    }
+
+    private sealed class DispatchWorkbook
+    {
+        public List<DispatchRow> Items { get; } = new();
+    }
+
+    private sealed class DispatchRow
+    {
+        public string Code { get; set; } = string.Empty;
     }
 }
 

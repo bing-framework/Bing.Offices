@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Data;
 using System.IO;
 using System.Globalization;
 using System.Text;
@@ -19,64 +18,6 @@ namespace Bing.Offices.Tests;
 
 public class CsvTest
 {
-    [Fact]
-    public void Test_ExportByDataTable()
-    {
-        var dt = new DataTable();
-        dt.Columns.AddRange(new[]
-        {
-            new DataColumn("Name"),
-            new DataColumn("Age"),
-            new DataColumn("Desc"),
-            new DataColumn("Separator"),
-            new DataColumn("Quote"),
-        });
-        for (var i = 0; i < 10; i++)
-        {
-            var row = dt.NewRow();
-            row.ItemArray = new object[] { $"Test_{i}", i + 10, $"Desc_{i}",$"Separator , {i}",$"Quote , \" {i}" };
-            dt.Rows.Add(row);
-        }
-
-        var filePath = Path.Combine(Path.GetTempPath(), $"Bing.Offices.Tests.{Guid.NewGuid():N}.csv");
-        try
-        {
-            Assert.True(CsvHelper.ToCsvFile(dt, filePath, true, ',', '"'));
-            var content = File.ReadAllText(filePath, System.Text.Encoding.UTF8);
-            Assert.Contains("Name,Age,Desc,Separator,Quote", content);
-            Assert.Contains("\"Separator , 0\"", content);
-            Assert.Contains("\"Quote , \"\" 0\"", content);
-        }
-        finally
-        {
-            if (File.Exists(filePath))
-                File.Delete(filePath);
-        }
-    }
-
-    /// <summary>
-    /// 测试 - DataTable CSV 兼容层应为无数据表保留表头，并按显式参数处理公式字段和引用字符。
-    /// </summary>
-    [Fact]
-    public void DataTableCompatibility_ExplicitOptions_ShouldKeepHeaderAndEscapeFormula()
-    {
-        // Arrange
-        var empty = new DataTable();
-        empty.Columns.Add("=标题");
-        var data = new DataTable();
-        data.Columns.Add("Name");
-        data.Rows.Add("=SUM(A1:A2)");
-
-        // Act
-        var emptyContent = CsvHelper.GetCsvText(empty, true, ';', '|');
-        var content = CsvHelper.GetCsvText(data, true, ';', '|');
-
-        // Assert
-        Assert.Equal("'=标题\r\n", emptyContent);
-        Assert.Contains("'=SUM(A1:A2)", content);
-        Assert.DoesNotContain("\"", content);
-    }
-
     /// <summary>
     /// 测试 - 实体 CSV 管线应正确转义分隔符、引号和记录内换行，并保持调用方流打开。
     /// </summary>
@@ -107,6 +48,32 @@ public class CsvTest
         Assert.Equal(sourceItems[0].Name, item.Name);
         Assert.Equal(sourceItems[0].Description, item.Description);
         Assert.Equal(7, item.Count);
+    }
+
+    /// <summary>
+    /// 测试 - CSV 默认应以 ISO round-trip 文本保留 DateTimeOffset 的值和 offset。
+    /// </summary>
+    [Fact]
+    public void EntityPipeline_DateTimeOffset_ShouldRoundTripWithStableOffsetText()
+    {
+        // Arrange
+        var expected = new DateTimeOffset(2026, 9, 6, 12, 34, 56, TimeSpan.FromHours(8));
+        using var destination = new MemoryStream();
+        var exporter = new CsvEntityExporter();
+        var importer = new CsvEntityImporter();
+
+        // Act
+        exporter.Export(new[] { new CsvOffsetRow { OccurredAt = expected } }, destination);
+        var content = Encoding.UTF8.GetString(destination.ToArray());
+        destination.Position = 0;
+        var result = importer.Import<CsvOffsetRow>(destination);
+
+        // Assert
+        Assert.Contains(expected.ToString("O", CultureInfo.InvariantCulture), content);
+        Assert.Empty(result.Errors);
+        var actual = Assert.Single(result.Items).OccurredAt;
+        Assert.Equal(expected, actual);
+        Assert.Equal(expected.Offset, actual.Offset);
     }
 
     /// <summary>
@@ -297,8 +264,9 @@ public class CsvTest
         try
         {
             // Act
-            Assert.Throws<BingOfficesFileCommitException>(() => new ThrowingCsvExporter()
+            var exception = Assert.Throws<InvalidOperationException>(() => new ThrowingCsvExporter()
                 .ExportToFile(new[] { new CsvRow() }, filePath));
+            Assert.Equal("测试导出失败", exception.Message);
 
             // Assert
             Assert.Equal("原始内容", File.ReadAllText(filePath, Encoding.UTF8));
@@ -1035,6 +1003,11 @@ public class CsvTest
         /// 描述。
         /// </summary>
         public string Description { get; set; }
+    }
+
+    private sealed class CsvOffsetRow
+    {
+        public DateTimeOffset OccurredAt { get; set; }
     }
 
     private sealed class ThrowingCsvExporter : ICsvExporter

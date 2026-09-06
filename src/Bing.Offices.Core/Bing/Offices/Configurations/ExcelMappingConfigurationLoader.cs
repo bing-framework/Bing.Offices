@@ -37,50 +37,6 @@ public static class ExcelMappingConfigurationLoader
     public static ExcelMappingDocument FromJsonDocument(string json)
         => ExecuteConfiguration(() => LoadJsonDocument(json, null, null));
 
-
-    /// <summary>
-    /// 将 v1 平铺 JSON 映射配置迁移到指定方向的 v2 文档。
-    /// </summary>
-    /// <param name="json">v1 JSON 配置。</param>
-    /// <param name="direction">迁移目标方向。</param>
-    public static ExcelMappingDocument MigrateV1Json(string json, MappingDirection direction)
-    {
-        IReadOnlyList<ExcelMappingDiagnostic> diagnostics;
-        return MigrateV1Json(json, direction, out diagnostics);
-    }
-
-    /// <summary>
-    /// 将 v1 平铺 JSON 映射配置迁移到指定方向的 v2 文档，并返回诊断信息。
-    /// </summary>
-    /// <param name="json">v1 JSON 配置。</param>
-    /// <param name="direction">迁移目标方向。</param>
-    /// <param name="diagnostics">迁移诊断信息。</param>
-    public static ExcelMappingDocument MigrateV1Json(string json, MappingDirection direction,
-        out IReadOnlyList<ExcelMappingDiagnostic> diagnostics)
-    {
-        ValidateDirection(direction);
-        var items = new List<ExcelMappingDiagnostic>();
-        var result = ExecuteConfiguration(() => CreateMigratedDocument(DeserializeV1Json(json), direction));
-        items.Add(new ExcelMappingDiagnostic("V1_MIGRATED", "$",
-            $"检测到 v1 平铺 JSON，已显式迁移为 v2 {direction} 方向文档。"));
-        diagnostics = items;
-        return result;
-    }
-
-    /// <summary>
-    /// 从调用方拥有的流迁移 v1 JSON，并保留调用方流所有权。
-    /// </summary>
-    /// <param name="source">v1 JSON 流。</param>
-    /// <param name="direction">迁移目标方向。</param>
-    public static ExcelMappingDocument MigrateV1Json(Stream source, MappingDirection direction)
-    {
-        if (source == null)
-            throw new ArgumentNullException(nameof(source));
-        if (!source.CanRead)
-            throw new ArgumentException("JSON 配置流不可读取。", nameof(source));
-        using var reader = new StreamReader(source, Encoding.UTF8, true, 1024, true);
-        return MigrateV1Json(ExcelMappingTextReader.ReadLimitedText(reader), direction);
-    }
     /// <summary>
     /// 从 JSON 文本加载文档，并返回非阻断的迁移诊断。
     /// </summary>
@@ -130,25 +86,18 @@ public static class ExcelMappingConfigurationLoader
             var isV2 = document.RootElement.TryGetProperty("version", out _)
                        || document.RootElement.TryGetProperty("import", out _)
                        || document.RootElement.TryGetProperty("export", out _);
-            ExcelMappingDocumentValidator.ValidateJsonElement(document.RootElement, "$", isV2);
+            if (!isV2)
+                throw new InvalidOperationException("仅支持 v2 ExcelMappingDocument JSON 配置。");
+            ExcelMappingDocumentValidator.ValidateJsonElement(document.RootElement, "$", true);
             var options = new JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true,
                 MaxDepth = MaxDepth
             };
-            ExcelMappingDocument result;
-            if (isV2)
-            {
-                result = JsonSerializer.Deserialize<ExcelMappingDocument>(json, options)
-                    ?? throw new InvalidOperationException("JSON 配置未包含有效映射文档。");
-                if (result.Version != 2)
-                    throw new InvalidOperationException($"不支持的 JSON 映射文档版本: {result.Version}");
-            }
-            else
-            {
-                throw new InvalidOperationException(
-                    "检测到 v1 平铺 JSON；请调用 MigrateV1Json(json, direction) 并显式指定迁移方向。");
-            }
+            var result = JsonSerializer.Deserialize<ExcelMappingDocument>(json, options)
+                ?? throw new InvalidOperationException("JSON 配置未包含有效映射文档。");
+            if (result.Version != 2)
+                throw new InvalidOperationException($"不支持的 JSON 映射文档版本: {result.Version}");
             ExcelMappingDocumentValidator.ValidateDocument(result, modelAliases);
             return result;
         }
@@ -190,50 +139,6 @@ public static class ExcelMappingConfigurationLoader
     public static ExcelMappingDocument FromXmlDocument(string xml)
         => ExecuteConfiguration(() => LoadXmlDocument(xml, null, null));
 
-
-    /// <summary>
-    /// 将 v1 平铺 XML 映射配置迁移到指定方向的 v2 文档。
-    /// </summary>
-    /// <param name="xml">v1 XML 配置。</param>
-    /// <param name="direction">迁移目标方向。</param>
-    public static ExcelMappingDocument MigrateV1Xml(string xml, MappingDirection direction)
-    {
-        IReadOnlyList<ExcelMappingDiagnostic> diagnostics;
-        return MigrateV1Xml(xml, direction, out diagnostics);
-    }
-
-    /// <summary>
-    /// 将 v1 平铺 XML 映射配置迁移到指定方向的 v2 文档，并返回诊断信息。
-    /// </summary>
-    /// <param name="xml">v1 XML 配置。</param>
-    /// <param name="direction">迁移目标方向。</param>
-    /// <param name="diagnostics">迁移诊断信息。</param>
-    public static ExcelMappingDocument MigrateV1Xml(string xml, MappingDirection direction,
-        out IReadOnlyList<ExcelMappingDiagnostic> diagnostics)
-    {
-        ValidateDirection(direction);
-        var items = new List<ExcelMappingDiagnostic>();
-        var result = ExecuteConfiguration(() => CreateMigratedDocument(DeserializeV1Xml(xml), direction));
-        items.Add(new ExcelMappingDiagnostic("V1_MIGRATED", "/ExcelMappingConfiguration",
-            $"检测到 v1 平铺 XML，已显式迁移为 v2 {direction} 方向文档。"));
-        diagnostics = items;
-        return result;
-    }
-
-    /// <summary>
-    /// 从调用方拥有的流迁移 v1 XML，并保留调用方流所有权。
-    /// </summary>
-    /// <param name="source">v1 XML 流。</param>
-    /// <param name="direction">迁移目标方向。</param>
-    public static ExcelMappingDocument MigrateV1Xml(Stream source, MappingDirection direction)
-    {
-        if (source == null)
-            throw new ArgumentNullException(nameof(source));
-        if (!source.CanRead)
-            throw new ArgumentException("XML 配置流不可读取。", nameof(source));
-        using var reader = new StreamReader(source, Encoding.UTF8, true, 1024, true);
-        return MigrateV1Xml(ExcelMappingTextReader.ReadLimitedText(reader), direction);
-    }
     /// <summary>
     /// 从 XML 文本加载文档，并返回非阻断的迁移诊断。
     /// </summary>
@@ -271,14 +176,13 @@ public static class ExcelMappingConfigurationLoader
         if (Encoding.UTF8.GetByteCount(xml) > MaxDocumentBytes)
             throw new InvalidOperationException($"XML 配置超过最大字节数: {MaxDocumentBytes}");
         var isV2 = IsXmlDocumentRoot(xml);
+        if (!isV2)
+            throw new InvalidOperationException("仅支持 v2 ExcelMappingDocument XML 配置。");
         using (var shapeReader = XmlReader.Create(new StringReader(xml), CreateXmlReaderSettings()))
         {
             var shape = XDocument.Load(shapeReader, LoadOptions.SetLineInfo);
-            ExcelMappingDocumentValidator.ValidateXmlShape(shape.Root, isV2);
+            ExcelMappingDocumentValidator.ValidateXmlShape(shape.Root, true);
         }
-        if (!isV2)
-            throw new InvalidOperationException(
-                "检测到 v1 平铺 XML；请调用 MigrateV1Xml(xml, direction) 并显式指定迁移方向。");
         using var reader = XmlReader.Create(new StringReader(xml), CreateXmlReaderSettings());
         var result = DeserializeXml(reader);
         ExcelMappingDocumentValidator.ValidateDocument(result, modelAliases);
@@ -360,82 +264,6 @@ public static class ExcelMappingConfigurationLoader
         {
             throw new BingOfficesConfigurationException("映射配置无效。", exception);
         }
-    }
-
-    /// <summary>将 v1 平铺方向配置包装为 v2 双方向映射文档。</summary>
-    /// <param name="configuration">已反序列化的 v1 配置。</param>
-    /// <param name="direction">v1 配置应归属的映射方向。</param>
-    /// <returns>版本为 2 的规范化映射文档。</returns>
-    private static ExcelMappingDocument CreateMigratedDocument(ExcelMappingConfiguration configuration,
-        MappingDirection direction)
-    {
-        if (configuration == null)
-            throw new InvalidOperationException("v1 配置未包含有效映射。");
-        return new ExcelMappingDocument
-        {
-            Version = 2,
-            Import = direction == MappingDirection.Import
-                ? MappingConfigurationMerger.Merge(null, configuration, MappingSourceKind.Document)
-                : null,
-            Export = direction == MappingDirection.Export
-                ? MappingConfigurationMerger.Merge(null, configuration, MappingSourceKind.Document)
-                : null
-        };
-    }
-
-    /// <summary>反序列化并验证历史 v1 平铺 JSON 配置。</summary>
-    /// <param name="json">v1 JSON 配置文本。</param>
-    /// <returns>已通过结构校验的平铺配置。</returns>
-    private static ExcelMappingConfiguration DeserializeV1Json(string json)
-    {
-        ExcelMappingTextReader.ValidateDocumentText(json, "JSON");
-        try
-        {
-            using var document = JsonDocument.Parse(json, new JsonDocumentOptions
-            {
-                MaxDepth = MaxDepth,
-                CommentHandling = JsonCommentHandling.Disallow,
-                AllowTrailingCommas = false
-            });
-            if (document.RootElement.ValueKind != JsonValueKind.Object)
-                throw new InvalidOperationException("JSON 配置根节点必须是对象。");
-            ExcelMappingDocumentValidator.ValidateJsonElement(document.RootElement, "$", false);
-            return JsonSerializer.Deserialize<ExcelMappingConfiguration>(json, new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true,
-                MaxDepth = MaxDepth
-            }) ?? throw new InvalidOperationException("JSON 配置未包含有效映射。");
-        }
-        catch (JsonException exception)
-        {
-            throw new InvalidOperationException($"JSON 映射配置无效: {exception.Message}", exception);
-        }
-    }
-
-    /// <summary>在安全 XML 读取设置下反序列化并验证历史 v1 平铺配置。</summary>
-    /// <param name="xml">v1 XML 配置文本。</param>
-    /// <returns>已通过结构校验的平铺配置。</returns>
-    private static ExcelMappingConfiguration DeserializeV1Xml(string xml)
-    {
-        ExcelMappingTextReader.ValidateDocumentText(xml, "XML");
-        using (var shapeReader = XmlReader.Create(new StringReader(xml), CreateXmlReaderSettings()))
-        {
-            var shape = XDocument.Load(shapeReader, LoadOptions.SetLineInfo);
-            ExcelMappingDocumentValidator.ValidateXmlShape(shape.Root, false);
-        }
-        using var reader = XmlReader.Create(new StringReader(xml), CreateXmlReaderSettings());
-        var serializer = new XmlSerializer(typeof(ExcelMappingConfiguration));
-        AttachXmlValidationHandlers(serializer);
-        return (ExcelMappingConfiguration)serializer.Deserialize(reader)
-            ?? throw new InvalidOperationException("XML 配置未包含有效映射。");
-    }
-
-    /// <summary>验证指定值是受支持的映射方向枚举成员。</summary>
-    /// <param name="direction">待验证的映射方向。</param>
-    private static void ValidateDirection(MappingDirection direction)
-    {
-        if (!Enum.IsDefined(typeof(MappingDirection), direction))
-            throw new ArgumentOutOfRangeException(nameof(direction));
     }
 
     /// <summary>创建禁用 DTD、外部实体且限制文档规模的 XML 读取设置。</summary>
@@ -529,15 +357,40 @@ public static class ExcelMappingConfigurationLoader
 /// </summary>
 internal sealed class DefaultExcelMappingConfigurationLoader : IExcelMappingConfigurationLoader
 {
-    /// <inheritdoc />
-    public ExcelMappingDocument FromJsonDocument(string json) => ExcelMappingConfigurationLoader.FromJsonDocument(json);
+    private readonly BingOfficesExceptionDispatcher _exceptionDispatcher;
+
+    /// <summary>使用当前 DI 容器中的异常观察器初始化推荐配置加载入口。</summary>
+    public DefaultExcelMappingConfigurationLoader(IEnumerable<IBingOfficesExceptionObserver> exceptionObservers = null)
+    {
+        _exceptionDispatcher = new BingOfficesExceptionDispatcher(exceptionObservers);
+    }
 
     /// <inheritdoc />
-    public ExcelMappingDocument FromJsonDocument(Stream source) => ExcelMappingConfigurationLoader.FromJsonDocument(source);
+    public ExcelMappingDocument FromJsonDocument(string json) =>
+        Execute(() => ExcelMappingConfigurationLoader.FromJsonDocument(json));
 
     /// <inheritdoc />
-    public ExcelMappingDocument FromXmlDocument(string xml) => ExcelMappingConfigurationLoader.FromXmlDocument(xml);
+    public ExcelMappingDocument FromJsonDocument(Stream source) =>
+        Execute(() => ExcelMappingConfigurationLoader.FromJsonDocument(source));
 
     /// <inheritdoc />
-    public ExcelMappingDocument FromXmlDocument(Stream source) => ExcelMappingConfigurationLoader.FromXmlDocument(source);
+    public ExcelMappingDocument FromXmlDocument(string xml) =>
+        Execute(() => ExcelMappingConfigurationLoader.FromXmlDocument(xml));
+
+    /// <inheritdoc />
+    public ExcelMappingDocument FromXmlDocument(Stream source) =>
+        Execute(() => ExcelMappingConfigurationLoader.FromXmlDocument(source));
+
+    private ExcelMappingDocument Execute(Func<ExcelMappingDocument> load)
+    {
+        try
+        {
+            return load();
+        }
+        catch (BingOfficesException exception)
+        {
+            _exceptionDispatcher.Observe(exception);
+            throw;
+        }
+    }
 }

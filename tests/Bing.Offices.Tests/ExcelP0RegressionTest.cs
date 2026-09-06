@@ -13,6 +13,7 @@ using Bing.Offices.Configurations;
 using Bing.Offices.Exceptions;
 using Bing.Offices.Exports;
 using Bing.Offices.Imports;
+using Bing.Offices.Npoi;
 using Bing.Offices.Npoi.Exports;
 using Bing.Offices.Extensions;
 using Bing.Offices.Npoi.Extensions;
@@ -1039,6 +1040,83 @@ public sealed class ExcelP0RegressionTest
     }
 
     /// <summary>
+    /// 测试 - Provider 不支持行元数据时应输出结构化诊断，而不是静默吞掉异常。
+    /// </summary>
+    [Fact]
+    public void FailureWorkbook_UnsupportedRowMetadata_ShouldReportStructuredDiagnostic()
+    {
+        // Arrange
+        ExcelImportFailureDiagnostic diagnostic = null;
+
+        // Act
+        NpoiFailureWorkbookDiagnostics.CopyOptionalRowMetadata(
+            () => throw new NotImplementedException("provider does not implement Hidden"),
+            "Hidden", 4, value => diagnostic = value);
+
+        // Assert
+        Assert.NotNull(diagnostic);
+        Assert.Equal("FailureWorkbookRowMetadataUnsupported", diagnostic.Code);
+        Assert.Null(diagnostic.TemporaryPath);
+        Assert.IsType<NotImplementedException>(diagnostic.Exception);
+        Assert.Contains("第 5 行", diagnostic.Exception.Message);
+        Assert.Contains("Hidden", diagnostic.Exception.Message);
+        Assert.IsType<NotImplementedException>(diagnostic.Exception.InnerException);
+    }
+
+    /// <summary>
+    /// 测试 - 未配置诊断接收器时，行元数据降级应写入结构化 Trace 而非静默丢失。
+    /// </summary>
+    [Fact]
+    public void FailureWorkbook_UnsupportedRowMetadataWithoutSink_ShouldWriteStructuredTrace()
+    {
+        using var writer = new StringWriter(CultureInfo.InvariantCulture);
+        using var listener = new TextWriterTraceListener(writer);
+        Trace.Listeners.Add(listener);
+        try
+        {
+            NpoiFailureWorkbookDiagnostics.CopyOptionalRowMetadata(
+                () => throw new NotImplementedException(), "Hidden", 4, null);
+            Trace.Flush();
+        }
+        finally
+        {
+            Trace.Listeners.Remove(listener);
+        }
+
+        var trace = writer.ToString();
+        Assert.Contains("code=FailureWorkbookRowMetadataUnsupported", trace);
+        Assert.Contains("property=Hidden", trace);
+        Assert.Contains("row=5", trace);
+    }
+
+    /// <summary>
+    /// 测试 - 诊断接收器失败不能覆盖失败工作簿主流程，并应留下独立 Trace 诊断。
+    /// </summary>
+    [Fact]
+    public void FailureWorkbook_DiagnosticSinkFailure_ShouldWriteTraceWithoutThrowing()
+    {
+        using var writer = new StringWriter(CultureInfo.InvariantCulture);
+        using var listener = new TextWriterTraceListener(writer);
+        Trace.Listeners.Add(listener);
+        try
+        {
+            NpoiFailureWorkbookDiagnostics.CopyOptionalRowMetadata(
+                () => throw new NotImplementedException(), "Collapsed", 2,
+                _ => throw new InvalidOperationException("sink failed"));
+            Trace.Flush();
+        }
+        finally
+        {
+            Trace.Listeners.Remove(listener);
+        }
+
+        var trace = writer.ToString();
+        Assert.Contains("code=FailureWorkbookDiagnosticSinkFailed", trace);
+        Assert.Contains("property=Collapsed", trace);
+        Assert.Contains("row=3", trace);
+    }
+
+    /// <summary>
     /// 测试 - Failure Workbook 主异常优先时仍应保留清理异常诊断。
     /// </summary>
     [Fact]
@@ -1348,6 +1426,41 @@ public sealed class ExcelP0RegressionTest
         // Assert
         var exception = Assert.Throws<BingOfficesResourceLimitException>(action);
         Assert.Equal(BingOfficesStage.Open, exception.Stage);
+    }
+
+    /// <summary>
+    /// 测试 - XLS/OLE 与 XLSX 均应在 Workbook DOM 创建前应用输入字节预算。
+    /// </summary>
+    [Theory]
+    [InlineData(ExcelFormat.Xls)]
+    [InlineData(ExcelFormat.Xlsx)]
+    public void Import_InputResourceLimit_ShouldCoverBothWorkbookProviders(ExcelFormat format)
+    {
+        // Arrange
+        using var workbook = ExcelHelper.PrepareWorkbook(format);
+        workbook.CreateSheet("Data");
+        using var serialized = new MemoryStream();
+        workbook.Write(serialized, false);
+        using var source = new MemoryStream(serialized.ToArray(), writable: false);
+        var request = ExcelImport.Workbook<FailureWorkbook>(builder =>
+            builder.ResourceLimits(new ExcelResourceLimits { MaxInputBytes = source.Length - 1 })
+                .Sheet("Data", root => root.Rows));
+
+        // Act
+        var exception = Assert.Throws<BingOfficesResourceLimitException>(() =>
+            new NpoiExcelImporter().Import(source, request));
+
+        // Assert
+        Assert.Equal(BingOfficesStage.Open, exception.Stage);
+        Assert.True(source.CanRead);
+    }
+
+    /// <summary>默认输入预算应有限且可由调用方显式关闭。</summary>
+    [Fact]
+    public void ResourceLimits_DefaultInputBudget_ShouldBeBoundedAndOptional()
+    {
+        Assert.Equal(128L * 1024 * 1024, new ExcelResourceLimits().MaxInputBytes);
+        Assert.Null(new ExcelResourceLimits { MaxInputBytes = null }.MaxInputBytes);
     }
 
     /// <summary>

@@ -1,9 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 
 namespace Bing.Offices.Configurations;
 
+[EditorBrowsable(EditorBrowsableState.Never)]
 public static class MappingConfigurationMerger
 {
     /// <summary>

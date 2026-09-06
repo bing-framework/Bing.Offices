@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.ComponentModel;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Bing.Offices.Attributes;
@@ -10,6 +11,7 @@ namespace Bing.Offices.Validations;
 /// <summary>
 /// 内置 Excel 导入校验规则集合。
 /// </summary>
+[EditorBrowsable(EditorBrowsableState.Never)]
 public static class ExcelValidationRules
 {
     /// <summary>
@@ -30,7 +32,7 @@ public static class ExcelValidationRules
 /// <summary>
 /// 必填校验规则。
 /// </summary>
-public sealed class RequiredExcelValidationRule : IExcelValidationRule
+internal sealed class RequiredExcelValidationRule : IExcelValidationRule
 {
     /// <inheritdoc />
     public bool CanValidate(FilterAttributeBase attribute) => attribute is ExcelRequiredAttribute;
@@ -43,7 +45,7 @@ public sealed class RequiredExcelValidationRule : IExcelValidationRule
 /// <summary>
 /// 正则表达式校验规则。
 /// </summary>
-public sealed class RegexExcelValidationRule : IExcelValidationRule
+internal sealed class RegexExcelValidationRule : IExcelValidationRule
 {
     /// <summary>进程级正则缓存允许保留的最大模式数量。</summary>
     internal const int RegexCacheCapacity = 256;
@@ -89,7 +91,7 @@ public sealed class RegexExcelValidationRule : IExcelValidationRule
 /// <summary>
 /// 数值区间校验规则。
 /// </summary>
-public sealed class RangeExcelValidationRule : IExcelValidationRule
+internal sealed class RangeExcelValidationRule : IExcelValidationRule
 {
     /// <inheritdoc />
     public bool CanValidate(FilterAttributeBase attribute) => attribute is ExcelRangeAttribute;
@@ -108,7 +110,7 @@ public sealed class RangeExcelValidationRule : IExcelValidationRule
 /// <summary>
 /// 最大值校验规则。
 /// </summary>
-public sealed class MaxValueExcelValidationRule : IExcelValidationRule
+internal sealed class MaxValueExcelValidationRule : IExcelValidationRule
 {
     /// <inheritdoc />
     public bool CanValidate(FilterAttributeBase attribute) => attribute is ExcelMaxValueAttribute;
@@ -126,7 +128,7 @@ public sealed class MaxValueExcelValidationRule : IExcelValidationRule
 /// <summary>
 /// 最大长度校验规则。
 /// </summary>
-public sealed class MaxLengthExcelValidationRule : IExcelValidationRule
+internal sealed class MaxLengthExcelValidationRule : IExcelValidationRule
 {
     /// <inheritdoc />
     public bool CanValidate(FilterAttributeBase attribute) => attribute is ExcelMaxLengthAttribute;
@@ -142,6 +144,7 @@ public sealed class MaxLengthExcelValidationRule : IExcelValidationRule
 /// <summary>
 /// 日期校验规则。
 /// </summary>
+[EditorBrowsable(EditorBrowsableState.Never)]
 public sealed class DateTimeExcelValidationRule : IExcelValidationRule
 {
     /// <inheritdoc />
@@ -182,7 +185,7 @@ public sealed class DateTimeExcelValidationRule : IExcelValidationRule
 /// <summary>
 /// 重复值校验规则。
 /// </summary>
-public sealed class DuplicationExcelValidationRule : IExcelValidationRule
+internal sealed class DuplicationExcelValidationRule : IExcelValidationRule
 {
     /// <inheritdoc />
     public bool CanValidate(FilterAttributeBase attribute) => attribute is ExcelUniqueAttribute;

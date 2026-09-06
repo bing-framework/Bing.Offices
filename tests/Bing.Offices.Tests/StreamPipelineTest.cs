@@ -659,9 +659,13 @@ public class StreamPipelineTest
     public void StreamPipeline_FluentMappingConfiguration_ShouldApplyToSingleRequest()
     {
         // Arrange
-        var mapping = ExcelMapping.For<ConfiguredRow>()
-            .Property(row => row.Count).HasTitle("数量").HasColumnIndex(0).Map("一", 1).And()
-            .Property(row => row.Name).HasTitle("名称").HasColumnIndex(1).And()
+        var exportMapping = new ExportMappingBuilder<ConfiguredRow>()
+            .Property(row => row.Count).HasHeader("数量").HasColumnIndex(0).Map("一", 1).And()
+            .Property(row => row.Name).HasHeader("名称").HasColumnIndex(1).And()
+            .Build();
+        var importMapping = new ImportMappingBuilder<ConfiguredRow>()
+            .Property(row => row.Count).HasHeader("数量").HasColumnIndex(0).Map("一", 1).And()
+            .Property(row => row.Name).HasHeader("名称").HasColumnIndex(1).And()
             .Build();
         using var destination = new MemoryStream();
         var exporter = new NpoiExcelExporter();
@@ -669,9 +673,9 @@ public class StreamPipelineTest
 
         // Act
         exporter.Export(CreateSingleSheetExportRequest(new[] { new ConfiguredRow { Name = "配置行", Count = 1 } },
-            configure: sheet => sheet.Mapping(mapping)), destination);
+            configure: sheet => sheet.Mapping(exportMapping)), destination);
         destination.Position = 0;
-        var result = importer.Import(destination, CreateSingleSheetRequest<ConfiguredRow>(sheet => sheet.Mapping(mapping)));
+        var result = importer.Import(destination, CreateSingleSheetRequest<ConfiguredRow>(sheet => sheet.Mapping(importMapping)));
 
         // Assert
         Assert.Empty(result.Errors);
@@ -721,8 +725,8 @@ public class StreamPipelineTest
     public void TypeMap_RequestConfiguration_ShouldOverrideProfile()
     {
         // Arrange
-        var profile = ExcelMapping.For<ConfiguredRow>()
-            .Property(row => row.Name).HasTitle("Profile 名称").And()
+        var profile = new ImportMappingBuilder<ConfiguredRow>()
+            .Property(row => row.Name).HasHeader("Profile 名称").And()
             .Build();
         var request = new ExcelMappingConfiguration
         {
@@ -747,8 +751,8 @@ public class StreamPipelineTest
     public void TypeMap_Profile_ShouldKeepIndependentConfigurationSnapshot()
     {
         // Arrange
-        var configuration = ExcelMapping.For<ConfiguredRow>()
-            .Property(row => row.Name).HasTitle("固定名称").And()
+        var configuration = new ImportMappingBuilder<ConfiguredRow>()
+            .Property(row => row.Name).HasHeader("固定名称").And()
             .Build();
         var snapshot = MappingConfigurationCloner.Clone(configuration, MappingSourceKind.Profile);
         configuration.Columns[0].Title = "外部修改";
@@ -767,15 +771,13 @@ public class StreamPipelineTest
     public void TypeMap_ConfigurationSources_ShouldCompileEquivalentColumnDefinition()
     {
         // Arrange
-        var fluent = ExcelMapping.For<EquivalentConfigurationRow>()
-            .Property(row => row.Amount).HasTitle("金额").HasFormatter("0.00").HasDecimalScale(2).Map("有效", 1).And()
+        var fluent = new ExportMappingBuilder<EquivalentConfigurationRow>()
+            .Property(row => row.Amount).HasHeader("金额").HasFormatter("0.00").HasDecimalScale(2).Map("有效", 1).And()
             .Build();
-        var json = ExcelMappingConfigurationLoader.MigrateV1Json(
-            "{\"columns\":[{\"propertyName\":\"Amount\",\"title\":\"金额\",\"formatter\":\"0.00\",\"decimalScale\":2,\"valueMappings\":[{\"text\":\"有效\",\"value\":\"1\"}]}]}",
-            MappingDirection.Import).Import;
-        var xml = ExcelMappingConfigurationLoader.MigrateV1Xml(
-            "<ExcelMappingConfiguration><Columns><ExcelColumnConfiguration><PropertyName>Amount</PropertyName><Title>金额</Title><Formatter>0.00</Formatter><DecimalScale>2</DecimalScale><ValueMappings><ExcelValueMappingConfiguration><Text>有效</Text><Value>1</Value></ExcelValueMappingConfiguration></ValueMappings></ExcelColumnConfiguration></Columns></ExcelMappingConfiguration>",
-            MappingDirection.Import).Import;
+        var json = ExcelMappingConfigurationLoader.FromJsonDocument(
+            "{\"version\":2,\"export\":{\"columns\":[{\"propertyName\":\"Amount\",\"title\":\"金额\",\"formatter\":\"0.00\",\"decimalScale\":2,\"valueMappings\":[{\"text\":\"有效\",\"value\":\"1\"}]}]}}").Export;
+        var xml = ExcelMappingConfigurationLoader.FromXmlDocument(
+            "<ExcelMappingDocument><Version>2</Version><Export><Columns><ExcelColumnConfiguration><PropertyName>Amount</PropertyName><Title>金额</Title><Formatter>0.00</Formatter><DecimalScale>2</DecimalScale><ValueMappings><ExcelValueMappingConfiguration><Text>有效</Text><Value>1</Value></ExcelValueMappingConfiguration></ValueMappings></ExcelColumnConfiguration></Columns></Export></ExcelMappingDocument>").Export;
 
         // Act
         var attributeColumn = ExcelTypeMapFactory.Get<EquivalentConfigurationRow>().Properties.Single();
@@ -820,13 +822,13 @@ public class StreamPipelineTest
     public void MappingConfigurationLoader_JsonAndXml_ShouldLoadAndRejectDtd()
     {
         // Arrange
-        const string json = "{\"columns\":[{\"propertyName\":\"Name\",\"title\":\"JSON 名称\"}]}";
-        const string xml = "<ExcelMappingConfiguration><Columns><ExcelColumnConfiguration><PropertyName>Name</PropertyName><Title>XML 名称</Title></ExcelColumnConfiguration></Columns></ExcelMappingConfiguration>";
-        const string unsafeXml = "<!DOCTYPE config [<!ENTITY value SYSTEM 'file:///not-allowed'>]><ExcelMappingConfiguration />";
+        const string json = "{\"version\":2,\"import\":{\"columns\":[{\"propertyName\":\"Name\",\"title\":\"JSON 名称\"}]}}";
+        const string xml = "<ExcelMappingDocument><Version>2</Version><Import><Columns><ExcelColumnConfiguration><PropertyName>Name</PropertyName><Title>XML 名称</Title></ExcelColumnConfiguration></Columns></Import></ExcelMappingDocument>";
+        const string unsafeXml = "<!DOCTYPE config [<!ENTITY value SYSTEM 'file:///not-allowed'>]><ExcelMappingDocument />";
 
         // Act
-        var jsonConfiguration = ExcelMappingConfigurationLoader.MigrateV1Json(json, MappingDirection.Import).Import;
-        var xmlConfiguration = ExcelMappingConfigurationLoader.MigrateV1Xml(xml, MappingDirection.Import).Import;
+        var jsonConfiguration = ExcelMappingConfigurationLoader.FromJsonDocument(json).Import;
+        var xmlConfiguration = ExcelMappingConfigurationLoader.FromXmlDocument(xml).Import;
 
         // Assert
         Assert.Equal("JSON 名称", Assert.Single(jsonConfiguration.Columns).Title);
@@ -844,8 +846,8 @@ public class StreamPipelineTest
     public void MappingConfigurationLoader_Utf8FilesAndStreams_ShouldKeepCallerStreamsOpen()
     {
         // Arrange
-        const string json = "{\"columns\":[{\"propertyName\":\"Name\",\"title\":\"JSON 中文标题\"}]}";
-        const string xml = "<ExcelMappingConfiguration><Columns><ExcelColumnConfiguration><PropertyName>Name</PropertyName><Title>XML 中文标题</Title></ExcelColumnConfiguration></Columns></ExcelMappingConfiguration>";
+        const string json = "{\"version\":2,\"import\":{\"columns\":[{\"propertyName\":\"Name\",\"title\":\"JSON 中文标题\"}]}}";
+        const string xml = "<ExcelMappingDocument><Version>2</Version><Import><Columns><ExcelColumnConfiguration><PropertyName>Name</PropertyName><Title>XML 中文标题</Title></ExcelColumnConfiguration></Columns></Import></ExcelMappingDocument>";
         var directory = Path.Combine(Path.GetTempPath(), $"Bing.Offices.配置.{Guid.NewGuid():N}");
         var jsonPath = Path.Combine(directory, "映射.json");
         var xmlPath = Path.Combine(directory, "映射.xml");
@@ -858,14 +860,12 @@ public class StreamPipelineTest
         try
         {
             // Act
-            var jsonFileConfiguration = ExcelMappingConfigurationLoader.MigrateV1Json(
-                File.ReadAllText(jsonPath, System.Text.Encoding.UTF8), MappingDirection.Import).Import;
-            var xmlFileConfiguration = ExcelMappingConfigurationLoader.MigrateV1Xml(
-                File.ReadAllText(xmlPath, System.Text.Encoding.UTF8), MappingDirection.Import).Import;
-            var jsonStreamConfiguration = ExcelMappingConfigurationLoader.MigrateV1Json(
-                jsonStream, MappingDirection.Import).Import;
-            var xmlStreamConfiguration = ExcelMappingConfigurationLoader.MigrateV1Xml(
-                xmlStream, MappingDirection.Import).Import;
+            var jsonFileConfiguration = ExcelMappingConfigurationLoader.FromJsonDocument(
+                File.ReadAllText(jsonPath, System.Text.Encoding.UTF8)).Import;
+            var xmlFileConfiguration = ExcelMappingConfigurationLoader.FromXmlDocument(
+                File.ReadAllText(xmlPath, System.Text.Encoding.UTF8)).Import;
+            var jsonStreamConfiguration = ExcelMappingConfigurationLoader.FromJsonDocument(jsonStream).Import;
+            var xmlStreamConfiguration = ExcelMappingConfigurationLoader.FromXmlDocument(xmlStream).Import;
 
             // Assert
             Assert.Equal("JSON 中文标题", Assert.Single(jsonFileConfiguration.Columns).Title);
@@ -912,30 +912,6 @@ public class StreamPipelineTest
     }
 
     /// <summary>
-    /// 测试 - JSON v1 和 v2 应归一化为同一导入配置，且 v2 保留独立导出方向。
-    /// </summary>
-    [Fact]
-    public void MappingConfigurationLoader_JsonV1AndV2_ShouldNormalizeToEquivalentDocument()
-    {
-        // Arrange
-        const string v1 = "{\"columns\":[{\"propertyName\":\"Name\",\"title\":\"名称\",\"aliases\":[\"旧名称\"]}]}";
-        const string v2 = "{\"version\":2,\"import\":{\"profile\":\"orders\",\"modelAlias\":\"order-row\",\"columns\":[{\"propertyName\":\"Name\",\"title\":\"名称\",\"aliases\":[\"旧名称\"]}]},\"export\":{\"profile\":\"orders\",\"modelAlias\":\"order-row\",\"columns\":[{\"propertyName\":\"Name\",\"title\":\"导出名称\"}]}}";
-
-        // Act
-        var migrated = ExcelMappingConfigurationLoader.MigrateV1Json(v1, MappingDirection.Import);
-        var document = ExcelMappingConfigurationLoader.FromJsonDocument(v2);
-
-        // Assert
-        Assert.Equal(2, migrated.Version);
-        Assert.Equal("名称", Assert.Single(migrated.Import.Columns).Title);
-        Assert.Equal("名称", Assert.Single(document.Import.Columns).Title);
-        Assert.Equal("旧名称", Assert.Single(document.Import.Columns).Aliases[0]);
-        Assert.Equal("导出名称", Assert.Single(document.Export.Columns).Title);
-        Assert.Equal("orders", document.Import.Profile);
-        Assert.Equal("order-row", document.Import.ModelAlias);
-    }
-
-    /// <summary>
     /// 测试 - XML v2 与 JSON v2 应生成相同方向配置，并拒绝未知节点。
     /// </summary>
     [Fact]
@@ -969,14 +945,14 @@ public class StreamPipelineTest
     public void MappingConfigurationLoader_InputLimits_ShouldRejectUnsafeDocuments()
     {
         // Arrange
-        var unknown = "{\"columns\":[{\"propertyName\":\"Name\",\"unknown\":true}]}";
-        var longTitle = "{\"columns\":[{\"propertyName\":\"Name\",\"title\":\"" + new string('x', 4097) + "\"}]}";
+        var unknown = "{\"version\":2,\"import\":{\"columns\":[{\"propertyName\":\"Name\",\"unknown\":true}]}}";
+        var longTitle = "{\"version\":2,\"import\":{\"columns\":[{\"propertyName\":\"Name\",\"title\":\"" + new string('x', 4097) + "\"}]}}";
         var deep = "{\"version\":2,\"import\":{\"columns\":[{\"aliases\":[" + new string('[', 40) + "\"x\"" + new string(']', 40) + "]}}";
         var oversized = new string('x', 1024 * 1024 + 1);
 
         // Act / Assert
         var unknownException = Assert.Throws<BingOfficesConfigurationException>(() => ExcelMappingConfigurationLoader.FromJsonDocument(unknown));
-        Assert.Contains("$.columns[0].unknown", unknownException.InnerException.Message);
+        Assert.Contains("$.import.columns[0].unknown", unknownException.InnerException.Message);
         Assert.Throws<BingOfficesConfigurationException>(() => ExcelMappingConfigurationLoader.FromJsonDocument(longTitle));
         Assert.ThrowsAny<Exception>(() => ExcelMappingConfigurationLoader.FromJsonDocument(deep));
         Assert.Throws<BingOfficesConfigurationException>(() => ExcelMappingConfigurationLoader.FromJsonDocument(oversized));
@@ -1042,9 +1018,8 @@ public class StreamPipelineTest
     public void StreamPipeline_JsonNamedConverter_ShouldRoundTripDomainValue()
     {
         // Arrange
-        var configuration = ExcelMappingConfigurationLoader.MigrateV1Json(
-            "{\"columns\":[{\"propertyName\":\"Code\",\"converterName\":\"order-code\"}]}",
-            MappingDirection.Import).Import;
+        var document = ExcelMappingConfigurationLoader.FromJsonDocument(
+            "{\"version\":2,\"import\":{\"columns\":[{\"propertyName\":\"Code\",\"converterName\":\"order-code\"}]},\"export\":{\"columns\":[{\"propertyName\":\"Code\",\"converterName\":\"order-code\"}]}}");
         var converter = new OrderCodeExcelValueConverter();
         using var destination = new MemoryStream();
         var exporter = new NpoiExcelExporter(new IExcelValueConverter[] { converter });
@@ -1052,10 +1027,10 @@ public class StreamPipelineTest
 
         // Act
         exporter.Export(CreateSingleSheetExportRequest(new[] { new ConvertedRow { Code = new OrderCode("42") } },
-            configure: sheet => sheet.Mapping(configuration)), destination);
+            configure: sheet => sheet.Mapping(document)), destination);
         destination.Position = 0;
         var result = importer.Import(destination, CreateSingleSheetRequest<ConvertedRow>(sheet =>
-            sheet.Mapping(configuration)));
+            sheet.Mapping(document)));
 
         // Assert
         Assert.Empty(result.Errors);
@@ -1069,9 +1044,8 @@ public class StreamPipelineTest
     public void StreamPipeline_JsonNamedValidationRule_ShouldReturnValidationError()
     {
         // Arrange
-        var configuration = ExcelMappingConfigurationLoader.MigrateV1Json(
-            "{\"columns\":[{\"propertyName\":\"Name\",\"validationRuleNames\":[\"starts-with-ok\"]}]}",
-            MappingDirection.Import).Import;
+        var configuration = ExcelMappingConfigurationLoader.FromJsonDocument(
+            "{\"version\":2,\"import\":{\"columns\":[{\"propertyName\":\"Name\",\"validationRuleNames\":[\"starts-with-ok\"]}]}}").Import;
         using var source = new MemoryStream(CreateWorkbook(workbook =>
         {
             var sheet = workbook.CreateSheet("Data");
@@ -1101,12 +1075,11 @@ public class StreamPipelineTest
     public void StreamPipeline_FluentAndXmlNamedValidationRules_ShouldReturnValidationErrors()
     {
         // Arrange
-        var fluent = ExcelMapping.For<StreamRow>()
+        var fluent = new ImportMappingBuilder<StreamRow>()
             .Property(row => row.Name).HasValidationRule("starts-with-ok").And()
             .Build();
-        var xml = ExcelMappingConfigurationLoader.MigrateV1Xml(
-            "<ExcelMappingConfiguration><Columns><ExcelColumnConfiguration><PropertyName>Name</PropertyName><ValidationRuleNames><string>starts-with-ok</string></ValidationRuleNames></ExcelColumnConfiguration></Columns></ExcelMappingConfiguration>",
-            MappingDirection.Import).Import;
+        var xml = ExcelMappingConfigurationLoader.FromXmlDocument(
+            "<ExcelMappingDocument><Version>2</Version><Import><Columns><ExcelColumnConfiguration><PropertyName>Name</PropertyName><ValidationRuleNames><string>starts-with-ok</string></ValidationRuleNames></ExcelColumnConfiguration></Columns></Import></ExcelMappingDocument>").Import;
         var importer = new NpoiExcelImporter(namedValidationRules: new INamedExcelValidationRule[]
         {
             new StartsWithOkValidationRule()
@@ -1139,9 +1112,8 @@ public class StreamPipelineTest
     public void Import_NamedValidationRule_ShouldExposeFullValidationContext()
     {
         // Arrange
-        var configuration = ExcelMappingConfigurationLoader.MigrateV1Json(
-            "{\"columns\":[{\"propertyName\":\"Name\",\"validationRuleNames\":[\"context\"]}]}",
-            MappingDirection.Import).Import;
+        var configuration = ExcelMappingConfigurationLoader.FromJsonDocument(
+            "{\"version\":2,\"import\":{\"columns\":[{\"propertyName\":\"Name\",\"validationRuleNames\":[\"context\"]}]}}").Import;
         var rule = new ContextCapturingValidationRule();
         using var source = new MemoryStream(CreateWorkbook(workbook =>
         {
@@ -2218,6 +2190,82 @@ public class StreamPipelineTest
     }
 
     /// <summary>
+    /// 测试 - Excel 默认应把 DateTimeOffset 写为保留 offset 的 ISO round-trip 文本。
+    /// </summary>
+    [Theory]
+    [InlineData(ExcelFormat.Xlsx)]
+    [InlineData(ExcelFormat.Xls)]
+    public void Export_DateTimeOffset_ShouldWriteStableOffsetText(ExcelFormat format)
+    {
+        // Arrange
+        using var destination = new MemoryStream();
+        var expected = new DateTimeOffset(2026, 9, 6, 12, 34, 56, TimeSpan.FromHours(8));
+
+        // Act
+        new NpoiExcelExporter().Export(CreateSingleSheetExportRequest(
+            new[] { new DateTimeOffsetRow { OccurredAt = expected } }, format: format), destination);
+
+        // Assert
+        destination.Position = 0;
+        using var workbook = WorkbookFactory.Create(destination);
+        var cell = workbook.GetSheetAt(0).GetRow(1).GetCell(0);
+        Assert.Equal(CellType.String, cell.CellType);
+        Assert.Equal(expected.ToString("O", CultureInfo.InvariantCulture), cell.StringCellValue);
+    }
+
+    /// <summary>
+    /// 测试 - DateTimeOffset 应经 Excel 导入、再次导出、关闭重开和再导入后保留值与 offset。
+    /// </summary>
+    [Theory]
+    [InlineData(ExcelFormat.Xlsx)]
+    [InlineData(ExcelFormat.Xls)]
+    public void ImportExport_DateTimeOffset_ShouldRoundTripAfterReopen(ExcelFormat format)
+    {
+        // Arrange
+        var expected = new DateTimeOffset(2026, 9, 6, 12, 34, 56, TimeSpan.FromHours(8));
+        byte[] initialBytes;
+        using (var initial = new MemoryStream())
+        {
+            new NpoiExcelExporter().Export(CreateSingleSheetExportRequest(
+                new[] { new DateTimeOffsetRow { OccurredAt = expected } }, format: format), initial);
+            initialBytes = initial.ToArray();
+        }
+
+        // Act
+        DateTimeOffset firstValue;
+        using (var firstInput = new MemoryStream(initialBytes, writable: false))
+        {
+            var firstImport = new NpoiExcelImporter().Import(firstInput,
+                CreateSingleSheetRequest<DateTimeOffsetRow>());
+            Assert.Empty(firstImport.Errors);
+            firstValue = Assert.Single(firstImport.Workbook.Items).OccurredAt;
+        }
+        byte[] secondBytes;
+        using (var secondOutput = new MemoryStream())
+        {
+            new NpoiExcelExporter().Export(CreateSingleSheetExportRequest(
+                new[] { new DateTimeOffsetRow { OccurredAt = firstValue } }, format: format), secondOutput);
+            secondBytes = secondOutput.ToArray();
+        }
+
+        // Assert
+        using (var reopenedWorkbookStream = new MemoryStream(secondBytes, writable: false))
+        using (var reopenedWorkbook = WorkbookFactory.Create(reopenedWorkbookStream))
+        {
+            var cell = reopenedWorkbook.GetSheetAt(0).GetRow(1).GetCell(0);
+            Assert.Equal(CellType.String, cell.CellType);
+            Assert.Equal(expected.ToString("O", CultureInfo.InvariantCulture), cell.StringCellValue);
+        }
+        using var secondInput = new MemoryStream(secondBytes, writable: false);
+        var secondImport = new NpoiExcelImporter().Import(secondInput,
+            CreateSingleSheetRequest<DateTimeOffsetRow>());
+        Assert.Empty(secondImport.Errors);
+        var actual = Assert.Single(secondImport.Workbook.Items).OccurredAt;
+        Assert.Equal(expected, actual);
+        Assert.Equal(expected.Offset, actual.Offset);
+    }
+
+    /// <summary>
     /// 测试 - 工作簿扩展应识别格式、排除隐藏工作表，并以非过时 API 设置粗体。
     /// </summary>
     [Fact]
@@ -2462,6 +2510,67 @@ public class StreamPipelineTest
         // Assert
         Assert.Throws<ArgumentException>(action);
         Assert.Empty(workbook.GetAllPictures());
+    }
+
+    /// <summary>
+    /// 测试 - TryAddPicture 必须在修改工作簿前拒绝 null、空数据、负坐标和未知图片类型。
+    /// </summary>
+    [Fact]
+    public void SheetExtensions_TryAddPictureInvalidArguments_ShouldThrowWithoutMutation()
+    {
+        // Arrange
+        using var workbook = ExcelHelper.PrepareWorkbook(ExcelFormat.Xlsx);
+        var sheet = workbook.CreateSheet("Data");
+
+        // Act / Assert
+        Assert.Throws<ArgumentNullException>(() => sheet.TryAddPicture(0, 0, (IPictureData)null));
+        Assert.Throws<ArgumentNullException>(() => sheet.TryAddPicture(0, 0, (byte[])null));
+        Assert.Throws<ArgumentException>(() => sheet.TryAddPicture(0, 0, Array.Empty<byte>()));
+        Assert.Throws<ArgumentOutOfRangeException>(() => sheet.TryAddPicture(-1, 0, new byte[] { 1 }));
+        Assert.Throws<ArgumentOutOfRangeException>(() => sheet.TryAddPicture(0, -1, new byte[] { 1 }));
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            sheet.TryAddPicture(0, 0, new byte[] { 1 }, (PictureType)int.MaxValue));
+        Assert.Empty(workbook.GetAllPictures());
+    }
+
+    /// <summary>
+    /// 测试 - TryAddPicture 应在 XSSF 和 HSSF Provider 上添加有效图片。
+    /// </summary>
+    [Theory]
+    [InlineData(ExcelFormat.Xlsx)]
+    [InlineData(ExcelFormat.Xls)]
+    public void SheetExtensions_TryAddPictureValidImage_ShouldSupportBothProviders(ExcelFormat format)
+    {
+        // Arrange
+        using var workbook = ExcelHelper.PrepareWorkbook(format);
+        var sheet = workbook.CreateSheet("Data");
+        var image = Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
+
+        // Act
+        var added = sheet.TryAddPicture(0, 0, image, PictureType.PNG);
+
+        // Assert
+        Assert.True(added);
+        Assert.Single(workbook.GetAllPictures());
+    }
+
+    /// <summary>
+    /// 测试 - MovePictures 对 null 和未知 ISheet 实现应显式失败，不能静默无操作。
+    /// </summary>
+    [Fact]
+    public void SheetExtensions_MovePicturesUnknownSheet_ShouldThrowUnsupportedFeature()
+    {
+        // Arrange
+        var unknownSheet = DispatchProxy.Create<ISheet, UnknownSheetProxy>();
+
+        // Act / Assert
+        Assert.Throws<ArgumentNullException>(() => SheetExtensions.MovePictures(null));
+        var exception = Assert.Throws<BingOfficesUnsupportedFeatureException>(() =>
+            unknownSheet.MovePictures());
+        Assert.Equal(BingOfficesErrorCode.UnsupportedFeature, exception.Code);
+        Assert.Equal(BingOfficesOperation.Export, exception.Operation);
+        Assert.Equal(BingOfficesStage.Write, exception.Stage);
     }
 
     /// <summary>
@@ -3564,6 +3673,17 @@ public class StreamPipelineTest
         /// 发生时间。
         /// </summary>
         public DateTime OccurredAt { get; set; }
+    }
+
+    private sealed class DateTimeOffsetRow
+    {
+        public DateTimeOffset OccurredAt { get; set; }
+    }
+
+    public class UnknownSheetProxy : DispatchProxy
+    {
+        protected override object Invoke(MethodInfo targetMethod, object[] args) =>
+            targetMethod.ReturnType.IsValueType ? Activator.CreateInstance(targetMethod.ReturnType) : null;
     }
 
     /// <summary>

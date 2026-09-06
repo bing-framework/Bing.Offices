@@ -41,12 +41,7 @@ internal static class DocsExamples
         var importRequest = ExcelImport.Workbook<OrdersWorkbook>(builder =>
             builder.Sheet("订单", workbook => workbook.Items, sheet => sheet.Mapping(document)));
         _ = importRequest;
-        var migrated = ExcelMappingConfigurationLoader.MigrateV1Json(
-            "{\"columns\":[{\"propertyName\":\"Code\",\"title\":\"编码\"}]}",
-            MappingDirection.Import, out var diagnostics);
-        if (!diagnostics.Any(item => item.Code == "V1_MIGRATED"))
-            throw new InvalidOperationException("v1 migration diagnostic missing");
-        return migrated;
+        return document;
     }
 
     internal static CsvImportResult<ValidatedRow> Validation(Stream source, ICsvImporter importer)

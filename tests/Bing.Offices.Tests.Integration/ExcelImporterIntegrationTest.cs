@@ -427,8 +427,8 @@ public class ExcelImporterIntegrationTest
         services.AddBingOfficesNpoi();
         using var provider = services.BuildServiceProvider();
         using var destination = new MemoryStream();
-        var profile = ExcelMapping.For<MappingIntegrationRow>()
-            .Property(row => row.Code).HasTitle("业务编码").And()
+        var profile = new ExportMappingBuilder<MappingIntegrationRow>()
+            .Property(row => row.Code).HasHeader("业务编码").And()
             .Build();
         var xmlConfiguration = ExcelMappingConfigurationLoader.FromXmlDocument(
             "<ExcelMappingDocument><Version>2</Version><Import><Columns><ExcelColumnConfiguration><PropertyName>Code</PropertyName><Title>业务编码</Title></ExcelColumnConfiguration></Columns></Import></ExcelMappingDocument>");

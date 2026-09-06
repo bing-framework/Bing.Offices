@@ -7,7 +7,7 @@
 迁移建议：
 
 1. 新代码使用四种方向明确的 Profile 契约，按方向配置 Builder。
-2. JSON/XML 使用 v2 `ExcelMappingDocument`；旧平铺 v1 必须通过 `MigrateV1Json`/`MigrateV1Xml` 显式选择方向。
+2. JSON/XML 只使用 v2 `ExcelMappingDocument`；v1 平铺配置应在升级前离线转换。
 3. 使用 `ExcelRequired`、`ExcelRegex`、`ExcelDate`、`ExcelMaxValue`、`ExcelRange`、`ExcelMaxLength`、`ExcelUnique`。
 4. 通过 `AddBingOfficesNpoi(IServiceCollection): IServiceCollection` 注册 NPOI，并支持链式注册；Profile Registry 使用独立的显式或程序集扫描扩展。
 5. 只依赖 provider-neutral 请求、结果和转换器接口，不引用 NPOI 类型。
@@ -25,7 +25,7 @@
 
 | 当前 2.x 入口 | 新代码建议 | 当前兼容策略 | 批准状态 |
 | --- | --- | --- | --- |
-| `ExcelMapping.For<T>()` | 按导入/导出方向使用对应 Builder | 保留 | 已确认方向中立映射入口 |
+| `ExcelMapping.For<T>()` | `ImportMappingBuilder<T>` / `ExportMappingBuilder<T>` | 已移除 | 本次 RC Breaking Change |
 | `Mapping(configuration)` / `Mapping(document)` | 使用具名的 `MappingConfiguration(...)` / `MappingDocument(...)` 入口 | 迁移中 | 当前 Major 仍使用 `Mapping(...)` |
 | `HeaderMatch` | `RequireExpectedHeaders` | 删除 | Major 已迁移 |
 | `MaxColumnCount` | `MaxReadColumns` | 删除 | Major 已迁移 |
@@ -40,12 +40,10 @@
 迁移示例：
 
 ```csharp
-// 仍兼容的旧版入口
-var mappingBuilder = ExcelMapping.For<OrderRow>();
-mappingBuilder.Property(row => row.Code).HasTitle("订单号");
-var mapping = mappingBuilder.Build();
-
-// 新代码优先使用方向明确的 Profile/Mapping 配置
+// 使用方向明确的 Builder/Profile 配置
+var importMapping = new ImportMappingBuilder<OrderRow>()
+    .Property(row => row.Code).HasHeader("订单号").And()
+    .Build();
 services.AddMappingProfile<OrderProfile>();
 var request = ExcelImport.Workbook<OrderWorkbook>(builder =>
 	builder.Sheet("订单", workbook => workbook.Rows));

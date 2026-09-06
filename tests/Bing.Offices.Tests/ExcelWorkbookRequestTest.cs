@@ -286,12 +286,9 @@ public sealed class ExcelWorkbookRequestTest
         try
         {
             // Act
-            var commitException = Assert.Throws<BingOfficesFileCommitException>(() => new ThrowingExcelExporter()
+            var exportException = Assert.Throws<InvalidOperationException>(() => new ThrowingExcelExporter()
                 .ExportToFile(request, filePath));
-            Assert.Equal(BingOfficesErrorCode.FileCommitFailed, commitException.Code);
-            Assert.Equal(BingOfficesOperation.FileCommit, commitException.Operation);
-            Assert.Equal(BingOfficesStage.Commit, commitException.Stage);
-            Assert.IsType<InvalidOperationException>(commitException.InnerException);
+            Assert.Equal("测试导出失败", exportException.Message);
 
             // Assert
             Assert.Equal("原始内容", File.ReadAllText(filePath, Encoding.UTF8));
@@ -592,6 +589,42 @@ public sealed class ExcelWorkbookRequestTest
         // Assert
         Assert.True(result.IsSuccess, string.Join("; ", result.Errors.Select(error => error.Message)));
         Assert.Equal("商品", Assert.Single(Assert.Single(result.Workbook.Orders).DetailItems).Name);
+    }
+
+    /// <summary>
+    /// 测试 - 关系绑定委托应在首次类型组合调用时创建，并在后续调用中命中同一缓存项。
+    /// </summary>
+    [Fact]
+    public void RelationBinder_SameTypeCombination_ShouldCacheInvoker()
+    {
+        // Arrange
+        var root = new CachedRelationWorkbook();
+        root.Parents.Add(new CachedRelationParent { Id = 1 });
+        root.Children.Add(new CachedRelationChild { ParentId = 1 });
+        var request = ExcelRelationRequest.Create<CachedRelationWorkbook, CachedRelationParent,
+            CachedRelationChild, int>(
+            workbook => workbook.Parents,
+            workbook => workbook.Children,
+            parent => parent.Id,
+            child => child.ParentId,
+            parent => parent.Children,
+            null);
+        Assert.False(NpoiRelationBinder.IsCached(typeof(CachedRelationWorkbook),
+            typeof(CachedRelationParent), typeof(CachedRelationChild), typeof(int)));
+
+        // Act
+        NpoiRelationBinder.Bind(root, request, new ExcelImportErrorCollector(null), null,
+            CancellationToken.None);
+        var cachedAfterFirstBind = NpoiRelationBinder.IsCached(typeof(CachedRelationWorkbook),
+            typeof(CachedRelationParent), typeof(CachedRelationChild), typeof(int));
+        NpoiRelationBinder.Bind(root, request, new ExcelImportErrorCollector(null), null,
+            CancellationToken.None);
+
+        // Assert
+        Assert.True(cachedAfterFirstBind);
+        Assert.True(NpoiRelationBinder.IsCached(typeof(CachedRelationWorkbook),
+            typeof(CachedRelationParent), typeof(CachedRelationChild), typeof(int)));
+        Assert.Equal(2, root.Parents[0].Children.Count);
     }
 
     /// <summary>
@@ -2740,6 +2773,23 @@ public sealed class ExcelWorkbookRequestTest
     {
         public List<ThrowingRelationParent> Parents { get; } = new();
         public List<ThrowingRelationChild> Children { get; } = new();
+    }
+
+    private sealed class CachedRelationWorkbook
+    {
+        public List<CachedRelationParent> Parents { get; } = new();
+        public List<CachedRelationChild> Children { get; } = new();
+    }
+
+    private sealed class CachedRelationParent
+    {
+        public int Id { get; set; }
+        public List<CachedRelationChild> Children { get; } = new();
+    }
+
+    private sealed class CachedRelationChild
+    {
+        public int ParentId { get; set; }
     }
 
     private sealed class ThrowingRelationParent

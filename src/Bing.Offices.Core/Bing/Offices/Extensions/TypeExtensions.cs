@@ -7,14 +7,14 @@ namespace Bing.Offices.Extensions;
 /// <summary>
 /// 类型名称和枚举元数据解析扩展。
 /// </summary>
-public static class TypeExtensions
+internal static class TypeExtensions
 {
     /// <summary>
     /// 将类型转换为不含程序集限定名的 C# 泛型类型名称。
     /// </summary>
     /// <param name="type">类型</param>
     /// <returns>类型的 C# 名称；泛型类型包含其递归解析后的类型参数。</returns>
-    public static string GetCSharpTypeName(this Type type)
+    internal static string GetCSharpTypeName(this Type type)
     {
         var sb = new StringBuilder();
         var name = type.Name;
@@ -36,7 +36,7 @@ public static class TypeExtensions
     /// key：返回显示名称或描述 <br/>
     /// value：值
     /// </returns>
-    public static IDictionary<string, int> GetEnumTextAndValues(this Type type)
+    internal static IDictionary<string, int> GetEnumTextAndValues(this Type type)
     {
         if (!type.IsEnum)
             throw new InvalidOperationException();
@@ -53,7 +53,7 @@ public static class TypeExtensions
     /// </summary>
     /// <param name="type">类型</param>
     /// <returns>枚举定义列表；传入类型不是枚举时返回 null。</returns>
-    public static IEnumerable<(string Name, int Value, string DisplayName, string Description)> GetEnumDefinitionList(this Type type)
+    internal static IEnumerable<(string Name, int Value, string DisplayName, string Description)> GetEnumDefinitionList(this Type type)
     {
         var list = new List<(string Name, int Value, string DisplayName, string Description)>();
         var attrType = type;

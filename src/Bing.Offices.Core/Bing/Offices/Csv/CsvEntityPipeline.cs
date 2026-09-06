@@ -164,7 +164,7 @@ internal sealed partial class CsvEntityExporter : ICsvExporter
             try
             {
                 if (converter.TryConvertTo(context, out var convertedValue))
-                    return Convert.ToString(convertedValue, culture) ?? string.Empty;
+                    return FormatScalarValue(convertedValue, culture);
             }
             catch (Exception exception) when (exception is not OperationCanceledException
                 && exception is not OutOfMemoryException && exception is not StackOverflowException)
@@ -179,7 +179,7 @@ internal sealed partial class CsvEntityExporter : ICsvExporter
         var mapping = column.ValueMap.FirstOrDefault(pair => IsMappedValue(pair.Value, value, culture));
         if (mapping.Key != null)
             return mapping.Key;
-        return Convert.ToString(value, culture) ?? string.Empty;
+        return FormatScalarValue(value, culture);
     }
 
     /// <summary>将固定或动态导出列从实体中读取并格式化为 CSV 字段文本。</summary>
@@ -216,7 +216,7 @@ internal sealed partial class CsvEntityExporter : ICsvExporter
             try
             {
                 if (converter.TryConvertTo(context, out var convertedValue))
-                    return Convert.ToString(convertedValue, culture) ?? string.Empty;
+                    return FormatScalarValue(convertedValue, culture);
             }
             catch (Exception exception) when (exception is not OperationCanceledException
                 && exception is not OutOfMemoryException && exception is not StackOverflowException)
@@ -226,8 +226,14 @@ internal sealed partial class CsvEntityExporter : ICsvExporter
                     columnIndex: columnIndex, code: BingOfficesErrorCode.UserExtensionFailed);
             }
         }
-        return Convert.ToString(value, culture) ?? string.Empty;
+        return FormatScalarValue(value, culture);
     }
+
+    /// <summary>DateTimeOffset 使用不依赖区域性的往返格式，其他值沿用请求 Culture。</summary>
+    private static string FormatScalarValue(object value, CultureInfo culture) =>
+        value is DateTimeOffset dateTimeOffset
+            ? dateTimeOffset.ToString("O", CultureInfo.InvariantCulture)
+            : Convert.ToString(value, culture) ?? string.Empty;
 
     /// <summary>将不可变映射计划展开为固定和动态 CSV 导出列。</summary>
     /// <typeparam name="T">导出实体类型。</typeparam>
