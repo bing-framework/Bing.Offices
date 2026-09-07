@@ -10,5 +10,6 @@
   "status": "implementing",
   "startedAt": "2026-08-20T10:00:00+08:00",
   "updatedAt": "2026-08-20T10:00:00+08:00",
-  "fixScope": "recommended"
+  "fixScope": "recommended",
+  "agentProfile": "balanced"
 }

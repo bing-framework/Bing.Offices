@@ -474,6 +474,7 @@ function buildNotificationMessage(
     reviewRound: Number.isInteger(task.reviewRound) ? task.reviewRound : 0,
     fixScope: task.fixScope || undefined,
     agentSource: task.agentSource || 'antigravity',
+    agentProfile: task.agentProfile || undefined,
     modelName: sanitizeNotificationText(context.modelName, 200),
     terminationReason: sanitizeNotificationText(context.terminationReason, 200),
     executionPath: executionRelative,

@@ -73,6 +73,17 @@ function safeWriteJson(filePath, value) {
   renameSync(temp, filePath);
 }
 
+function readActiveProfile(workspaceRoot) {
+  const file = path.join(
+    workspaceRoot,
+    '.agents',
+    'generated',
+    'agent-profile.json',
+  );
+  const value = safeReadJson(file, null);
+  return value?.profile || null;
+}
+
 function loadMergedEnv(workspaceRoot) {
   const envRelative =
     process.env.AI_WORKFLOW_ENV_FILE ||
@@ -253,6 +264,7 @@ async function main() {
     taskId,
     mode,
     agentSource: source,
+    agentProfile: readActiveProfile(workspaceRoot) || undefined,
     terminationReason: 'stage_completed',
     extraLines,
   });

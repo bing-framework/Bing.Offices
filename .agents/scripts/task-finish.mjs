@@ -312,6 +312,7 @@ async function main() {
           : 0,
         fixScope: finalized.fixScope || undefined,
         agentSource: finalized.agentSource || 'unknown',
+        agentProfile: finalized.agentProfile || undefined,
         terminationReason: 'explicit_finish',
         executionPath,
         extraLines: buildExtraLines(finalized, terminal),

@@ -111,6 +111,23 @@ function getAgentSource() {
   );
 }
 
+function getActiveAgentProfile(workspaceRoot) {
+  const generated = path.join(
+    workspaceRoot,
+    '.agents',
+    'generated',
+    'agent-profile.json',
+  );
+
+  try {
+    if (!existsSync(generated)) return null;
+    const value = JSON.parse(readFileSync(generated, 'utf8'));
+    return value?.profile || null;
+  } catch {
+    return null;
+  }
+}
+
 function safeReadJson(filePath) {
   if (!existsSync(filePath)) {
     return null;
@@ -237,6 +254,7 @@ function buildRuntime({
   paths,
   startedAt,
   agentSource,
+  agentProfile = null,
   fixScope = null,
 }) {
   return {
@@ -244,6 +262,7 @@ function buildRuntime({
     taskId,
     mode,
     agentSource,
+    agentProfile,
     fixScope,
     planPath: paths.planRelative,
     executionPath: paths.executionRelative,
@@ -291,6 +310,7 @@ function startPlan(workspaceRoot, taskId) {
     paths,
     startedAt: now,
     agentSource: getAgentSource(),
+    agentProfile: getActiveAgentProfile(workspaceRoot),
     fixScope: null,
   });
 
@@ -363,6 +383,7 @@ function startReviewFix(workspaceRoot, taskId) {
     paths,
     startedAt: now,
     agentSource: getAgentSource(),
+    agentProfile: getActiveAgentProfile(workspaceRoot),
     fixScope: getFixScope(),
   });
 

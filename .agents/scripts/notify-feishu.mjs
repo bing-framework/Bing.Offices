@@ -290,6 +290,7 @@ export function buildFeishuText({
   reviewRound,
   fixScope,
   agentSource,
+  agentProfile,
   modelName,
   terminationReason,
   executionPath,
@@ -308,6 +309,10 @@ export function buildFeishuText({
 
   if (agentSource) {
     lines.push(`执行器：${String(agentSource).toUpperCase()}`);
+  }
+
+  if (agentProfile) {
+    lines.push(`Agent Profile：${agentProfile}`);
   }
 
   if (getModeLabel(mode) === 'REVIEW_FIX' && Number.isInteger(reviewRound) && reviewRound > 0) {
@@ -359,6 +364,7 @@ export function buildFeishuCard({
   reviewRound,
   fixScope,
   agentSource,
+  agentProfile,
   modelName,
   terminationReason,
   executionPath,
@@ -372,6 +378,7 @@ export function buildFeishuCard({
     mdRow('任务', taskId),
     mdRow('模式', getModeLabel(mode)),
     agentSource ? mdRow('执行器', String(agentSource).toUpperCase()) : null,
+    agentProfile ? mdRow('Agent Profile', agentProfile) : null,
     getModeLabel(mode) === 'REVIEW_FIX' && Number.isInteger(reviewRound) && reviewRound > 0
       ? mdRow('修复轮次', `Round ${reviewRound}`)
       : null,
@@ -584,6 +591,7 @@ async function runCli() {
       reviewRound: 1,
       fixScope: 'recommended',
       agentSource: 'copilot',
+      agentProfile: 'balanced',
       modelName: 'manual-test',
       terminationReason: 'manual_test',
       executionPath: 'ai_docs/tasks/feishu-card-test/execution.md',
