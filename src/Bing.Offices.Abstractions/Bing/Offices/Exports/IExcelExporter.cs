@@ -14,4 +14,13 @@ public interface IExcelExporter
     void Export(ExcelWorkbookExportRequest request, Stream destination,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// 将 Workbook 请求以原子方式写入文件；文件提交异常也在 exporter 观察边界内分发。
+    /// </summary>
+    /// <param name="request">Workbook 导出请求。</param>
+    /// <param name="path">目标文件路径。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    void ExportToFile(ExcelWorkbookExportRequest request, string path,
+        CancellationToken cancellationToken = default);
+
 }

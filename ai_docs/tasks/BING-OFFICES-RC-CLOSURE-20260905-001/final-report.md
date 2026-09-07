@@ -21,7 +21,7 @@
 
 | 门禁 | 最终结果 |
 | --- | --- |
-| Release build | PASS，0 errors / 28 warnings |
+| Release build | PASS，续跑结果 0 warning / 0 error（历史 closure freeze 为 28 warnings） |
 | Unit netcoreapp3.1/net6/net8 | 各 470/471，0 skipped；唯一失败 formal API hash |
 | Integration net6/net8 | 各 15/15 |
 | Docs | 10/10，全部 Markdown C# fence 编译执行 |
@@ -30,7 +30,7 @@
 | PackageConsumer | netstandard2.0 编译；三个 runtime 均 `package-consumer-ok` |
 | Pack identity | `packages-rc-final` 三包；五个包内 DLL 与 Release 输出 hash 全 match |
 | API candidate | 三 TFM 一致；formal approval BLOCKED |
-| Independent Review | 0 P0 / 2 P1 / 2 P2，`NEEDS_FIX / No-Go` |
+| Independent Review | 0 P0 / 2 P1 / 1 P2，`NEEDS_FIX / No-Go` |
 
 分报告：`unit-test-report.md`、`integration-test-report.md`、`docs-test-report.md`、`package-consumer-report.md`、`benchmark-report.md`、`resource-report.md`、`api-diff.md`、`review.md`。原始证据位于本任务 `artifacts/`。
 
@@ -43,7 +43,7 @@
 1. P1 `FIX-002`：仓库缺失正式成员 baseline JSON；当前 API hash 测试三个 TFM 均失败，canonicalizer 也不覆盖 abstract/sealed、约束、默认参数、访问器与关键 attribute。需要维护者恢复/批准成员 baseline，并使用完整 APICompat 工具复验。
 2. P1 `FIX-005`：缺少可比历史 baseline、批准预算与批准人；尚缺图片/模板/样式/验证完整资源矩阵、Failure Workbook 双 DOM 独立 PeakWorkingSet/LOH、取消延迟分位数。需要维护者给出预算后在固定环境复验。
 3. P2 `FIX-006`：CSV、Importer/Exporter 与 Failure Writer 仍有大类职责拆分遗留，建议独立重构任务处理。
-4. P2 `FIX-008`：TryAddPicture 在 AddPicture 后续阶段失败时的部分修改/回滚语义尚未以可控注入测试冻结。
+4. FIX-008 已关闭：TryAddPicture 的 CreatePicture/Resize 后置失败均有可控注入测试，公共方法只在工作簿变更前返回 false。
 5. Linux/macOS Integration runner 当前不可用；netcoreapp3.1/net6 已 EOL，旧 TFM 依赖支持警告需发布策略确认。
 
 ## Breaking 与迁移
@@ -59,3 +59,13 @@ Excel 使用 `ExcelImport/ExcelExport + Workbook/Sheet Builder`；映射使用 `
 5. `docs: publish rc contracts migration and no-go report`
 
 未执行 commit、push、PR、tag 或 NuGet publish。
+
+## 2026-09-07 续跑复验
+
+- `TryAddPicture` 后置 `CreatePicture`/`Resize` 失败均有确定性测试；生产测试注入移除可变静态全局状态。定向过滤测试 `5/5` 通过。
+- 当前 Release solution build：`0 warning / 0 error`。
+- 当前 net8 Unit：`478 passed / 0 skipped / 1 failed`；唯一失败仍为 API baseline `approvedBy`/`approvedAt` 为空。
+- Integration：`15/15`；Docs：`10/10`。
+- 重新 `dotnet pack` 后，Abstractions/Core 包仅含 `netstandard2.0`，NPOI 包仅含 `net8.0`；独立 offline PackageReference consumer 最新输出 `package-consumer-ok excelBytes=4250 csvBytes=20 npoiExtensions=ok`。
+- API snapshot 复验的 added/removed member diff 与已记录的 hardening 变更一致，没有新增意外 public 成员；比较命令仍因审批字段为空退出 1。
+- CSV 1M InProcess ShortRun 续跑：Import `945.480 ms / 1,984.1 MB / Gen2 1,000`，Export `1.216 s / 14,455.7 MB / Gen2 0`；隔离 BDN restore 受 NuGet TLS 阻断，预算仍未批准。

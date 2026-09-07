@@ -8,4 +8,4 @@ Cell、Style、Font、Row、Sheet 和 Workbook 扩展可用于调用方直接操
 
 样式、图片、批注、公式和 Data Validation 的支持范围受 XLS/HSSF 与 XLSX/XSSF 能力差异约束。不支持特性应按请求的 `ExcelUnsupportedFeaturePolicy` 报告或拒绝，不应通过 catch-all 伪装成功。
 
-本轮 package-only 消费者从实际 nupkg 编译并运行这些扩展容器，覆盖 netcoreapp3.1、net6.0 和 net8.0；Npoi 包不提供 netstandard2.0 资产。
+当前 package-only 消费者从实际 nupkg 编译并运行这些扩展容器，目标为受支持的 net8.0；Npoi 包不提供 netstandard2.0 资产。netcoreapp3.1 与 net6.0 已从发布矩阵移除。

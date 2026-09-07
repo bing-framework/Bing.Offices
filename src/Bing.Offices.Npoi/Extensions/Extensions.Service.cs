@@ -1,6 +1,7 @@
 ﻿using Bing.Offices.Exports;
 using Bing.Offices.Exceptions;
 using Bing.Offices.Imports;
+using Bing.Offices.IO;
 using Bing.Offices.Conversions;
 using Bing.Offices.Configurations;
 using Bing.Offices.Npoi.Exports;
@@ -39,7 +40,8 @@ public static class ExcelNpoiServiceCollectionExtensions
         services.TryAddTransient<IExcelExporter>(provider => new NpoiExcelExporter(
             provider.GetServices<IExcelValueConverter>(),
             provider.GetService<IExcelMappingPlanFactory>(),
-            provider.GetServices<IBingOfficesExceptionObserver>()));
+            provider.GetServices<IBingOfficesExceptionObserver>(),
+            provider.GetRequiredService<IFileExportCommitter>()));
         return services;
     }
 }

@@ -5,6 +5,7 @@ using System.Linq;
 
 namespace Bing.Offices.Configurations;
 
+/// <summary>执行方向化映射配置的优先级合并。</summary>
 [EditorBrowsable(EditorBrowsableState.Never)]
 public static class MappingConfigurationMerger
 {

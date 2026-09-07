@@ -10,8 +10,11 @@ namespace Bing.Offices.Exports;
 /// </summary>
 public enum ExcelChartType
 {
+    /// <summary>柱状图。</summary>
     Column,
+    /// <summary>折线图。</summary>
     Line,
+    /// <summary>饼图。</summary>
     Pie
 }
 
@@ -135,6 +138,7 @@ public sealed class ExcelChartDefinition
     /// </summary>
     public ExcelChartAnchor Anchor { get; init; }
 
+    /// <summary>验证图表定义的范围和系列约束。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public void Validate()
     {

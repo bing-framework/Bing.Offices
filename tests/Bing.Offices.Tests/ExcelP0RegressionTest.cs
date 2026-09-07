@@ -539,8 +539,8 @@ public sealed class ExcelP0RegressionTest
         var error = Assert.Single(result.Errors);
         Assert.False(result.IsSuccess);
         Assert.Empty(result.Workbook.Rows);
-        Assert.Equal(1, result.Errors.Select(item => (item.SheetName, item.RowIndex)).Distinct().Count());
-        Assert.Equal(1, result.Errors.Count);
+        Assert.Single(result.Errors.Select(item => (item.SheetName, item.RowIndex)).Distinct());
+        Assert.Single(result.Errors);
         Assert.Equal("Orders", error.SheetName);
         Assert.Equal(2, error.RowIndex);
         Assert.Equal(1, error.ColumnIndex);
@@ -837,6 +837,36 @@ public sealed class ExcelP0RegressionTest
         Assert.Equal(BingOfficesErrorCode.ResourceLimitExceeded, exception.Code);
         Assert.Equal(BingOfficesOperation.Import, exception.Operation);
         Assert.Equal(BingOfficesStage.Serialize, exception.Stage);
+        Assert.Equal(0, failure.Length);
+    }
+
+    /// <summary>
+    /// 测试 - ErrorRowsOnly 在创建独立工作簿前应按候选错误行预算拒绝请求。
+    /// </summary>
+    [Fact]
+    public void Import_FailureWorkbook_CandidateRowBudget_ShouldRejectBeforeMutation()
+    {
+        using var source = new MemoryStream(CreateWorkbook(workbook =>
+        {
+            var sheet = workbook.CreateSheet("Data");
+            sheet.CreateRow(0).CreateCell(0).SetCellValue("Count");
+            sheet.CreateRow(1).CreateCell(0).SetCellValue("invalid-1");
+            sheet.CreateRow(2).CreateCell(0).SetCellValue("invalid-2");
+        }));
+        using var failure = new MemoryStream();
+        var request = ExcelImport.Workbook<FailureWorkbook>(builder => builder
+            .FailureWorkbook(new ExcelImportFailureOptions
+            {
+                Mode = ExcelImportFailureWorkbookMode.ErrorRowsOnly,
+                Destination = failure,
+                MaxCandidateErrorRows = 1
+            })
+            .Sheet("Data", root => root.Rows));
+
+        var exception = Assert.Throws<BingOfficesResourceLimitException>(() =>
+            new NpoiExcelImporter().Import(source, request));
+
+        Assert.Equal(BingOfficesStage.Preflight, exception.Stage);
         Assert.Equal(0, failure.Length);
     }
 

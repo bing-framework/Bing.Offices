@@ -631,25 +631,25 @@ public class StreamPipelineTest
     }
 
     /// <summary>
-    /// 测试 - Workbook 请求应支持异步测试场景中的字节缓冲往返。
+    /// 测试 - Workbook 请求应支持同步字节缓冲往返。
     /// </summary>
     [Fact]
-    public async Task StreamExtensions_LegacyExcelAsyncBytes_ShouldDelegateToExporter()
+    public void StreamExtensions_WorkbookBytesRoundTrip_ShouldDelegateToExporter()
     {
         // Arrange
         var exporter = new NpoiExcelExporter();
         using var destination = new MemoryStream();
 
         // Act
-    await Task.Run(() => exporter.Export(CreateSingleSheetExportRequest(
-        new[] { new StreamRow { Name = "兼容" } }), destination));
+        exporter.Export(CreateSingleSheetExportRequest(
+            new[] { new StreamRow { Name = "字节往返" } }), destination);
 
         // Assert
         Assert.NotEmpty(destination.ToArray());
         destination.Position = 0;
         var result = new NpoiExcelImporter().Import(destination, CreateSingleSheetRequest<StreamRow>());
         Assert.Empty(result.Errors);
-        Assert.Equal("兼容", Assert.Single(result.Workbook.Items).Name);
+        Assert.Equal("字节往返", Assert.Single(result.Workbook.Items).Name);
     }
 
     /// <summary>
@@ -1592,7 +1592,7 @@ public class StreamPipelineTest
             sheet.CreateRow(0).CreateCell(0).SetCellValue(nameof(StreamRow.Name));
             sheet.CreateRow(1).CreateCell(0).SetCellValue("value");
             if (hidden)
-                workbook.SetSheetHidden(0, SheetVisibility.Hidden);
+                workbook.SetSheetVisibility(0, SheetVisibility.Hidden);
         });
         var request = ExcelImport.Workbook<SingleWorkbook<StreamRow>>(builder =>
             builder.Sheet(ExcelSheetSelector.ByName(selectorName), root => root.Items));
@@ -2556,6 +2556,79 @@ public class StreamPipelineTest
     }
 
     /// <summary>
+    /// 测试 - 图片数据写入后若形状阶段失败，不得返回 false 隐藏工作簿副作用。
+    /// </summary>
+    [Fact]
+    public void SheetExtensions_TryAddPicturePostMutationFailure_ShouldThrowExplicitExportException()
+    {
+        using var workbook = ExcelHelper.PrepareWorkbook(ExcelFormat.Xlsx);
+        var sheet = workbook.CreateSheet("Data");
+        var image = Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
+        var exception = Assert.Throws<BingOfficesExportException>(() =>
+            SheetExtensions.TryAddPicture(sheet, 0, 0, image, PictureType.PNG,
+                new ThrowingPictureMutationAdapter()));
+
+        Assert.Equal(BingOfficesOperation.Export, exception.Operation);
+        Assert.Equal(BingOfficesStage.Write, exception.Stage);
+        Assert.NotEmpty(workbook.GetAllPictures());
+    }
+
+    /// <summary>
+    /// 测试 - 图片 Resize 后置阶段失败同样不得返回 false 或隐藏工作簿副作用。
+    /// </summary>
+    [Fact]
+    public void SheetExtensions_TryAddPictureResizeFailure_ShouldThrowExplicitExportException()
+    {
+        using var workbook = ExcelHelper.PrepareWorkbook(ExcelFormat.Xlsx);
+        var sheet = workbook.CreateSheet("Data");
+        var image = Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
+
+        var exception = Assert.Throws<BingOfficesExportException>(() =>
+            SheetExtensions.TryAddPicture(sheet, 0, 0, image, PictureType.PNG,
+                new ResizeThrowingPictureMutationAdapter()));
+
+        Assert.Equal(BingOfficesOperation.Export, exception.Operation);
+        Assert.Equal(BingOfficesStage.Write, exception.Stage);
+        Assert.NotEmpty(workbook.GetAllPictures());
+    }
+
+    private sealed class ThrowingPictureMutationAdapter : IPictureMutationAdapter
+    {
+        public int AddPicture(ISheet sheet, byte[] pictureBytes, PictureType pictureType)
+            => sheet.Workbook.AddPicture(pictureBytes, pictureType);
+
+        public IClientAnchor CreateClientAnchor(ISheet sheet)
+            => sheet.Workbook.GetCreationHelper().CreateClientAnchor();
+
+        public IDrawing GetOrCreateDrawing(ISheet sheet)
+            => sheet.DrawingPatriarch ?? sheet.CreateDrawingPatriarch();
+
+        public IPicture CreatePicture(IDrawing drawing, IClientAnchor anchor, int pictureIndex)
+            => throw new InvalidOperationException("测试形状创建失败");
+
+        public void Resize(IPicture picture) => picture.Resize();
+    }
+
+    private sealed class ResizeThrowingPictureMutationAdapter : IPictureMutationAdapter
+    {
+        public int AddPicture(ISheet sheet, byte[] pictureBytes, PictureType pictureType)
+            => sheet.Workbook.AddPicture(pictureBytes, pictureType);
+
+        public IClientAnchor CreateClientAnchor(ISheet sheet)
+            => sheet.Workbook.GetCreationHelper().CreateClientAnchor();
+
+        public IDrawing GetOrCreateDrawing(ISheet sheet)
+            => sheet.DrawingPatriarch ?? sheet.CreateDrawingPatriarch();
+
+        public IPicture CreatePicture(IDrawing drawing, IClientAnchor anchor, int pictureIndex)
+            => drawing.CreatePicture(anchor, pictureIndex);
+
+        public void Resize(IPicture picture) => throw new InvalidOperationException("测试图片调整大小失败");
+    }
+
+    /// <summary>
     /// 测试 - MovePictures 对 null 和未知 ISheet 实现应显式失败，不能静默无操作。
     /// </summary>
     [Fact]
@@ -2935,7 +3008,8 @@ public class StreamPipelineTest
             && method.GetParameters()[1].ParameterType.Name.StartsWith("ExcelWorkbookImportRequest", StringComparison.Ordinal));
         var exporter = typeof(IExcelExporter).GetMethods().Single(method =>
             method.GetParameters().Length == 3
-            && method.GetParameters()[0].ParameterType == typeof(Bing.Offices.Exports.ExcelWorkbookExportRequest));
+            && method.GetParameters()[0].ParameterType == typeof(Bing.Offices.Exports.ExcelWorkbookExportRequest)
+            && method.GetParameters()[1].ParameterType == typeof(Stream));
 
         // Assert
         Assert.NotNull(importer);

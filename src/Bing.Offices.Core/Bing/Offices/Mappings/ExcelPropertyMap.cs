@@ -1,6 +1,8 @@
 ﻿using System.Reflection;
 using Bing.Offices.Imports;
 
+#nullable enable annotations
+
 namespace Bing.Offices.Mappings;
 
 /// <summary>

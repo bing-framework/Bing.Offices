@@ -3,8 +3,8 @@
 		<RootNamespace/>
 		<LangVersion>latest</LangVersion>
 		<RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
-		<NoWarn Condition=" '$(Configuration)' == 'Debug' ">$(NoWarn);NETSDK1138</NoWarn>
-		<NoWarn Condition=" '$(Configuration)' == 'Release' ">$(NoWarn);CS1591;NETSDK1138</NoWarn>
+    <NoWarn Condition=" '$(Configuration)' == 'Debug' ">$(NoWarn)</NoWarn>
+    <NoWarn Condition=" '$(Configuration)' == 'Release' ">$(NoWarn)</NoWarn>
 	</PropertyGroup>
 
 	<PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">

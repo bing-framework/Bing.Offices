@@ -122,7 +122,7 @@
 | Phase 5 性能/资源 | DONE / BLOCKED | 实测矩阵完成；历史 baseline 与批准预算 BLOCKED |
 | Phase 6 文档/Review/门禁 | DONE / No-Go | 文档和独立 Review 已执行；外部门禁未解除 |
 
-最终冻结证据：Release build 0 errors / 28 warnings；Unit 三 TFM 各 470/471；Integration 两 TFM 各 15/15；Docs 10/10；PackageConsumer 四目标通过且五 DLL hash match；candidate API 位于 `artifacts/api-snapshot/candidate-rc-final`。
+历史 closure freeze 证据：Release build 0 errors / 28 warnings；续跑 Rebuild 已为 0 warning / 0 error。Unit/Integration/Docs/PackageConsumer 历史矩阵与最新 hardening net8 续跑均保留在对应分报告；candidate API 位于 `artifacts/api-snapshot/candidate-rc-final`。
 
 ## 2026-09-06 13:11 +08:00
 
@@ -130,3 +130,12 @@
 - 开放 P1：正式 APICompat baseline/成员级审批；性能资源可比 baseline、批准预算与剩余资源矩阵。
 - 开放 P2：大类职责拆分剩余；TryAddPicture 后半段可恢复失败的副作用合同。
 - 本地可执行项已完成；最终报告为 `No-Go`，execution 以 `PARTIAL` 收口。
+
+## 2026-09-07 续跑
+
+- Review FIX-008：`TryAddPicture` 的后置 `CreatePicture` 与 `Resize` 失败均通过内部适配器进行确定性测试，确认抛出 `BingOfficesExportException`、保留 NPOI 已写入图片数据，不返回假失败。
+- 生产实现：移除可变静态 `PictureMutationAdapter.Current`，改为公共方法使用默认适配器、测试友元使用内部重载；未增加生产程序集间 IVT 或 public API。
+- 验证：`dotnet test tests/Bing.Offices.Tests/Bing.Offices.Tests.csproj -c Release --no-restore --filter FullyQualifiedName~SheetExtensions_TryAddPicture`，`5 passed / 0 skipped / 0 failed`。
+- 未完成：正式 API baseline 审批、性能/资源预算与完整可比矩阵、跨平台 runner、独立复审重新确认；下一步重跑受影响 Unit/API 快照并更新 hardening 报告。
+
+- 续跑补充：PackageReference-only consumer 重新覆盖六组 NPOI public 扩展，当前包仅含 net8 NPOI 资产，运行输出 `npoiExtensions=ok`；package artifact、命令和 TLS 离线限制已写入 `package-consumer-report.md`。

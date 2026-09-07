@@ -391,7 +391,7 @@ public static partial class SheetExtensions
     /// <param name="row">行索引</param>
     /// <param name="col">列索引</param>
     /// <param name="pictureData">图片数据</param>
-    /// <returns>图片成功添加时为 true；NPOI 拒绝图片数据或创建绘图区失败时为 false。</returns>
+    /// <returns>图片成功添加时为 true；在工作簿变更前被 NPOI 拒绝的数据返回 false。</returns>
     public static bool TryAddPicture(this ISheet sheet, int row, int col, IPictureData pictureData)
     {
         if (pictureData is null)
@@ -400,16 +400,23 @@ public static partial class SheetExtensions
     }
 
     /// <summary>
-    /// 将图片字节添加到工作表并自动调整图片大小；失败时返回 false。
+    /// 将图片字节添加到工作表并自动调整图片大小；仅在工作簿变更前拒绝时返回 false。
     /// </summary>
     /// <param name="sheet">工作表</param>
     /// <param name="row">行索引</param>
     /// <param name="col">列索引</param>
     /// <param name="pictureBytes">图片数据</param>
     /// <param name="pictureType">图片类型</param>
-    /// <returns>图片成功添加时为 true；图片数据无效或 NPOI 创建失败时为 false。</returns>
+    /// <returns>图片成功添加时为 true；在工作簿变更前被 NPOI 拒绝的数据返回 false。</returns>
     public static bool TryAddPicture(this ISheet sheet, int row, int col, byte[] pictureBytes,
         PictureType pictureType = PictureType.PNG)
+        => TryAddPicture(sheet, row, col, pictureBytes, pictureType, new DefaultPictureMutationAdapter());
+
+    /// <summary>
+    /// 通过内部适配器执行图片写入；仅供职责级测试确定性注入 NPOI 后置阶段失败。
+    /// </summary>
+    internal static bool TryAddPicture(ISheet sheet, int row, int col, byte[] pictureBytes,
+        PictureType pictureType, IPictureMutationAdapter adapter)
     {
         if (sheet is null)
             throw new ArgumentNullException(nameof(sheet));
@@ -423,19 +430,12 @@ public static partial class SheetExtensions
             throw new ArgumentException("图片数据不能为空。", nameof(pictureBytes));
         if (!Enum.IsDefined(typeof(PictureType), pictureType))
             throw new ArgumentOutOfRangeException(nameof(pictureType));
-
+        if (adapter is null)
+            throw new ArgumentNullException(nameof(adapter));
+        int pictureIndex;
         try
         {
-            var pictureIndex = sheet.Workbook.AddPicture(pictureBytes, pictureType);
-
-            var clientAnchor = sheet.Workbook.GetCreationHelper().CreateClientAnchor();
-            clientAnchor.Row1 = row;
-            clientAnchor.Col1 = col;
-
-            var picture = (sheet.DrawingPatriarch ?? sheet.CreateDrawingPatriarch())
-                .CreatePicture(clientAnchor, pictureIndex);
-            picture.Resize();
-            return true;
+            pictureIndex = adapter.AddPicture(sheet, pictureBytes, pictureType);
         }
         catch (ArgumentException)
         {
@@ -445,5 +445,56 @@ public static partial class SheetExtensions
         {
             return false;
         }
+
+        try
+        {
+            var clientAnchor = adapter.CreateClientAnchor(sheet);
+            clientAnchor.Row1 = row;
+            clientAnchor.Col1 = col;
+
+            var drawing = adapter.GetOrCreateDrawing(sheet);
+            var picture = adapter.CreatePicture(drawing, clientAnchor, pictureIndex);
+            adapter.Resize(picture);
+            return true;
+        }
+        catch (ArgumentException exception)
+        {
+            throw new BingOfficesExportException(
+                "NPOI 已写入图片数据，但创建图片形状失败；TryAddPicture 不返回假失败。",
+                exception, "NPOI", BingOfficesStage.Write);
+        }
+        catch (InvalidOperationException exception)
+        {
+            throw new BingOfficesExportException(
+                "NPOI 已写入图片数据，但创建图片形状失败；TryAddPicture 不返回假失败。",
+                exception, "NPOI", BingOfficesStage.Write);
+        }
     }
+}
+
+/// <summary>图片写入阶段适配器；测试可替换以确定性验证失败原子性合同。</summary>
+internal interface IPictureMutationAdapter
+{
+    int AddPicture(ISheet sheet, byte[] pictureBytes, PictureType pictureType);
+    IClientAnchor CreateClientAnchor(ISheet sheet);
+    IDrawing GetOrCreateDrawing(ISheet sheet);
+    IPicture CreatePicture(IDrawing drawing, IClientAnchor anchor, int pictureIndex);
+    void Resize(IPicture picture);
+}
+
+internal sealed class DefaultPictureMutationAdapter : IPictureMutationAdapter
+{
+    public int AddPicture(ISheet sheet, byte[] pictureBytes, PictureType pictureType)
+        => sheet.Workbook.AddPicture(pictureBytes, pictureType);
+
+    public IClientAnchor CreateClientAnchor(ISheet sheet)
+        => sheet.Workbook.GetCreationHelper().CreateClientAnchor();
+
+    public IDrawing GetOrCreateDrawing(ISheet sheet)
+        => sheet.DrawingPatriarch ?? sheet.CreateDrawingPatriarch();
+
+    public IPicture CreatePicture(IDrawing drawing, IClientAnchor anchor, int pictureIndex)
+        => drawing.CreatePicture(anchor, pictureIndex);
+
+    public void Resize(IPicture picture) => picture.Resize();
 }

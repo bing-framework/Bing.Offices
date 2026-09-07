@@ -29,21 +29,27 @@ public sealed class ExcelWorkbookExportRequest
     /// </summary>
     public int SheetCount => Sheets.Count;
 
+    /// <summary>获取不可变 Sheet 执行描述。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public IReadOnlyList<ExcelSheetExportRequest> Sheets { get; }
 
+    /// <summary>获取模板输入流。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Stream Template { get; }
 
+    /// <summary>获取模板流是否由调用方继续持有。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public bool LeaveTemplateOpen { get; }
 
+    /// <summary>获取目标 Excel 格式。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public ExcelFormat Format { get; }
 
+    /// <summary>获取工作簿元数据。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public ExcelWorkbookMetadataOptions Metadata { get; }
 
+    /// <summary>获取调用方是否显式设置过元数据。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public bool MetadataSpecified { get; }
 }
@@ -130,38 +136,55 @@ public sealed class ExcelSheetExportRequest
     /// </summary>
     public bool Hidden { get; }
 
+    /// <summary>获取 Sheet 数据项类型。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Type ItemType { get; }
+    /// <summary>获取 Sheet 数据序列。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public System.Collections.IEnumerable Data { get; }
+    /// <summary>获取动态列定义。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public IReadOnlyList<ExcelDynamicColumnDefinition> DynamicColumns { get; }
+    /// <summary>获取是否拒绝未知动态值。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public bool FailOnUnknownDynamicValues { get; }
+    /// <summary>获取动态值读取器。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Func<object, IDictionary<string, object>> DynamicGetter { get; }
+    /// <summary>获取 Sheet 样式。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Styles.ExcelCellStyle SheetStyle { get; }
+    /// <summary>获取表头样式。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Styles.ExcelCellStyle HeaderStyle { get; }
+    /// <summary>获取正文样式。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Styles.ExcelCellStyle BodyStyle { get; }
+    /// <summary>获取模板命名区域。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public string TemplateRegion { get; }
+    /// <summary>获取图表定义。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public IReadOnlyList<ExcelChartDefinition> Charts { get; }
+    /// <summary>获取额外表头行。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public IReadOnlyList<ExcelHeaderRow> HeaderRows { get; }
+    /// <summary>获取映射配置。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Configurations.ExcelMappingConfiguration MappingConfiguration { get; }
+    /// <summary>获取映射文档。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Configurations.ExcelMappingDocument MappingDocument { get; }
+    /// <summary>获取格式化区域性。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public System.Globalization.CultureInfo Culture { get; }
+    /// <summary>获取列宽策略。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public ExcelColumnWidthOptions ColumnWidth { get; }
+    /// <summary>获取批注冲突策略。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public ExcelCommentConflictPolicy CommentConflictPolicy { get; }
+    /// <summary>获取模板单元格覆盖策略。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public ExcelTemplateCellOverwritePolicy TemplateCellOverwritePolicy { get; }
 }

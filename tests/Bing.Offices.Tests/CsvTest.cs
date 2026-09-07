@@ -11,6 +11,7 @@ using Bing.Offices.Conversions;
 using Bing.Offices.Extensions;
 using Bing.Offices.Exceptions;
 using Bing.Offices.Imports;
+using Bing.Offices.IO;
 using Bing.Offices.Validations;
 using Xunit;
 
@@ -1018,6 +1019,12 @@ public class CsvTest
             destination.WriteByte(1);
             throw new InvalidOperationException("测试导出失败");
         }
+
+        public void ExportToFile<T>(IEnumerable<T> data, string path, CsvExportOptions<T> options = null,
+            CancellationToken cancellationToken = default) where T : class, new()
+            => AtomicFileCommitter.Commit(path,
+                destination => Export(data, destination, options, cancellationToken),
+                cancellationToken, "CSV");
     }
 
     private sealed class CancelingCsvExporter : ICsvExporter
@@ -1028,6 +1035,12 @@ public class CsvTest
             destination.WriteByte(1);
             throw new OperationCanceledException(cancellationToken);
         }
+
+        public void ExportToFile<T>(IEnumerable<T> data, string path, CsvExportOptions<T> options = null,
+            CancellationToken cancellationToken = default) where T : class, new()
+            => AtomicFileCommitter.Commit(path,
+                destination => Export(data, destination, options, cancellationToken),
+                cancellationToken, "CSV");
     }
 
     /// <summary>

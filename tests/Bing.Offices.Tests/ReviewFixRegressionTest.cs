@@ -4,8 +4,10 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
+using System.Threading;
 using Bing.Offices.Attributes;
 using Bing.Offices.Configurations;
+using Bing.Offices.Csv;
 using Bing.Offices.Exports;
 using Bing.Offices.Imports;
 using Bing.Offices.IO;
@@ -15,6 +17,7 @@ using Bing.Offices.Validations;
 using Bing.Offices.Extensions;
 using Bing.Offices.Exceptions;
 using Bing.Offices.Npoi.Extensions;
+using Bing.Offices.Npoi.Exports;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -25,6 +28,41 @@ namespace Bing.Offices.Tests;
 /// </summary>
 public sealed class ReviewFixRegressionTest
 {
+    /// <summary>
+    /// 测试 - Excel/CSV exporter 的文件提交失败必须在同一公共边界内观察同一异常实例且只观察一次。
+    /// </summary>
+    [Fact]
+    public void ExporterFileCommitFailure_ShouldObserveSameExceptionOnce()
+    {
+        var request = ExcelExport.Workbook(workbook => workbook
+            .AddSheet("Data", new[] { new ReviewRow { Name = "A" } }));
+        var excelObserver = new RecordingObserver();
+        var excelException = new BingOfficesFileCommitException("Excel 提交失败", provider: "Test");
+        var excelExporter = new NpoiExcelExporter(
+            exceptionObservers: new[] { excelObserver },
+            fileExportCommitter: new ThrowingCommitter(excelException));
+
+        var actualExcel = Assert.Throws<BingOfficesFileCommitException>(() =>
+            excelExporter.ExportToFile(request, "target.xlsx"));
+
+        Assert.Same(excelException, actualExcel);
+        Assert.Single(excelObserver.Exceptions);
+        Assert.Same(actualExcel, excelObserver.Exceptions[0]);
+
+        var csvObserver = new RecordingObserver();
+        var csvException = new BingOfficesFileCommitException("CSV 提交失败", provider: "Test");
+        var csvExporter = new CsvEntityExporter(
+            exceptionObservers: new[] { csvObserver },
+            fileExportCommitter: new ThrowingCommitter(csvException));
+
+        var actualCsv = Assert.Throws<BingOfficesFileCommitException>(() =>
+            csvExporter.ExportToFile(new[] { new ReviewRow { Name = "A" } }, "target.csv"));
+
+        Assert.Same(csvException, actualCsv);
+        Assert.Single(csvObserver.Exceptions);
+        Assert.Same(actualCsv, csvObserver.Exceptions[0]);
+    }
+
     /// <summary>
     /// 测试 - 内容写入主异常与临时文件清理异常同时发生时，应原样保留主异常和结构化诊断。
     /// </summary>
@@ -797,7 +835,7 @@ public sealed class ReviewFixRegressionTest
     /// 测试 - Provider SPI 应隐藏于 IntelliSense，旧 object-profile 入口不应继续公开。
     /// </summary>
     [Fact]
-    public void ProviderSpiAndCompatibilityOverloads_ShouldHaveMigrationMetadata()
+    public void ProviderSpiBoundary_ShouldHideObjectProfileOverloads()
     {
         // Arrange
         var spiTypes = new[]
@@ -887,6 +925,23 @@ public sealed class ReviewFixRegressionTest
         public string Name { get; }
         public string ErrorMessage => string.Empty;
         public bool Validate(ExcelValidationContext context) => true;
+    }
+
+    private sealed class RecordingObserver : IBingOfficesExceptionObserver
+    {
+        public List<BingOfficesException> Exceptions { get; } = new();
+
+        public void Observe(BingOfficesException exception) => Exceptions.Add(exception);
+    }
+
+    private sealed class ThrowingCommitter : IFileExportCommitter
+    {
+        private readonly BingOfficesFileCommitException _exception;
+
+        public ThrowingCommitter(BingOfficesFileCommitException exception) => _exception = exception;
+
+        public void Commit(string path, Action<Stream> write, CancellationToken cancellationToken, string format)
+            => throw _exception;
     }
 
     private sealed class FailingAtomicFileSystem : IAtomicFileSystem

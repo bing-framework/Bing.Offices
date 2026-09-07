@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Reflection;
 using Bing.Offices.Configurations;
 using Bing.Offices.Attributes;
@@ -42,7 +43,10 @@ public class MappingValidationBenchmarks
             .Select(index => (INamedExcelValidationRule)new BenchmarkNamedValidationRule($"rule-{index}"))
             .ToArray();
         _planFactory = ExcelMappingPlanFactoryProvider.CreateDefault(namedValidationRules: namedRules);
-        _cacheKeySerializerOptions = new JsonSerializerOptions { IgnoreNullValues = false };
+        _cacheKeySerializerOptions = new JsonSerializerOptions
+        {
+            DefaultIgnoreCondition = JsonIgnoreCondition.Never
+        };
         _configuration = new ExcelMappingConfiguration
         {
             Columns =

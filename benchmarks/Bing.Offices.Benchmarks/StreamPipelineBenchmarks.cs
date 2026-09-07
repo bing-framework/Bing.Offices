@@ -157,7 +157,7 @@ public class StreamPipelineBenchmarks
 [MemoryDiagnoser]
 public class CsvPipelineBenchmarks
 {
-    [Params(1000, 10000, 100000)]
+    [Params(1000, 10000, 100000, 1_000_000)]
     public int RowCount { get; set; }
 
     private IServiceProvider _serviceProvider = null!;

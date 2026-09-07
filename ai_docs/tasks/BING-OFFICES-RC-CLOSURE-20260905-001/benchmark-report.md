@@ -67,6 +67,10 @@ Export 的 3 次迭代方差较高，99.9% CI 不稳定；本 ShortRun 证明场
 
 场景使用真实 `ErrorRowsOnly` 导入与失败工作簿序列化。100k 的高分配和 Gen2 是明确风险，不符合“低 GC”描述。原始 artifacts：`artifacts/benchmark/failure-workbook-shortrun/`。
 
+## 2026-09-07 CSV 1M 续跑
+
+CSV 基准参数扩展为 `1_000_000`，使用已构建程序集的 BenchmarkDotNet `InProcessEmitToolchain` 完成 Import/Export 各 3 次迭代：Import Mean `945.480 ms`、Allocated `1,984.1 MB`、Gen2 `1,000`；Export Mean `1.216 s`、Allocated `14,455.7 MB`、无 Gen2。该模式用于绕过隔离 benchmark 项目 NuGet TLS 阻断，不能与原隔离进程 ShortRun 直接计算 Ratio；原始 artifact 在 hardening 任务 `artifacts/benchmark/csv-pipeline-1m-inprocess-final/`，预算仍为 `UNAPPROVED`。
+
 ## 命令
 
 ```powershell

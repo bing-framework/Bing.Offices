@@ -9,15 +9,21 @@ namespace Bing.Offices.Exceptions;
 [EditorBrowsable(EditorBrowsableState.Never)]
 public sealed class BingOfficesExceptionDispatcher
 {
+    /// <summary>标记异常已完成观察，防止同一实例重复通知。</summary>
     public const string ObservedKey = "Bing.Offices.ExceptionObserved";
+    /// <summary>保存观察器失败诊断的 Data 键。</summary>
     public const string ObserverFailureKey = "Bing.Offices.ExceptionObserverFailure";
     private readonly IReadOnlyList<IBingOfficesExceptionObserver> _observers;
 
+    /// <summary>使用观察器集合创建异常分发器。</summary>
+    /// <param name="observers">接收公共异常的观察器集合。</param>
     public BingOfficesExceptionDispatcher(IEnumerable<IBingOfficesExceptionObserver> observers = null)
     {
         _observers = new List<IBingOfficesExceptionObserver>(observers ?? Array.Empty<IBingOfficesExceptionObserver>());
     }
 
+    /// <summary>向每个观察器发送异常，并保证同一异常实例最多通知一次。</summary>
+    /// <param name="exception">待观察的公共异常。</param>
     public void Observe(BingOfficesException exception)
     {
         if (exception == null)

@@ -9,6 +9,8 @@ using Bing.Offices.Mappings;
 using Bing.Offices.Providers;
 using Bing.Offices.Validations;
 
+#nullable enable annotations
+
 namespace Bing.Offices.Csv;
 
 /// <summary>保存 CSV 列与实体属性之间的反射、转换器和校验绑定。</summary>

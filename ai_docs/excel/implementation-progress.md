@@ -23,13 +23,13 @@
 ## 已确认现状
 
 - 解决方案包含 Abstractions、Core、Npoi、Unit Test、Integration Test、Benchmark 项目。
-- Abstractions/Core 目标为 `netstandard2.0`；Npoi 目标包含 `net8.0;net7.0;net6.0;netcoreapp3.1`。
+- Abstractions/Core 目标为 `netstandard2.0`；Npoi 发布目标收敛为 `net8.0`，net7/net6/netcoreapp3.1 不再属于支持矩阵。
 - NPOI 锁定版本为 `2.7.4`。
 - `IExcelExporter`/`IExcelImporter` 公开契约已收敛为 Workbook Request。
 - 生产程序集已删除 `ExcelExportOptions<T>`、`ExcelImportOptions<T>` 和 `LegacyExcelFileImportOptions<T>`。
 - 测试项目保留独立迁移适配器，仅用于运行历史回归，不进入生产程序集。
 - 18 个历史 XLSX 资源存在，但尚未形成高级模板/图表/真实 Office 资源测试矩阵。
-- Public API 当前主要由测试中的公开顶层类型清单校验，未覆盖完整成员签名。
+- Public API 由 `build/ApiSnapshot` 成员级 canonicalizer 生成；正式 baseline 仍需维护者审批后启用门禁。
 
 ## 基线命令与结果
 
@@ -37,16 +37,12 @@
    - 结果：失败。
    - 原因：当前 `.csproj` 与已有 `packages.lock.json` 不一致，出现 `NU1004`。
 2. `dotnet restore Bing.Offices.sln --force-evaluate`
-   - 结果：通过，并重新生成当前项目依赖锁定结果。
+   - 结果：通过（需要可用 NuGet 源）；net8 发布矩阵锁定结果已重新生成。
 3. `dotnet build Bing.Offices.sln -c Release --no-restore`
-   - 结果：通过；9 个目标框架相关警告，主要来自 netcoreapp3.1/net5.0 使用的 System.Security 8.x 包支持声明。
+   - 结果：通过；生产 XML 文档缺口仍产生 CS1591，发布门禁暂记 BLOCKED。
 4. `dotnet test tests/Bing.Offices.Tests/Bing.Offices.Tests.csproj -f net8.0 -c Release --no-restore`
    - 结果：97 通过，0 失败。
-5. `dotnet test tests/Bing.Offices.Tests/Bing.Offices.Tests.csproj -f net6.0 -c Release --no-restore`
-   - 结果：99 通过，0 失败。
-6. `dotnet test tests/Bing.Offices.Tests.Integration/Bing.Offices.Tests.Integration.csproj -f net8.0 -c Release --no-restore`
-   - 结果：10 通过，0 失败。
-7. `dotnet test tests/Bing.Offices.Tests.Integration/Bing.Offices.Tests.Integration.csproj -f net6.0 -c Release --no-restore`
+5. `dotnet test tests/Bing.Offices.Tests.Integration/Bing.Offices.Tests.Integration.csproj -f net8.0 -c Release --no-restore`
    - 结果：10 通过，0 失败。
 
 8. `dotnet build Bing.Offices.sln -c Release --no-restore`

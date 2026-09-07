@@ -58,3 +58,9 @@ dotnet <task>/artifacts/package-consumer/runtime/bin/Release/net8.0/Consumer.dll
 ## 失败记录
 
 首次将 Npoi 消费者错误加入 `netstandard2.0`，restore 正确返回 `NU1202`，随后拆分为运行消费者和 Core 合同消费者。首次两个项目同目录共享 `obj` 导致 assets 冲突，已通过物理子目录隔离。首次 CSV 场景复用了带 Excel 日期特性的模型并触发校验错误，已改为独立 CSV 模型；失败进程经命令行精确确认后终止。最终证据均来自修复后的重新 restore/build/run。
+
+## 2026-09-07 续跑复验
+
+当前 hardening 变更重新 pack 后，三个包的 `lib` 资产已收敛为 Abstractions/Core `netstandard2.0` 和 NPOI `net8.0`；旧 `netcoreapp3.1`/`net6.0` 资产不再进入新包。独立 offline PackageReference consumer 使用当前包源恢复、构建、运行通过，最新输出 `package-consumer-ok excelBytes=4250 csvBytes=20 npoiExtensions=ok`，并覆盖 DI、Excel/CSV、ExportMappingBuilder、JSON/XML v2 loader、FileCommit observer 同实例/单次和六组 public 扩展。
+
+当前复验包 SHA-256：Abstractions `F4141EA90C5DB457F8D09C2A44176A188252A3BBE79C0C125FF646B8787578CD`、Core `57FBF0528EA8DADAC2999E4C9E7F0357013FD0999CEE5088288BC210D03A0212`、Npoi `F01559A7B7ACE6824FEA22A207F86713CE15676A0D067D5A58725A949BFB42E1`。外部 NuGet 源因 TLS 凭证不可用，本次依赖从此前已验证缓存导入本地离线源；缓存和 consumer `bin/obj` 已清理。

@@ -9,7 +9,7 @@ AI_REVIEWED_AT: 2026-09-06T13:09:05+08:00
 - 结论：`NEEDS_FIX` / `No-Go`。
 - 开放 P0：0。
 - 开放 P1：2（FIX-002、FIX-005）。
-- 开放 P2：2（FIX-006、FIX-008）。
+- 开放 P2：1（FIX-006）。
 - 已关闭：FIX-001、FIX-003、FIX-004、FIX-007。
 - 本次复审未修改生产代码，未 commit、push、创建 PR、tag 或 publish。
 
@@ -48,11 +48,11 @@ AI_REVIEWED_AT: 2026-09-06T13:09:05+08:00
 
 ### FIX-008：TryAddPicture 缺少可恢复失败后副作用的合同测试
 
-- 状态：`OPEN`。
+- 状态：`CLOSED`。
 - 位置：`SheetExtensions.Picture.cs` 的 `TryAddPicture(byte[])`。
-- 证据：方法先执行 `Workbook.AddPicture`，之后 `CreatePicture/Resize` 的 `ArgumentException` 或 `InvalidOperationException` 会返回 false。现有 Unit/PackageConsumer 覆盖预校验无修改和成功路径，没有覆盖后半段失败时是否残留 picture 数据或 drawing。
-- 影响：调用方看到 false 时的部分修改语义仍未冻结。
-- 解除条件：增加可控失败注入测试；明确允许部分修改还是回滚，并同步文档。
+- 证据：后置 `CreatePicture` 和 `Resize` 失败均转换为 `BingOfficesExportException`；公共方法只在 `AddPicture` 尚未修改工作簿时返回 false。新增两个可控适配器测试，均断言异常分类和图片数据副作用保留。
+- 影响：调用方看到 false 时的部分修改语义已冻结为“仅前置拒绝返回 false”。
+- 验证：`SheetExtensions_TryAddPicture` 过滤测试 `5/5` 通过；生产实现改为内部适配器重载，移除可变静态全局注入。
 
 ## 已关闭 Findings
 
@@ -91,4 +91,3 @@ AI_REVIEWED_AT: 2026-09-06T13:09:05+08:00
 ## 发布结论
 
 当前必须保持 `No-Go`：开放 P1 是正式 APICompat/审批和性能资源预算/完整证据，两者均属于明确发布门禁。修复或取得批准后，应重跑对应 API、Benchmark/Resource 与最终全量验证，再执行一次独立复审；只有开放 P0/P1 为零时才能考虑 Go。
-

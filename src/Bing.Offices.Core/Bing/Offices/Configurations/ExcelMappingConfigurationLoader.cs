@@ -35,22 +35,7 @@ public static class ExcelMappingConfigurationLoader
     /// <param name="json">待加载的 JSON 文本。</param>
     /// <returns>已通过结构和业务规则验证的映射文档。</returns>
     public static ExcelMappingDocument FromJsonDocument(string json)
-        => ExecuteConfiguration(() => LoadJsonDocument(json, null, null));
-
-    /// <summary>
-    /// 从 JSON 文本加载文档，并返回非阻断的迁移诊断。
-    /// </summary>
-    /// <param name="json">待加载的 JSON 文本。</param>
-    /// <param name="diagnostics">接收非阻断诊断的集合。</param>
-    /// <returns>已通过结构和业务规则验证的映射文档。</returns>
-    public static ExcelMappingDocument FromJsonDocument(string json,
-        out IReadOnlyList<ExcelMappingDiagnostic> diagnostics)
-    {
-        var items = new List<ExcelMappingDiagnostic>();
-        var result = ExecuteConfiguration(() => LoadJsonDocument(json, null, items));
-        diagnostics = items;
-        return result;
-    }
+        => ExecuteConfiguration(() => LoadJsonDocument(json, null));
 
     /// <summary>
     /// 从 JSON 文本加载文档，并按已注册的业务模型别名进行校验。
@@ -59,15 +44,13 @@ public static class ExcelMappingConfigurationLoader
     /// <param name="modelAliases">用于校验模型别名的注册表。</param>
     /// <returns>已通过结构和业务规则验证的映射文档。</returns>
     public static ExcelMappingDocument FromJsonDocument(string json, ExcelModelAliasRegistry modelAliases)
-        => ExecuteConfiguration(() => LoadJsonDocument(json, modelAliases, null));
+        => ExecuteConfiguration(() => LoadJsonDocument(json, modelAliases));
 
     /// <summary>解析、验证并反序列化 v2 JSON 映射文档。</summary>
     /// <param name="json">待加载的 JSON 文本。</param>
     /// <param name="modelAliases">用于校验模型别名的可选注册表。</param>
-    /// <param name="diagnostics">接收非阻断诊断的可选集合。</param>
     /// <returns>已通过结构和业务规则验证的映射文档。</returns>
-    private static ExcelMappingDocument LoadJsonDocument(string json, ExcelModelAliasRegistry modelAliases,
-        ICollection<ExcelMappingDiagnostic> diagnostics)
+    private static ExcelMappingDocument LoadJsonDocument(string json, ExcelModelAliasRegistry modelAliases)
     {
         if (string.IsNullOrWhiteSpace(json))
             throw new ArgumentException("JSON 配置不能为空。", nameof(json));
@@ -137,22 +120,7 @@ public static class ExcelMappingConfigurationLoader
     /// <param name="xml">待加载的 XML 文本。</param>
     /// <returns>已通过结构和业务规则验证的映射文档。</returns>
     public static ExcelMappingDocument FromXmlDocument(string xml)
-        => ExecuteConfiguration(() => LoadXmlDocument(xml, null, null));
-
-    /// <summary>
-    /// 从 XML 文本加载文档，并返回非阻断的迁移诊断。
-    /// </summary>
-    /// <param name="xml">待加载的 XML 文本。</param>
-    /// <param name="diagnostics">接收非阻断诊断的集合。</param>
-    /// <returns>已通过结构和业务规则验证的映射文档。</returns>
-    public static ExcelMappingDocument FromXmlDocument(string xml,
-        out IReadOnlyList<ExcelMappingDiagnostic> diagnostics)
-    {
-        var items = new List<ExcelMappingDiagnostic>();
-        var result = ExecuteConfiguration(() => LoadXmlDocument(xml, null, items));
-        diagnostics = items;
-        return result;
-    }
+        => ExecuteConfiguration(() => LoadXmlDocument(xml, null));
 
     /// <summary>
     /// 从 XML 文本加载文档，并按已注册的业务模型别名进行校验。
@@ -161,15 +129,13 @@ public static class ExcelMappingConfigurationLoader
     /// <param name="modelAliases">用于校验模型别名的注册表。</param>
     /// <returns>已通过结构和业务规则验证的映射文档。</returns>
     public static ExcelMappingDocument FromXmlDocument(string xml, ExcelModelAliasRegistry modelAliases)
-        => ExecuteConfiguration(() => LoadXmlDocument(xml, modelAliases, null));
+        => ExecuteConfiguration(() => LoadXmlDocument(xml, modelAliases));
 
     /// <summary>在禁止 DTD 和外部解析器的设置下解析并验证 v2 XML 映射文档。</summary>
     /// <param name="xml">待加载的 XML 文本。</param>
     /// <param name="modelAliases">用于校验模型别名的可选注册表。</param>
-    /// <param name="diagnostics">接收非阻断诊断的可选集合。</param>
     /// <returns>已通过结构和业务规则验证的映射文档。</returns>
-    private static ExcelMappingDocument LoadXmlDocument(string xml, ExcelModelAliasRegistry modelAliases,
-        ICollection<ExcelMappingDiagnostic> diagnostics)
+    private static ExcelMappingDocument LoadXmlDocument(string xml, ExcelModelAliasRegistry modelAliases)
     {
         if (string.IsNullOrWhiteSpace(xml))
             throw new ArgumentException("XML 配置不能为空。", nameof(xml));

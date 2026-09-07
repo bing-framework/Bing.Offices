@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using Bing.Offices.ApiSnapshot;
 using Bing.Offices.Configurations;
 using Bing.Offices.Exceptions;
@@ -30,9 +31,9 @@ public class PublicApiContractTest
             ["Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelColumnConfiguration"] = "User API",
             ["Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelMappingConfiguration"] = "User API",
             ["Bing.Offices.Abstractions:Bing.Offices.Configurations.MappingConfigurationMerger"] = "Provider SPI",
-            ["Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelMappingDiagnostic"] = "User API",
             ["Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelMappingDocument"] = "User API",
             ["Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelMappingDocumentFactory"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.IO.IFileExportCommitter"] = "Provider SPI",
             ["Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelMappingDynamicColumnConfiguration"] = "User API",
             ["Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelMappingDynamicValidationConfiguration"] = "User API",
             ["Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelDynamicColumnMergeMode"] = "User API",
@@ -175,6 +176,7 @@ public class PublicApiContractTest
             ["Bing.Offices.Core:Bing.Offices.Extensions.ExcelStreamExtensions"] = "User API",
             ["Bing.Offices.Core:Bing.Offices.Extensions.MappingProfileServiceCollectionExtensions"] = "User API",
             ["Bing.Offices.Core:Bing.Offices.Exceptions.BingOfficesExceptionDispatcher"] = "Provider SPI",
+            ["Bing.Offices.Core:Bing.Offices.IO.DefaultFileExportCommitter"] = "Provider SPI",
             ["Bing.Offices.Core:Bing.Offices.Mappings.ExcelMappingPlanFactoryProvider"] = "Provider SPI",
             ["Bing.Offices.Core:Bing.Offices.Metadata.MergedRegionInfo"] = "Provider User API",
             ["Bing.Offices.Core:Bing.Offices.Metadata.PictureInfo"] = "Provider User API",
@@ -259,9 +261,9 @@ public class PublicApiContractTest
             "Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelColumnConfiguration",
             "Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelMappingConfiguration",
             "Bing.Offices.Abstractions:Bing.Offices.Configurations.MappingConfigurationMerger",
-            "Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelMappingDiagnostic",
             "Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelMappingDocument",
             "Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelMappingDocumentFactory",
+            "Bing.Offices.Abstractions:Bing.Offices.IO.IFileExportCommitter",
             "Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelMappingDynamicColumnConfiguration",
             "Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelMappingDynamicValidationConfiguration",
             "Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelDynamicColumnMergeMode",
@@ -404,6 +406,7 @@ public class PublicApiContractTest
             "Bing.Offices.Core:Bing.Offices.Extensions.CsvStreamExtensions",
             "Bing.Offices.Core:Bing.Offices.Extensions.ExcelStreamExtensions",
             "Bing.Offices.Core:Bing.Offices.Exceptions.BingOfficesExceptionDispatcher",
+            "Bing.Offices.Core:Bing.Offices.IO.DefaultFileExportCommitter",
             "Bing.Offices.Core:Bing.Offices.Metadata.MergedRegionInfo",
             "Bing.Offices.Core:Bing.Offices.Metadata.PictureInfo",
             "Bing.Offices.Core:Bing.Offices.Metadata.PictureStyle",
@@ -629,36 +632,49 @@ public class PublicApiContractTest
     }
 
     /// <summary>
+    /// 测试 - API canonicalizer 必须保留泛型参数、参数名、默认值、修饰符和关键 attribute。
+    /// </summary>
+    [Fact]
+    public void PublicApiSnapshot_CanonicalLines_ShouldIncludeGovernedMetadata()
+    {
+        var abstractions = PublicApiSnapshot.Load(typeof(IExcelImporter).Assembly.Location,
+            Directory.EnumerateFiles(Path.GetDirectoryName(typeof(IExcelImporter).Assembly.Location)!, "*.dll"));
+
+        Assert.Contains(
+            "type|Bing.Offices.IO.IFileExportCommitter|kind=interface|visibility=public|modifiers=abstract|base=<null>|interfaces=|generic=|attributes=System.ComponentModel.EditorBrowsableAttribute(enum(System.ComponentModel.EditorBrowsableState)=1;)",
+            abstractions.Lines);
+        Assert.Contains(
+            "method|Bing.Offices.Exports.IExcelExporter.ExportToFile|visibility=public|modifiers=instance,abstract,virtual,hidebysig|return=System.Void|returnAttributes=|params=request:value:Bing.Offices.Exports.ExcelWorkbookExportRequest|attributes=,path:value:System.String|attributes=,cancellationToken:value:System.Threading.CancellationToken?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;)|generic=|attributes=",
+            abstractions.Lines);
+        Assert.Contains(
+            "method|Bing.Offices.Csv.ICsvExporter.ExportToFile|visibility=public|modifiers=instance,abstract,virtual,hidebysig|return=System.Void|returnAttributes=|params=data:value:System.Collections.Generic.IEnumerable`1[[T]]|attributes=,path:value:System.String|attributes=,options:value:Bing.Offices.Csv.CsvExportOptions`1[[T]]?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;),cancellationToken:value:System.Threading.CancellationToken?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;)|generic=T:class,new():constraints=|attributes=|attributes=",
+            abstractions.Lines);
+        Assert.Contains(
+            "property|Bing.Offices.Imports.ExcelImportFailureOptions.MaxCopiedPictureBytes|type=System.Nullable`1[[System.Int64]]|params=|accessors=MaxCopiedPictureBytes:public:instance,hidebysig,MaxCopiedPictureBytes:public:instance,hidebysig|attributes=",
+            abstractions.Lines);
+        Assert.Contains(
+            "property|Bing.Offices.Imports.ExcelImportFailureOptions.MaxEstimatedTargetObjects|type=System.Nullable`1[[System.Int64]]|params=|accessors=MaxEstimatedTargetObjects:public:instance,hidebysig,MaxEstimatedTargetObjects:public:instance,hidebysig|attributes=",
+            abstractions.Lines);
+    }
+
+    /// <summary>
     /// 测试 - Abstractions、Core 和 NPOI 程序集的全部公开成员应匹配批准快照。
     /// </summary>
     [Fact]
     public void PublicApi_AllReleaseAssemblies_ShouldMatchMemberSnapshot()
     {
-        // Arrange
-        var expected = new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-#if NETCOREAPP3_1
-            ["Bing.Offices.Abstractions"] = "7F9A2AA819E94B3838097DF2FF374A934CF7F35F3D2E91F3D1DB790F22972943",
-#elif NET6_0
-            ["Bing.Offices.Abstractions"] = "7F9A2AA819E94B3838097DF2FF374A934CF7F35F3D2E91F3D1DB790F22972943",
-#elif NET8_0
-            ["Bing.Offices.Abstractions"] = "7F9A2AA819E94B3838097DF2FF374A934CF7F35F3D2E91F3D1DB790F22972943",
-#endif
-#if NETCOREAPP3_1
-            ["Bing.Offices.Core"] = "B3661970BBE5AECC06DAD57B1E3F960FA77E70C4D2E66B2DA4910F7823AA2BB6",
-#elif NET6_0
-            ["Bing.Offices.Core"] = "B3661970BBE5AECC06DAD57B1E3F960FA77E70C4D2E66B2DA4910F7823AA2BB6",
-#elif NET8_0
-            ["Bing.Offices.Core"] = "B3661970BBE5AECC06DAD57B1E3F960FA77E70C4D2E66B2DA4910F7823AA2BB6",
-#endif
-#if NETCOREAPP3_1
-            ["Bing.Offices.Npoi"] = "DA163263804A964D8AC2A13D78D6B3858256171CE7729841690FDB56F602CEEE"
-#elif NET6_0
-            ["Bing.Offices.Npoi"] = "DA163263804A964D8AC2A13D78D6B3858256171CE7729841690FDB56F602CEEE"
-#elif NET8_0
-            ["Bing.Offices.Npoi"] = "DA163263804A964D8AC2A13D78D6B3858256171CE7729841690FDB56F602CEEE"
-#endif
-        };
+        var baselinePath = Path.Combine(FindRepositoryRoot(), "build", "api-snapshot-baseline.json");
+        Assert.True(File.Exists(baselinePath),
+            $"BLOCKED: API baseline is missing: {baselinePath}");
+        using var document = JsonDocument.Parse(File.ReadAllText(baselinePath, System.Text.Encoding.UTF8));
+        var root = document.RootElement;
+        Assert.Equal("bing.offices.public-api.v2", root.GetProperty("schema").GetString());
+        Assert.Equal("2.0.0", root.GetProperty("generatorVersion").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(root.GetProperty("approvedBy").GetString()),
+            "BLOCKED: API baseline approvedBy is empty.");
+        Assert.False(string.IsNullOrWhiteSpace(root.GetProperty("approvedAt").GetString()),
+            "BLOCKED: API baseline approvedAt is empty.");
+
         var assemblies = new[]
         {
             typeof(IExcelImporter).Assembly,
@@ -667,15 +683,27 @@ public class PublicApiContractTest
         };
 
         // Act
-        var actual = assemblies.ToDictionary(assembly => assembly.GetName().Name,
+        var actual = assemblies.ToDictionary(assembly => assembly.GetName().Name!,
             GetPublicMemberSnapshotHash, StringComparer.Ordinal);
 
-        // Assert
-        foreach (var pair in expected)
+        var expected = root.GetProperty("assemblies").GetProperty("net8.0");
+        foreach (var pair in actual)
         {
-            if (!string.Equals(pair.Value, actual[pair.Key], StringComparison.Ordinal))
-                throw new InvalidOperationException($"{pair.Key}: expected={pair.Value}; actual={actual[pair.Key]}");
+            var expectedHash = expected.GetProperty(pair.Key).GetProperty("hash").GetString();
+            Assert.Equal(expectedHash, pair.Value);
         }
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "Bing.Offices.sln")))
+                return directory.FullName;
+            directory = directory.Parent;
+        }
+        return Directory.GetCurrentDirectory();
     }
 
     private static string FormatConstructor(Type type, System.Reflection.ConstructorInfo constructor) =>

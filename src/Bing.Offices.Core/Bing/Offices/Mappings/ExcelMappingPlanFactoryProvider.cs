@@ -7,6 +7,7 @@ using Bing.Offices.Validations;
 using Bing.Offices.Csv;
 using Bing.Offices.Configurations;
 using Bing.Offices.Exceptions;
+using Bing.Offices.IO;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -52,6 +53,7 @@ public static class ExcelMappingPlanFactoryProvider
                 provider.GetService<Configurations.ExcelModelAliasRegistry>(),
                 256));
         services.TryAddSingleton<IExcelMappingConfigurationLoader, DefaultExcelMappingConfigurationLoader>();
+        services.TryAddSingleton<IFileExportCommitter, DefaultFileExportCommitter>();
         services.TryAddTransient<ICsvImporter>(provider => new CsvEntityImporter(
             provider.GetServices<IExcelValueConverter>(),
             provider.GetServices<IExcelValidationRule>(),
@@ -61,7 +63,8 @@ public static class ExcelMappingPlanFactoryProvider
         services.TryAddTransient<ICsvExporter>(provider => new CsvEntityExporter(
             provider.GetServices<IExcelValueConverter>(),
             provider.GetRequiredService<IExcelMappingPlanFactory>(),
-            provider.GetServices<IBingOfficesExceptionObserver>()));
+            provider.GetServices<IBingOfficesExceptionObserver>(),
+            provider.GetRequiredService<IFileExportCommitter>()));
         return services;
     }
 }

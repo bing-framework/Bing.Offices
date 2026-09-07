@@ -31,18 +31,25 @@ public sealed class ExcelWorkbookImportRequest<TWorkbook> where TWorkbook : clas
     /// </summary>
     public int SheetCount => Sheets.Count;
 
+    /// <summary>获取不可变 Sheet 导入描述。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public IReadOnlyList<ExcelSheetImportRequest> Sheets { get; }
+    /// <summary>获取父子关系描述。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public IReadOnlyList<ExcelRelationRequest> Relations { get; }
+    /// <summary>获取 Sheet 名称比较策略。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public ExcelNameComparison SheetNameComparison { get; }
+    /// <summary>获取输入资源限制。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public ExcelResourceLimits ResourceLimits { get; }
+    /// <summary>获取失败工作簿选项。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public ExcelImportFailureOptions FailureOptions { get; }
+    /// <summary>获取校验模式。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public ExcelImportValidationMode ValidationMode { get; }
+    /// <summary>获取不支持特性策略。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public ExcelUnsupportedFeaturePolicy UnsupportedFeaturePolicy { get; }
 }
@@ -115,40 +122,58 @@ public sealed class ExcelSheetImportRequest
     /// </summary>
     public int DynamicColumnCount => DynamicColumns.Count;
 
+    /// <summary>获取 Sheet 数据项类型。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Type ItemType { get; }
+    /// <summary>获取目标集合读取器。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Func<object, object> Target { get; }
+    /// <summary>获取动态列定义。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public IReadOnlyList<Exports.ExcelDynamicColumnDefinition> DynamicColumns { get; }
+    /// <summary>获取动态目标表达式。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Expression DynamicTarget { get; }
+    /// <summary>获取是否要求预期表头。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public bool RequireExpectedHeaders { get; }
+    /// <summary>获取单元格校验模式。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public ValidateMode ValidateMode { get; }
+    /// <summary>获取解析区域性。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public System.Globalization.CultureInfo Culture { get; }
+    /// <summary>获取映射配置。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Configurations.ExcelMappingConfiguration MappingConfiguration { get; }
+    /// <summary>获取映射文档。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Configurations.ExcelMappingDocument MappingDocument { get; }
+    /// <summary>获取动态目标读取器。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Func<object, object> DynamicTargetGetter { get; }
+    /// <summary>获取最大读取列数。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public int MaxReadColumns { get; }
+    /// <summary>获取读取列范围。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public ExcelReadColumnRange ReadColumnRange { get; }
+    /// <summary>获取表头比较策略。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public ExcelNameComparison HeaderComparison { get; }
+    /// <summary>获取表头空白处理策略。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public ExcelWhitespacePolicy HeaderWhitespace { get; }
+    /// <summary>获取正文空白处理策略。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public ExcelWhitespacePolicy BodyWhitespace { get; }
+    /// <summary>获取是否拒绝未知动态列。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public bool FailOnUnknownDynamicColumns { get; }
+    /// <summary>获取是否报告空行。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public bool ReportEmptyRows { get; }
+    /// <summary>获取是否遇到首个空行即停止。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public bool StopAtFirstEmptyRow { get; }
 }
@@ -173,20 +198,28 @@ public sealed class ExcelRelationRequest
         Comparer = comparer;
     }
 
+    /// <summary>获取父集合读取器。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Func<object, object> Parents { get; }
+    /// <summary>获取子集合读取器。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Func<object, object> Children { get; }
+    /// <summary>获取父键委托。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Delegate ParentKey { get; }
+    /// <summary>获取子键委托。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Delegate ChildKey { get; }
+    /// <summary>获取子导航属性写入器。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Func<object, object> Navigation { get; }
+    /// <summary>获取父实体类型。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Type ParentType { get; }
+    /// <summary>获取子实体类型。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Type ChildType { get; }
+    /// <summary>获取键比较器。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public object Comparer { get; }
 

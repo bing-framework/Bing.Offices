@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
 using Bing.Offices.Configurations;
 using Bing.Offices.Exceptions;
 using Bing.Offices.Npoi.Extensions;
@@ -11,6 +13,18 @@ namespace Bing.Offices.Tests;
 /// <summary>映射配置加载器静态与 DI 边界合同测试。</summary>
 public sealed class ExcelMappingConfigurationLoaderTest
 {
+    /// <summary>空诊断 API 已删除，Loader 仅保留 v2 文档入口。</summary>
+    [Fact]
+    public void RemovedDiagnosticsSurface_ShouldNotBePublished()
+    {
+        var methods = typeof(ExcelMappingConfigurationLoader).GetMethods(
+            BindingFlags.Public | BindingFlags.Static);
+
+        Assert.DoesNotContain(methods, method => method.GetParameters().Any(parameter => parameter.IsOut));
+        Assert.Null(typeof(ExcelMappingConfigurationLoader).Assembly.GetType(
+            "Bing.Offices.Configurations.ExcelMappingDiagnostic"));
+    }
+
     /// <summary>静态 Loader 是纯解析入口，不参与 Observer。</summary>
     [Fact]
     public void StaticLoader_InvalidDocument_ShouldThrowWithoutObservation()

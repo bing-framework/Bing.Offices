@@ -9,6 +9,7 @@ namespace Bing.Offices.Imports;
 /// </summary>
 public sealed class ExcelWorkbookImportResult<TWorkbook> where TWorkbook : class, new()
 {
+    /// <summary>创建工作簿导入结果。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public ExcelWorkbookImportResult(TWorkbook workbook, IReadOnlyList<ExcelSheetImportResult> sheets,
         IReadOnlyList<ExcelImportError> errors, bool errorsTruncated, int? maxErrors)
@@ -56,6 +57,7 @@ public sealed class ExcelWorkbookImportResult<TWorkbook> where TWorkbook : class
 /// </summary>
 public sealed class ExcelSheetImportResult
 {
+    /// <summary>创建 Sheet 导入结果。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public ExcelSheetImportResult(string name, Type itemType,
         IReadOnlyList<int> sourceRows, IReadOnlyList<ExcelImportError> errors)

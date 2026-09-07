@@ -10,6 +10,7 @@ using Bing.Offices.Csv;
 using Bing.Offices.Exports;
 using Bing.Offices.Extensions;
 using Bing.Offices.Imports;
+using Bing.Offices.IO;
 using Bing.Offices.Mappings;
 using Bing.Offices.Npoi.Exports;
 using Bing.Offices.Npoi.Imports;
@@ -2688,6 +2689,12 @@ public sealed class ExcelWorkbookRequestTest
             destination.WriteByte(1);
             throw new InvalidOperationException("测试导出失败");
         }
+
+        public void ExportToFile(ExcelWorkbookExportRequest request, string path,
+            CancellationToken cancellationToken = default)
+            => AtomicFileCommitter.Commit(path,
+                destination => Export(request, destination, cancellationToken),
+                cancellationToken, "Excel");
     }
 
     private sealed class CancelingExcelExporter : IExcelExporter
@@ -2698,6 +2705,12 @@ public sealed class ExcelWorkbookRequestTest
             destination.WriteByte(1);
             throw new OperationCanceledException(cancellationToken);
         }
+
+        public void ExportToFile(ExcelWorkbookExportRequest request, string path,
+            CancellationToken cancellationToken = default)
+            => AtomicFileCommitter.Commit(path,
+                destination => Export(request, destination, cancellationToken),
+                cancellationToken, "Excel");
     }
 
     [Header(FontName = "Arial", FontSize = 11, Bold = false, Color = Color.Blue)]

@@ -4,5 +4,23 @@
         <name>Bing.Offices.ProfileFixtures</name>
     </assembly>
     <members>
+        <member name="T:Bing.Offices.ProfileFixtures.ExternalMappingProfile">
+            <summary>供外部程序集 Profile 扫描测试使用的双向映射 Profile。</summary>
+        </member>
+        <member name="M:Bing.Offices.ProfileFixtures.ExternalMappingProfile.Configure(Bing.Offices.Configurations.FluentSetting{Bing.Offices.ProfileFixtures.ExternalImportModel,Bing.Offices.ProfileFixtures.ExternalExportModel})">
+            <summary>配置外部输入和输出字段标题。</summary>
+        </member>
+        <member name="T:Bing.Offices.ProfileFixtures.ExternalImportModel">
+            <summary>外部导入模型。</summary>
+        </member>
+        <member name="P:Bing.Offices.ProfileFixtures.ExternalImportModel.Code">
+            <summary>外部输入编码。</summary>
+        </member>
+        <member name="T:Bing.Offices.ProfileFixtures.ExternalExportModel">
+            <summary>外部导出模型。</summary>
+        </member>
+        <member name="P:Bing.Offices.ProfileFixtures.ExternalExportModel.Label">
+            <summary>外部输出标签。</summary>
+        </member>
     </members>
 </doc>

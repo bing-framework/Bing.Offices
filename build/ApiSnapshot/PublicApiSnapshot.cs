@@ -1,5 +1,8 @@
 ﻿using System;
+#nullable enable
+
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -77,13 +80,18 @@ public sealed class PublicApiSnapshot
         var lines = new List<string>();
         foreach (var type in assembly.GetExportedTypes().OrderBy(type => type.FullName, StringComparer.Ordinal))
         {
-            lines.Add($"type|{type.FullName}|generic={type.GetGenericArguments().Length}");
+            lines.Add($"type|{type.FullName}|kind={GetTypeKind(type)}|visibility={GetVisibility(type)}"
+                + $"|modifiers={FormatTypeModifiers(type)}|base={FormatTypeName(type.BaseType)}"
+                + $"|interfaces={string.Join(",", type.GetInterfaces().Select(FormatTypeName).OrderBy(name => name, StringComparer.Ordinal))}"
+                + $"|generic={FormatGenericParameters(type.GetGenericArguments())}|attributes={FormatAttributes(type)}");
             foreach (var constructor in GetGovernedConstructors(type))
                 lines.Add(FormatConstructor(type, constructor));
             foreach (var property in GetGovernedProperties(type))
                 lines.Add(FormatProperty(type, property));
             foreach (var field in GetGovernedFields(type))
                 lines.Add(FormatField(type, field));
+            foreach (var @event in GetGovernedEvents(type))
+                lines.Add(FormatEvent(type, @event));
             foreach (var method in GetGovernedMethods(type).Where(method => !method.IsSpecialName))
                 lines.Add(FormatMethod(type, method));
         }
@@ -92,23 +100,173 @@ public sealed class PublicApiSnapshot
     }
 
     private static string FormatConstructor(Type type, ConstructorInfo constructor) =>
-        $"constructor|{type.FullName}|{FormatParameters(constructor.GetParameters())}";
+        $"constructor|{type.FullName}|visibility={GetVisibility(constructor)}|modifiers={FormatMethodModifiers(constructor)}"
+        + $"|params={FormatParameters(constructor.GetParameters())}|attributes={FormatAttributes(constructor)}";
 
     private static string FormatProperty(Type type, PropertyInfo property) =>
-        $"property|{type.FullName}.{property.Name}|{FormatTypeName(property.PropertyType)}";
+        $"property|{type.FullName}.{property.Name}|type={FormatTypeName(property.PropertyType)}"
+        + $"|params={FormatParameters(property.GetIndexParameters())}|accessors={FormatPropertyAccessors(property)}"
+        + $"|attributes={FormatAttributes(property)}";
 
     private static string FormatField(Type type, FieldInfo field) =>
-        $"field|{type.FullName}.{field.Name}|{FormatTypeName(field.FieldType)}";
+        $"field|{type.FullName}.{field.Name}|type={FormatTypeName(field.FieldType)}|visibility={GetVisibility(field)}"
+        + $"|modifiers={FormatFieldModifiers(field)}|attributes={FormatAttributes(field)}";
+
+    private static string FormatEvent(Type type, EventInfo @event) =>
+        $"event|{type.FullName}.{@event.Name}|type={FormatTypeName(@event.EventHandlerType)}"
+        + $"|accessors={FormatEventAccessors(@event)}|attributes={FormatAttributes(@event)}";
 
     private static string FormatMethod(Type type, MethodInfo method) =>
-        $"method|{type.FullName}.{method.Name}|{(method.IsStatic ? "static" : "instance")}|{FormatTypeName(method.ReturnType)}|"
-        + $"{FormatParameters(method.GetParameters())}|generic={method.GetGenericArguments().Length}";
+        $"method|{type.FullName}.{method.Name}|visibility={GetVisibility(method)}|modifiers={FormatMethodModifiers(method)}"
+        + $"|return={FormatTypeName(method.ReturnType)}|returnAttributes={FormatAttributes(method.ReturnParameter)}"
+        + $"|params={FormatParameters(method.GetParameters())}|generic={FormatGenericParameters(method.GetGenericArguments())}"
+        + $"|attributes={FormatAttributes(method)}";
 
     private static string FormatParameters(IReadOnlyList<ParameterInfo> parameters) =>
-        string.Join(",", parameters.Select(parameter => FormatTypeName(parameter.ParameterType)));
+        string.Join(",", parameters.Select(parameter =>
+            $"{Escape(parameter.Name ?? string.Empty)}:{FormatParameterModifiers(parameter)}:{FormatTypeName(parameter.ParameterType)}"
+            + $"{(parameter.IsOptional ? $"?={FormatConstant(parameter.RawDefaultValue, parameter.ParameterType)}" : string.Empty)}"
+            + $"|attributes={FormatAttributes(parameter)}"));
 
-    private static string FormatTypeName(Type type)
+    private static string FormatGenericParameters(IReadOnlyList<Type> parameters) =>
+        string.Join(",", parameters.Select(parameter =>
+            $"{Escape(parameter.Name ?? string.Empty)}:{FormatGenericParameterAttributes(parameter)}"
+            + $":constraints={string.Join("&", parameter.GetGenericParameterConstraints().Select(FormatTypeName).OrderBy(name => name, StringComparer.Ordinal))}"
+            + $"|attributes={FormatAttributes(parameter)}"));
+
+    private static string FormatPropertyAccessors(PropertyInfo property) =>
+        string.Join(",", property.GetAccessors(true).OrderBy(accessor => accessor.Name, StringComparer.Ordinal)
+            .Select(accessor => $"{GetAccessorName(accessor)}:{GetVisibility(accessor)}:{FormatMethodModifiers(accessor)}"));
+
+    private static string FormatEventAccessors(EventInfo @event) =>
+        string.Join(",", new[] { @event.GetAddMethod(true), @event.GetRemoveMethod(true), @event.GetRaiseMethod(true) }
+            .Where(accessor => accessor is not null).Cast<MethodInfo>()
+            .OrderBy(accessor => accessor.Name, StringComparer.Ordinal)
+            .Select(accessor => $"{GetAccessorName(accessor)}:{GetVisibility(accessor)}:{FormatMethodModifiers(accessor)}"));
+
+    private static string GetAccessorName(MethodInfo accessor) =>
+        accessor.Name.Substring(accessor.Name.LastIndexOf('.') + 1).Split('_').Last();
+
+    private static string GetTypeKind(Type type) =>
+        type.IsInterface ? "interface" : type.IsEnum ? "enum" : type.IsValueType ? "struct" : "class";
+
+    private static string GetVisibility(Type type) => GetVisibility(type.Attributes & TypeAttributes.VisibilityMask);
+
+    private static string GetVisibility(TypeAttributes attributes) => attributes switch
     {
+        TypeAttributes.Public or TypeAttributes.NestedPublic => "public",
+        TypeAttributes.NestedFamily => "protected",
+        TypeAttributes.NestedFamORAssem => "protected-internal",
+        TypeAttributes.NestedAssembly => "internal",
+        _ => "private"
+    };
+
+    private static string GetVisibility(MethodBase method) => method.IsPublic ? "public"
+        : method.IsFamily ? "protected" : method.IsFamilyOrAssembly ? "protected-internal"
+        : method.IsAssembly ? "internal" : "private";
+
+    private static string GetVisibility(FieldInfo field) => field.IsPublic ? "public"
+        : field.IsFamily ? "protected" : field.IsFamilyOrAssembly ? "protected-internal"
+        : field.IsAssembly ? "internal" : "private";
+
+    private static string FormatTypeModifiers(Type type)
+    {
+        var modifiers = new List<string>();
+        if (type.IsAbstract && type.IsSealed) modifiers.Add("static");
+        else
+        {
+            if (type.IsAbstract) modifiers.Add("abstract");
+            if (type.IsSealed) modifiers.Add("sealed");
+        }
+        if (type.IsValueType && !type.IsEnum) modifiers.Add("value");
+        return string.Join(",", modifiers);
+    }
+
+    private static string FormatMethodModifiers(MethodBase method)
+    {
+        var modifiers = new List<string> { method.IsStatic ? "static" : "instance" };
+        if (method.IsAbstract) modifiers.Add("abstract");
+        if (method.IsVirtual) modifiers.Add(method.IsFinal ? "sealed-virtual" : "virtual");
+        if (method is MethodInfo info && info.IsVirtual && (info.Attributes & MethodAttributes.NewSlot) == 0)
+            modifiers.Add("override");
+        if (method.IsHideBySig) modifiers.Add("hidebysig");
+        return string.Join(",", modifiers);
+    }
+
+    private static string FormatFieldModifiers(FieldInfo field)
+    {
+        var modifiers = new List<string> { field.IsStatic ? "static" : "instance" };
+        if (field.IsInitOnly) modifiers.Add("readonly");
+        if (field.IsLiteral) modifiers.Add("const");
+        return string.Join(",", modifiers);
+    }
+
+    private static string FormatParameterModifiers(ParameterInfo parameter)
+    {
+        var modifiers = new List<string>();
+        if (parameter.IsOut) modifiers.Add("out");
+        else if (parameter.ParameterType.IsByRef) modifiers.Add("ref");
+        if (parameter.GetCustomAttributesData().Any(attribute =>
+                string.Equals(attribute.AttributeType.FullName, "System.ParamArrayAttribute", StringComparison.Ordinal)))
+            modifiers.Add("params");
+        return modifiers.Count == 0 ? "value" : string.Join(",", modifiers);
+    }
+
+    private static string FormatGenericParameterAttributes(Type parameter)
+    {
+        var attributes = parameter.GenericParameterAttributes & GenericParameterAttributes.SpecialConstraintMask;
+        var values = new List<string>();
+        if ((attributes & GenericParameterAttributes.ReferenceTypeConstraint) != 0) values.Add("class");
+        if ((attributes & GenericParameterAttributes.NotNullableValueTypeConstraint) != 0) values.Add("struct");
+        if ((attributes & GenericParameterAttributes.DefaultConstructorConstraint) != 0) values.Add("new()");
+        return string.Join(",", values);
+    }
+
+    private static string FormatAttributes(MemberInfo member) =>
+        FormatAttributes(CustomAttributeData.GetCustomAttributes(member));
+
+    private static string FormatAttributes(ParameterInfo parameter) =>
+        FormatAttributes(CustomAttributeData.GetCustomAttributes(parameter));
+
+    private static string FormatAttributes(IEnumerable<CustomAttributeData> attributes) =>
+        string.Join(",", attributes.OrderBy(attribute => attribute.AttributeType.FullName, StringComparer.Ordinal)
+            .Select(attribute =>
+                Escape(attribute.AttributeType.FullName ?? attribute.AttributeType.Name) + "(" +
+                string.Join(",", attribute.ConstructorArguments.Select(FormatAttributeArgument)) + ";" +
+                string.Join(",", attribute.NamedArguments.OrderBy(argument => argument.MemberName, StringComparer.Ordinal)
+                    .Select(argument => Escape(argument.MemberName) + "=" + FormatAttributeArgument(argument.TypedValue))) + ")"));
+
+    private static string FormatAttributeArgument(CustomAttributeTypedArgument argument) =>
+        FormatConstant(argument.Value, argument.ArgumentType);
+
+    private static string FormatConstant(object? value, Type declaredType)
+    {
+        if (value is null || value == DBNull.Value || value == Missing.Value)
+            return "null";
+        if (value is IReadOnlyCollection<CustomAttributeTypedArgument> array)
+            return "[" + string.Join(",", array.Select(FormatAttributeArgument)) + "]";
+        if (value is Type type)
+            return "typeof(" + FormatTypeName(type) + ")";
+        if (declaredType.IsEnum)
+            return "enum(" + FormatTypeName(declaredType) + ")=" + Convert.ToString(value, CultureInfo.InvariantCulture);
+        if (value is string text)
+            return "\"" + Escape(text) + "\"";
+        if (value is char character)
+            return "'" + Escape(character.ToString()) + "'";
+        if (value is bool boolean)
+            return boolean ? "true" : "false";
+        return Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
+    }
+
+    private static string Escape(string value) => value.Replace("\\", "\\\\", StringComparison.Ordinal)
+        .Replace("|", "\\|", StringComparison.Ordinal)
+        .Replace("\r", "\\r", StringComparison.Ordinal)
+        .Replace("\n", "\\n", StringComparison.Ordinal);
+
+    private static string FormatTypeName(Type? type)
+    {
+        if (type is null)
+            return "<null>";
         if (type.IsByRef)
             return $"{FormatTypeName(type.GetElementType()!)}&";
         if (type.IsPointer)
@@ -116,7 +274,7 @@ public sealed class PublicApiSnapshot
         if (type.IsArray)
             return $"{FormatTypeName(type.GetElementType()!)}{new string(',', type.GetArrayRank() - 1)}[]";
         if (type.IsGenericParameter)
-            return type.FullName ?? string.Empty;
+            return type.Name;
         if (!type.IsGenericType)
             return type.FullName ?? type.Name;
 
@@ -213,6 +371,17 @@ public sealed class PublicApiSnapshot
         return type.GetProperties(flags).Where(property =>
             property.GetAccessors(true).Any(accessor =>
                 accessor.IsPublic || accessor.IsFamily || accessor.IsFamilyOrAssembly));
+    }
+
+    private static IEnumerable<EventInfo> GetGovernedEvents(Type type)
+    {
+        const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic
+            | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
+        return type.GetEvents(flags).Where(@event => new[]
+        {
+            @event.GetAddMethod(true), @event.GetRemoveMethod(true), @event.GetRaiseMethod(true)
+        }.Any(accessor => accessor is not null &&
+            (accessor.IsPublic || accessor.IsFamily || accessor.IsFamilyOrAssembly)));
     }
 
     private static IEnumerable<FieldInfo> GetGovernedFields(Type type)
