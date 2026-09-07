@@ -1,7 +1,4 @@
-﻿using System;
-using System.IO;
-
-namespace Bing.Offices.Imports;
+﻿namespace Bing.Offices.Imports;
 
 /// <summary>导入失败工作簿和诊断输出的策略。</summary>
 public sealed class ExcelImportFailureOptions

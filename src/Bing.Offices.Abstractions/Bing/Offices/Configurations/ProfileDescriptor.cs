@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace Bing.Offices.Configurations;
+﻿namespace Bing.Offices.Configurations;
 
 /// <summary>
 /// 单一方向的规范化 Profile 描述。

@@ -16,8 +16,6 @@ using Bing.Offices.Providers;
 using Bing.Offices.Validations;
 using Bing.Offices.Extensions;
 using Bing.Offices.Exceptions;
-using Bing.Offices.Npoi.Extensions;
-using Bing.Offices.Npoi.Exports;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 

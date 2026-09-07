@@ -1,6 +1,4 @@
-﻿using System.Collections.Generic;
-
-namespace Bing.Offices.Configurations;
+﻿namespace Bing.Offices.Configurations;
 
 using Bing.Offices.Imports;
 

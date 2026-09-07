@@ -1,7 +1,4 @@
-using System;
-using System.IO;
-
-namespace Bing.Offices.Imports;
+﻿namespace Bing.Offices.Imports;
 
 /// <summary>
 /// 导入失败工作簿输出模式。

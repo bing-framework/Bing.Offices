@@ -1,10 +1,9 @@
-using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using Bing.Offices.Configurations;
 using Bing.Offices.Exceptions;
-using Bing.Offices.Npoi.Extensions;
+using Bing.Offices.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 

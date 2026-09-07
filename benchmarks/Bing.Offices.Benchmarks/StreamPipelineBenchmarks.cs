@@ -4,7 +4,6 @@ using Bing.Offices.Csv;
 using Bing.Offices.Exports;
 using Bing.Offices.Imports;
 using Bing.Offices.Extensions;
-using Bing.Offices.Npoi.Extensions;
 using Bing.Offices.Styles;
 using Microsoft.Extensions.DependencyInjection;
 using NPOI.SS.UserModel;

@@ -1,5 +1,4 @@
-﻿using System;
-using Bing.Offices.Dates;
+﻿using Bing.Offices.Dates;
 
 namespace Bing.Offices.Attributes;
 

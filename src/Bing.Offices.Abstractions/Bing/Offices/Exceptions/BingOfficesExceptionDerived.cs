@@ -1,6 +1,4 @@
-using System;
-
-namespace Bing.Offices.Exceptions;
+﻿namespace Bing.Offices.Exceptions;
 
 /// <summary>映射、Profile 或请求配置无效异常。</summary>
 public sealed class BingOfficesConfigurationException : BingOfficesException

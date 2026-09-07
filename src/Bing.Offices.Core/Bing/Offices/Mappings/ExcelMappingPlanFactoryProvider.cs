@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using Bing.Offices.Conversions;
 using Bing.Offices.Providers;
 using Bing.Offices.Validations;

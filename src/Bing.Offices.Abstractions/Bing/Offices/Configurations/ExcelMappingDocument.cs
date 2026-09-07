@@ -1,6 +1,4 @@
-﻿using System.Collections.Generic;
-
-namespace Bing.Offices.Configurations;
+﻿namespace Bing.Offices.Configurations;
 
 /// <summary>
 /// v2 规范化映射文档；Import 和 Export 配置相互独立。

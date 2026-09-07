@@ -1,5 +1,4 @@
-﻿using System;
-using Bing.Offices.Attributes;
+﻿using Bing.Offices.Attributes;
 using Bing.Offices.Validations;
 
 namespace Bing.Offices.Mappings;

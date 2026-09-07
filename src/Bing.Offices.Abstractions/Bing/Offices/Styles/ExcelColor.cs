@@ -1,7 +1,4 @@
-using System;
-using System.Collections.Generic;
-
-namespace Bing.Offices.Styles;
+﻿namespace Bing.Offices.Styles;
 
 /// <summary>
 /// 与 Excel 提供程序无关的颜色描述。

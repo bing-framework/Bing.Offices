@@ -1,6 +1,4 @@
-﻿using System.Linq;
-
-namespace Bing.Offices.Imports;
+﻿namespace Bing.Offices.Imports;
 
 /// <summary>
 /// Excel 流式导入结果。

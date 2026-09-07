@@ -1,11 +1,9 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using Bing.Offices.Configurations;
 using Bing.Offices.Extensions;
-using Bing.Offices.Npoi.Extensions;
 using Bing.Offices.ProfileFixtures;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;

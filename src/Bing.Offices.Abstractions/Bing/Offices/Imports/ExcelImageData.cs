@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace Bing.Offices.Imports;
+﻿namespace Bing.Offices.Imports;
 
 /// <summary>
 /// 与 Excel 提供程序无关的图片数据及其左上角锚点。

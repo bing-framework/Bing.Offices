@@ -1,5 +1,4 @@
-﻿using System;
-using System.Globalization;
+﻿using System.Globalization;
 using Bing.Offices.Attributes;
 using Bing.Offices.Conversions;
 

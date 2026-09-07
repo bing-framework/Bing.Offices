@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace Bing.Offices.Csv;
+﻿namespace Bing.Offices.Csv;
 
 /// <summary>解析 CSV 动态列允许使用的 CLR 类型名称。</summary>
 internal static class CsvDynamicTypeResolver

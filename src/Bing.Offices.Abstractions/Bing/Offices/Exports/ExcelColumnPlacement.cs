@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-
-namespace Bing.Offices.Exports;
+﻿namespace Bing.Offices.Exports;
 
 /// <summary>
 /// 动态列相对于固定列的请求级位置。

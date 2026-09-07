@@ -1,11 +1,4 @@
-using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Linq;
-using System.Reflection;
-using System.Collections.ObjectModel;
-using Bing.Offices.Attributes;
+﻿using System.Collections.ObjectModel;
 using Bing.Offices.Conversions;
 using Bing.Offices.Configurations;
 using Bing.Offices.Validations;

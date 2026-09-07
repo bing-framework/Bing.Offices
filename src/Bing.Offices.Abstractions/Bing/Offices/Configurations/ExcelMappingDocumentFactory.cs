@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace Bing.Offices.Configurations;
+﻿namespace Bing.Offices.Configurations;
 
 /// <summary>
 /// 创建方向化、不可变的规范化映射文档。

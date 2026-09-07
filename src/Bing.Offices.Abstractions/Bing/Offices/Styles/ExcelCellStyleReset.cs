@@ -1,7 +1,4 @@
-using System;
-using System.Collections.Generic;
-
-namespace Bing.Offices.Styles;
+﻿namespace Bing.Offices.Styles;
 
 /// <summary>
 /// 单元格样式属性的显式清除/恢复默认描述。

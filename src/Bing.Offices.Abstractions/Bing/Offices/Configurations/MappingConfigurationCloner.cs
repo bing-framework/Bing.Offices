@@ -1,6 +1,4 @@
-﻿using System.Linq;
-
-namespace Bing.Offices.Configurations;
+﻿namespace Bing.Offices.Configurations;
 
 internal static class MappingConfigurationCloner
 {

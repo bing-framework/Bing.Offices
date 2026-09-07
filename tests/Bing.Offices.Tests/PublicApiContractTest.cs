@@ -10,9 +10,6 @@ using Bing.Offices.ApiSnapshot;
 using Bing.Offices.Configurations;
 using Bing.Offices.Exceptions;
 using Bing.Offices.Imports;
-using Bing.Offices.Mappings;
-using Bing.Offices.Npoi.Imports;
-using Bing.Offices.Providers;
 using Xunit;
 
 namespace Bing.Offices.Tests;

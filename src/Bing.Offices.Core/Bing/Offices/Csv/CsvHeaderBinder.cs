@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using Bing.Offices.Mappings;
-using Bing.Offices.Providers;
+﻿using Bing.Offices.Providers;
 
 namespace Bing.Offices.Csv;
 

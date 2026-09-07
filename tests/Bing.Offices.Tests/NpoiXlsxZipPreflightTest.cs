@@ -5,7 +5,6 @@ using System.Text;
 using System.Threading;
 using Bing.Offices.Exceptions;
 using Bing.Offices.Imports;
-using Bing.Offices.Npoi.Imports;
 using Xunit;
 
 namespace Bing.Offices.Tests;
