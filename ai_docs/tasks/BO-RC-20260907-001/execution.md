@@ -1,12 +1,12 @@
-<!-- AI_EXECUTION_STATUS: PARTIAL -->
+<!-- AI_EXECUTION_STATUS: COMPLETED -->
 AI_TASK_ID: BO-RC-20260907-001
-AI_EXECUTION_FINISHED_AT: 2026-09-08T11:48:01+08:00
+AI_EXECUTION_FINISHED_AT: 2026-09-08T17:27:17.0664874+08:00
 
 # 实施执行报告
 
 ## 执行结论
 
-本轮已完成可在当前环境安全执行的核心实现与本地验证，状态为 `PARTIAL / NO-GO`。双 TFM、真实 Async API、NPOI namespace/API 分层、直接测试、Integration、Docs、双 TFM PackageReference-only consumer，以及带 warmup/重复测量和结构化预算失败记录的 100K staging 矩阵已落地。正式 API baseline 审批、性能/资源预算批准、跨平台 runner 和下一轮独立 Review 仍未完成，不能把任务标记为 Go 或 COMPLETED。
+本地实现与验证已完成，当前状态为 `PASS_WITH_ISSUES`。Phase 9 已将公开扩展方法直接覆盖从约 `23/85` 提升到 `85/85`，双 TFM Unit、Integration、Docs、Release build 和 API compare 全部通过。API 与 2C4G 资源预算已由 `jian玄冰` 批准；发布仍需取得 GitHub 双 TFM CI 最终绿灯，并在实际部署入口确认 NPOI DOM 最大并行度为 `1`。
 
 ## 任务信息
 
@@ -28,8 +28,9 @@ AI_EXECUTION_FINISHED_AT: 2026-09-08T11:48:01+08:00
 | P4 CSV Async | COMPLETED locally | CsvHelper async Parser/Writer、文件导出和直接测试 |
 | P5 Excel Async | COMPLETED locally | 输入异步复制、输出 staging、Failure Workbook 异步复制；DOM 同步边界有文档 |
 | P6 测试/Consumer | COMPLETED locally | Unit/Integration/Docs、net6/net8 PackageReference-only consumer 通过 |
-| P7 Benchmark/Resource | PARTIAL | workload 修复、CSV Sync/Async Dry smoke、ResourceProbe 完成；正式预算未批准 |
-| P8 文档/发布门禁 | PARTIAL | README/docs/reports 完成；API 审批和独立 Review 待外部输入 |
+| P7 Benchmark/Resource | COMPLETED locally | workload、ResourceProbe、2C4G 单槽位预算与维护者审批已完成 |
+| P8 文档/发布门禁 | PASS_WITH_ISSUES | API 已批准；GitHub CI 和实际生产入口仍是外部门禁 |
+| P9 扩展方法测试 | COMPLETED locally | 85/85 公开扩展签名有职责级直接调用；双 TFM Unit 各 716/716 |
 
 ## 已完成事项
 
@@ -46,10 +47,9 @@ AI_EXECUTION_FINISHED_AT: 2026-09-08T11:48:01+08:00
 
 ## 部分/未完成事项
 
-- `build/api-snapshot-baseline.json` 仍缺 `approvedBy`/`approvedAt`；candidate net6/net8 已生成，正式 compare 按设计阻塞。
-- 性能/资源正式阈值、before/candidate 完整矩阵、P95/P99 和 staging 方案审批未完成；完整 ResourceProbe 已完成，但仍无维护者批准阈值。
-- Linux/macOS runner 未在本环境执行；CI 已更新为安装并测试 net6/net8，但尚未取得远端运行结果。
-- 独立 Review 尚未由 Reviewer 生成；本报告不能替代独立审查。
+- GitHub push/PR runner 尚未取得本次工作区的双 TFM 最终绿灯。
+- 当前仓库不包含实际生产宿主，无法在本地确认部署入口已使用共享 `SemaphoreSlim(1, 1)`。
+- Phase 9 完成后需重新独立 Review；执行报告不能替代审查结论。
 
 ## 修改文件
 
@@ -78,21 +78,21 @@ AI_EXECUTION_FINISHED_AT: 2026-09-08T11:48:01+08:00
 | 验证 | 结果 |
 | --- | --- |
 | Release solution build `/m:1` | 0 warning / 0 error |
-| Unit net6 | 509 passed / 1 API approval blocked / 0 skipped / 510 total |
-| Unit net8 | 509 passed / 1 API approval blocked / 0 skipped / 510 total |
+| Unit net6 | 716/716 passed，0 skipped |
+| Unit net8 | 716/716 passed，0 skipped |
 | Integration net6 | 15/15 passed |
 | Integration net8 | 15/15 passed |
 | Docs net8 | 10/10 passed |
 | Async/CommitAsync direct tests | net6/net8 通过；net8 AsyncPipeline 8/8、Committer 9/9 |
 | Package Consumer net6 | `package-consumer-ok`, real nupkg, isolated final cache |
 | Package Consumer net8 | `package-consumer-ok`, real nupkg, isolated final cache |
-| API candidate | net6/net8 canonical members identical；formal approval blocked |
+| API snapshot | net6/net8 compare PASS；`approvedBy=jian玄冰` |
 | Benchmark smoke | CSV Sync/Async 1K/10K/100K/1M Dry 结果已保存 |
 | ResourceProbe | 16/16 passed；最大 PeakWorkingSet 142,835,712 B、最大 LOH 57,147,216 B |
 
 ## Build/Typecheck/Lint/Format
 
-- `dotnet build Bing.Offices.sln -c Release --no-restore /m:1`：通过，0 warning/0 error。
+- `dotnet build Bing.Offices.sln -c Release --no-restore /m:1`：通过，0 error；保留当前环境无法访问 NuGet 漏洞源的既有 `NU1900` warning。
 - `git diff --check`：通过；Git 仅提示两个历史/生成文件的 CRLF/LF 转换，不是 whitespace error。
 - 仓库未配置独立 lint/formatter；未伪造 PASS。
 
@@ -571,8 +571,179 @@ AI_EXECUTION_FINISHED_AT: 2026-09-08T11:48:01+08:00
 - 回归验证：Release solution build 0 error（14 个 `NU1900`）；AsyncPipeline net6/net8 各 26/26；Integration net6/net8 各 15/15；Docs net8 10/10；完整 Unit net6/net8 各 525 passed + 1 API approval blocked / 526 total；`git diff --check` PASS。
 - 下一步：维护者完成 API/资源预算审批后重新进行独立 Review。
 
+### Round 7 维护者审批与门禁解锁
+
+- Review 状态：`BLOCKED`（本轮已补齐外部审批证据，待下一轮独立 Review 重判）
+- Fix Scope：`recommended`
+- Review 文件：`ai_docs/tasks/BO-RC-20260907-001/review.md`
+- 审批人：`jian玄冰`
+- 资源策略：服务器 `2C4G`；逻辑请求并发 `1/4/16/64`；最大实际并行度 `1`；默认策略 `TempFile`
+
+#### FIX-025
+
+- 严重程度：HIGH
+- 处理要求：MUST_FIX
+- 执行状态：`COMPLETED`
+- 修改文件：
+  - `tests/Bing.Offices.ResourceProbe/Program.cs`
+  - `tests/Bing.Offices.ResourceProbe/StagingResourceMatrix.cs`
+  - `ai_docs/tasks/BO-RC-20260907-001/artifacts/benchmark/staging-matrix/formal-100k-v8.jsonl`
+  - `ai_docs/tasks/BO-RC-20260907-001/artifacts/benchmark/staging-matrix/formal-100k-v8.md`
+  - `ai_docs/tasks/BO-RC-20260907-001/artifacts/reports/resource-report.md`
+  - `ai_docs/tasks/BO-RC-20260907-001/maintainer-approval.md`
+- 根因处置：将逻辑请求并发与 NPOI DOM 实际并行度分离；2C4G 部署只允许一个活动 DOM 操作，额外请求排队，不再创建并行工作簿。
+- 验证：
+  - 1K smoke：36/36 通过，0 guard failure，0 残留。
+  - 100K formal v8：36/36 通过，0 budget-failed，0 null result，0 错误，0 残留。
+  - 最大 PeakWorkingSet：`1,515,835,392 B`；最大 LOH sampled peak：`532,433,208 B`。
+  - 最大排队数：`63`；所有单元 `measuredActiveOperations=1`。
+
+#### FIX-026
+
+- 严重程度：HIGH
+- 处理要求：MUST_FIX
+- 执行状态：`COMPLETED`
+- 修改文件：
+  - `build/api-snapshot-baseline.json`
+  - `build/ApiSnapshot/PublicApiSnapshot.cs`
+  - `ai_docs/tasks/BO-RC-20260907-001/maintainer-approval.md`
+  - `ai_docs/tasks/BO-RC-20260907-001/artifacts/api-approval-final/`
+- 根因处置：写入 net6/net8 canonical API 快照及真实维护者审批字段；统一 net6 测试与 net8 快照工具使用的 canonical runtime，消除平台程序集解析造成的 hash 漂移。
+- 验证：
+  - API snapshot compare net6/net8：PASS。
+  - PublicApiContractTest net6：9/9 PASS。
+  - PublicApiContractTest net8：9/9 PASS。
+
+### Round 7 汇总
+
+- MUST_FIX：FIX-025、FIX-026 已完成。
+- SHOULD_FIX：无。
+- OPTIONAL：FIX-024 XML 文档仍按默认 `recommended` 范围跳过。
+- 回归验证：ResourceProbe Release build 0 error；仅有既有 `NU1900` 漏洞源不可访问警告。
+- 收口验证：完整 Unit net6 `526/526`、net8 `526/526`；API snapshot compare net6/net8 `PASS`；`git diff --check` `PASS`。
+- 下一步：重新执行独立 `$review-code BO-RC-20260907-001`；不得手工修改 `review.md` 结论。
+
+### Round 8 Fix Review（用户指定 all）
+
+- 用户明确要求处理 XML 文档、旧版 final report，以及发布前 CI 双 TFM/生产并行度确认；本轮按 `fixScope=all` 执行。当前 `review.md` 为 `PASS_WITH_ISSUES`，未被手工改写。
+
+#### FIX-027
+
+- 严重程度：LOW
+- 处理要求：OPTIONAL（用户本轮明确要求）
+- 执行状态：`COMPLETED`
+- 修改文件：
+  - `src/Bing.Offices.Core/Bing/Offices/Extensions/CsvStreamExtensions.cs`
+  - `src/Bing.Offices.Core/Bing/Offices/Extensions/ExcelStreamExtensions.cs`
+  - `docs/excel/async-io.md`
+- 处理：补齐公开 Stream 扩展异步/同步便利成员的 XML 参数、泛型、返回值说明，并将 NPOI 同步 DOM 边界和 2C4G 单槽位 gate 合同写入发布文档。
+
+#### FIX-028
+
+- 严重程度：MEDIUM
+- 处理要求：SHOULD_FIX
+- 执行状态：`COMPLETED`
+- 修改文件：
+  - `ai_docs/tasks/BO-RC-20260907-001/artifacts/reports/BO-RC-20260907-001-final.md`
+  - `ai_docs/tasks/BO-RC-20260907-001/artifacts/reports/resource-report.md`
+- 处理：移除 final report 中旧的 API/资源“审批阻塞”结论，写入真实 `approvedBy=jian玄冰`、`approvedAt`、双 TFM 结果、formal v8 资源证据和当前外部发布条件；资源报告中的历史 Round 6 阻塞段落已标记为被 Round 8 替代。
+
+#### FIX-029
+
+- 严重程度：HIGH
+- 处理要求：MUST_FIX
+- 执行状态：`PARTIAL/EXTERNAL_GATE`
+- 处理：确认 `.github/workflows/ci.yml` 安装并执行 net6.0/net8.0 Unit、Integration、build、API compare、pack 和 XML package 检查；确认仓库没有可供本地核验的实际生产宿主入口，并在 `docs/excel/async-io.md` 与 final report 固化 `SemaphoreSlim(1, 1)` 的部署要求。
+- 验证：本地双 TFM 及 ResourceProbe 证据通过；GitHub push/PR CI 绿灯和部署仓库实际 gate 仍需发布前外部确认，未伪造为已完成。
+
+### Round 8 汇总
+
+- FIX-027、FIX-028 已完成。
+- FIX-029 的代码仓库内可验证部分已完成；外部 CI 最终结果和生产入口检查仍是发布条件。
+- 回归验证：双 TFM Unit 各 `526/526`、API compare `PASS`、formal v8 `36/36`、`git diff --check` `PASS`。
+- 独立 `$review-code BO-RC-20260907-001` 已完成 Round 9；结论为 `PASS_WITH_ISSUES`。Reviewer 确认 XML 文档和 final report 已收口，外部 CI 与生产入口 gate 仍是发布条件。
+
 ## Git 状态
 
 - 工作区包含本任务生产代码、测试、文档和 artifacts；未执行 git add/commit/push。
 - 未自动创建 PR、tag 或发布 NuGet。
 - `git diff --check` 已通过。
+
+### Round 10 Phase 9：公开扩展方法测试补全
+
+- 执行范围：仅测试、计划与证据；未修改生产实现、公开 API、依赖或 API baseline。
+- 覆盖基线：公开扩展方法 Core `19`、NPOI `66`，共 `85`；实施前直接调用约 `23/85`。
+- 新增职责级测试文件：
+  - `CsvStreamExtensionsTest.cs`、`ExcelStreamExtensionsTest.cs`、`MappingProfileServiceCollectionExtensionsTest.cs`
+  - `NpoiWorkbookExtensionsTest.cs`、`NpoiCellStyleExtensionsTest.cs`、`NpoiFontExtensionsTest.cs`
+  - `NpoiRowExtensionsTest.cs`、`NpoiCellExtensionsTest.cs`
+  - `NpoiSheetExtensionsTest.cs`、`NpoiSheetPictureExtensionsTest.cs`
+  - `NpoiServiceCollectionExtensionsTest.cs`、`PublicExtensionCoverageTest.cs`
+- 覆盖门禁：从公开程序集反射完整签名，并解析 xUnit 测试与 async/lambda 生成方法的 IL 静态调用；`85/85` 全部有直接测试，新增重载或删除测试调用均会失败。
+- Core 行为：参数/options/request/原始 CancellationToken 完整转发；内部流在成功、异常、取消后释放；字节导入流只读；异常实例不包装；Mapping Profile 空白名称回退到类型 FullName，扫描失败保持原子性。
+- NPOI 行为：HSSF/XSSF 均覆盖 Workbook、样式、字体、Row、Cell、Sheet、合并区域和图片。按当前合同固化 XSSF 合并区域移动不持久化、HSSF GIF 添加抛 `InvalidOperationException`，未借测试任务修改生产语义。
+- DI 行为：静态入口链式返回、null 参数、重复注册、调用方替换及生命周期均有直接测试。
+
+#### Round 10 验证
+
+| 验证 | 结果 |
+| --- | --- |
+| Phase 9 定向测试 net6 | `190/190`，0 failed，0 skipped |
+| Phase 9 定向测试 net8 | `190/190`，0 failed，0 skipped |
+| 完整 Unit net6 | `716/716`，0 failed，0 skipped |
+| 完整 Unit net8 | `716/716`，0 failed，0 skipped |
+| Integration net6/net8 | 各 `15/15` |
+| Docs net8 | `10/10` |
+| Release solution build | 0 error；1 条既有 `NU1900` |
+| API snapshot compare | net6/net8 `PASS`，零差异 |
+| `git diff --check` | `PASS` |
+
+- 追溯报告：`artifacts/reports/public-extension-coverage.md`。
+- 下一步：由独立 Reviewer 对 Phase 9 的测试质量、覆盖门禁与证据进行复审；执行阶段不修改 `review.md`。
+
+## Review 修复记录
+
+### Round 12
+
+- Review 状态：`NEEDS_FIX`
+- Fix Scope：`recommended`
+- Review 文件：`ai_docs/tasks/BO-RC-20260907-001/review.md`
+
+#### FIX-030
+
+- 严重程度：MEDIUM
+- 处理要求：SHOULD_FIX
+- 执行状态：COMPLETED
+- 修改文件：`tests/Bing.Offices.Tests/PublicExtensionCoverageTest.cs`
+- 根因：旧门禁接受全部 `InlineMethod`，并按名称扫描任意编译器生成方法，可能把 `ldftn` 或未执行 lambda 误算为调用。
+- 修复：仅接受 `call`/`callvirt`；异步测试只通过 `AsyncStateMachineAttribute` 精确定位 `MoveNext`；新增方法组取址和未执行 lambda 反例。
+- 验证：`PublicExtensionCoverageTest` net6/net8 各 2/2；85/85 门禁继续通过。
+
+#### FIX-031
+
+- 严重程度：MEDIUM
+- 处理要求：SHOULD_FIX
+- 执行状态：COMPLETED
+- 修改文件：`NpoiSheetExtensionsTest.cs`、`NpoiSheetPictureExtensionsTest.cs`
+- 根因：行、合并和图片失败场景主要只断言异常类型，且行边界仅覆盖 XSSF。
+- 修复：行边界参数化 HSSF/XSSF；逐项断言 `deleteRowStartIndex`、`count`、`rowIndex`、`rowsCount`、`startRowIndex`、`endRowIndex`、`moveRowCount`、`moveColCount`、`picInfo`、`pictureData`、`pictureBytes`、`row`、`col`、`pictureType`、`sheet`；每次失败后验证行/合并/图片状态不变。生产端重叠异常无参数名，测试显式断言 null。
+- 验证：相关门禁与 Sheet/图片测试 net6/net8 各 54/54。
+
+#### FIX-032
+
+- 严重程度：MEDIUM
+- 处理要求：SHOULD_FIX
+- 执行状态：COMPLETED
+- 修改文件：`artifacts/reports/public-extension-coverage.md`、`artifacts/reports/unit-tests.md`、`artifacts/reports/BO-RC-20260907-001-final.md`、`symbol-test-map.md`、`artifacts/test-results/BO-RC-phase9-*.trx`
+- 根因：原报告只有容器级汇总，旧 TRX 与 Round 10 数字不一致。
+- 修复：门禁在显式环境变量下生成完整 85 行“签名 -> 测试项目 -> 具体测试方法”报告；新增双 TFM 全量与定向 TRX，修正 API 审批和证据替代说明。
+- 验证：追溯数据行严格为 85；全量 TRX net6/net8 各 716/716；定向 TRX 各 190/190；TRX 均包含覆盖门禁测试。
+
+### Round 12 汇总
+
+- MUST_FIX：无。
+- SHOULD_FIX：FIX-030、FIX-031、FIX-032 全部完成。
+- OPTIONAL：无。
+- 回归验证：完整 Unit net6/net8 各 716/716；Integration 各 15/15；Docs 10/10；Release build 0 error（1 条既有 NU1900）；API compare 双 TFM PASS；`git diff --check` PASS。
+- 验证注意：全量双 TFM Unit 必须按 CI 顺序运行；并发启动两个测试进程会争用既有测试共用的临时 staging 前缀。
+- 下一步：重新独立 Review；不得手工修改 `review.md`。

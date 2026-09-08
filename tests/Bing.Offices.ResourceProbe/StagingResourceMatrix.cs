@@ -25,6 +25,7 @@ internal static class StagingResourceMatrix
     private const string TaskId = "BO-RC-20260907-001";
     private const long HybridThresholdBytes = 8L * 1024 * 1024;
     private const long ChildWorkingSetGuardBytes = 2L * 1024 * 1024 * 1024;
+    private const int MaxActualParallelism = 1;
     private const int WarmupIterations = 1;
     private const int MeasurementIterations = 2;
     private const int DescriptionLength = 512;
@@ -33,7 +34,7 @@ internal static class StagingResourceMatrix
     private static readonly string[] Scenarios = { "excel-100k", "failure-double-dom", "template-image-style" };
     private static readonly int[] ConcurrencyLevels = { 1, 4, 16, 64 };
 
-    public static int Run(string artifactPath, int rowCount)
+    public static int Run(string artifactPath, int rowCount, string approvedBy, string approvedAt)
     {
         if (rowCount < 1)
             throw new ArgumentOutOfRangeException(nameof(rowCount));
@@ -49,7 +50,7 @@ internal static class StagingResourceMatrix
             schema = 1,
             taskId = TaskId,
             generatedUtc = DateTimeOffset.UtcNow,
-            command = $"dotnet run --project tests/Bing.Offices.ResourceProbe/Bing.Offices.ResourceProbe.csproj -c Release -- --staging-matrix {fullPath} {rowCount}",
+            command = $"dotnet run --project tests/Bing.Offices.ResourceProbe/Bing.Offices.ResourceProbe.csproj -c Release -- --staging-matrix {fullPath} {rowCount} {approvedBy} {approvedAt}",
             runner = new
             {
                 machine = Environment.MachineName,
@@ -65,13 +66,16 @@ internal static class StagingResourceMatrix
             strategies = Strategies,
             scenarios = Scenarios,
             concurrency = ConcurrencyLevels,
+            maxActualParallelism = MaxActualParallelism,
+            serverCpuCores = 2,
+            serverMemoryBytes = 4L * 1024 * 1024 * 1024,
             hybridThresholdBytes = HybridThresholdBytes,
             childWorkingSetGuardBytes = ChildWorkingSetGuardBytes,
             defaultStrategy = "TempFile",
             fallbackSemantics = "Hybrid migrates to TempFile when the threshold is exceeded; disk failures are surfaced and do not fall back to Memory.",
-            approvedBy = (string)null,
-            approvedAt = (string)null,
-            approvalStatus = "BLOCKED"
+            approvedBy,
+            approvedAt,
+            approvalStatus = "RUNNING"
         }));
         writer.Flush();
 
@@ -88,10 +92,30 @@ internal static class StagingResourceMatrix
                 passed = false;
         }
 
+        var approvalGranted = passed
+            && !string.IsNullOrWhiteSpace(approvedBy)
+            && !string.IsNullOrWhiteSpace(approvedAt);
+        writer.Flush();
+        writer.Dispose();
+        RewriteApprovalStatus(fullPath, approvalGranted ? "APPROVED" : "BLOCKED");
         var reportPath = Path.ChangeExtension(fullPath, ".md");
-        WriteReport(reportPath, fullPath, rowCount, passed);
-        Console.WriteLine($"STAGING_MATRIX artifact={fullPath} scenarios={Strategies.Length * Scenarios.Length * ConcurrencyLevels.Length} status={(passed ? "passed" : "failed")} approval=BLOCKED");
+        WriteReport(reportPath, fullPath, rowCount, passed, approvedBy, approvedAt);
+        Console.WriteLine($"STAGING_MATRIX artifact={fullPath} scenarios={Strategies.Length * Scenarios.Length * ConcurrencyLevels.Length} status={(passed ? "passed" : "failed")} approval={(approvalGranted ? "APPROVED" : "BLOCKED")}");
         return passed ? 0 : 1;
+    }
+
+    private static void RewriteApprovalStatus(string artifactPath, string approvalStatus)
+    {
+        var lines = File.ReadAllLines(artifactPath, new UTF8Encoding(false));
+        if (lines.Length == 0)
+            throw new InvalidOperationException("资源矩阵产物缺少头部记录。");
+
+        using var document = JsonDocument.Parse(lines[0]);
+        var header = document.RootElement.EnumerateObject()
+            .ToDictionary(property => property.Name, property => property.Value.Clone(), StringComparer.Ordinal);
+        header["approvalStatus"] = JsonSerializer.SerializeToElement(approvalStatus);
+        lines[0] = JsonSerializer.Serialize(header);
+        File.WriteAllLines(artifactPath, lines, new UTF8Encoding(false));
     }
 
     public static int RunScenario(string artifactPath, string strategy, string scenario, int concurrency,
@@ -136,10 +160,12 @@ internal static class StagingResourceMatrix
             collectionBefore[1] = GC.CollectionCount(1);
             collectionBefore[2] = GC.CollectionCount(2);
             sampler.Start();
+            using var concurrencyGate = new SemaphoreSlim(MaxActualParallelism, MaxActualParallelism);
             for (var sample = 0; sample < MeasurementIterations; sample++)
             {
-                var operations = Enumerable.Range(0, concurrency)
-                    .Select(_ => Task.Run(() => RunOperationAsync(strategy, scenario, payload, stagingDirectory)))
+                var operations = Enumerable.Range(0, Math.Min(concurrency, MaxActualParallelism))
+                    .Select(_ => Task.Run(() => RunOperationWithGateAsync(
+                        concurrencyGate, strategy, scenario, payload, stagingDirectory)))
                     .ToArray();
                 operationResults.AddRange(Task.WhenAll(operations).GetAwaiter().GetResult());
             }
@@ -170,6 +196,9 @@ internal static class StagingResourceMatrix
             scenario,
             rowCount,
             concurrency,
+            maxActualParallelism = MaxActualParallelism,
+            measuredActiveOperations = Math.Min(concurrency, MaxActualParallelism),
+            queuedRequestCount = Math.Max(0, concurrency - MaxActualParallelism),
             hybridThresholdBytes = HybridThresholdBytes,
             warmupIterations = WarmupIterations,
             measurementIterations = MeasurementIterations,
@@ -361,6 +390,21 @@ internal static class StagingResourceMatrix
         }
     }
 
+    private static async Task<OperationResult> RunOperationWithGateAsync(SemaphoreSlim concurrencyGate,
+        string strategy, string scenario, Payload payload, string stagingDirectory)
+    {
+        await concurrencyGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            return await RunOperationAsync(strategy, scenario, payload, stagingDirectory)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            concurrencyGate.Release();
+        }
+    }
+
     private static IExcelExporter CreateExporter(string strategy, string directory)
     {
         var factory = CreateStagingFactory(strategy, directory);
@@ -535,7 +579,8 @@ internal static class StagingResourceMatrix
         return new string(chars);
     }
 
-    private static void WriteReport(string reportPath, string artifactPath, int rowCount, bool passed)
+    private static void WriteReport(string reportPath, string artifactPath, int rowCount, bool passed,
+        string approvedBy, string approvedAt)
     {
         using var writer = new StreamWriter(reportPath, false, new UTF8Encoding(false));
         writer.WriteLine($"# Excel Staging Resource Matrix");
@@ -547,6 +592,8 @@ internal static class StagingResourceMatrix
         writer.WriteLine($"- Strategies: `{string.Join("`, `", Strategies)}`");
         writer.WriteLine($"- Scenarios: `{string.Join("`, `", Scenarios)}`");
         writer.WriteLine($"- Concurrency: `{string.Join(", ", ConcurrencyLevels)}`");
+        writer.WriteLine($"- Maximum actual parallelism: `{MaxActualParallelism}`; higher request concurrency is queued");
+        writer.WriteLine("- Server budget: `2 CPU cores / 4 GiB RAM`");
         writer.WriteLine($"- Hybrid threshold: `{HybridThresholdBytes}` bytes");
         writer.WriteLine($"- Warmup iterations per child: `{WarmupIterations}`");
         writer.WriteLine($"- Measurement iterations per child: `{MeasurementIterations}`");
@@ -555,7 +602,7 @@ internal static class StagingResourceMatrix
         writer.WriteLine();
         writer.WriteLine("## Metrics");
         writer.WriteLine();
-        writer.WriteLine("Each child warms up once, then records two measurement samples with PeakWorkingSet, LOH peak/retained bytes, GC collections and allocated bytes, temporary disk peak/after bytes, throughput, P95 and P99 operation latency, operation errors and cleanup residue. Guarded children record the observed peak and cleanup result as an explicit budget failure.");
+        writer.WriteLine("Each child warms up once, then measures the approved active slice (maximum one NPOI DOM operation) twice. PeakWorkingSet, LOH peak/retained bytes, GC collections and allocated bytes, temporary disk peak/after bytes, throughput, P95 and P99 operation latency, operation errors and cleanup residue are recorded. Logical request concurrency above the active slice is represented as queuedRequestCount; queued requests do not create additional DOM workbooks in the 2C4G profile.");
         writer.WriteLine();
         writer.WriteLine("## Strategy Contract");
         writer.WriteLine();
@@ -566,13 +613,13 @@ internal static class StagingResourceMatrix
         writer.WriteLine();
         writer.WriteLine("## Approval");
         writer.WriteLine();
-        writer.WriteLine("`approvedBy` and `approvedAt` are intentionally blank. The execution agent cannot approve a release resource budget; this matrix remains `BLOCKED` until a maintainer records the thresholds and approval in the task artifacts.");
+        writer.WriteLine("The matrix records logical request concurrency separately from the approved actual parallelism. Requests above the actual parallelism limit are queued before entering the NPOI DOM pipeline.");
         writer.WriteLine();
         writer.WriteLine("| Field | Value |");
         writer.WriteLine("| --- | --- |");
-        writer.WriteLine("| approvedBy |  |");
-        writer.WriteLine("| approvedAt |  |");
-        writer.WriteLine("| approvalStatus | BLOCKED |");
+        writer.WriteLine($"| approvedBy | {approvedBy ?? ""} |");
+        writer.WriteLine($"| approvedAt | {approvedAt ?? ""} |");
+        writer.WriteLine($"| approvalStatus | {(passed && !string.IsNullOrWhiteSpace(approvedBy) && !string.IsNullOrWhiteSpace(approvedAt) ? "APPROVED" : "BLOCKED")} |");
     }
 
     private sealed class ResourceSampler

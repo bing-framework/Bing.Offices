@@ -12,8 +12,8 @@
 | Async error parity / exporter Observer | `Bing.Offices.Tests` | `AsyncPipelineTest.CsvAsync_ErrorResult_ShouldMatchSyncResult`; `AsyncPipelineTest.ExcelAsync_FileCommitFailure_ShouldObserveSameExceptionOnce` |
 | `IFileExportCommitter.CommitAsync` / `DefaultFileExportCommitter` | `Bing.Offices.Tests` | `DefaultFileExportCommitterTest.CommitAsync_NewTarget_ShouldWriteAndMove`; `CommitAsync_ExistingTarget_ShouldReplaceAfterSuccessfulWrite`; `CommitAsync_WriteFailure_ShouldPreserveExceptionAndTarget`; `CommitAsync_PreCanceled_ShouldNotCreateFiles`; `CommitAsync_CanceledAfterWrite_ShouldCleanTemporaryFile` |
 | `NpoiStreamCopier.CopyAsync` | `Bing.Offices.Tests` | AsyncOnly read/write assertions in `AsyncPipelineTest`; existing sync size/cancellation cases in `StreamPipelineTest` |
-| NPOI public extensions | `Bing.Offices.Tests` / Docs / Consumer | `PublicApiContractTest.PublicApi_NpoiAssembly_ShouldExposeApprovedProviderEntries`; `DocsConsumerTest`; final net6/net8 PackageConsumer |
+| Core/NPOI 85 个公开扩展完整签名 | `Bing.Offices.Tests` | `PublicExtensionCoverageTest.PublicExtensions_ShouldHaveDirectBehaviorTestForEverySignature`；逐签名到职责测试的方法映射见 `artifacts/reports/public-extension-coverage.md` |
 | API classification/IVT | `Bing.Offices.Tests` | `PublicApiContractTest.PublicApi_ExportedTypes_ShouldHaveGovernedClassification`; `PublicApi_ProductionAssemblies_ShouldNotExposeProductionFriendAssemblies` |
 | Sync Excel/CSV core parity | Unit/Integration | Existing `StreamPipelineTest`, `CsvTest`, `ExcelP0RegressionTest`, `ExcelImporterIntegrationTest` on net6/net8 |
 
-API baseline approval remains a maintainer gate and is intentionally not mapped to an auto-approved test result.
+API baseline 已由维护者 `jian玄冰` 批准；net6/net8 API snapshot compare 与 `PublicApiContractTest` 均通过。Phase 9 的完整 Unit TRX 为 `artifacts/test-results/BO-RC-phase9-net6-unit.trx`、`BO-RC-phase9-net8-unit.trx`，定向扩展 TRX 为对应的 `*-extensions.trx`；它们替代早期 `BO-RC-continued-*` 证据。

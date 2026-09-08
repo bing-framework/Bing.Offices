@@ -17,3 +17,23 @@ NPOI 没有异步的 `WorkbookFactory.Create` 与 Workbook DOM 序列化 API。E
 ## 资源预期
 
 Excel DOM 仍会产生与工作簿规模相关的内存分配；Async 不代表零 GC。大文件部署应同时设置 `ExcelResourceLimits` 和进程级内存/CPU 限额，并使用发布任务的 ResourceProbe 结果评估 staging 峰值。
+
+## 2C4G 发布入口并行度
+
+本任务的维护者批准配置为服务器 `2C4G`。`1/4/16/64` 是逻辑请求并发档位，不是允许同时创建 NPOI Workbook DOM 的数量。发布入口必须在调用 `IExcelImporter`、`IExcelExporter` 及其 Async API 之前共享一个进程级 `SemaphoreSlim(1, 1)`；超出的请求排队，不能在入口处先创建 Workbook、任务或 provider 实例后再限流。
+
+```csharp
+private static readonly SemaphoreSlim ExcelDomGate = new(1, 1);
+
+await ExcelDomGate.WaitAsync(cancellationToken);
+try
+{
+    return await importer.ImportAsync(source, request, cancellationToken);
+}
+finally
+{
+    ExcelDomGate.Release();
+}
+```
+
+ResourceProbe formal v8 使用同样的单槽位 gate，覆盖逻辑并发 `1/4/16/64`，结果为所有单元 `measuredActiveOperations=1`，最大排队数 `63`。该结果证明库的 staging 资源包络和排队模型；它不能替代部署应用入口的实际配置检查。发布前必须在部署仓库或启动配置中确认该 gate 的容量仍为 `1`，并保留 CI 双 TFM job 的最终通过记录。

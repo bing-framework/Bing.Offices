@@ -11,6 +11,10 @@ public static class ExcelStreamExtensions
     /// <summary>
     /// 将 Workbook 导出请求写为 Excel 字节数组。
     /// </summary>
+    /// <param name="exporter">Excel 导出器。</param>
+    /// <param name="request">Workbook 导出请求。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>包含 Excel 内容的字节数组。</returns>
     public static byte[] ExportToBytes(this IExcelExporter exporter, ExcelWorkbookExportRequest request,
         CancellationToken cancellationToken = default)
     {
@@ -26,6 +30,10 @@ public static class ExcelStreamExtensions
     /// <summary>
     /// 将 Workbook 导出请求写入 Excel 文件。
     /// </summary>
+    /// <param name="exporter">Excel 导出器。</param>
+    /// <param name="request">Workbook 导出请求。</param>
+    /// <param name="path">目标文件路径。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
     public static void ExportToFile(this IExcelExporter exporter, ExcelWorkbookExportRequest request, string path,
         CancellationToken cancellationToken = default)
     {
@@ -38,7 +46,13 @@ public static class ExcelStreamExtensions
         exporter.ExportToFile(request, path, cancellationToken);
     }
 
-    /// <summary>异步将 Workbook 请求导出为 Excel 字节数组。</summary>
+    /// <summary>
+    /// 异步将 Workbook 请求导出为 Excel 字节数组。
+    /// </summary>
+    /// <param name="exporter">Excel 导出器。</param>
+    /// <param name="request">Workbook 导出请求。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>包含 Excel 内容的字节数组任务。</returns>
     public static async Task<byte[]> ExportToBytesAsync(this IExcelExporter exporter,
         ExcelWorkbookExportRequest request, CancellationToken cancellationToken = default)
     {
@@ -51,7 +65,14 @@ public static class ExcelStreamExtensions
         return destination.ToArray();
     }
 
-    /// <summary>异步将 Workbook 请求写入 Excel 文件。</summary>
+    /// <summary>
+    /// 异步将 Workbook 请求以原子方式写入 Excel 文件。
+    /// </summary>
+    /// <param name="exporter">Excel 导出器。</param>
+    /// <param name="request">Workbook 导出请求。</param>
+    /// <param name="path">目标文件路径。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>表示异步文件导出的任务。</returns>
     public static Task ExportToFileAsync(this IExcelExporter exporter, ExcelWorkbookExportRequest request,
         string path, CancellationToken cancellationToken = default)
     {
@@ -67,6 +88,12 @@ public static class ExcelStreamExtensions
     /// <summary>
     /// 从 Excel 字节数组导入 Workbook。
     /// </summary>
+    /// <typeparam name="TWorkbook">根 Workbook 类型。</typeparam>
+    /// <param name="importer">Excel 导入器。</param>
+    /// <param name="content">Excel 文件字节数组。</param>
+    /// <param name="request">Workbook 导入请求。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>导入结果。</returns>
     public static ExcelWorkbookImportResult<TWorkbook> ImportFromBytes<TWorkbook>(this IExcelImporter importer,
         byte[] content, ExcelWorkbookImportRequest<TWorkbook> request,
         CancellationToken cancellationToken = default) where TWorkbook : class, new()
@@ -84,6 +111,12 @@ public static class ExcelStreamExtensions
     /// <summary>
     /// 从 Excel 文件导入 Workbook。
     /// </summary>
+    /// <typeparam name="TWorkbook">根 Workbook 类型。</typeparam>
+    /// <param name="importer">Excel 导入器。</param>
+    /// <param name="path">源文件路径。</param>
+    /// <param name="request">Workbook 导入请求。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>导入结果。</returns>
     public static ExcelWorkbookImportResult<TWorkbook> ImportFromFile<TWorkbook>(this IExcelImporter importer,
         string path, ExcelWorkbookImportRequest<TWorkbook> request,
         CancellationToken cancellationToken = default) where TWorkbook : class, new()
@@ -98,7 +131,15 @@ public static class ExcelStreamExtensions
         return importer.Import(source, request, cancellationToken);
     }
 
-    /// <summary>异步从 Excel 字节数组导入 Workbook。</summary>
+    /// <summary>
+    /// 异步从 Excel 字节数组导入 Workbook。
+    /// </summary>
+    /// <typeparam name="TWorkbook">根 Workbook 类型。</typeparam>
+    /// <param name="importer">Excel 导入器。</param>
+    /// <param name="content">Excel 文件字节数组。</param>
+    /// <param name="request">Workbook 导入请求。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>异步导入结果任务。</returns>
     public static Task<ExcelWorkbookImportResult<TWorkbook>> ImportFromBytesAsync<TWorkbook>(
         this IExcelImporter importer, byte[] content, ExcelWorkbookImportRequest<TWorkbook> request,
         CancellationToken cancellationToken = default) where TWorkbook : class, new()
@@ -120,7 +161,15 @@ public static class ExcelStreamExtensions
         return await importer.ImportAsync(source, request, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>异步从 Excel 文件导入 Workbook。</summary>
+    /// <summary>
+    /// 异步从 Excel 文件导入 Workbook。
+    /// </summary>
+    /// <typeparam name="TWorkbook">根 Workbook 类型。</typeparam>
+    /// <param name="importer">Excel 导入器。</param>
+    /// <param name="path">源文件路径。</param>
+    /// <param name="request">Workbook 导入请求。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>异步导入结果任务。</returns>
     public static async Task<ExcelWorkbookImportResult<TWorkbook>> ImportFromFileAsync<TWorkbook>(
         this IExcelImporter importer, string path, ExcelWorkbookImportRequest<TWorkbook> request,
         CancellationToken cancellationToken = default) where TWorkbook : class, new()

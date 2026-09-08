@@ -372,3 +372,46 @@
 ## 10. 推荐执行顺序
 
 严格按 `P0 -> P1 -> P2 -> P3 -> P4 -> P5 -> P6 -> P7 -> P8` 执行。P1/P2 完成后冻结 API；P3-P5 完成后冻结行为；P6 后再批准 API baseline；P7 的资源结论决定 Excel Export staging；P8 只做文档、审批、Review 和最终全量回归，不在发布收口阶段引入新功能。
+
+## 11. Phase 9：公开扩展方法职责级测试补全（已批准）
+
+### BO-RC-P9-01 覆盖清单门禁
+
+- 新增 `PublicExtensionCoverageTest`，反射枚举 Core/NPOI 程序集中的公开扩展方法。
+- 建立完整方法签名到职责级测试方法的映射，覆盖当前 Core 19 个、NPOI 66 个，共 85 个声明及全部重载。
+- 断言映射无遗漏、无失效签名，且目标测试真实存在并带 `[Fact]` 或 `[Theory]`。
+- `internal` 类型上的扩展不纳入公开 API 门禁。
+- 行为测试使用静态扩展类限定调用，避免同名接口或 NPOI 实例方法造成假覆盖。
+
+### BO-RC-P9-02 Core 扩展
+
+- 新增 `CsvStreamExtensionsTest`、`ExcelStreamExtensionsTest`，直接覆盖各 8 个同步/异步入口。
+- 通过 tracking importer/exporter 验证参数、options、请求和原始 `CancellationToken` 转发。
+- 覆盖正常结果、null、空白路径、异常传播、预取消和异步取消，以及内部流的释放和读写属性。
+- 扩充 Mapping Profile 注册测试，覆盖参数校验、非法 Profile、名称回退、链式返回、重复注册、扫描异常及失败原子性。
+
+### BO-RC-P9-03 NPOI 基础扩展
+
+- 按 `ExcelFormat.Xls/Xlsx` 参数化 Workbook、CellStyle、Font、Row 测试。
+- 直接覆盖 Workbook 6 个、CellStyle 17 个、Font 4 个、Row 5 个和 Cell 9 个公开扩展声明。
+- 固化格式识别、样式属性、单元格读写/转换、缓存、条件格式以及合并行为的当前运行时合同。
+
+### BO-RC-P9-04 NPOI Sheet、合并与图片扩展
+
+- 覆盖 Sheet 行操作、合并区域、图片添加/读取/过滤/移除/移动的全部公开重载。
+- HSSF/XSSF 均具备正常场景，失败场景断言当前异常类型、参数名及对象不变性。
+- 图片签名覆盖 PNG/JPEG/GIF/未知类型；两个 `TryAddPicture` 重载分别覆盖成功和拒绝/异常路径。
+
+### BO-RC-P9-05 DI 与证据收口
+
+- 补强 `AddBingOfficesNpoi` 的链式返回、重复注册、调用方替换、生命周期和双 TFM 一致性测试。
+- 更新 `execution.md`、最终报告和生产符号到测试方法追溯表。
+- 完成双 TFM Unit/Integration、Release build、API snapshot compare、`git diff --check`，API baseline 保持零差异。
+- 执行阶段不修改 `review.md`；完成后交由独立 Reviewer 复审。
+
+### Phase 9 约束
+
+- 只补测试和证据，不修改公开 API、API baseline、生产实现或依赖。
+- 按维护者决策固化当前运行时行为；若文档与实现不一致，只修正文档和执行记录。
+- 不新增测试框架或覆盖率包，继续使用现有 xUnit 2.4.2。
+- 服务器预算保持 2C4G，逻辑并发等级 1/4/16/64 全部通过，生产最大实际并行度保持 1。

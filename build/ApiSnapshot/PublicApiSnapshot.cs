@@ -36,11 +36,9 @@ public sealed class PublicApiSnapshot
         var resolverPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         AddDirectory(resolverPaths, Path.GetDirectoryName(fullAssemblyPath));
         var trustedPlatformAssemblyPaths = GetTrustedPlatformAssemblyPaths();
-        var coreAssemblyPath = Path.Combine(RuntimeEnvironment.GetRuntimeDirectory(), "System.Private.CoreLib.dll");
-        if (!File.Exists(coreAssemblyPath))
-            coreAssemblyPath = trustedPlatformAssemblyPaths.FirstOrDefault(path =>
-                string.Equals(Path.GetFileName(path), "System.Private.CoreLib.dll", StringComparison.OrdinalIgnoreCase))
-                ?? typeof(object).Assembly.Location;
+        var coreAssemblyPath = trustedPlatformAssemblyPaths.FirstOrDefault(path =>
+            string.Equals(Path.GetFileName(path), "System.Private.CoreLib.dll", StringComparison.OrdinalIgnoreCase))
+            ?? Path.Combine(RuntimeEnvironment.GetRuntimeDirectory(), "System.Private.CoreLib.dll");
         if (!File.Exists(coreAssemblyPath))
             coreAssemblyPath = Path.Combine(AppContext.BaseDirectory, "System.Private.CoreLib.dll");
         if (!File.Exists(coreAssemblyPath))
@@ -287,9 +285,22 @@ public sealed class PublicApiSnapshot
     private static List<string> GetTrustedPlatformAssemblyPaths()
     {
         var value = AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") as string;
-        return string.IsNullOrWhiteSpace(value)
+        var current = string.IsNullOrWhiteSpace(value)
             ? new List<string>()
             : value.Split(Path.PathSeparator).Where(File.Exists).ToList();
+        if (Environment.Version.Major >= 8)
+            return current;
+
+        var runtimeDirectory = new DirectoryInfo(RuntimeEnvironment.GetRuntimeDirectory());
+        var sharedDirectory = runtimeDirectory.Parent?.Parent?.FullName;
+        var net8Directory = sharedDirectory is null
+            ? null
+            : Directory.GetDirectories(Path.Combine(sharedDirectory, "Microsoft.NETCore.App"), "8.*")
+                .OrderByDescending(path => path, StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault();
+        return net8Directory is null
+            ? current
+            : Directory.EnumerateFiles(net8Directory, "*.dll").ToList();
     }
 
     private static void AddKnownPackageAssemblies(ISet<string> paths)

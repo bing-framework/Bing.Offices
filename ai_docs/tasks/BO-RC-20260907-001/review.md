@@ -1,65 +1,57 @@
-<!-- AI_REVIEW_STATUS: BLOCKED -->
+<!-- AI_REVIEW_STATUS: PASS -->
 AI_TASK_ID: BO-RC-20260907-001
-AI_REVIEWED_AT: 2026-09-08T12:48:02+08:00
+AI_REVIEWED_AT: 2026-09-08T17:44:47.0785975+08:00
 
-# 独立代码审查报告（Round 7）
+# 独立代码审查报告（Round 13 / Phase 9 修复复核）
 
 ## 审查结论
 
-结论为 `BLOCKED / NO-GO`。本轮没有发现需要继续由 Fix Executor 修改的代码缺陷；Round 6 已修复正式 staging 矩阵的空结果和 Hybrid 未跨阈值问题。但正式验收仍缺少两类由维护者负责的关键证据：资源预算/默认策略批准，以及双 TFM API baseline 的真实审批。依据计划 P7-02、P8-01 和 P8-03，这些证据未齐时不得宣布 RC 可发布。
+结论为 `PASS`。本轮仅复核 Round 11 遗留的 `FIX-030`、`FIX-031`、`FIX-032` 及 Round 12 修复证据，没有重新开展全仓分析。三项 `SHOULD_FIX` 均已完成，未发现新的 `MUST_FIX`、`SHOULD_FIX` 或 `OPTIONAL`。
 
-## Round 6 复核
+本结论确认 Phase 9 修复达到当前本地验收要求，但不替代 GitHub push/PR CI 最终绿灯，也不解除外部生产入口进入 NPOI DOM 前共享并行度 1 门禁的发布条件。
 
-| 项目 | 结论 | 当前证据 |
+## 修复复核
+
+### FIX-030：IL 门禁真实调用判定
+
+- 严重程度：`MEDIUM`
+- 处理要求：`SHOULD_FIX`
+- 状态：`RESOLVED`
+- 复核结果：`PublicExtensionCoverageTest` 仅在操作码为 `call` 或 `callvirt` 时解析被调用方法；普通测试只扫描测试本体，async 测试仅通过 `AsyncStateMachineAttribute` 精确加入状态机 `MoveNext`，不再按编译器生成名称扫描 lambda/本地函数。
+- 反例证据：`CoverageReader_ShouldRejectMethodPointersAndUnexecutedLambdas` 同时验证真实直接调用可识别、仅方法组取址不可识别、未执行 lambda 不可识别。该反例与主门禁在四份 Phase 9 TRX 中均为 `Passed`。
+- 结论：原 `ldftn`/`ldvirtftn` 和未执行 lambda 假覆盖风险已关闭。
+
+### FIX-031：异常参数名与失败不变性
+
+- 严重程度：`MEDIUM`
+- 处理要求：`SHOULD_FIX`
+- 状态：`RESOLVED`
+- 复核结果：行边界、合并区域移动、图片参数校验均以 HSSF/XSSF 双 Provider 参数化执行；测试精确断言 `deleteRowStartIndex`、`count`、`rowIndex`、`rowsCount`、`startRowIndex`、`endRowIndex`、`moveRowCount`、`moveColCount`、`picInfo`、`pictureData`、`pictureBytes`、`row`、`col`、`pictureType`、`sheet`。生产端重叠异常没有参数名，测试显式断言 `ParamName == null`。
+- 不变性证据：行内容、行边界和合并区域在失败后保持原状；图片失败场景检查 workbook 图片集合与 sheet 图片信息不增加，已有 `IPictureData` 场景还校验失败前后图片总数一致。
+- 结论：异常类型/参数合同及失败前无副作用要求已由双 Provider 职责测试固化。
+
+### FIX-032：逐签名映射与原始测试证据
+
+- 严重程度：`MEDIUM`
+- 处理要求：`SHOULD_FIX`
+- 状态：`RESOLVED`
+- 复核结果：`public-extension-coverage.md` 解析得到 85 条数据行、85 个唯一完整签名，其中 Core 19、NPOI 66，测试项目均为 `Bing.Offices.Tests`，无重复签名。`symbol-test-map.md` 已指向该逐签名报告，并标明新的 Phase 9 TRX 替代旧 `BO-RC-continued-*` 证据。
+- TRX 证据：net6/net8 完整 Unit 各 `716/716`，net6/net8 定向扩展各 `190/190`，均为 0 failed；四份 TRX 均包含并通过 `PublicExtensions_ShouldHaveDirectBehaviorTestForEverySignature` 和门禁反例测试。
+- 结论：逐签名追溯、测试计数和原始结果已互相一致。
+
+## Round 13 验收矩阵
+
+| 验收项 | 结果 | 证据 |
 | --- | --- | --- |
-| FIX-025 资源矩阵结构 | PASS | `formal-100k-v6.jsonl` 有 36/36 结构化子进程记录、0 个 `result=null`、27 个带实际峰值和 cleanup 状态的 `budget-failed` 记录；所有守卫目录均由父进程删除。 |
-| FIX-025 Hybrid 实际迁移 | PASS | Hybrid 的 `excel-100k` 与 `template-image-style` 并发 1 记录的临时磁盘峰值分别为 `41,721,723 B` 与 `41,704,272 B`，均在完成后回到 0 且无残留。 |
-| FIX-025 发布预算/策略批准 | BLOCKED | 矩阵头和报告的 `approvedBy` / `approvedAt` 均为空，36 个单元中 27 个达到 2 GiB 守卫并以 budget-failed 结束，尚无经维护者批准的阈值或 PASS/FAIL 判定。 |
-| FIX-026 API baseline 审批 | BLOCKED | `build/api-snapshot-baseline.json` 的审批字段为空且仅含 net8 baseline；任务 artifacts 已保留 net6/net8 candidate 和成员 diff，但未获维护者批准。 |
-| FIX-024 XML 文档 | OPEN OPTIONAL | 默认 `recommended` 修复范围未包含此项。 |
+| FIX-030 门禁仅认真实调用 | `PASS` | `PublicExtensionCoverageTest.cs`：`call`/`callvirt`、`AsyncStateMachineAttribute`、方法组/未执行 lambda 反例；四份 TRX 双测试通过 |
+| FIX-031 参数名与失败不变性 | `PASS` | `NpoiSheetExtensionsTest.cs`、`NpoiSheetPictureExtensionsTest.cs`：HSSF/XSSF 参数化、精确 `ParamName`、失败后状态断言 |
+| FIX-032 85 行追溯映射 | `PASS` | `public-extension-coverage.md`：85 个唯一签名（19 + 66）；`symbol-test-map.md` 已建立入口 |
+| 完整 Unit 原始结果 | `PASS` | net6/net8 各 `716/716`，0 failed |
+| 定向扩展原始结果 | `PASS` | net6/net8 各 `190/190`，0 failed，均含主门禁和反例测试 |
+| Round 12 既有验证 | `PASS` | `execution.md`：Integration 各 15/15、Docs 10/10、Release build 0 error（1 条既有 NU1900）、API compare 双 TFM PASS、`git diff --check` PASS |
 
-## 外部阻塞
+## 发布条件
 
-### API baseline 维护者审批
-
-- 必需证据：维护者对 `artifacts/api-compare-final/api-diff.json` 的成员级审查结论、真实 `approvedBy` / `approvedAt`，以及写入正式 baseline 的 net6/net8 canonical 快照。
-- 当前证据：`PublicApi_AllReleaseAssemblies_ShouldMatchMemberSnapshot` 在 net6 和 net8 均实际失败，原因为 `BLOCKED: API baseline approvedBy is empty.`。
-- 解锁条件：有权维护者批准新增 Async API、公开 Provider 类型、namespace 迁移和列出的删除项；随后 API contract 在两个 TFM 均通过。
-
-### 资源预算与默认策略审批
-
-- 必需证据：固定环境上的 before/candidate 阈值、对 27 个 budget-failed 单元的风险处置、默认 `TempFile` 策略批准，以及真实 `approvedBy` / `approvedAt`。
-- 当前证据：`formal-100k-v6.md` 明确为 `FAIL` / `approvalStatus: BLOCKED`。资源探针代码在守卫触发时记录观察峰值、临时磁盘残留、文件数与 parent cleanup，避免将被终止子进程误报为成功。
-- 解锁条件：维护者设定可接受资源预算并批准；若预算不接受现有结果，需要由产品/架构方决定降低并发、调整工作负载或改变实现，不能由 Reviewer 代为选择。
-
-## Phase 验收矩阵
-
-| Phase | 结论 | 说明 |
-| --- | --- | --- |
-| P0 基线与合同 | PARTIAL | 任务文档、candidate 和矩阵证据存在；人工批准未完成。 |
-| P1 双 TFM | PASS（本地） | 双 TFM 构建与 AsyncPipeline 回归均有通过证据。 |
-| P2 API/namespace | BLOCKED | 代码和候选快照已存在，正式 API baseline 未获批准。 |
-| P3 Async 提交/复制 | PASS | 直接 Async/取消/cleanup 测试已通过。 |
-| P4 CSV Async | PASS | 执行记录和回归测试支持 Sync/Async 行为复用。 |
-| P5 Excel Async | PASS | Hybrid seek/backpatch 与跨阈值 staging 证据均已存在。 |
-| P6 测试/Consumer | PARTIAL | 相关回归和 Consumer 通过；完整 Unit 仍受 API 审批门禁阻断。 |
-| P7 Benchmark/Resource | BLOCKED | 矩阵采集质量已满足复核，但资源预算/默认策略无维护者批准。 |
-| P8 文档/发布门禁 | BLOCKED | API 审批和资源审批均未闭环；跨平台 CI 证据也未在本地提供。 |
-
-## 本轮验证
-
-| 命令/证据 | 结果 |
-| --- | --- |
-| `dotnet build tests/Bing.Offices.ResourceProbe/... -c Release --no-restore` | PASS：0 error；4 个 NU1900（NuGet vulnerability source 不可访问）。 |
-| `dotnet test ... AsyncPipelineTest -f net6.0` | PASS：26/26。 |
-| `dotnet test ... AsyncPipelineTest -f net8.0` | PASS：26/26。 |
-| API snapshot contract net6 | BLOCKED：`approvedBy` 为空。 |
-| API snapshot contract net8 | BLOCKED：`approvedBy` 为空。 |
-| `formal-100k-v6.jsonl` 审计 | 36 cells，0 null result，27 structured budget failures，2 Hybrid disk-migration samples，0 guard-cleanup failure。 |
-| `git diff --check` | PASS；仅既有 CRLF/LF 转换警告。 |
-
-## 审查边界
-
-- 本轮仅更新本 `review.md`，未修改业务代码、测试、计划或执行记录。
-- 未执行 git add、commit、push、PR、tag 或 NuGet publish。
-- 下一步是维护者提供 API/资源预算审批证据；审批完成后重新运行独立 Review。
+- `.github/workflows/ci.yml` 的 GitHub push/PR 最终绿灯仍是发布前外部条件；本地 build、Unit、Integration、Docs 与 API compare 结果不能替代 CI。
+- 生产仓库入口仍不在本仓库。2C4G 部署必须在进入 NPOI DOM 前共享 `SemaphoreSlim(1, 1)`，保证最大实际并行度为 1；实际入口未确认或未落实该门禁时仍为 No-Go。
+- 本轮 Reviewer 仅更新 `review.md`，未修改测试、生产代码、计划、执行报告、报告证据、baseline、依赖或 CI，未执行 git add/commit/push/PR/tag/publish。

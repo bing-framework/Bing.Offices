@@ -15,6 +15,7 @@ public static class CsvStreamExtensions
     /// <param name="data">实体集合。</param>
     /// <param name="options">导出选项。</param>
     /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>包含 CSV 内容的字节数组。</returns>
     public static byte[] ExportToBytes<T>(this ICsvExporter exporter, IEnumerable<T> data,
         CsvExportOptions<T> options = null, CancellationToken cancellationToken = default) where T : class, new()
     {
@@ -44,7 +45,15 @@ public static class CsvStreamExtensions
         exporter.ExportToFile(data, path, options, cancellationToken);
     }
 
-    /// <summary>异步将实体集合导出为 CSV 字节数组。</summary>
+    /// <summary>
+    /// 异步将实体集合导出为 CSV 字节数组。
+    /// </summary>
+    /// <typeparam name="T">实体类型。</typeparam>
+    /// <param name="exporter">CSV 导出器。</param>
+    /// <param name="data">待导出的实体集合。</param>
+    /// <param name="options">导出选项。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>包含 CSV 内容的字节数组任务。</returns>
     public static async Task<byte[]> ExportToBytesAsync<T>(this ICsvExporter exporter, IEnumerable<T> data,
         CsvExportOptions<T> options = null, CancellationToken cancellationToken = default) where T : class, new()
     {
@@ -55,7 +64,16 @@ public static class CsvStreamExtensions
         return destination.ToArray();
     }
 
-    /// <summary>异步将实体集合导出为 CSV 文件。</summary>
+    /// <summary>
+    /// 异步将实体集合以原子方式导出为 CSV 文件。
+    /// </summary>
+    /// <typeparam name="T">实体类型。</typeparam>
+    /// <param name="exporter">CSV 导出器。</param>
+    /// <param name="data">待导出的实体集合。</param>
+    /// <param name="path">目标文件路径。</param>
+    /// <param name="options">导出选项。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>表示异步文件导出的任务。</returns>
     public static Task ExportToFileAsync<T>(this ICsvExporter exporter, IEnumerable<T> data, string path,
         CsvExportOptions<T> options = null, CancellationToken cancellationToken = default) where T : class, new()
     {
@@ -74,6 +92,7 @@ public static class CsvStreamExtensions
     /// <param name="content">CSV 文件字节数组。</param>
     /// <param name="options">导入选项。</param>
     /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>导入结果。</returns>
     public static CsvImportResult<T> ImportFromBytes<T>(this ICsvImporter importer, byte[] content,
         CsvImportOptions<T> options = null, CancellationToken cancellationToken = default) where T : class, new()
     {
@@ -93,6 +112,7 @@ public static class CsvStreamExtensions
     /// <param name="path">源文件路径。</param>
     /// <param name="options">导入选项。</param>
     /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>导入结果。</returns>
     public static CsvImportResult<T> ImportFromFile<T>(this ICsvImporter importer, string path,
         CsvImportOptions<T> options = null, CancellationToken cancellationToken = default) where T : class, new()
     {
@@ -104,7 +124,15 @@ public static class CsvStreamExtensions
         return importer.Import(source, options, cancellationToken);
     }
 
-    /// <summary>异步从 CSV 字节数组导入实体集合。</summary>
+    /// <summary>
+    /// 异步从 CSV 字节数组导入实体集合。
+    /// </summary>
+    /// <typeparam name="T">实体类型。</typeparam>
+    /// <param name="importer">CSV 导入器。</param>
+    /// <param name="content">CSV 文件字节数组。</param>
+    /// <param name="options">导入选项。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>异步导入结果任务。</returns>
     public static Task<CsvImportResult<T>> ImportFromBytesAsync<T>(this ICsvImporter importer, byte[] content,
         CsvImportOptions<T> options = null, CancellationToken cancellationToken = default) where T : class, new()
     {
@@ -122,7 +150,15 @@ public static class CsvStreamExtensions
         return await importer.ImportAsync(source, options, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>异步从 CSV 文件导入实体集合。</summary>
+    /// <summary>
+    /// 异步从 CSV 文件导入实体集合。
+    /// </summary>
+    /// <typeparam name="T">实体类型。</typeparam>
+    /// <param name="importer">CSV 导入器。</param>
+    /// <param name="path">源文件路径。</param>
+    /// <param name="options">导入选项。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>异步导入结果任务。</returns>
     public static async Task<CsvImportResult<T>> ImportFromFileAsync<T>(this ICsvImporter importer, string path,
         CsvImportOptions<T> options = null, CancellationToken cancellationToken = default) where T : class, new()
     {

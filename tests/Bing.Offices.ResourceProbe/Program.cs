@@ -11,7 +11,8 @@ using System.Xml;
 using Bing.Offices.Exceptions;
 
 if (args.Length >= 2 && string.Equals(args[0], "--staging-matrix", StringComparison.OrdinalIgnoreCase))
-    return StagingResourceMatrix.Run(args[1], args.Length >= 3 ? int.Parse(args[2]) : 100000);
+    return StagingResourceMatrix.Run(args[1], args.Length >= 3 ? int.Parse(args[2]) : 100000,
+        args.Length >= 4 ? args[3] : null, args.Length >= 5 ? args[4] : null);
 if (args.Length >= 6 && string.Equals(args[0], "--staging-scenario", StringComparison.OrdinalIgnoreCase))
     return StagingResourceMatrix.RunScenario(args[1], args[2], args[3], int.Parse(args[4]), int.Parse(args[5]),
         args.Length >= 7 ? args[6] : null);
