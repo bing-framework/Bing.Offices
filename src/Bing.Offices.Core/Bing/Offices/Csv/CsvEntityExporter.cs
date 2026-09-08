@@ -52,6 +52,11 @@ internal sealed partial class CsvEntityExporter : ICsvExporter
         {
             ExportCore(data, destination, options, cancellationToken);
         }
+        catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested
+            && exception.GetType() != typeof(OperationCanceledException))
+        {
+            throw new OperationCanceledException(cancellationToken);
+        }
         catch (OperationCanceledException)
         {
             throw;
@@ -87,6 +92,64 @@ internal sealed partial class CsvEntityExporter : ICsvExporter
             _fileExportCommitter.Commit(path,
                 destination => Export(data, destination, options, cancellationToken),
                 cancellationToken, "CSV");
+        }
+        catch (BingOfficesFileCommitException exception)
+        {
+            _exceptionDispatcher.Observe(exception);
+            throw;
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task ExportAsync<T>(IEnumerable<T> data, Stream destination,
+        CsvExportOptions<T> options = null, CancellationToken cancellationToken = default)
+        where T : class, new()
+    {
+        try
+        {
+            await ExportCoreAsync(data, destination, options, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested
+            && exception.GetType() != typeof(OperationCanceledException))
+        {
+            throw new OperationCanceledException(cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (ArgumentException)
+        {
+            throw;
+        }
+        catch (BingOfficesException exception)
+        {
+            _exceptionDispatcher.Observe(exception);
+            throw;
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException
+            && exception is not StackOverflowException)
+        {
+            var translated = new BingOfficesExportException("CSV 导出失败。", exception, "Core",
+                BingOfficesStage.Write);
+            _exceptionDispatcher.Observe(translated);
+            throw translated;
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task ExportToFileAsync<T>(IEnumerable<T> data, string path,
+        CsvExportOptions<T> options = null, CancellationToken cancellationToken = default)
+        where T : class, new()
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            throw new ArgumentException("目标文件路径不能为空。", nameof(path));
+
+        try
+        {
+            await _fileExportCommitter.CommitAsync(path,
+                (destination, token) => ExportAsync(data, destination, options, token),
+                cancellationToken, "CSV").ConfigureAwait(false);
         }
         catch (BingOfficesFileCommitException exception)
         {
@@ -141,6 +204,58 @@ internal sealed partial class CsvEntityExporter : ICsvExporter
             rowIndex++;
         }
         writer.Flush();
+    }
+
+    private async Task ExportCoreAsync<T>(IEnumerable<T> data, Stream destination,
+        CsvExportOptions<T> options, CancellationToken cancellationToken) where T : class, new()
+    {
+        if (data == null)
+            throw new ArgumentNullException(nameof(data));
+        if (destination == null)
+            throw new ArgumentNullException(nameof(destination));
+        if (!destination.CanWrite)
+            throw new ArgumentException("目标流不可写入。", nameof(destination));
+        cancellationToken.ThrowIfCancellationRequested();
+        options ??= new CsvExportOptions<T>();
+        ValidateOptions(options.Delimiter, options.Quote, options.NewLine, options.Encoding, options.Culture,
+            options.FormulaInjectionPolicy);
+        var document = options.MappingDocument ?? new ExcelMappingDocument
+        {
+            UseConventionFallback = true
+        };
+        IExcelMappingPlan map;
+        try
+        {
+            map = _mappingPlanFactory.Create<T>(document, options.MappingConfiguration, MappingDirection.Export);
+        }
+        catch (BingOfficesException)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException
+            && exception is not OutOfMemoryException && exception is not StackOverflowException)
+        {
+            throw new BingOfficesConfigurationException("CSV 映射配置无效。", exception);
+        }
+        var columns = CreateColumns<T>(map, options.DynamicColumns);
+        using var cancellationDestination = new CsvCancellationStream(destination, cancellationToken,
+            suppressSynchronousFlush: true);
+        using var writer = new StreamWriter(cancellationDestination, options.Encoding, 1024, true);
+        if (options.IncludeHeader)
+            await CsvRecordWriter.WriteAsync(writer, columns.Select(column => column.Title), options.Delimiter,
+                options.Quote, options.NewLine, options.FormulaInjectionPolicy, cancellationToken)
+                .ConfigureAwait(false);
+        var rowIndex = options.IncludeHeader ? 2 : 1;
+        foreach (var item in data)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            await CsvRecordWriter.WriteAsync(writer, columns.Select((column, index) => FormatValue(column, item,
+                    rowIndex, index + 1, options.Culture)), options.Delimiter, options.Quote, options.NewLine,
+                options.FormulaInjectionPolicy, cancellationToken).ConfigureAwait(false);
+            rowIndex++;
+        }
+        await writer.FlushAsync().ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
     }
 
     /// <summary>验证 CSV 序列化使用的字符、编码、区域性和公式防护策略。</summary>
@@ -325,4 +440,3 @@ internal sealed partial class CsvEntityExporter : ICsvExporter
         public IExcelDynamicMappingColumn DynamicColumn { get; }
     }
 }
-

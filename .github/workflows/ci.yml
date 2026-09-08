@@ -17,7 +17,9 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: |
+            6.0.x
+            8.0.x
 
       - name: Restore
         run: dotnet restore Bing.Offices.sln --locked-mode
@@ -28,16 +30,21 @@ jobs:
       - name: Check diff
         run: git diff --check
 
+      - name: API snapshot compare
+        run: dotnet run --project build/ApiSnapshot/ApiSnapshot.csproj -c Release --no-build -- --root output/release --baseline build/api-snapshot-baseline.json
+
       - name: Test
         run: |
+          dotnet test tests/Bing.Offices.Tests/Bing.Offices.Tests.csproj -f net6.0 -c Release --no-restore
           dotnet test tests/Bing.Offices.Tests/Bing.Offices.Tests.csproj -f net8.0 -c Release --no-restore
+          dotnet test tests/Bing.Offices.Tests.Integration/Bing.Offices.Tests.Integration.csproj -f net6.0 -c Release --no-restore
           dotnet test tests/Bing.Offices.Tests.Integration/Bing.Offices.Tests.Integration.csproj -f net8.0 -c Release --no-restore
 
       - name: Pack
         run: |
-          dotnet pack src/Bing.Offices.Abstractions/Bing.Offices.Abstractions.csproj -c Release --no-build -o artifacts/packages
-          dotnet pack src/Bing.Offices.Core/Bing.Offices.Core.csproj -c Release --no-build -o artifacts/packages
-          dotnet pack src/Bing.Offices.Npoi/Bing.Offices.Npoi.csproj -c Release --no-build -o artifacts/packages
+          dotnet pack src/Bing.Offices.Abstractions/Bing.Offices.Abstractions.csproj -c Release -o artifacts/packages
+          dotnet pack src/Bing.Offices.Core/Bing.Offices.Core.csproj -c Release -o artifacts/packages
+          dotnet pack src/Bing.Offices.Npoi/Bing.Offices.Npoi.csproj -c Release -o artifacts/packages
 
       - name: Verify packages
         shell: bash

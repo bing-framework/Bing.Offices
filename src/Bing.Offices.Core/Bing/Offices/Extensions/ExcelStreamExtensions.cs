@@ -38,6 +38,32 @@ public static class ExcelStreamExtensions
         exporter.ExportToFile(request, path, cancellationToken);
     }
 
+    /// <summary>异步将 Workbook 请求导出为 Excel 字节数组。</summary>
+    public static async Task<byte[]> ExportToBytesAsync(this IExcelExporter exporter,
+        ExcelWorkbookExportRequest request, CancellationToken cancellationToken = default)
+    {
+        if (exporter == null)
+            throw new ArgumentNullException(nameof(exporter));
+        if (request == null)
+            throw new ArgumentNullException(nameof(request));
+        using var destination = new MemoryStream();
+        await exporter.ExportAsync(request, destination, cancellationToken).ConfigureAwait(false);
+        return destination.ToArray();
+    }
+
+    /// <summary>异步将 Workbook 请求写入 Excel 文件。</summary>
+    public static Task ExportToFileAsync(this IExcelExporter exporter, ExcelWorkbookExportRequest request,
+        string path, CancellationToken cancellationToken = default)
+    {
+        if (exporter == null)
+            throw new ArgumentNullException(nameof(exporter));
+        if (request == null)
+            throw new ArgumentNullException(nameof(request));
+        if (string.IsNullOrWhiteSpace(path))
+            throw new ArgumentException("目标文件路径不能为空。", nameof(path));
+        return exporter.ExportToFileAsync(request, path, cancellationToken);
+    }
+
     /// <summary>
     /// 从 Excel 字节数组导入 Workbook。
     /// </summary>
@@ -70,5 +96,43 @@ public static class ExcelStreamExtensions
             throw new ArgumentException("源文件路径不能为空。", nameof(path));
         using var source = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
         return importer.Import(source, request, cancellationToken);
+    }
+
+    /// <summary>异步从 Excel 字节数组导入 Workbook。</summary>
+    public static Task<ExcelWorkbookImportResult<TWorkbook>> ImportFromBytesAsync<TWorkbook>(
+        this IExcelImporter importer, byte[] content, ExcelWorkbookImportRequest<TWorkbook> request,
+        CancellationToken cancellationToken = default) where TWorkbook : class, new()
+    {
+        if (importer == null)
+            throw new ArgumentNullException(nameof(importer));
+        if (content == null)
+            throw new ArgumentNullException(nameof(content));
+        if (request == null)
+            throw new ArgumentNullException(nameof(request));
+        return ImportFromBytesAsyncCore(importer, content, request, cancellationToken);
+    }
+
+    private static async Task<ExcelWorkbookImportResult<TWorkbook>> ImportFromBytesAsyncCore<TWorkbook>(
+        IExcelImporter importer, byte[] content, ExcelWorkbookImportRequest<TWorkbook> request,
+        CancellationToken cancellationToken) where TWorkbook : class, new()
+    {
+        using var source = new MemoryStream(content, writable: false);
+        return await importer.ImportAsync(source, request, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>异步从 Excel 文件导入 Workbook。</summary>
+    public static async Task<ExcelWorkbookImportResult<TWorkbook>> ImportFromFileAsync<TWorkbook>(
+        this IExcelImporter importer, string path, ExcelWorkbookImportRequest<TWorkbook> request,
+        CancellationToken cancellationToken = default) where TWorkbook : class, new()
+    {
+        if (importer == null)
+            throw new ArgumentNullException(nameof(importer));
+        if (request == null)
+            throw new ArgumentNullException(nameof(request));
+        if (string.IsNullOrWhiteSpace(path))
+            throw new ArgumentException("源文件路径不能为空。", nameof(path));
+        using var source = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 4096,
+            FileOptions.Asynchronous | FileOptions.SequentialScan);
+        return await importer.ImportAsync(source, request, cancellationToken).ConfigureAwait(false);
     }
 }

@@ -1,6 +1,6 @@
 ﻿using NPOI.SS.UserModel;
 
-namespace Bing.Offices.Extensions;
+namespace Bing.Offices.Npoi.Extensions;
 
 /// <summary>
 /// 行(<see cref="IRow"/>) 扩展

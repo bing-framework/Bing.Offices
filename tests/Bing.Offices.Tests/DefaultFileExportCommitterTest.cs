@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using Bing.Offices.IO;
 using Xunit;
 
@@ -94,6 +95,116 @@ public sealed class DefaultFileExportCommitterTest
             Assert.Throws<OperationCanceledException>(() =>
                 new DefaultFileExportCommitter().Commit(path, stream => WriteText(stream, "不会写入"),
                     cancellation.Token, "CSV"));
+
+            Assert.False(File.Exists(path));
+            Assert.Empty(GetTemporaryFiles(path));
+        }
+        finally
+        {
+            DeleteFile(path);
+        }
+    }
+
+    [Fact]
+    public async Task CommitAsync_NewTarget_ShouldWriteAndMove()
+    {
+        var path = CreatePath();
+        try
+        {
+            await new DefaultFileExportCommitter().CommitAsync(path, async (stream, token) =>
+            {
+                var bytes = Encoding.UTF8.GetBytes("异步内容");
+                await stream.WriteAsync(bytes, 0, bytes.Length, token);
+            }, CancellationToken.None, "CSV");
+
+            Assert.Equal("异步内容", File.ReadAllText(path, Encoding.UTF8));
+            Assert.Empty(GetTemporaryFiles(path));
+        }
+        finally
+        {
+            DeleteFile(path);
+        }
+    }
+
+    [Fact]
+    public async Task CommitAsync_ExistingTarget_ShouldReplaceAfterSuccessfulWrite()
+    {
+        var path = CreatePath();
+        File.WriteAllText(path, "旧内容", Encoding.UTF8);
+        try
+        {
+            await new DefaultFileExportCommitter().CommitAsync(path, async (stream, token) =>
+            {
+                var bytes = Encoding.UTF8.GetBytes("新异步内容");
+                await stream.WriteAsync(bytes, 0, bytes.Length, token);
+            }, CancellationToken.None, "Excel");
+
+            Assert.Equal("新异步内容", File.ReadAllText(path, Encoding.UTF8));
+            Assert.Empty(GetTemporaryFiles(path));
+        }
+        finally
+        {
+            DeleteFile(path);
+        }
+    }
+
+    [Fact]
+    public async Task CommitAsync_WriteFailure_ShouldPreserveExceptionAndTarget()
+    {
+        var path = CreatePath();
+        File.WriteAllText(path, "旧内容", Encoding.UTF8);
+        var expected = new InvalidOperationException("异步写入失败");
+        try
+        {
+            var actual = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                new DefaultFileExportCommitter().CommitAsync(path, (stream, token) =>
+                    Task.FromException(expected), CancellationToken.None, "CSV"));
+
+            Assert.Same(expected, actual);
+            Assert.Equal("旧内容", File.ReadAllText(path, Encoding.UTF8));
+            Assert.Empty(GetTemporaryFiles(path));
+        }
+        finally
+        {
+            DeleteFile(path);
+        }
+    }
+
+    [Fact]
+    public async Task CommitAsync_PreCanceled_ShouldNotCreateFiles()
+    {
+        var path = CreatePath();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        try
+        {
+            await Assert.ThrowsAsync<OperationCanceledException>(() =>
+                new DefaultFileExportCommitter().CommitAsync(path,
+                    (stream, token) => Task.CompletedTask, cancellation.Token, "CSV"));
+
+            Assert.False(File.Exists(path));
+            Assert.Empty(GetTemporaryFiles(path));
+        }
+        finally
+        {
+            DeleteFile(path);
+        }
+    }
+
+    [Fact]
+    public async Task CommitAsync_CanceledAfterWrite_ShouldCleanTemporaryFile()
+    {
+        var path = CreatePath();
+        using var cancellation = new CancellationTokenSource();
+        try
+        {
+            await Assert.ThrowsAsync<OperationCanceledException>(() =>
+                new DefaultFileExportCommitter().CommitAsync(path, async (stream, token) =>
+                {
+                    var bytes = Encoding.UTF8.GetBytes("部分内容");
+                    await stream.WriteAsync(bytes, 0, bytes.Length, token);
+                    cancellation.Cancel();
+                }, cancellation.Token, "CSV"));
 
             Assert.False(File.Exists(path));
             Assert.Empty(GetTemporaryFiles(path));

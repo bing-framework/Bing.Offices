@@ -1,5 +1,6 @@
 ﻿using Bing.Offices.Extensions;
 using Bing.Offices.Metadata;
+using Bing.Offices.Npoi.Extensions;
 using NPOI.HSSF.UserModel;
 using NPOI.SS.UserModel;
 using NPOI.XSSF.UserModel;

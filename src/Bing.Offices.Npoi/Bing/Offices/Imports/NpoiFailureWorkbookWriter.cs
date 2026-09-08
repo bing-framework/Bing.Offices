@@ -22,7 +22,7 @@ internal static class NpoiFailureWorkbookWriter
         IReadOnlyDictionary<string, ExcelSheetImportRequest> resolvedSheetRequests,
         CancellationToken cancellationToken)
         => Write(workbook, options, errors, resolvedSheetRequests, cancellationToken,
-            new SystemFailureWorkbookFileSystem());
+            new SystemFailureWorkbookFileSystem(), null);
 
     /// <summary>使用指定文件系统适配器写出失败工作簿，便于测试临时文件操作。</summary>
     /// <param name="workbook">原始导入工作簿。</param>
@@ -31,10 +31,12 @@ internal static class NpoiFailureWorkbookWriter
     /// <param name="resolvedSheetRequests">实际解析 Sheet 名称到请求的映射。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <param name="fileSystem">临时文件系统适配器。</param>
+    /// <param name="destinationOverride">可选的异步 staging 目标流。</param>
     internal static void Write(IWorkbook workbook, ExcelImportFailureOptions options,
         IReadOnlyCollection<ExcelImportError> errors,
         IReadOnlyDictionary<string, ExcelSheetImportRequest> resolvedSheetRequests,
-        CancellationToken cancellationToken, IFailureWorkbookFileSystem fileSystem)
+        CancellationToken cancellationToken, IFailureWorkbookFileSystem fileSystem,
+        Stream destinationOverride = null)
     {
         if (options == null || options.Mode == ExcelImportFailureWorkbookMode.None || errors.Count == 0)
             return;
@@ -87,6 +89,11 @@ internal static class NpoiFailureWorkbookWriter
             {
                 throw new BingOfficesImportException("失败工作簿错误摘要写入失败。", exception, "NPOI",
                     BingOfficesStage.Write);
+            }
+            if (destinationOverride != null)
+            {
+                SerializeToDestination(outputWorkbook, destinationOverride, options, cancellationToken);
+                return;
             }
             var temporaryDirectory = options.TemporaryDirectory ?? Path.GetTempPath();
             try
@@ -177,7 +184,7 @@ internal static class NpoiFailureWorkbookWriter
                     }
                     try
                     {
-                        NpoiFailureWorkbookSerialization.WriteStream(options.Destination, output,
+                        NpoiFailureWorkbookSerialization.WriteStream(destinationOverride ?? options.Destination, output,
                             cancellationToken);
                     }
                     catch (OperationCanceledException)
@@ -213,6 +220,65 @@ internal static class NpoiFailureWorkbookWriter
         {
             independentWorkbook?.Close();
         }
+    }
+
+    /// <summary>将异步 staging 目标作为唯一序列化目标，避免再创建第二个失败工作簿临时文件。</summary>
+    private static void SerializeToDestination(IWorkbook outputWorkbook, Stream destination,
+        ExcelImportFailureOptions options, CancellationToken cancellationToken)
+    {
+        if (!destination.CanWrite)
+            throw new ArgumentException("失败工作簿目标流不可写入。", nameof(destination));
+        using var limitedOutput = new NpoiFailureWorkbookSerialization.LimitedWriteStream(destination,
+            options.MaxSerializedBytes);
+        try
+        {
+            outputWorkbook.Write(limitedOutput, false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException
+            && exception is not StackOverflowException)
+        {
+            var fatalException = NpoiFailureWorkbookSerialization.FindFatalException(exception);
+            if (fatalException != null)
+            {
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(fatalException).Throw();
+                throw;
+            }
+            var limitException = NpoiFailureWorkbookSerialization.FindLimitException(exception);
+            if (limitException != null)
+                throw limitException;
+            if (exception is BingOfficesException)
+                throw;
+            throw new BingOfficesImportException("失败工作簿序列化失败。", exception, "NPOI",
+                BingOfficesStage.Serialize);
+        }
+        try
+        {
+            limitedOutput.Flush();
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (BingOfficesException)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException
+            && exception is not StackOverflowException)
+        {
+            throw new BingOfficesImportException("失败工作簿序列化写入失败。", exception, "NPOI",
+                BingOfficesStage.Serialize);
+        }
+        if (options.MaxSerializedBytes.HasValue && destination.Length > options.MaxSerializedBytes.Value)
+            throw new BingOfficesResourceLimitException(
+                $"失败工作簿超过最大序列化字节数: {options.MaxSerializedBytes.Value}",
+                provider: "NPOI", operation: BingOfficesOperation.Import,
+                stage: BingOfficesStage.Serialize);
+        cancellationToken.ThrowIfCancellationRequested();
     }
 
     /// <summary>删除失败工作簿临时文件，并将清理失败写入诊断或主异常。</summary>

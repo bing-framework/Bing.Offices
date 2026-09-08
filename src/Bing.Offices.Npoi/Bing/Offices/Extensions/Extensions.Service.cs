@@ -9,7 +9,7 @@ using Bing.Offices.Mappings;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
-namespace Bing.Offices.Extensions;
+namespace Bing.Offices.Npoi.Extensions;
 
 /// <summary>
 /// 服务扩展

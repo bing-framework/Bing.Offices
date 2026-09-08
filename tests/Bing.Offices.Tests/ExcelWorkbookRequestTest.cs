@@ -2691,6 +2691,14 @@ public sealed class ExcelWorkbookRequestTest
             => AtomicFileCommitter.Commit(path,
                 destination => Export(request, destination, cancellationToken),
                 cancellationToken, "Excel");
+
+        public Task ExportAsync(ExcelWorkbookExportRequest request, Stream destination,
+            CancellationToken cancellationToken = default)
+            => Task.FromException(new InvalidOperationException("测试导出失败"));
+
+        public Task ExportToFileAsync(ExcelWorkbookExportRequest request, string path,
+            CancellationToken cancellationToken = default)
+            => Task.FromException(new InvalidOperationException("测试导出失败"));
     }
 
     private sealed class CancelingExcelExporter : IExcelExporter
@@ -2707,6 +2715,14 @@ public sealed class ExcelWorkbookRequestTest
             => AtomicFileCommitter.Commit(path,
                 destination => Export(request, destination, cancellationToken),
                 cancellationToken, "Excel");
+
+        public Task ExportAsync(ExcelWorkbookExportRequest request, Stream destination,
+            CancellationToken cancellationToken = default)
+            => Task.FromException(new OperationCanceledException(cancellationToken));
+
+        public Task ExportToFileAsync(ExcelWorkbookExportRequest request, string path,
+            CancellationToken cancellationToken = default)
+            => Task.FromException(new OperationCanceledException(cancellationToken));
     }
 
     [Header(FontName = "Arial", FontSize = 11, Bold = false, Color = Color.Blue)]

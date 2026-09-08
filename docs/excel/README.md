@@ -8,7 +8,7 @@
 
 Workbook 元数据使用请求级 `ExcelWorkbookMetadataOptions` 配置，不依赖进程级默认状态。未显式调用 `Metadata(...)` 时模板 metadata 保留；显式调用时六个字段覆盖模板值，XLS 与 XLSX 采用相同策略。`ExportToFile` 和 CSV `ExportToFile` 先写同目录临时文件，成功关闭并 flush 后在最终提交点再次检查取消，再替换目标；导出失败或取消不会截断已有目标文件。直接写入调用方 Stream 时不提供回滚保证，失败后可能已经产生部分写入。
 
-NPOI 导入会先把输入复制到受 `MaxInputBytes` 约束的内存流，再建立 Workbook DOM；`MaxInputBytes` 不等于解压后 DOM 峰值保护。失败工作簿的 `MaxSerializedBytes` 只限制序列化输出，不限制原始 Workbook、解压内容、业务实体或失败工作簿 DOM 的峰值。部署不受信任文件时还应设置进程内存/CPU 限额，并使用 `ExcelResourceLimits` 限制行、错误、图片和唯一值；未映射图片不会被图片限制器扫描。
+NPOI 导入会先把输入复制到受 `MaxInputBytes` 约束的内存流，再建立 Workbook DOM；`ImportAsync` 的输入复制使用 `ReadAsync`，之后的 NPOI DOM 解析仍为同步阶段；`MaxInputBytes` 不等于解压后 DOM 峰值保护。失败工作簿的 `MaxSerializedBytes` 只限制序列化输出，不限制原始 Workbook、解压内容、业务实体或失败工作簿 DOM 的峰值。部署不受信任文件时还应设置进程内存/CPU 限额，并使用 `ExcelResourceLimits` 限制行、错误、图片和唯一值；未映射图片不会被图片限制器扫描。
 
 生产 API 以 Workbook Request 为中心，支持：
 
@@ -17,6 +17,10 @@ NPOI 导入会先把输入复制到受 `MaxInputBytes` 约束的内存流，再�
 - 模板 Workbook、命名区域、样式缓存和自定义表头
 - 显式父子关系绑定与结构化导入错误
 - XLSX 柱状、折线和饼图
+
+### Sync 与 Async
+
+`IExcelImporter.ImportAsync`、`IExcelExporter.ExportAsync` 和 `ExportToFileAsync` 仅将外围文件/Stream IO 异步化；NPOI DOM 构建、映射、校验和序列化仍运行在调用线程。CSV 的 `ImportAsync`、`ExportAsync` 和 `ExportToFileAsync` 使用异步 CSV Parser/Writer 与 Stream IO。两套 API 共享 Mapping、Validation、Conversion、错误结果和取消合同，不应使用 `Task.Run` 替代真实 IO。
 
 ```csharp
 var request = ExcelExport.Workbook(workbook =>
@@ -34,6 +38,7 @@ exporter.Export(request, stream);
 - [exceptions-and-observers.md](exceptions-and-observers.md)：异常分类、Observer 与文件提交边界
 - [dates.md](dates.md)：日期、DateTimeOffset 与跨时区合同
 - [npoi-extensions.md](npoi-extensions.md)：七个 NPOI 用户扩展容器和 Try/Throw 行为
+- [async-io.md](async-io.md)：Sync/Async API、流所有权、取消和 NPOI 同步边界
 - [nuget-migration.md](nuget-migration.md)：包身份、当前兼容边界和迁移注意事项
 
 迁移与使用：
@@ -45,6 +50,7 @@ exporter.Export(request, stream);
 - [exceptions-and-observers.md](exceptions-and-observers.md)
 - [dates.md](dates.md)
 - [npoi-extensions.md](npoi-extensions.md)
+- [async-io.md](async-io.md)
 - [nuget-migration.md](nuget-migration.md)
 
 ASP.NET Core 上传示例见 `import-validation.md`；公开示例由 `Bing.Offices.Docs.Tests` 对当前源码持续编译和执行，真实 nupkg 可消费性由发布任务中的独立 PackageConsumer 验证。

@@ -1,7 +1,7 @@
 ﻿using Bing.Offices.Metadata;
 using NPOI.SS.Util;
 
-namespace Bing.Offices.Extensions;
+namespace Bing.Offices.Npoi.Extensions;
 
 /// <summary>
 /// NPOI工作表(<see cref="NPOI.SS.UserModel.ISheet"/>) 扩展

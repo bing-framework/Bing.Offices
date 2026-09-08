@@ -1,6 +1,6 @@
 ﻿using NPOI.SS.UserModel;
 
-namespace Bing.Offices.Extensions;
+namespace Bing.Offices.Npoi.Extensions;
 
 /// <summary>
 /// 工作表行、合并区域和图片相关操作扩展。

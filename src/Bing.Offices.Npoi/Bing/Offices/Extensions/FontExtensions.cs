@@ -1,6 +1,6 @@
 ﻿using NPOI.SS.UserModel;
 
-namespace Bing.Offices.Extensions;
+namespace Bing.Offices.Npoi.Extensions;
 
 /// <summary>
 /// 字体属性配置扩展，返回同一字体以支持链式调用。

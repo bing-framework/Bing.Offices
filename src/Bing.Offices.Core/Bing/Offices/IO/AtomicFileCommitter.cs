@@ -17,6 +17,63 @@ internal static class AtomicFileCommitter
         string format)
         => Commit(path, write, cancellationToken, format, DefaultFileSystem);
 
+    /// <summary>将异步写入结果原子提交到目标路径。</summary>
+    internal static Task CommitAsync(string path, Func<Stream, CancellationToken, Task> writeAsync,
+        CancellationToken cancellationToken, string format)
+        => CommitAsync(path, writeAsync, cancellationToken, format, DefaultFileSystem);
+
+    /// <summary>使用指定文件系统适配器异步写入并提交文件。</summary>
+    internal static async Task CommitAsync(string path, Func<Stream, CancellationToken, Task> writeAsync,
+        CancellationToken cancellationToken, string format, IAtomicFileSystem fileSystem)
+    {
+        if (fileSystem == null)
+            throw new ArgumentNullException(nameof(fileSystem));
+        if (writeAsync == null)
+            throw new ArgumentNullException(nameof(writeAsync));
+        var temporaryPath = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        var writingContent = false;
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            using (var destination = fileSystem.CreateFile(temporaryPath))
+            {
+                writingContent = true;
+                await writeAsync(destination, cancellationToken).ConfigureAwait(false);
+                writingContent = false;
+                await fileSystem.FlushAsync(destination, cancellationToken).ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            if (fileSystem.Exists(path))
+                fileSystem.Replace(temporaryPath, path);
+            else
+                fileSystem.Move(temporaryPath, path);
+            temporaryPath = null;
+        }
+        catch (OperationCanceledException exception)
+        {
+            Cleanup(temporaryPath, format, exception, fileSystem);
+            if (cancellationToken.IsCancellationRequested
+                && exception.GetType() != typeof(OperationCanceledException))
+                throw new OperationCanceledException(cancellationToken);
+            throw;
+        }
+        catch (Exception exception) when (writingContent)
+        {
+            Cleanup(temporaryPath, format, exception, fileSystem);
+            throw;
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException
+            && exception is not StackOverflowException)
+        {
+            var translated = new BingOfficesFileCommitException(
+                $"{format} 文件提交失败。", exception, format, BingOfficesStage.Commit);
+            Cleanup(temporaryPath, format, translated, fileSystem);
+            throw translated;
+        }
+    }
+
     /// <summary>使用指定文件系统适配器将写入结果原子提交到目标路径。</summary>
     /// <param name="path">最终输出文件路径。</param>
     /// <param name="write">向临时输出流写入内容的操作。</param>
@@ -52,6 +109,9 @@ internal static class AtomicFileCommitter
         catch (OperationCanceledException exception)
         {
             Cleanup(temporaryPath, format, exception, fileSystem);
+            if (cancellationToken.IsCancellationRequested
+                && exception.GetType() != typeof(OperationCanceledException))
+                throw new OperationCanceledException(cancellationToken);
             throw;
         }
         catch (Exception exception) when (writingContent)
@@ -104,6 +164,8 @@ internal interface IAtomicFileSystem
     Stream CreateFile(string path);
     /// <summary>将已写入流的内容持久化到存储介质。</summary>
     void Flush(Stream stream);
+    /// <summary>异步写入并完成与同步提交一致的持久化边界。</summary>
+    Task FlushAsync(Stream stream, CancellationToken cancellationToken);
     /// <summary>确定目标文件是否存在。</summary>
     bool Exists(string path);
     /// <summary>以临时文件替换已存在的目标文件。</summary>
@@ -119,7 +181,7 @@ internal sealed class SystemAtomicFileSystem : IAtomicFileSystem
 {
     /// <inheritdoc />
     public Stream CreateFile(string path) => new FileStream(path, FileMode.CreateNew, FileAccess.Write,
-        FileShare.None, 4096, FileOptions.SequentialScan);
+        FileShare.None, 4096, FileOptions.SequentialScan | FileOptions.Asynchronous);
 
     /// <inheritdoc />
     public void Flush(Stream stream)
@@ -128,6 +190,20 @@ internal sealed class SystemAtomicFileSystem : IAtomicFileSystem
             fileStream.Flush(true);
         else
             stream.Flush();
+    }
+
+    /// <inheritdoc />
+    public async Task FlushAsync(Stream stream, CancellationToken cancellationToken)
+    {
+        if (stream is FileStream fileStream)
+        {
+            await fileStream.FlushAsync(cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            fileStream.Flush(true);
+            return;
+        }
+
+        await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc />

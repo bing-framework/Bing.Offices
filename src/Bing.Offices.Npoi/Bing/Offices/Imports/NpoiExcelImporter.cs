@@ -4,6 +4,8 @@ using Bing.Offices.Conversions;
 using Bing.Offices.Configurations;
 using Bing.Offices.Exceptions;
 using Bing.Offices.Extensions;
+using Bing.Offices.IO;
+using Bing.Offices.Npoi.Extensions;
 using Bing.Offices.Providers;
 using Bing.Offices.Validations;
 using NPOI.SS.UserModel;
@@ -13,7 +15,7 @@ namespace Bing.Offices.Imports;
 /// <summary>
 /// 基于 NPOI 的 Excel 导入器；输入会先复制并由 NPOI 建立内存中的 Workbook DOM。
 /// </summary>
-internal sealed class NpoiExcelImporter : IExcelImporter
+public sealed class NpoiExcelImporter : IExcelImporter
 {
     private delegate void ImportSheetInvoker<TWorkbook>(NpoiExcelImporter target, ISheet sheet,
         ExcelSheetImportRequest request, TWorkbook root, ICollection<ExcelSheetImportResult> sheetResults,
@@ -57,6 +59,8 @@ internal sealed class NpoiExcelImporter : IExcelImporter
     private readonly NpoiImportSheetExecutor _sheetExecutor;
     /// <summary>观察并记录公共 Excel 导入异常。</summary>
     private readonly BingOfficesExceptionDispatcher _exceptionDispatcher;
+    /// <summary>负责失败工作簿外围异步输出的可替换 staging 策略。</summary>
+    private readonly INpoiAsyncStagingFactory _asyncStagingFactory;
 
     /// <summary>
     /// 初始化一个<see cref="NpoiExcelImporter"/>类型的实例。
@@ -71,6 +75,17 @@ internal sealed class NpoiExcelImporter : IExcelImporter
         IEnumerable<INamedExcelValidationRule> namedValidationRules = null,
         IExcelMappingPlanFactory mappingPlanFactory = null,
         IEnumerable<IBingOfficesExceptionObserver> exceptionObservers = null)
+        : this(validationRules, valueConverters, namedValidationRules, mappingPlanFactory, exceptionObservers,
+            new NpoiAsyncStagingFactory(NpoiAsyncStagingStrategy.TempFile))
+    {
+    }
+
+    internal NpoiExcelImporter(IEnumerable<IExcelValidationRule> validationRules,
+        IEnumerable<IExcelValueConverter> valueConverters,
+        IEnumerable<INamedExcelValidationRule> namedValidationRules,
+        IExcelMappingPlanFactory mappingPlanFactory,
+        IEnumerable<IBingOfficesExceptionObserver> exceptionObservers,
+        INpoiAsyncStagingFactory asyncStagingFactory)
     {
         _validationRules = validationRules?.ToArray() ?? ExcelValidationRules.CreateDefault();
         _valueConverters = valueConverters?.ToArray() ?? Array.Empty<IExcelValueConverter>();
@@ -81,6 +96,12 @@ internal sealed class NpoiExcelImporter : IExcelImporter
         _rowMaterializer = new NpoiImportRowMaterializer();
         _sheetExecutor = new NpoiImportSheetExecutor(_rowMaterializer);
         _exceptionDispatcher = new BingOfficesExceptionDispatcher(exceptionObservers);
+        _asyncStagingFactory = asyncStagingFactory ?? throw new ArgumentNullException(nameof(asyncStagingFactory));
+    }
+
+    internal NpoiExcelImporter(INpoiAsyncStagingFactory asyncStagingFactory)
+        : this(null, null, null, null, null, asyncStagingFactory)
+    {
     }
 
     /// <inheritdoc />
@@ -99,6 +120,11 @@ internal sealed class NpoiExcelImporter : IExcelImporter
         try
         {
             return ImportCore(source, request, cancellationToken);
+        }
+        catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested
+            && exception.GetType() != typeof(OperationCanceledException))
+        {
+            throw new OperationCanceledException(cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -135,13 +161,146 @@ internal sealed class NpoiExcelImporter : IExcelImporter
         }
     }
 
-    private ExcelWorkbookImportResult<TWorkbook> ImportCore<TWorkbook>(Stream source,
-        ExcelWorkbookImportRequest<TWorkbook> request, CancellationToken cancellationToken)
+    /// <inheritdoc />
+    public async Task<ExcelWorkbookImportResult<TWorkbook>> ImportAsync<TWorkbook>(Stream source,
+        ExcelWorkbookImportRequest<TWorkbook> request, CancellationToken cancellationToken = default)
         where TWorkbook : class, new()
     {
+        if (source == null)
+            throw new ArgumentNullException(nameof(source));
+        if (request == null)
+            throw new ArgumentNullException(nameof(request));
+        if (!source.CanRead)
+            throw new ArgumentException("输入流不可读取。", nameof(source));
+        cancellationToken.ThrowIfCancellationRequested();
 
         using var bufferedSource = new MemoryStream();
+        INpoiAsyncStaging failureStaging = null;
+        Exception primaryException = null;
+        try
+        {
+            await NpoiStreamCopier.CopyAsync(source, bufferedSource, cancellationToken,
+                request.ResourceLimits?.MaxInputBytes).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested
+            && exception.GetType() != typeof(OperationCanceledException))
+        {
+            throw new OperationCanceledException(cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (BingOfficesException exception)
+        {
+            _exceptionDispatcher.Observe(exception);
+            throw;
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException
+            && exception is not StackOverflowException)
+        {
+            var translated = new BingOfficesImportException("Excel 输入流异步读取失败。", exception, "NPOI",
+                BingOfficesStage.Read);
+            _exceptionDispatcher.Observe(translated);
+            throw translated;
+        }
+
+        bufferedSource.Position = 0;
+        try
+        {
+            var failureDestination = request.FailureOptions?.Destination;
+            if (failureDestination != null && request.FailureOptions.Mode != ExcelImportFailureWorkbookMode.None)
+                failureStaging = _asyncStagingFactory.Create("bing-offices-failure-async-");
+            var result = ImportBufferedCore(bufferedSource, request, cancellationToken,
+                failureStaging?.WriteStream);
+            if (failureStaging != null)
+            {
+                await failureStaging.FlushAsync(cancellationToken).ConfigureAwait(false);
+                await failureStaging.CopyToAsync(failureDestination, cancellationToken).ConfigureAwait(false);
+            }
+            return result;
+        }
+        catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested
+            && exception.GetType() != typeof(OperationCanceledException))
+        {
+            primaryException = new OperationCanceledException(cancellationToken);
+            throw primaryException;
+        }
+        catch (OperationCanceledException exception)
+        {
+            primaryException = exception;
+            throw;
+        }
+        catch (ArgumentException exception)
+        {
+            primaryException = exception;
+            throw;
+        }
+        catch (BingOfficesResourceLimitException exception)
+        {
+            primaryException = exception;
+            _exceptionDispatcher.Observe(exception);
+            throw;
+        }
+        catch (BingOfficesException exception)
+        {
+            primaryException = exception;
+            _exceptionDispatcher.Observe(exception);
+            throw;
+        }
+        catch (ImageResourceLimitException exception)
+        {
+            var translated = new BingOfficesResourceLimitException("Excel 导入超过图片资源限制。", exception,
+                "NPOI", BingOfficesOperation.Import, BingOfficesStage.Read);
+            primaryException = translated;
+            _exceptionDispatcher.Observe(translated);
+            throw translated;
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException
+            && exception is not StackOverflowException)
+        {
+            var translated = new BingOfficesImportException("Excel 导入失败。", exception, "NPOI",
+                BingOfficesStage.Read);
+            primaryException = translated;
+            _exceptionDispatcher.Observe(translated);
+            throw translated;
+        }
+        finally
+        {
+            if (failureStaging != null)
+            {
+                try
+                {
+                    failureStaging.Dispose();
+                }
+                catch (Exception cleanupException) when (cleanupException is IOException
+                    || cleanupException is UnauthorizedAccessException)
+                {
+                    if (primaryException != null)
+                        primaryException.Data["Bing.Offices.ExcelAsync.FailureStagingCleanupException"] =
+                            cleanupException;
+                    else
+                        throw new IOException("Excel 失败工作簿临时文件清理失败。", cleanupException);
+                }
+            }
+        }
+    }
+
+    private ExcelWorkbookImportResult<TWorkbook> ImportCore<TWorkbook>(Stream source,
+        ExcelWorkbookImportRequest<TWorkbook> request, CancellationToken cancellationToken,
+        Stream failureDestinationOverride = null)
+        where TWorkbook : class, new()
+    {
+        using var bufferedSource = new MemoryStream();
         NpoiStreamCopier.Copy(source, bufferedSource, cancellationToken, request.ResourceLimits?.MaxInputBytes);
+        return ImportBufferedCore(bufferedSource, request, cancellationToken, failureDestinationOverride);
+    }
+
+    private ExcelWorkbookImportResult<TWorkbook> ImportBufferedCore<TWorkbook>(Stream bufferedSource,
+        ExcelWorkbookImportRequest<TWorkbook> request, CancellationToken cancellationToken,
+        Stream failureDestinationOverride = null)
+        where TWorkbook : class, new()
+    {
         bufferedSource.Position = 0;
         NpoiXlsxZipPreflight.Validate(bufferedSource, request.ResourceLimits ?? new ExcelResourceLimits(),
             cancellationToken);
@@ -235,7 +394,7 @@ internal sealed class NpoiExcelImporter : IExcelImporter
             NpoiRelationBinder.Bind(root, relation, errors, sourceLocations, cancellationToken);
         }
         NpoiFailureWorkbookWriter.Write(workbook, request.FailureOptions, errors.Errors, resolvedSheetRequests,
-            cancellationToken);
+            cancellationToken, new SystemFailureWorkbookFileSystem(), failureDestinationOverride);
         return new ExcelWorkbookImportResult<TWorkbook>(root, sheetResults, errors.Errors,
             errors.IsTruncated, errors.MaxErrors);
     }

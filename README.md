@@ -4,6 +4,13 @@
 Bing.Offices是Bing应用框架的 Excel 导入导出类库。
 当前发布程序集提供 Excel/CSV 相关能力；Word、PDF 不属于当前交付范围。
 
+## Runtime 与异步边界
+
+- `Bing.Offices.Npoi`、Unit Tests 和 Integration Tests 支持 `.NET 6` 与 `.NET 8`；Abstractions/Core 继续提供 `netstandard2.0` 资产。
+- Excel 和 CSV 同时提供 Sync 与 Async API。CSV 的 Reader/Writer、Excel 的文件/Stream 复制和文件 flush 使用真实异步 IO，并继续传递 `CancellationToken`。
+- NPOI `WorkbookFactory.Create`、Workbook DOM 操作和 `workbook.Write` 没有异步 API，因此 Excel Async 不承诺 DOM 阶段完全异步，也不使用 `Task.Run` 伪装异步。
+- NPOI-specific 扩展位于 `Bing.Offices.Npoi.Extensions`；provider-neutral 文件/字节扩展位于 `Bing.Offices.Extensions`。
+
 ## Nuget Packages
 |Nuget|版本号|说明|
 |---|---|---|

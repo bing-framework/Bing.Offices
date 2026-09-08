@@ -1,6 +1,6 @@
 ﻿using NPOI.SS.UserModel;
 
-namespace Bing.Offices.Extensions;
+namespace Bing.Offices.Npoi.Extensions;
 
 /// <summary>
 /// 单元格样式(<see cref="ICellStyle"/>) 扩展

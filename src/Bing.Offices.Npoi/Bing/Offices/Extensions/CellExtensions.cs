@@ -3,7 +3,7 @@ using System.Runtime.CompilerServices;
 using Bing.Helpers;
 using NPOI.SS.UserModel;
 
-namespace Bing.Offices.Extensions;
+namespace Bing.Offices.Npoi.Extensions;
 
 /// <summary>
 /// NPOI单元格(<see cref="NPOI.SS.UserModel.ICell"/>) 扩展

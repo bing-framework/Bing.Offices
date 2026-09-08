@@ -4,6 +4,7 @@ using System.Reflection;
 using Bing.Offices.Configurations;
 using Bing.Offices.Exceptions;
 using Bing.Offices.Extensions;
+using Bing.Offices.Npoi.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 

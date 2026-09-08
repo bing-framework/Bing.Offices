@@ -10,7 +10,7 @@ var baselinePath = Path.GetFullPath(arguments.GetValueOrDefault("baseline") ?? "
 var output = arguments.GetValueOrDefault("output");
 var dependencies = arguments.GetValueOrDefault("dependencies");
 var captureOnly = string.Equals(arguments.GetValueOrDefault("capture"), "true", StringComparison.OrdinalIgnoreCase);
-var targetFrameworks = new[] { "net8.0" };
+var targetFrameworks = new[] { "net6.0", "net8.0" };
 var jsonOptions = new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
 ApiBaselineDocument? baseline = null;
@@ -130,8 +130,8 @@ if (failures.Count > 0)
 }
 
 Console.WriteLine(captureOnly
-    ? "API snapshot capture completed."
-    : "API snapshot comparison passed for net8.0.");
+    ? "API snapshot capture completed for net6.0 and net8.0."
+    : "API snapshot comparison passed for net6.0 and net8.0.");
 return 0;
 
 static Dictionary<string, string> ParseArguments(string[] args)

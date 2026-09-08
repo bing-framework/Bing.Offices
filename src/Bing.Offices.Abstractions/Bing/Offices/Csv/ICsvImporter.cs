@@ -14,4 +14,13 @@ public interface ICsvImporter
     /// <param name="cancellationToken">取消令牌。</param>
     CsvImportResult<T> Import<T>(Stream source, CsvImportOptions<T> options = null,
         CancellationToken cancellationToken = default) where T : class, new();
+
+    /// <summary>以真正异步的 Reader/Stream IO 导入 CSV 实体集合。</summary>
+    /// <typeparam name="T">实体类型。</typeparam>
+    /// <param name="source">输入流。调用完成后保持打开。</param>
+    /// <param name="options">CSV 导入选项。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>异步导入结果。</returns>
+    Task<CsvImportResult<T>> ImportAsync<T>(Stream source, CsvImportOptions<T> options = null,
+        CancellationToken cancellationToken = default) where T : class, new();
 }

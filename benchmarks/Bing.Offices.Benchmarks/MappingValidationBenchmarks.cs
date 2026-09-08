@@ -1,5 +1,4 @@
 ﻿using BenchmarkDotNet.Attributes;
-using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -21,8 +20,6 @@ namespace Bing.Offices.Benchmarks;
 [MemoryDiagnoser]
 public class MappingValidationBenchmarks
 {
-    private const long PeakWorkingSetCeilingBytes = 1024L * 1024 * 1024;
-    private static int _workingSetEvidenceWritten;
     private IExcelMappingPlanFactory _planFactory = null!;
     private ExcelMappingConfiguration _configuration = null!;
     private ExcelMappingDocument _document = null!;
@@ -114,24 +111,6 @@ public class MappingValidationBenchmarks
         return Convert.ToBase64String(SHA256.HashData(payload));
     }
 
-    /// <summary>读取当前进程已观测峰值工作集，供资源证据采集。</summary>
-    [Benchmark]
-    public long PeakWorkingSetBytes()
-    {
-        var value = Process.GetCurrentProcess().PeakWorkingSet64;
-        EnsureResourceCeiling("PeakWorkingSetBytes", value, PeakWorkingSetCeilingBytes);
-        return value;
-    }
-
-    private static void EnsureResourceCeiling(string metric, long value, long ceiling)
-    {
-        if (value > ceiling)
-            throw new InvalidOperationException($"RESOURCE_CEILING failed metric={metric} value={value} ceiling={ceiling}");
-        var shouldWrite = Interlocked.Exchange(ref _workingSetEvidenceWritten, 1) == 0;
-        if (shouldWrite)
-            Console.WriteLine($"RESOURCE_METRIC metric={metric} value={value} ceiling={ceiling} status=passed");
-    }
-
     /// <summary>测量显式 Profile 注册解析。</summary>
     [Benchmark]
     public int ExplicitRegistration()
@@ -195,18 +174,34 @@ public class DynamicPlanBenchmarks
     public int PlanBuildCount { get; set; }
 
     private IExcelMappingPlanFactory _planFactory = null!;
+    private IExcelMappingPlanFactory _coldPlanFactory = null!;
     private ExcelMappingConfiguration _profileConfiguration = null!;
+    private IReadOnlyList<INamedExcelValidationRule> _namedRules = Array.Empty<INamedExcelValidationRule>();
 
     [GlobalSetup]
     public void Setup()
     {
-        _planFactory = ExcelMappingPlanFactoryProvider.CreateDefault(namedValidationRules:
-            Enumerable.Range(0, 10000)
-                .Select(index => (INamedExcelValidationRule)new BenchmarkNamedValidationRule($"rule-{index}"))
-                .ToArray());
+        _namedRules = Enumerable.Range(0, 10000)
+            .Select(index => (INamedExcelValidationRule)new BenchmarkNamedValidationRule($"rule-{index}"))
+            .ToArray();
+        _planFactory = CreatePlanFactory();
+        _coldPlanFactory = CreatePlanFactory();
         var profileBuilder = new ImportMappingBuilder<BenchmarkRow>();
         profileBuilder.Property(row => row.Code).HasHeader("编码");
         _profileConfiguration = profileBuilder.Build();
+    }
+
+    [IterationSetup(Target = nameof(DynamicPlanBuildCold))]
+    public void ResetColdPlanFactory() => _coldPlanFactory = CreatePlanFactory();
+
+    [IterationSetup(Target = nameof(DynamicPlanBuildCacheMiss))]
+    public void ResetCacheMissPlanFactory() => _planFactory = CreatePlanFactory();
+
+    [IterationSetup(Target = nameof(DynamicPlanBuildCacheHit))]
+    public void PrepareCacheHitPlanFactory()
+    {
+        _planFactory = CreatePlanFactory();
+        _planFactory.Create<BenchmarkRow>(CreateDynamicDocument(0), MappingDirection.Import);
     }
 
     [Benchmark]
@@ -215,9 +210,19 @@ public class DynamicPlanBenchmarks
         var count = 0;
         for (var index = 0; index < PlanBuildCount; index++)
         {
-            var factory = CreatePlanFactory();
-            count += factory.Create<BenchmarkRow>(CreateDynamicDocument(index), MappingDirection.Import).Columns.Count;
+            count += _coldPlanFactory.Create<BenchmarkRow>(CreateDynamicDocument(index), MappingDirection.Import)
+                .Columns.Count;
         }
+        return count;
+    }
+
+    /// <summary>单独测量工厂创建，避免把工厂开销误报为计划编译成本。</summary>
+    [Benchmark]
+    public int DynamicPlanFactoryCreation()
+    {
+        var count = 0;
+        for (var index = 0; index < PlanBuildCount; index++)
+            count += CreatePlanFactory().GetType().Name.Length;
         return count;
     }
 
@@ -239,10 +244,8 @@ public class DynamicPlanBenchmarks
         return count;
     }
 
-    private IExcelMappingPlanFactory CreatePlanFactory() => ExcelMappingPlanFactoryProvider.CreateDefault(namedValidationRules:
-        Enumerable.Range(0, 10000)
-            .Select(index => (INamedExcelValidationRule)new BenchmarkNamedValidationRule($"rule-{index}"))
-            .ToArray());
+    private IExcelMappingPlanFactory CreatePlanFactory() => ExcelMappingPlanFactoryProvider.CreateDefault(
+        namedValidationRules: _namedRules);
 
     private ExcelMappingDocument CreateDynamicDocument(int index) => new()
     {
@@ -425,6 +428,19 @@ public class UniqueJournalBenchmarks
     [Params(10000, 100000)]
     public int UniqueRowCount { get; set; }
 
+    private string[] _keys = Array.Empty<string>();
+    private string[] _values = Array.Empty<string>();
+
+    [GlobalSetup]
+    public void Setup()
+    {
+        _keys = Enumerable.Range(0, UniqueColumnCount)
+            .Select(column => $"unique-{column}").ToArray();
+        _values = Enumerable.Range(0, UniqueRowCount * UniqueColumnCount)
+            .Select(index => $"value-{index % UniqueColumnCount}-{index / UniqueColumnCount}")
+            .ToArray();
+    }
+
     /// <summary>
     /// 测量 Unique committed/pending journal 的线性插入。
     /// </summary>
@@ -437,7 +453,7 @@ public class UniqueJournalBenchmarks
         {
             tracker.BeginRow();
             for (var column = 0; column < UniqueColumnCount; column++)
-                tracker.TryReserve($"unique-{column}", $"value-{column}-{row}", false, false, row + 1);
+                tracker.TryReserve(_keys[column], _values[row * UniqueColumnCount + column], false, false, row + 1);
             tracker.CommitRow();
         }
         return tracker.TrackedValueCount;

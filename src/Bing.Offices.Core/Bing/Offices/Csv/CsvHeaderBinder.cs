@@ -22,26 +22,37 @@ internal static class CsvHeaderBinder
             throw new ArgumentNullException(nameof(records));
         if (!records.MoveNext())
             throw new CsvInvalidHeaderException("CSV 不包含表头。");
-        if (maxColumns.HasValue && records.Current.Count > maxColumns.Value)
+        return Bind(records.Current, properties, dynamicProperties, dynamicColumns, requireExpectedHeaders, maxColumns);
+    }
+
+    /// <summary>使用已异步读取的首条记录创建列绑定。</summary>
+    public static IReadOnlyList<CsvColumn> Bind(IReadOnlyList<string> header,
+        IReadOnlyCollection<CsvPropertyBinding> properties,
+        IReadOnlyCollection<CsvPropertyBinding> dynamicProperties,
+        IReadOnlyList<IExcelDynamicMappingColumn> dynamicColumns, bool requireExpectedHeaders, int? maxColumns = null)
+    {
+        if (header == null)
+            throw new ArgumentNullException(nameof(header));
+        if (maxColumns.HasValue && header.Count > maxColumns.Value)
             throw new CsvResourceLimitException($"CSV 表头超过最大列数: {maxColumns.Value}");
 
         var columns = new List<CsvColumn>();
         var headers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        for (var index = 0; index < records.Current.Count; index++)
+        for (var index = 0; index < header.Count; index++)
         {
-            var header = records.Current[index];
-            if (!headers.Add(header))
-                throw new CsvInvalidHeaderException($"CSV 包含重复表头: {header}");
+            var headerValue = header[index];
+            if (!headers.Add(headerValue))
+                throw new CsvInvalidHeaderException($"CSV 包含重复表头: {headerValue}");
             var property = properties.FirstOrDefault(candidate =>
-                string.Equals(candidate.Title, header, StringComparison.OrdinalIgnoreCase)
-                || candidate.Aliases.Any(alias => string.Equals(alias, header, StringComparison.OrdinalIgnoreCase))
-                || string.Equals(candidate.Name, header, StringComparison.OrdinalIgnoreCase));
+                string.Equals(candidate.Title, headerValue, StringComparison.OrdinalIgnoreCase)
+                || candidate.Aliases.Any(alias => string.Equals(alias, headerValue, StringComparison.OrdinalIgnoreCase))
+                || string.Equals(candidate.Name, headerValue, StringComparison.OrdinalIgnoreCase));
             IExcelDynamicMappingColumn dynamicColumn = null;
             if (property == null && dynamicProperties.Count == 1)
-            {
+                {
                 dynamicColumn = dynamicColumns?.FirstOrDefault(candidate =>
-                    string.Equals(candidate.Title, header, StringComparison.OrdinalIgnoreCase)
-                    || candidate.Aliases.Any(alias => string.Equals(alias, header,
+                    string.Equals(candidate.Title, headerValue, StringComparison.OrdinalIgnoreCase)
+                    || candidate.Aliases.Any(alias => string.Equals(alias, headerValue,
                         StringComparison.OrdinalIgnoreCase)));
                 if (dynamicColumns == null || dynamicColumns.Count == 0 || dynamicColumn != null)
                     property = dynamicProperties.First();
@@ -50,7 +61,7 @@ internal static class CsvHeaderBinder
                 continue;
             if (!property.Property.CanWrite)
                 throw new CsvInvalidHeaderException($"导入模板属性不可写入: {property.Name}");
-            columns.Add(new CsvColumn(index, property, header, property.IsDynamicColumn, dynamicColumn));
+            columns.Add(new CsvColumn(index, property, headerValue, property.IsDynamicColumn, dynamicColumn));
         }
         if (requireExpectedHeaders)
         {

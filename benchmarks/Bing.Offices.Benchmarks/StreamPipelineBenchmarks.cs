@@ -4,6 +4,7 @@ using Bing.Offices.Csv;
 using Bing.Offices.Exports;
 using Bing.Offices.Imports;
 using Bing.Offices.Extensions;
+using Bing.Offices.Npoi.Extensions;
 using Bing.Offices.Styles;
 using Microsoft.Extensions.DependencyInjection;
 using NPOI.SS.UserModel;
@@ -97,6 +98,15 @@ public class StreamPipelineBenchmarks
         return _importer.Import(source, _importRequest).Workbook.Items.Count;
     }
 
+    /// <summary>测量异步输入复制与同步 NPOI DOM 导入的成本。</summary>
+    [Benchmark]
+    public async Task<int> ImportAsync()
+    {
+        using var source = new MemoryStream(_sourceBytes, writable: false);
+        var result = await _importer.ImportAsync(source, _importRequest).ConfigureAwait(false);
+        return result.Workbook.Items.Count;
+    }
+
     /// <summary>
     /// 测量向 XLSX 目标流导出全部行的成本。
     /// </summary>
@@ -106,6 +116,15 @@ public class StreamPipelineBenchmarks
     {
         using var destination = new MemoryStream();
         _exporter.Export(_exportRequest, destination);
+        return destination.Length;
+    }
+
+    /// <summary>测量同步 NPOI 序列化后异步复制到目标流的成本。</summary>
+    [Benchmark]
+    public async Task<long> ExportAsync()
+    {
+        using var destination = new MemoryStream();
+        await _exporter.ExportAsync(_exportRequest, destination).ConfigureAwait(false);
         return destination.Length;
     }
 
@@ -194,10 +213,26 @@ public class CsvPipelineBenchmarks
     }
 
     [Benchmark]
+    public async Task<int> ImportAsync()
+    {
+        using var source = new MemoryStream(_sourceBytes, writable: false);
+        var result = await _importer.ImportAsync<CsvBenchmarkRow>(source).ConfigureAwait(false);
+        return result.Items.Count;
+    }
+
+    [Benchmark]
     public long Export()
     {
         using var destination = new MemoryStream();
         _exporter.Export(_rows, destination);
+        return destination.Length;
+    }
+
+    [Benchmark]
+    public async Task<long> ExportAsync()
+    {
+        using var destination = new MemoryStream();
+        await _exporter.ExportAsync(_rows, destination).ConfigureAwait(false);
         return destination.Length;
     }
 

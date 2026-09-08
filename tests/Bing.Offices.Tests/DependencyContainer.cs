@@ -1,5 +1,6 @@
 ﻿using System;
 using Bing.Offices.Extensions;
+using Bing.Offices.Npoi.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Bing.Offices.Tests;

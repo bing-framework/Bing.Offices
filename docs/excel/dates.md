@@ -8,4 +8,4 @@ Excel 数值日期、公式缓存日期和文本日期按实际 CellKind 处理�
 
 跨时区部署不改变上述结果。本项目的专项测试分别在 `TZ=UTC` 与 `TZ=Pacific Standard Time` 下执行 XLS、XLSX 和 CSV 往返，并断言相同值和 offset。
 
-`DateOnly` 不属于当前统一公共合同：Abstractions/Core 保持 netstandard2.0，NPOI 发布目标收敛为 net8.0；当前不通过伪兼容公开 DateOnly。
+`DateOnly` 不属于当前统一公共合同：Abstractions/Core 保持 netstandard2.0，NPOI 发布目标为 net6.0 与 net8.0；当前不通过伪兼容公开 DateOnly。

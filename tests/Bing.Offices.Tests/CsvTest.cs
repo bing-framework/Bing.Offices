@@ -4,6 +4,7 @@ using System.IO;
 using System.Globalization;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using Bing.Offices.Csv;
 using Bing.Offices.Attributes;
 using Bing.Offices.Configurations;
@@ -1025,6 +1026,14 @@ public class CsvTest
             => AtomicFileCommitter.Commit(path,
                 destination => Export(data, destination, options, cancellationToken),
                 cancellationToken, "CSV");
+
+        public Task ExportAsync<T>(IEnumerable<T> data, Stream destination, CsvExportOptions<T> options = null,
+            CancellationToken cancellationToken = default) where T : class, new()
+            => Task.FromException(new InvalidOperationException("测试导出失败"));
+
+        public Task ExportToFileAsync<T>(IEnumerable<T> data, string path, CsvExportOptions<T> options = null,
+            CancellationToken cancellationToken = default) where T : class, new()
+            => Task.FromException(new InvalidOperationException("测试导出失败"));
     }
 
     private sealed class CancelingCsvExporter : ICsvExporter
@@ -1041,6 +1050,14 @@ public class CsvTest
             => AtomicFileCommitter.Commit(path,
                 destination => Export(data, destination, options, cancellationToken),
                 cancellationToken, "CSV");
+
+        public Task ExportAsync<T>(IEnumerable<T> data, Stream destination, CsvExportOptions<T> options = null,
+            CancellationToken cancellationToken = default) where T : class, new()
+            => Task.FromException(new OperationCanceledException(cancellationToken));
+
+        public Task ExportToFileAsync<T>(IEnumerable<T> data, string path, CsvExportOptions<T> options = null,
+            CancellationToken cancellationToken = default) where T : class, new()
+            => Task.FromException(new OperationCanceledException(cancellationToken));
     }
 
     /// <summary>

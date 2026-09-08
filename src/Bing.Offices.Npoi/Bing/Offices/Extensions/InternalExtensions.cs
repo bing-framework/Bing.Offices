@@ -1,7 +1,7 @@
 ﻿using System.Reflection;
 using Bing.Offices.Attributes;
 
-namespace Bing.Offices.Extensions;
+namespace Bing.Offices.Npoi.Extensions;
 
 /// <summary>
     /// Excel 导出和动态列处理使用的内部反射扩展。

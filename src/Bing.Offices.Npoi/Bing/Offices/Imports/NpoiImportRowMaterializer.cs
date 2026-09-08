@@ -1,5 +1,6 @@
 ﻿using System.Globalization;
 using Bing.Offices.Conversions;
+using Bing.Offices.Npoi.Extensions;
 using Bing.Offices.Exceptions;
 using Bing.Offices.Extensions;
 using Bing.Offices.Metadata;

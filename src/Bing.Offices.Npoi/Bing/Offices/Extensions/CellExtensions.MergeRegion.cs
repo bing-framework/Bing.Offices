@@ -1,7 +1,7 @@
 ﻿using Bing.Offices.Metadata;
 using NPOI.SS.Util;
 
-namespace Bing.Offices.Extensions;
+namespace Bing.Offices.Npoi.Extensions;
 
 /// <summary>
 /// 单元格合并和合并区域解析扩展。

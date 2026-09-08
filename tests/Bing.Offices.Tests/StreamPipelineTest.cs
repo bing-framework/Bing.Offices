@@ -13,6 +13,7 @@ using Bing.Offices.Conversions;
 using Bing.Offices.Csv;
 using Bing.Offices.Exports;
 using Bing.Offices.Extensions;
+using Bing.Offices.Npoi.Extensions;
 using Bing.Offices.Exceptions;
 using Bing.Offices.Imports;
 using Bing.Offices.Mappings;
@@ -3000,9 +3001,13 @@ public class StreamPipelineTest
 
         // Act
         var importer = typeof(IExcelImporter).GetMethods().Single(method =>
+            method.Name == "Import"
+            &&
             method.GetParameters().Length == 3
             && method.GetParameters()[1].ParameterType.Name.StartsWith("ExcelWorkbookImportRequest", StringComparison.Ordinal));
         var exporter = typeof(IExcelExporter).GetMethods().Single(method =>
+            method.Name == "Export"
+            &&
             method.GetParameters().Length == 3
             && method.GetParameters()[0].ParameterType == typeof(Bing.Offices.Exports.ExcelWorkbookExportRequest)
             && method.GetParameters()[1].ParameterType == typeof(Stream));

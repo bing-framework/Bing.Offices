@@ -2,6 +2,7 @@
 using Bing.Offices.Attributes;
 using Bing.Offices.Exceptions;
 using Bing.Offices.Extensions;
+using Bing.Offices.Npoi.Extensions;
 using Bing.Offices.Providers;
 using NPOI.SS.UserModel;
 using NPOI.SS.UserModel.Charts;

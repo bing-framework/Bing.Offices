@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Threading.Tasks;
 using Bing.Offices.Attributes;
 using Bing.Offices.Configurations;
 using Bing.Offices.Csv;
@@ -15,6 +16,7 @@ using Bing.Offices.Mappings;
 using Bing.Offices.Providers;
 using Bing.Offices.Validations;
 using Bing.Offices.Extensions;
+using Bing.Offices.Npoi.Extensions;
 using Bing.Offices.Exceptions;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -167,6 +169,44 @@ public sealed class ReviewFixRegressionTest
         Assert.True(fileSystem.DeleteCalled);
         Assert.False(fileSystem.TargetChanged);
         Assert.True(fileSystem.TemporaryRemains);
+    }
+
+    [Fact]
+    public async Task AtomicFileCommitter_Async_ShouldFlushBeforeMove()
+    {
+        var fileSystem = new FailingAtomicFileSystem();
+
+        await AtomicFileCommitter.CommitAsync("target.xlsx", (stream, token) =>
+        {
+            fileSystem.Operations.Add("write");
+            stream.WriteByte(1);
+            return Task.CompletedTask;
+        }, default, "Excel", fileSystem);
+
+        Assert.Equal(new[] { "create", "write", "flush-async", "move" }, fileSystem.Operations);
+        Assert.True(fileSystem.AsyncFlushCalled);
+        Assert.False(fileSystem.SyncFlushCalled);
+    }
+
+    [Fact]
+    public async Task AtomicFileCommitter_AsyncFlushFailure_ShouldPreserveTargetAndCleanup()
+    {
+        var fileSystem = new FailingAtomicFileSystem
+        {
+            ExistingTarget = true,
+            FailFlush = true
+        };
+
+        var exception = await Assert.ThrowsAsync<BingOfficesFileCommitException>(() =>
+            AtomicFileCommitter.CommitAsync("target.xlsx", (stream, token) => Task.CompletedTask,
+                default, "Excel", fileSystem));
+
+        Assert.Equal("异步持久化失败", exception.InnerException.Message);
+        Assert.True(fileSystem.DeleteCalled);
+        Assert.False(fileSystem.TargetChanged);
+        Assert.False(fileSystem.Replaced);
+        Assert.DoesNotContain("move", fileSystem.Operations);
+        Assert.DoesNotContain("replace", fileSystem.Operations);
     }
 
     /// <summary>
@@ -940,6 +980,9 @@ public sealed class ReviewFixRegressionTest
 
         public void Commit(string path, Action<Stream> write, CancellationToken cancellationToken, string format)
             => throw _exception;
+
+        public Task CommitAsync(string path, Func<Stream, CancellationToken, Task> writeAsync,
+            CancellationToken cancellationToken, string format) => Task.FromException(_exception);
     }
 
     private sealed class FailingAtomicFileSystem : IAtomicFileSystem
@@ -948,17 +991,38 @@ public sealed class ReviewFixRegressionTest
         public bool FailMove { get; set; }
         public bool FailReplace { get; set; }
         public bool FailDelete { get; set; }
+        public bool FailFlush { get; set; }
         public bool ExistingTarget { get; set; }
         public bool DeleteCalled { get; private set; }
         public bool Replaced { get; private set; }
         public bool TargetChanged { get; private set; }
         public bool TemporaryRemains { get; private set; }
+        public bool SyncFlushCalled { get; private set; }
+        public bool AsyncFlushCalled { get; private set; }
+        public List<string> Operations { get; } = new();
 
-        public Stream CreateFile(string path) => FailWrite
-            ? new ThrowingAtomicStream()
-            : new MemoryStream();
+        public Stream CreateFile(string path)
+        {
+            Operations.Add("create");
+            return FailWrite ? new ThrowingAtomicStream() : new MemoryStream();
+        }
 
-        public void Flush(Stream stream) => stream.Flush();
+        public void Flush(Stream stream)
+        {
+            SyncFlushCalled = true;
+            Operations.Add("flush");
+            stream.Flush();
+        }
+
+        public Task FlushAsync(Stream stream, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            AsyncFlushCalled = true;
+            Operations.Add("flush-async");
+            if (FailFlush)
+                throw new IOException("异步持久化失败");
+            return Task.CompletedTask;
+        }
 
         public bool Exists(string path) => ExistingTarget;
 
@@ -966,6 +1030,7 @@ public sealed class ReviewFixRegressionTest
         {
             if (FailReplace)
                 throw new InvalidOperationException("替换失败");
+            Operations.Add("replace");
             Replaced = true;
             TargetChanged = true;
         }
@@ -974,12 +1039,14 @@ public sealed class ReviewFixRegressionTest
         {
             if (FailMove)
                 throw new InvalidOperationException("提交失败");
+            Operations.Add("move");
             TargetChanged = true;
         }
 
         public void Delete(string path)
         {
             DeleteCalled = true;
+            Operations.Add("delete");
             if (FailDelete)
             {
                 TemporaryRemains = true;

@@ -12,7 +12,7 @@ namespace Bing.Offices.Exports;
 /// <summary>
 /// 基于 NPOI 的单工作簿 Excel 导出器；NPOI 工作簿在内存中构建后写入目标流。
 /// </summary>
-internal sealed class NpoiExcelExporter : IExcelExporter
+public sealed class NpoiExcelExporter : IExcelExporter
 {
     private delegate void WriteSheetInvoker(NpoiExcelExporter target, NPOI.SS.UserModel.IWorkbook workbook,
         ExcelSheetExportRequest request, bool isTemplate, CancellationToken cancellationToken,
@@ -35,6 +35,8 @@ internal sealed class NpoiExcelExporter : IExcelExporter
     private readonly IFileExportCommitter _fileExportCommitter;
     /// <summary>观察并记录公共 Excel 导出异常。</summary>
     private readonly BingOfficesExceptionDispatcher _exceptionDispatcher;
+    /// <summary>负责外围异步输出的可替换 staging 策略。</summary>
+    private readonly INpoiAsyncStagingFactory _asyncStagingFactory;
 
     /// <summary>
     /// 初始化一个<see cref="NpoiExcelExporter"/>类型的实例。
@@ -47,6 +49,15 @@ internal sealed class NpoiExcelExporter : IExcelExporter
         IExcelMappingPlanFactory mappingPlanFactory = null,
         IEnumerable<IBingOfficesExceptionObserver> exceptionObservers = null,
         IFileExportCommitter fileExportCommitter = null)
+        : this(valueConverters, mappingPlanFactory, exceptionObservers, fileExportCommitter,
+            new NpoiAsyncStagingFactory(NpoiAsyncStagingStrategy.TempFile))
+    {
+    }
+
+    internal NpoiExcelExporter(IEnumerable<IExcelValueConverter> valueConverters,
+        IExcelMappingPlanFactory mappingPlanFactory,
+        IEnumerable<IBingOfficesExceptionObserver> exceptionObservers,
+        IFileExportCommitter fileExportCommitter, INpoiAsyncStagingFactory asyncStagingFactory)
     {
         _valueConverters = valueConverters?.ToArray() ?? Array.Empty<IExcelValueConverter>();
         _planBuilder = new NpoiExportPlanBuilder(mappingPlanFactory ?? NpoiMappingPlanFactoryResolver.CreateDefault(
@@ -54,6 +65,13 @@ internal sealed class NpoiExcelExporter : IExcelExporter
         _sheetWriter = new NpoiExportSheetWriter();
         _exceptionDispatcher = new BingOfficesExceptionDispatcher(exceptionObservers);
         _fileExportCommitter = fileExportCommitter ?? new DefaultFileExportCommitter();
+        _asyncStagingFactory = asyncStagingFactory ?? throw new ArgumentNullException(nameof(asyncStagingFactory));
+    }
+
+    internal NpoiExcelExporter(IFileExportCommitter fileExportCommitter,
+        INpoiAsyncStagingFactory asyncStagingFactory)
+        : this(null, null, null, fileExportCommitter, asyncStagingFactory)
+    {
     }
 
     /// <inheritdoc />
@@ -166,6 +184,100 @@ internal sealed class NpoiExcelExporter : IExcelExporter
             _fileExportCommitter.Commit(path,
                 destination => Export(request, destination, cancellationToken),
                 cancellationToken, "Excel");
+        }
+        catch (BingOfficesFileCommitException exception)
+        {
+            _exceptionDispatcher.Observe(exception);
+            throw;
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task ExportAsync(ExcelWorkbookExportRequest request, Stream destination,
+        CancellationToken cancellationToken = default)
+    {
+        if (request == null)
+            throw new ArgumentNullException(nameof(request));
+        if (destination == null)
+            throw new ArgumentNullException(nameof(destination));
+        if (!destination.CanWrite)
+            throw new ArgumentException("目标流不可写入。", nameof(destination));
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // NPOI 只能同步构建和序列化 DOM；外围复制通过可替换 staging 策略保持异步。
+        INpoiAsyncStaging staging = null;
+        Exception primaryException = null;
+        try
+        {
+            staging = _asyncStagingFactory.Create("bing-offices-excel-async-");
+            Export(request, staging.WriteStream, cancellationToken);
+            await staging.FlushAsync(cancellationToken).ConfigureAwait(false);
+            await staging.CopyToAsync(destination, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested
+            && exception.GetType() != typeof(OperationCanceledException))
+        {
+            primaryException = new OperationCanceledException(cancellationToken);
+            throw primaryException;
+        }
+        catch (OperationCanceledException exception)
+        {
+            primaryException = exception;
+            throw;
+        }
+        catch (ArgumentException exception)
+        {
+            primaryException = exception;
+            throw;
+        }
+        catch (BingOfficesException exception)
+        {
+            primaryException = exception;
+            throw;
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException
+            && exception is not StackOverflowException)
+        {
+            var translated = new BingOfficesExportException("Excel 异步输出流写入失败。", exception, "NPOI",
+                BingOfficesStage.Write);
+            primaryException = translated;
+            _exceptionDispatcher.Observe(translated);
+            throw translated;
+        }
+        finally
+        {
+            if (staging != null)
+            {
+                try
+                {
+                    staging.Dispose();
+                }
+                catch (Exception cleanupException) when (cleanupException is IOException
+                    || cleanupException is UnauthorizedAccessException)
+                {
+                    if (primaryException != null)
+                        primaryException.Data["Bing.Offices.ExcelAsync.StagingCleanupException"] = cleanupException;
+                    else
+                        throw;
+                }
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task ExportToFileAsync(ExcelWorkbookExportRequest request, string path,
+        CancellationToken cancellationToken = default)
+    {
+        if (request == null)
+            throw new ArgumentNullException(nameof(request));
+        if (string.IsNullOrWhiteSpace(path))
+            throw new ArgumentException("目标文件路径不能为空。", nameof(path));
+
+        try
+        {
+            await _fileExportCommitter.CommitAsync(path,
+                (destination, token) => ExportAsync(request, destination, token),
+                cancellationToken, "Excel").ConfigureAwait(false);
         }
         catch (BingOfficesFileCommitException exception)
         {

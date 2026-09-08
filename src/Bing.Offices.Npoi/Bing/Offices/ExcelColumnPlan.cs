@@ -7,6 +7,7 @@ using Bing.Offices.Dates;
 using Bing.Offices.Exceptions;
 using Bing.Offices.Exports;
 using Bing.Offices.Extensions;
+using Bing.Offices.Npoi.Extensions;
 using Bing.Offices.Imports;
 using Bing.Offices.Providers;
 using Bing.Offices.Styles;

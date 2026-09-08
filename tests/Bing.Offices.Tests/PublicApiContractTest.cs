@@ -188,6 +188,8 @@ public class PublicApiContractTest
             ["Bing.Offices.Npoi:Bing.Offices.Npoi.Extensions.WorkbookExtensions"] = "Provider User API",
             ["Bing.Offices.Npoi:Bing.Offices.Npoi.Extensions.CellStyleExtensions"] = "Provider User API",
             ["Bing.Offices.Npoi:Bing.Offices.Npoi.Extensions.FontExtensions"] = "Provider User API",
+            ["Bing.Offices.Npoi:Bing.Offices.Exports.NpoiExcelExporter"] = "Provider User API",
+            ["Bing.Offices.Npoi:Bing.Offices.Imports.NpoiExcelImporter"] = "Provider User API",
         };
 
     private static readonly IReadOnlyDictionary<string, ApiMemberGovernancePolicy> ApiMemberGovernancePolicies =
@@ -417,6 +419,8 @@ public class PublicApiContractTest
             "Bing.Offices.Npoi:Bing.Offices.Npoi.Extensions.RowExtensions",
             "Bing.Offices.Npoi:Bing.Offices.Npoi.Extensions.SheetExtensions",
             "Bing.Offices.Npoi:Bing.Offices.Npoi.Extensions.WorkbookExtensions",
+            "Bing.Offices.Npoi:Bing.Offices.Exports.NpoiExcelExporter",
+            "Bing.Offices.Npoi:Bing.Offices.Imports.NpoiExcelImporter",
             "Bing.Offices.Core:Bing.Offices.Extensions.MappingProfileServiceCollectionExtensions"
         };
         var assemblies = new[]
@@ -558,7 +562,7 @@ public class PublicApiContractTest
     /// 测试 - NPOI 适配程序集公开批准的扩展入口，但不公开内部实现辅助类型。
     /// </summary>
     [Fact]
-    public void PublicApi_NpoiAssembly_ShouldExposeOnlyRegistrationEntry()
+    public void PublicApi_NpoiAssembly_ShouldExposeApprovedProviderEntries()
     {
         // Arrange
         var assembly = typeof(NpoiExcelImporter).Assembly;
@@ -570,6 +574,8 @@ public class PublicApiContractTest
         // Assert
         Assert.Equal(new[]
         {
+            "Bing.Offices.Exports.NpoiExcelExporter",
+            "Bing.Offices.Imports.NpoiExcelImporter",
             "Bing.Offices.Npoi.Extensions.CellExtensions",
             "Bing.Offices.Npoi.Extensions.CellStyleExtensions",
             "Bing.Offices.Npoi.Extensions.ExcelNpoiServiceCollectionExtensions",
@@ -683,12 +689,23 @@ public class PublicApiContractTest
         var actual = assemblies.ToDictionary(assembly => assembly.GetName().Name!,
             GetPublicMemberSnapshotHash, StringComparer.Ordinal);
 
-        var expected = root.GetProperty("assemblies").GetProperty("net8.0");
+        var expectedTfm = GetCurrentTargetFramework();
+        Assert.True(root.GetProperty("assemblies").TryGetProperty(expectedTfm, out var expected),
+            $"BLOCKED: API baseline is missing {expectedTfm}.");
         foreach (var pair in actual)
         {
             var expectedHash = expected.GetProperty(pair.Key).GetProperty("hash").GetString();
             Assert.Equal(expectedHash, pair.Value);
         }
+    }
+
+    private static string GetCurrentTargetFramework()
+    {
+#if NET6_0
+        return "net6.0";
+#else
+        return "net8.0";
+#endif
     }
 
     private static string FindRepositoryRoot()

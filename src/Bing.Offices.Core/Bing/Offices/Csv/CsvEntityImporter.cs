@@ -61,6 +61,11 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
         {
             return ImportCore(source, options, cancellationToken);
         }
+        catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested
+            && exception.GetType() != typeof(OperationCanceledException))
+        {
+            throw new OperationCanceledException(cancellationToken);
+        }
         catch (OperationCanceledException)
         {
             throw;
@@ -82,6 +87,257 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
             _exceptionDispatcher.Observe(translated);
             throw translated;
         }
+    }
+
+    /// <inheritdoc />
+    public async Task<CsvImportResult<T>> ImportAsync<T>(Stream source, CsvImportOptions<T> options = null,
+        CancellationToken cancellationToken = default) where T : class, new()
+    {
+        try
+        {
+            return await ImportCoreAsync(source, options, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested
+            && exception.GetType() != typeof(OperationCanceledException))
+        {
+            throw new OperationCanceledException(cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (ArgumentException)
+        {
+            throw;
+        }
+        catch (BingOfficesException exception)
+        {
+            _exceptionDispatcher.Observe(exception);
+            throw;
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException
+            && exception is not StackOverflowException)
+        {
+            var translated = new BingOfficesImportException("CSV 导入失败。", exception, "Core",
+                BingOfficesStage.Read);
+            _exceptionDispatcher.Observe(translated);
+            throw translated;
+        }
+    }
+
+    private async Task<CsvImportResult<T>> ImportCoreAsync<T>(Stream source, CsvImportOptions<T> options,
+        CancellationToken cancellationToken) where T : class, new()
+    {
+        if (source == null)
+            throw new ArgumentNullException(nameof(source));
+        if (!source.CanRead)
+            throw new ArgumentException("输入流不可读取。", nameof(source));
+        cancellationToken.ThrowIfCancellationRequested();
+        options ??= new CsvImportOptions<T>();
+        options.Validate();
+        if (options.Delimiter == options.Quote || options.Delimiter == '\r' || options.Delimiter == '\n')
+            throw new ArgumentOutOfRangeException(nameof(options.Delimiter));
+        if (options.Quote == '\r' || options.Quote == '\n')
+            throw new ArgumentOutOfRangeException(nameof(options.Quote));
+        if (options.Encoding == null)
+            throw new ArgumentNullException(nameof(options.Encoding));
+        if (options.Culture == null)
+            throw new ArgumentNullException(nameof(options.Culture));
+
+        var document = options.MappingDocument ?? new ExcelMappingDocument
+        {
+            UseConventionFallback = true
+        };
+        var map = _mappingPlanFactory.Create<T>(document, options.MappingConfiguration, MappingDirection.Import);
+        var properties = map.Columns.Where(property => !property.Ignored && !property.IsDynamicColumn)
+            .Select(CsvPropertyBinding.Create<T>).ToList();
+        var dynamicProperties = map.Columns.Where(property => !property.Ignored && property.IsDynamicColumn)
+            .Select(CsvPropertyBinding.Create<T>).ToList();
+        if (dynamicProperties.Count > 1)
+            throw new InvalidOperationException($"CSV 模板 {typeof(T).FullName} 只能声明一个动态列属性。");
+        if (options.MaxInputBytes.HasValue && source.CanSeek && source.Length - source.Position > options.MaxInputBytes.Value)
+            return CreateResourceLimitResult($"CSV 输入超过最大字节数: {options.MaxInputBytes.Value}", options);
+        using var limitedSource = options.MaxInputBytes.HasValue && !source.CanSeek
+            ? new CsvLimitedReadStream(source, options.MaxInputBytes.Value)
+            : null;
+        using var cancellationSource = new CsvCancellationStream(limitedSource ?? source, cancellationToken);
+        using var reader = new StreamReader(cancellationSource, options.Encoding, true, 1024, true);
+        var items = new List<T>();
+        var errors = new List<CsvImportError>();
+        var duplicateValues = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+        var uniqueTracker = new UniqueTracker(duplicateValues, options.MaxTrackedUniqueValues,
+            CreateStringComparer(options.UniqueComparison));
+        IReadOnlyList<CsvColumn> columns = null;
+        var headerConsumed = !options.HasHeader;
+        var rowIndex = 0;
+        var dataRowCount = 0;
+        var isTruncated = false;
+
+        async Task ProcessRecord(IReadOnlyList<string> record)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (options.HasHeader && !headerConsumed)
+            {
+                try
+                {
+                    columns = CsvHeaderBinder.Bind(record, properties, dynamicProperties, map.DynamicColumns,
+                        options.RequireExpectedHeaders, options.MaxColumns);
+                }
+                catch (CsvResourceLimitException)
+                {
+                    throw;
+                }
+                headerConsumed = true;
+                rowIndex = 1;
+                return;
+            }
+            if (columns == null)
+                columns = CsvHeaderBinder.BindByPosition(properties);
+            if (options.MaxRows.HasValue && dataRowCount >= options.MaxRows.Value)
+            {
+                errors.Add(new CsvImportError($"CSV 数据行数超过限制: {options.MaxRows.Value}", rowIndex + 1, 0,
+                    null, code: CsvImportErrorCode.ResourceLimit));
+                isTruncated = true;
+                throw new CsvImportStopException();
+            }
+            dataRowCount++;
+            rowIndex++;
+            if (options.MaxColumns.HasValue && record.Count > options.MaxColumns.Value)
+            {
+                errors.Add(new CsvImportError($"CSV 第 {rowIndex} 行超过最大列数: {options.MaxColumns.Value}",
+                    rowIndex, 0, null, code: CsvImportErrorCode.ResourceLimit));
+                isTruncated = true;
+                throw new CsvImportStopException();
+            }
+            var item = new T();
+            var valid = true;
+            uniqueTracker.BeginRow();
+            Dictionary<string, object> dynamicValues = null;
+            foreach (var column in columns)
+            {
+                var value = column.Index < record.Count ? record[column.Index] : string.Empty;
+                if (options.MaxFieldLength.HasValue && value.Length > options.MaxFieldLength.Value)
+                {
+                    errors.Add(new CsvImportError(
+                        $"CSV 第 {rowIndex} 行第 {column.Index + 1} 列超过最大字段长度: {options.MaxFieldLength.Value}",
+                        rowIndex, column.Index + 1, column.DynamicColumn?.Key ?? column.Property.Name,
+                        code: CsvImportErrorCode.ResourceLimit));
+                    valid = false;
+                    isTruncated = true;
+                    break;
+                }
+                value = NormalizeText(value, column.Property.ImportWhitespace);
+                try
+                {
+                    if (column.IsDynamic)
+                    {
+                        dynamicValues ??= new Dictionary<string, object>(StringComparer.Ordinal);
+                        ValidateRawValue(value, column, rowIndex, duplicateValues, options.Culture);
+                        var dynamicValue = ConvertDynamicValue(value, column, rowIndex, options.Culture);
+                        ValidateConvertedValue(value, dynamicValue, column, rowIndex, duplicateValues,
+                            uniqueTracker, options.Culture);
+                        dynamicValues[column.DynamicColumn?.Key ?? column.HeaderName] = dynamicValue;
+                        continue;
+                    }
+                    ValidateRawValue(value, column, rowIndex, duplicateValues, options.Culture);
+                    var converted = ConvertValue(value, column.Property, rowIndex, column.Index + 1, options.Culture);
+                    ValidateConvertedValue(value, converted, column, rowIndex, duplicateValues, uniqueTracker,
+                        options.Culture);
+                    try
+                    {
+                        column.Property.Setter(item, converted);
+                    }
+                    catch (Exception exception) when (exception is not OperationCanceledException
+                        && exception is not OutOfMemoryException && exception is not StackOverflowException)
+                    {
+                        throw new BingOfficesImportException("CSV 属性写入器执行失败。", exception, "Core",
+                            BingOfficesStage.Validate, rowIndex: rowIndex,
+                            columnIndex: column.Index + 1, propertyName: column.Property.Name,
+                            code: BingOfficesErrorCode.UserExtensionFailed);
+                    }
+                }
+                catch (BingOfficesException)
+                {
+                    throw;
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception exception) when (exception is not OutOfMemoryException
+                    && exception is not StackOverflowException)
+                {
+                    int? firstRowNumber = null;
+                    var errorColumnKey = column.DynamicColumn?.Key ?? column.Property.Name;
+                    if (uniqueTracker.TryGetFirstRowNumber(errorColumnKey, value, out var firstRow))
+                        firstRowNumber = firstRow;
+                    errors.Add(new CsvImportError(exception.Message, rowIndex, column.Index + 1,
+                        errorColumnKey, firstRowNumber, ClassifyError(exception)));
+                    valid = false;
+                    break;
+                }
+            }
+            if (valid)
+            {
+                if (dynamicValues != null)
+                {
+                    try
+                    {
+                        dynamicProperties[0].Setter(item, dynamicValues);
+                    }
+                    catch (Exception exception) when (exception is not OperationCanceledException
+                        && exception is not OutOfMemoryException && exception is not StackOverflowException)
+                    {
+                        throw new BingOfficesImportException("CSV 动态属性写入器执行失败。", exception, "Core",
+                            BingOfficesStage.Validate, rowIndex: rowIndex,
+                            propertyName: dynamicProperties[0].Name,
+                            code: BingOfficesErrorCode.UserExtensionFailed);
+                    }
+                }
+                items.Add(item);
+                uniqueTracker.CommitRow();
+            }
+            else
+                uniqueTracker.RollbackRow();
+            if (isTruncated || options.MaxErrors.HasValue && errors.Count >= options.MaxErrors.Value)
+            {
+                isTruncated = true;
+                throw new CsvImportStopException();
+            }
+            await Task.CompletedTask.ConfigureAwait(false);
+        }
+
+        try
+        {
+            await CsvRecordReader.ReadAsync(reader, options.Delimiter, options.Quote, ProcessRecord,
+                cancellationToken).ConfigureAwait(false);
+            if (options.HasHeader && !headerConsumed)
+                throw new CsvInvalidHeaderException("CSV 不包含表头。");
+        }
+        catch (CsvImportStopException)
+        {
+            // 已将资源限制/最大错误数转换为结果，停止读取剩余记录。
+        }
+        catch (CsvResourceLimitException exception)
+        {
+            errors.Add(new CsvImportError(exception.Message, rowIndex + 1, 0, null,
+                code: CsvImportErrorCode.ResourceLimit));
+            isTruncated = true;
+        }
+        catch (CsvInvalidHeaderException exception)
+        {
+            return new CsvImportResult<T>(Array.Empty<T>(), new[]
+            {
+                new CsvImportError(exception.Message, 1, 0, null, code: CsvImportErrorCode.InvalidHeader)
+            }, maxErrors: options.MaxErrors);
+        }
+        if (options.MaxColumns.HasValue && columns != null && columns.Count > options.MaxColumns.Value)
+            return CreateResourceLimitResult($"CSV 映射列数超过最大列数: {options.MaxColumns.Value}", options);
+        return new CsvImportResult<T>(items, errors, isTruncated, options.MaxErrors);
+    }
+
+    private sealed class CsvImportStopException : Exception
+    {
     }
 
     private CsvImportResult<T> ImportCore<T>(Stream source, CsvImportOptions<T> options,
@@ -570,4 +826,3 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
         _ => throw new ArgumentOutOfRangeException(nameof(comparison))
     };
 }
-

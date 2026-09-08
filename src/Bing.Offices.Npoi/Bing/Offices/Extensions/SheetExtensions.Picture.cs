@@ -5,7 +5,7 @@ using NPOI.OpenXmlFormats.Dml.Spreadsheet;
 using NPOI.SS.UserModel;
 using NPOI.XSSF.UserModel;
 
-namespace Bing.Offices.Extensions;
+namespace Bing.Offices.Npoi.Extensions;
 
 /// <summary>
 /// NPOI工作表(<see cref="NPOI.SS.UserModel.ISheet"/>) 扩展
