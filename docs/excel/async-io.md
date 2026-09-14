@@ -4,11 +4,24 @@
 
 Excel 提供 `IExcelImporter.ImportAsync`、`IExcelExporter.ExportAsync` 和 `IExcelExporter.ExportToFileAsync`；CSV 提供 `ICsvImporter.ImportAsync`、`ICsvExporter.ExportAsync` 和 `ICsvExporter.ExportToFileAsync`。同步 API 保持不变，异步 API 返回与同步 API 相同的结果、错误分类和映射行为。
 
+## 2.0.0 Breaking Change
+
+`CsvStreamExtensions` 和 `ExcelStreamExtensions` 中与接口实例方法重复的四个 `ExportToFile`/`ExportToFileAsync` 扩展声明已移除。调用方继续通过 `ICsvExporter` 或 `IExcelExporter` 实例调用同名接口成员；`ExportToBytes*`、`ImportFromBytes*` 和 `ImportFromFile*` 扩展仍保留。
+
+```csharp
+await csvExporter.ExportToFileAsync(rows, path, options, cancellationToken);
+await excelExporter.ExportToFileAsync(request, path, cancellationToken);
+```
+
 ## 真异步边界
 
-CSV Parser/Writer、输入复制、输出复制、FileStream flush 和原子文件提交中的内容 IO 使用 `ReadAsync`、`WriteAsync`、`CopyToAsync` 或 `FlushAsync`。`CancellationToken` 会传递到这些 IO 调用；取消继续抛出 `OperationCanceledException`，不会包装成普通导入/导出异常。
+CSV Parser/Writer 的字段格式化在内存中同步完成；记录提交、输入复制、输出复制、FileStream flush 和原子文件提交中的内容 IO 使用 `ReadAsync`、`WriteAsync`、`CopyToAsync` 或 `FlushAsync`。CSV 异步导出会在每个字段、记录边界和最终 flush 检查 `CancellationToken`，并把令牌绑定到实际异步流写入；取消继续抛出 `OperationCanceledException`，不会包装成普通导入/导出异常。
 
 NPOI 没有异步的 `WorkbookFactory.Create` 与 Workbook DOM 序列化 API。Excel Async 会在这些阶段保持同步，并只把外围流/文件 IO 异步化；实现不使用 `Task.Run`、`.Result` 或 `.Wait()` 伪装异步。Failure Workbook 的 NPOI 序列化完成后，再通过异步 Stream 复制到调用方目标。
+
+### 模板输入边界
+
+Workbook 模板在 NPOI 的 `WorkbookFactory.Create` 阶段仍按同步 `Read` 访问。`ExportAsync` 不承诺接受只实现 `ReadAsync` 而拒绝同步读取的模板流；这属于当前 NPOI DOM 边界，而不是普通文件/输出流异步 IO 的失败。调用方应提供可同步读取、可定位的模板流，并按照流所有权合同自行管理其生命周期。该行为由双 TFM characterization 测试固定，当前不额外创建模板 staging 文件。
 
 ## 流所有权与文件提交
 

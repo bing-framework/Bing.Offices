@@ -27,14 +27,8 @@ public class CsvStreamExtensionsTest
 
         Assert.Throws<ArgumentNullException>(() =>
             CsvStreamExtensions.ExportToBytes<CsvRow>(null, data, options));
-        Assert.Throws<ArgumentNullException>(() =>
-            CsvStreamExtensions.ExportToFile<CsvRow>(null, data, "target.csv", options));
         await Assert.ThrowsAsync<ArgumentNullException>(() =>
             CsvStreamExtensions.ExportToBytesAsync<CsvRow>(null, data, options));
-        Assert.Throws<ArgumentNullException>(() =>
-        {
-            _ = CsvStreamExtensions.ExportToFileAsync<CsvRow>(null, data, "target.csv", options);
-        });
 
         Assert.Throws<ArgumentNullException>(() =>
             CsvStreamExtensions.ImportFromBytes<CsvRow>(null, content, importOptions));
@@ -54,12 +48,6 @@ public class CsvStreamExtensionsTest
             _ = CsvStreamExtensions.ImportFromBytesAsync<CsvRow>(importer, null, importOptions);
         });
 
-        Assert.Throws<ArgumentException>(() =>
-            CsvStreamExtensions.ExportToFile<CsvRow>(exporter, data, " \t", options));
-        Assert.Throws<ArgumentException>(() =>
-        {
-            _ = CsvStreamExtensions.ExportToFileAsync<CsvRow>(exporter, data, "\r\n", options);
-        });
         Assert.Throws<ArgumentException>(() =>
             CsvStreamExtensions.ImportFromFile<CsvRow>(importer, " ", importOptions));
         await Assert.ThrowsAsync<ArgumentException>(() =>
@@ -157,127 +145,6 @@ public class CsvStreamExtensionsTest
 
         Assert.Same(expected, actual);
         AssertStreamDisposed(exporter.LastDestination);
-    }
-
-    [Theory]
-    [InlineData(TrackingBehavior.Success)]
-    [InlineData(TrackingBehavior.Failure)]
-    [InlineData(TrackingBehavior.Cancellation)]
-    public void ExportToFile_ShouldForwardArgumentsAndReleaseTarget(TrackingBehavior behavior)
-    {
-        var exporter = new TrackingCsvExporter { Behavior = behavior };
-        var data = CreateData();
-        var options = new CsvExportOptions<CsvRow>();
-        using var cancellation = CreateCancellation(behavior);
-        var path = CreateTemporaryPath(".csv");
-
-        try
-        {
-            if (behavior == TrackingBehavior.Success)
-            {
-                CsvStreamExtensions.ExportToFile(exporter, data, path, options, cancellation.Token);
-                AssertFileCanBeOpenedExclusivelyAndDeleted(path);
-            }
-            else
-            {
-                var exception = Record.Exception(() =>
-                    CsvStreamExtensions.ExportToFile(exporter, data, path, options, cancellation.Token));
-                AssertExpectedBehaviorException(exporter, exception, cancellation.Token);
-            }
-
-            Assert.Same(data, exporter.LastData);
-            Assert.Same(options, exporter.LastOptions);
-            Assert.Equal(path, exporter.LastPath);
-            Assert.Equal(cancellation.Token, exporter.LastCancellationToken);
-        }
-        finally
-        {
-            DeleteTemporaryPath(path);
-        }
-    }
-
-    [Fact]
-    public void ExportToFile_ShouldPreserveOriginalFailure()
-    {
-        var expected = new InvalidOperationException("CSV 文件导出失败");
-        var exporter = new TrackingCsvExporter
-        {
-            Behavior = TrackingBehavior.Failure,
-            ExceptionToThrow = expected
-        };
-        var path = CreateTemporaryPath(".csv");
-
-        try
-        {
-            var actual = Record.Exception(() => CsvStreamExtensions.ExportToFile(exporter, CreateData(), path));
-            Assert.Same(expected, actual);
-        }
-        finally
-        {
-            DeleteTemporaryPath(path);
-        }
-    }
-
-    [Theory]
-    [InlineData(TrackingBehavior.Success)]
-    [InlineData(TrackingBehavior.Failure)]
-    [InlineData(TrackingBehavior.Cancellation)]
-    public async Task ExportToFileAsync_ShouldForwardArgumentsAndReleaseTarget(TrackingBehavior behavior)
-    {
-        var exporter = new TrackingCsvExporter { Behavior = behavior };
-        var data = CreateData();
-        var options = new CsvExportOptions<CsvRow>();
-        using var cancellation = CreateCancellation(behavior);
-        var path = CreateTemporaryPath(".csv");
-
-        try
-        {
-            if (behavior == TrackingBehavior.Success)
-            {
-                await CsvStreamExtensions.ExportToFileAsync(exporter, data, path, options,
-                    cancellation.Token);
-                AssertFileCanBeOpenedExclusivelyAndDeleted(path);
-            }
-            else
-            {
-                var exception = await Record.ExceptionAsync(() =>
-                    CsvStreamExtensions.ExportToFileAsync(exporter, data, path, options,
-                        cancellation.Token));
-                AssertExpectedBehaviorException(exporter, exception, cancellation.Token);
-            }
-
-            Assert.Same(data, exporter.LastData);
-            Assert.Same(options, exporter.LastOptions);
-            Assert.Equal(path, exporter.LastPath);
-            Assert.Equal(cancellation.Token, exporter.LastCancellationToken);
-        }
-        finally
-        {
-            DeleteTemporaryPath(path);
-        }
-    }
-
-    [Fact]
-    public async Task ExportToFileAsync_ShouldPreserveOriginalFailure()
-    {
-        var expected = new InvalidOperationException("CSV 异步文件导出失败");
-        var exporter = new TrackingCsvExporter
-        {
-            Behavior = TrackingBehavior.Failure,
-            ExceptionToThrow = expected
-        };
-        var path = CreateTemporaryPath(".csv");
-
-        try
-        {
-            var actual = await Record.ExceptionAsync(() =>
-                CsvStreamExtensions.ExportToFileAsync(exporter, CreateData(), path));
-            Assert.Same(expected, actual);
-        }
-        finally
-        {
-            DeleteTemporaryPath(path);
-        }
     }
 
     [Theory]

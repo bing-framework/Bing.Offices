@@ -1,17 +1,25 @@
+using System.Diagnostics;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Bing.Offices.ApiSnapshot;
 
 const string schema = "bing.offices.public-api.v2";
-const string generatorVersion = "2.0.0";
+const string generatorVersion = "2.3.0";
 
 var arguments = ParseArguments(args);
 var root = Path.GetFullPath(arguments.GetValueOrDefault("root") ?? "output/release");
 var baselinePath = Path.GetFullPath(arguments.GetValueOrDefault("baseline") ?? "build/api-snapshot-baseline.json");
 var output = arguments.GetValueOrDefault("output");
 var dependencies = arguments.GetValueOrDefault("dependencies");
+var packages = arguments.GetValueOrDefault("packages");
+var repository = Path.GetFullPath(arguments.GetValueOrDefault("repository") ?? Directory.GetCurrentDirectory());
 var captureOnly = string.Equals(arguments.GetValueOrDefault("capture"), "true", StringComparison.OrdinalIgnoreCase);
 var targetFrameworks = new[] { "net6.0", "net8.0" };
 var jsonOptions = new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+
+if (string.Equals(arguments.GetValueOrDefault("identity-self-test"), "true", StringComparison.OrdinalIgnoreCase))
+    return CandidateIdentityContractTest.Run();
 
 ApiBaselineDocument? baseline = null;
 if (!captureOnly)
@@ -36,6 +44,12 @@ var candidate = new ApiBaselineDocument
 };
 var failures = new List<string>();
 var diffs = new Dictionary<string, Dictionary<string, ApiMemberDiff>>(StringComparer.Ordinal);
+var candidateAssemblyPaths = GetCandidateAssemblyPaths(root);
+
+if (!captureOnly)
+{
+    CandidateIdentityVerifier.Validate(baseline!, candidateAssemblyPaths, packages, repository, failures);
+}
 
 foreach (var tfm in targetFrameworks)
 {
@@ -108,6 +122,10 @@ foreach (var tfm in targetFrameworks)
     diffs[tfm] = tfmDiffs;
 }
 
+if (captureOnly)
+    candidate.CandidateIdentity = CandidateIdentityVerifier.Capture(
+        candidateAssemblyPaths, packages, repository, candidate.BaselineCommit, failures);
+
 if (output is not null)
 {
     var directory = Path.GetFullPath(output);
@@ -146,6 +164,19 @@ static Dictionary<string, string> ParseArguments(string[] args)
     return result;
 }
 
+static Dictionary<string, string> GetCandidateAssemblyPaths(string root) =>
+    new(StringComparer.Ordinal)
+    {
+        ["netstandard2.0/Bing.Offices.Abstractions.dll"] =
+            Path.Combine(root, "netstandard2.0", "Bing.Offices.Abstractions.dll"),
+        ["netstandard2.0/Bing.Offices.Core.dll"] =
+            Path.Combine(root, "netstandard2.0", "Bing.Offices.Core.dll"),
+        ["net6.0/Bing.Offices.Npoi.dll"] =
+            Path.Combine(root, "net6.0", "Bing.Offices.Npoi.dll"),
+        ["net8.0/Bing.Offices.Npoi.dll"] =
+            Path.Combine(root, "net8.0", "Bing.Offices.Npoi.dll")
+    };
+
 public sealed class ApiBaselineDocument
 {
     public string Schema { get; set; } = "";
@@ -153,7 +184,19 @@ public sealed class ApiBaselineDocument
     public string BaselineCommit { get; set; } = "";
     public string ApprovedBy { get; set; } = "";
     public string ApprovedAt { get; set; } = "";
+    public ApiCandidateIdentity? CandidateIdentity { get; set; }
     public Dictionary<string, Dictionary<string, ApiSnapshotRecord>> Assemblies { get; set; } = new(StringComparer.Ordinal);
+}
+
+public sealed class ApiCandidateIdentity
+{
+    public string BaseCommit { get; set; } = "";
+    public string WorktreeState { get; set; } = "";
+    public string CandidateSourceManifestSha256 { get; set; } = "";
+    public string BreakingApprovalArtifact { get; set; } = "";
+    public string BreakingApprovalSha256 { get; set; } = "";
+    public Dictionary<string, string> AssemblyFiles { get; set; } = new(StringComparer.Ordinal);
+    public Dictionary<string, string> NupkgFiles { get; set; } = new(StringComparer.Ordinal);
 }
 
 public sealed class ApiSnapshotRecord
@@ -167,4 +210,477 @@ public sealed class ApiMemberDiff
 {
     public List<string> Added { get; set; } = new();
     public List<string> Removed { get; set; } = new();
+}
+
+internal static class CandidateIdentityVerifier
+{
+    internal const string BreakingApprovalPath =
+        "ai_docs/tasks/BO-RC-20260908-002/api-breaking-approval.md";
+
+    private static readonly string[] RequiredPackageIds =
+    {
+        "Bing.Offices.Abstractions",
+        "Bing.Offices.Core",
+        "Bing.Offices.Npoi"
+    };
+
+    private static readonly string[] CandidateSourceScope =
+    {
+        "src", "tests", "benchmarks", "build/ApiSnapshot", ".github", ".gitattributes", "docs",
+        "README.md", "AGENTS.md", ".gitignore", "framework.props", "common.props",
+        "common.tests.props", "version.props", "version.dev.props"
+    };
+
+    public static ApiCandidateIdentity Capture(
+        IReadOnlyDictionary<string, string> assemblyPaths,
+        string? packagesRoot,
+        string repositoryRoot,
+        string candidateCommit,
+        List<string> failures)
+    {
+        var identity = new ApiCandidateIdentity
+        {
+            BaseCommit = candidateCommit
+        };
+
+        foreach (var pair in assemblyPaths)
+        {
+            if (!File.Exists(pair.Value))
+            {
+                failures.Add($"capture: candidate assembly is missing: {pair.Value}");
+                continue;
+            }
+
+            identity.AssemblyFiles[pair.Key] = ApiSnapshotFileHash.ComputeSha256(pair.Value);
+        }
+
+        if (string.IsNullOrWhiteSpace(identity.BaseCommit)
+            && TryRunGit(repositoryRoot, new[] { "rev-parse", "HEAD" }, out var head, out _))
+            identity.BaseCommit = head.Trim();
+
+        if (TryRunGit(repositoryRoot, new[] { "status", "--porcelain=v1", "--untracked-files=all" },
+                out var status, out var statusError))
+            identity.WorktreeState = string.IsNullOrEmpty(status.Trim()) ? "clean" : "dirty";
+        else
+            failures.Add($"capture: unable to read git status: {statusError}");
+
+        if (TryGetCandidateSourceManifestSha256(repositoryRoot, out var sourceHash, out var sourceError))
+            identity.CandidateSourceManifestSha256 = sourceHash;
+        else
+            failures.Add($"capture: unable to hash candidate source manifest: {sourceError}");
+
+        identity.BreakingApprovalArtifact = BreakingApprovalPath;
+        var approvalPath = ResolveWithinRoot(repositoryRoot, BreakingApprovalPath);
+        if (approvalPath is null)
+        {
+            failures.Add($"capture: approval file path escapes repository root: {BreakingApprovalPath}");
+        }
+        else if (!File.Exists(approvalPath))
+        {
+            failures.Add($"capture: approval file is missing: {approvalPath}");
+        }
+        else
+        {
+            try
+            {
+                identity.BreakingApprovalSha256 = ApiSnapshotFileHash.ComputeCanonicalTextSha256(approvalPath);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                failures.Add($"capture: approval file could not be hashed: {approvalPath}; {exception.Message}");
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(packagesRoot))
+            identity.NupkgFiles = CaptureNupkgFiles(packagesRoot, failures);
+
+        return identity;
+    }
+
+    public static void Validate(
+        ApiBaselineDocument baseline,
+        IReadOnlyDictionary<string, string> assemblyPaths,
+        string? packagesRoot,
+        string repositoryRoot,
+        List<string> failures)
+    {
+        var identity = baseline.CandidateIdentity;
+        if (identity is null)
+        {
+            failures.Add("baseline candidate identity metadata is missing");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(identity.BaseCommit)
+            || !string.Equals(identity.BaseCommit, baseline.BaselineCommit, StringComparison.Ordinal))
+            failures.Add("candidate identity baseCommit does not match baselineCommit");
+
+        if (!string.Equals(identity.WorktreeState, "clean", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(identity.WorktreeState, "dirty", StringComparison.OrdinalIgnoreCase))
+            failures.Add($"candidate identity worktreeState is invalid: {identity.WorktreeState}");
+
+        if (TryGetCandidateSourceManifestSha256(repositoryRoot, out var actualSourceHash, out var sourceError))
+            ValidateHash("candidate source manifest", identity.CandidateSourceManifestSha256, actualSourceHash, failures);
+        else
+            failures.Add($"candidate identity source manifest verification failed: {sourceError}");
+
+        ValidateAssemblyFiles(identity.AssemblyFiles, assemblyPaths, failures);
+        ValidateNupkgFiles(identity.NupkgFiles, packagesRoot, failures);
+        ValidateApprovalFile(identity, repositoryRoot, failures);
+    }
+
+    private static void ValidateAssemblyFiles(
+        IReadOnlyDictionary<string, string>? recordedFiles,
+        IReadOnlyDictionary<string, string> assemblyPaths,
+        List<string> failures)
+    {
+        var expectedPaths = assemblyPaths.ToDictionary(
+            pair => NormalizeRelativePath(pair.Key), pair => pair.Value, StringComparer.Ordinal);
+        var recorded = NormalizeHashMap(recordedFiles, "assembly", failures);
+
+        foreach (var pair in expectedPaths)
+        {
+            if (!recorded.TryGetValue(pair.Key, out var expectedHash))
+            {
+                failures.Add($"candidate identity assembly hash is missing: {pair.Key}");
+                continue;
+            }
+
+            ValidateFileHash(pair.Value, expectedHash, $"assembly {pair.Key}", failures);
+        }
+
+        foreach (var path in recorded.Keys.Except(expectedPaths.Keys, StringComparer.Ordinal))
+            failures.Add($"candidate identity contains an unexpected assembly path: {path}");
+    }
+
+    private static void ValidateNupkgFiles(
+        IReadOnlyDictionary<string, string>? recordedFiles,
+        string? packagesRoot,
+        List<string> failures)
+    {
+        var recorded = NormalizeHashMap(recordedFiles, "nupkg", failures);
+        if (recorded.Count < RequiredPackageIds.Length)
+            failures.Add("candidate identity must contain hashes for the three production nupkg files");
+        if (string.IsNullOrWhiteSpace(packagesRoot))
+        {
+            failures.Add("nupkg hash verification requires --packages <directory>");
+            return;
+        }
+
+        var fullPackagesRoot = Path.GetFullPath(packagesRoot);
+        if (!Directory.Exists(fullPackagesRoot))
+        {
+            failures.Add($"nupkg directory does not exist: {fullPackagesRoot}");
+            return;
+        }
+
+        foreach (var pair in recorded)
+        {
+            if (!string.Equals(Path.GetExtension(pair.Key), ".nupkg", StringComparison.OrdinalIgnoreCase))
+            {
+                failures.Add($"candidate identity nupkg path is not a .nupkg file: {pair.Key}");
+                continue;
+            }
+
+            var packagePath = ResolveWithinRoot(fullPackagesRoot, pair.Key);
+            if (packagePath is null)
+            {
+                failures.Add($"candidate identity nupkg path escapes package root: {pair.Key}");
+                continue;
+            }
+
+            ValidateFileHash(packagePath, pair.Value, $"nupkg {pair.Key}", failures);
+        }
+
+        foreach (var packageId in RequiredPackageIds)
+        {
+            var matches = recorded.Keys.Where(path => string.Equals(GetPackageId(path), packageId,
+                StringComparison.OrdinalIgnoreCase)).ToArray();
+            if (matches.Length != 1)
+            {
+                failures.Add($"candidate identity must contain exactly one nupkg hash for {packageId}");
+                continue;
+            }
+
+            var actualPackages = Directory.EnumerateFiles(fullPackagesRoot, "*.nupkg", SearchOption.TopDirectoryOnly)
+                .Where(path => string.Equals(GetPackageId(Path.GetFileName(path)), packageId,
+                    StringComparison.OrdinalIgnoreCase))
+                .Select(path => NormalizeRelativePath(Path.GetRelativePath(fullPackagesRoot, path)))
+                .ToArray();
+            if (actualPackages.Length != 1 || !string.Equals(actualPackages[0], matches[0], StringComparison.Ordinal))
+                failures.Add($"candidate identity does not identify the unique final nupkg for {packageId}");
+        }
+    }
+
+    private static void ValidateApprovalFile(ApiCandidateIdentity identity, string repositoryRoot,
+        List<string> failures)
+    {
+        var path = NormalizeRelativePath(identity.BreakingApprovalArtifact);
+        if (!string.Equals(path, BreakingApprovalPath, StringComparison.Ordinal))
+        {
+            failures.Add($"candidate identity approval path is not the approved task-root file: {path}");
+            return;
+        }
+
+        var fullPath = ResolveWithinRoot(repositoryRoot, path);
+        if (fullPath is null)
+        {
+            failures.Add($"candidate identity approval path escapes repository root: {path}");
+            return;
+        }
+
+        ValidateCanonicalTextFileHash(fullPath, identity.BreakingApprovalSha256,
+            $"approval file {path}", failures);
+    }
+
+    private static Dictionary<string, string> CaptureNupkgFiles(string packagesRoot, List<string> failures)
+    {
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        var fullRoot = Path.GetFullPath(packagesRoot);
+        if (!Directory.Exists(fullRoot))
+        {
+            failures.Add($"capture: nupkg directory does not exist: {fullRoot}");
+            return result;
+        }
+
+        foreach (var packageId in RequiredPackageIds)
+        {
+            var matches = Directory.EnumerateFiles(fullRoot, "*.nupkg", SearchOption.TopDirectoryOnly)
+                .Where(path => Path.GetFileName(path).StartsWith(packageId + ".", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            if (matches.Length != 1)
+            {
+                failures.Add($"capture: expected exactly one final nupkg for {packageId}, found {matches.Length}");
+                continue;
+            }
+
+            var relativePath = NormalizeRelativePath(Path.GetRelativePath(fullRoot, matches[0]));
+            result[relativePath] = ApiSnapshotFileHash.ComputeSha256(matches[0]);
+        }
+
+        return result;
+    }
+
+    private static Dictionary<string, string> NormalizeHashMap(
+        IReadOnlyDictionary<string, string>? values, string label, List<string> failures)
+    {
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (values is null)
+            return result;
+
+        foreach (var pair in values)
+        {
+            var path = NormalizeRelativePath(pair.Key);
+            if (!result.TryAdd(path, pair.Value ?? string.Empty))
+                failures.Add($"candidate identity contains duplicate {label} path: {path}");
+            if (!ApiSnapshotFileHash.IsSha256(pair.Value))
+                failures.Add($"candidate identity {label} hash is not a SHA-256 value: {path}");
+        }
+
+        return result;
+    }
+
+    private static void ValidateFileHash(string path, string expectedHash, string label, List<string> failures)
+    {
+        if (!ApiSnapshotFileHash.IsSha256(expectedHash))
+            return;
+        if (!File.Exists(path))
+        {
+            failures.Add($"{label} is missing: {path}");
+            return;
+        }
+
+        try
+        {
+            var actualHash = ApiSnapshotFileHash.ComputeSha256(path);
+            if (!string.Equals(expectedHash, actualHash, StringComparison.OrdinalIgnoreCase))
+                failures.Add($"{label} SHA-256 mismatch: expected={expectedHash}; actual={actualHash}");
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            failures.Add($"{label} could not be hashed: {path}; {exception.Message}");
+        }
+    }
+
+    private static void ValidateCanonicalTextFileHash(string path, string expectedHash, string label,
+        List<string> failures)
+    {
+        if (!ApiSnapshotFileHash.IsSha256(expectedHash))
+            return;
+        if (!File.Exists(path))
+        {
+            failures.Add($"{label} is missing: {path}");
+            return;
+        }
+
+        try
+        {
+            var actualHash = ApiSnapshotFileHash.ComputeCanonicalTextSha256(path);
+            if (!string.Equals(expectedHash, actualHash, StringComparison.OrdinalIgnoreCase))
+                failures.Add($"{label} SHA-256 mismatch: expected={expectedHash}; actual={actualHash}");
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            failures.Add($"{label} could not be hashed: {path}; {exception.Message}");
+        }
+    }
+
+    private static void ValidateHash(string label, string expectedHash, string actualHash, List<string> failures)
+    {
+        if (!ApiSnapshotFileHash.IsSha256(expectedHash))
+        {
+            failures.Add($"candidate identity {label} hash is not a SHA-256 value");
+            return;
+        }
+
+        if (!string.Equals(expectedHash, actualHash, StringComparison.OrdinalIgnoreCase))
+            failures.Add($"candidate identity {label} SHA-256 mismatch: expected={expectedHash}; actual={actualHash}");
+    }
+
+    private static bool TryGetCandidateSourceManifestSha256(string repositoryRoot, out string hash, out string error)
+    {
+        if (!TryRunGit(repositoryRoot,
+                new[] { "ls-files", "--cached", "--others", "--exclude-standard", "--" }.Concat(CandidateSourceScope),
+                out var paths, out error))
+        {
+            hash = string.Empty;
+            return false;
+        }
+
+        var lines = new List<string>();
+        foreach (var relativePath in paths.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries)
+                     .Select(NormalizeRelativePath).Where(path => !string.IsNullOrWhiteSpace(path))
+                     .Distinct(StringComparer.Ordinal).OrderBy(path => path, StringComparer.Ordinal))
+        {
+            var fullPath = ResolveWithinRoot(repositoryRoot, relativePath);
+            if (fullPath is null)
+            {
+                hash = string.Empty;
+                error = $"candidate source path escapes repository root: {relativePath}";
+                return false;
+            }
+
+            if (!File.Exists(fullPath))
+                continue;
+
+            if (!TryRunGit(repositoryRoot,
+                    new[] { "hash-object", "--path=" + relativePath, "--", fullPath },
+                    out var canonicalBlobHash, out var canonicalHashError))
+            {
+                hash = string.Empty;
+                error = $"unable to hash candidate source path {relativePath}: {canonicalHashError}";
+                return false;
+            }
+
+            var normalizedBlobHash = canonicalBlobHash.Trim();
+            if (string.IsNullOrWhiteSpace(normalizedBlobHash))
+            {
+                hash = string.Empty;
+                error = $"git returned an empty canonical hash for candidate source path: {relativePath}";
+                return false;
+            }
+
+            lines.Add($"{relativePath}|{normalizedBlobHash}");
+        }
+
+        hash = ComputeUtf8Sha256(string.Join("\n", lines));
+        return true;
+    }
+
+    private static bool TryRunGit(string repositoryRoot, IEnumerable<string> arguments,
+        out string output, out string error)
+    {
+        try
+        {
+            using var process = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = "git",
+                    WorkingDirectory = repositoryRoot,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    StandardOutputEncoding = Encoding.UTF8,
+                    StandardErrorEncoding = Encoding.UTF8
+                }
+            };
+            foreach (var argument in arguments)
+                process.StartInfo.ArgumentList.Add(argument);
+
+            if (!process.Start())
+            {
+                output = string.Empty;
+                error = "git process did not start";
+                return false;
+            }
+
+            output = process.StandardOutput.ReadToEnd();
+            var standardError = process.StandardError.ReadToEnd();
+            process.WaitForExit();
+            if (process.ExitCode != 0)
+            {
+                error = string.IsNullOrWhiteSpace(standardError)
+                    ? $"git exited with code {process.ExitCode}"
+                    : standardError.Trim();
+                return false;
+            }
+
+            error = string.Empty;
+            return true;
+        }
+        catch (Exception exception) when (exception is IOException or InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            output = string.Empty;
+            error = exception.Message;
+            return false;
+        }
+    }
+
+    private static string ComputeUtf8Sha256(string value)
+    {
+        using var sha256 = SHA256.Create();
+        return BitConverter.ToString(sha256.ComputeHash(Encoding.UTF8.GetBytes(value)))
+            .Replace("-", string.Empty, StringComparison.Ordinal);
+    }
+
+    private static string? ResolveWithinRoot(string root, string relativePath)
+    {
+        if (string.IsNullOrWhiteSpace(relativePath) || Path.IsPathRooted(relativePath))
+            return null;
+
+        try
+        {
+            var fullRoot = Path.GetFullPath(root);
+            var fullPath = Path.GetFullPath(Path.Combine(fullRoot,
+                relativePath.Replace('/', Path.DirectorySeparatorChar)));
+            var relativeToRoot = Path.GetRelativePath(fullRoot, fullPath);
+            if (relativeToRoot == ".."
+                || relativeToRoot.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+                || Path.IsPathRooted(relativeToRoot))
+                return null;
+            return fullPath;
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+    }
+
+    private static string NormalizeRelativePath(string path)
+    {
+        var normalized = (path ?? string.Empty).Trim().Replace('\\', '/');
+        while (normalized.StartsWith("./", StringComparison.Ordinal))
+            normalized = normalized[2..];
+        return normalized;
+    }
+
+    private static string? GetPackageId(string path)
+    {
+        var fileName = Path.GetFileName(path);
+        return RequiredPackageIds.FirstOrDefault(packageId =>
+            fileName.StartsWith(packageId + ".", StringComparison.OrdinalIgnoreCase));
+    }
 }

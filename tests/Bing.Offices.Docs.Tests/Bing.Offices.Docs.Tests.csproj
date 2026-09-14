@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <IsPackable>false</IsPackable>
-    <RestoreAdditionalProjectSources>$(RestoreAdditionalProjectSources);$(MSBuildThisFileDirectory)..\..\artifacts\packages-vnext</RestoreAdditionalProjectSources>
+    <RestoreAdditionalProjectSources Condition="Exists('$(MSBuildThisFileDirectory)..\..\artifacts\packages-vnext')">$(RestoreAdditionalProjectSources);$(MSBuildThisFileDirectory)..\..\artifacts\packages-vnext</RestoreAdditionalProjectSources>
   </PropertyGroup>
 
   <ItemGroup>

@@ -191,19 +191,25 @@ internal sealed partial class CsvEntityExporter : ICsvExporter
         }
         var columns = CreateColumns<T>(map, options.DynamicColumns);
         using var writer = new StreamWriter(destination, options.Encoding, 1024, true);
+        using var csv = new CsvRecordWriter(writer, options.Delimiter, options.Quote, options.NewLine,
+            options.FormulaInjectionPolicy);
         if (options.IncludeHeader)
-            CsvRecordWriter.Write(writer, columns.Select(column => column.Title), options.Delimiter, options.Quote,
-                options.NewLine, options.FormulaInjectionPolicy);
+        {
+            for (var index = 0; index < columns.Count; index++)
+                csv.WriteField(columns[index].Title, cancellationToken);
+            csv.NextRecord();
+        }
         var rowIndex = options.IncludeHeader ? 2 : 1;
         foreach (var item in data)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            CsvRecordWriter.Write(writer, columns.Select((column, index) => FormatValue(column, item, rowIndex,
-                index + 1, options.Culture)), options.Delimiter, options.Quote, options.NewLine,
-                options.FormulaInjectionPolicy);
+            for (var index = 0; index < columns.Count; index++)
+                csv.WriteField(FormatValue(columns[index], item, rowIndex, index + 1, options.Culture),
+                    cancellationToken);
+            csv.NextRecord();
             rowIndex++;
         }
-        writer.Flush();
+        csv.Flush();
     }
 
     private async Task ExportCoreAsync<T>(IEnumerable<T> data, Stream destination,
@@ -238,23 +244,28 @@ internal sealed partial class CsvEntityExporter : ICsvExporter
             throw new BingOfficesConfigurationException("CSV 映射配置无效。", exception);
         }
         var columns = CreateColumns<T>(map, options.DynamicColumns);
-        using var cancellationDestination = new CsvCancellationStream(destination, cancellationToken,
-            suppressSynchronousFlush: true);
-        using var writer = new StreamWriter(cancellationDestination, options.Encoding, 1024, true);
+        using var csv = new CsvAsyncRecordWriter(destination, options.Encoding, options.Delimiter, options.Quote,
+            options.NewLine, options.FormulaInjectionPolicy);
         if (options.IncludeHeader)
-            await CsvRecordWriter.WriteAsync(writer, columns.Select(column => column.Title), options.Delimiter,
-                options.Quote, options.NewLine, options.FormulaInjectionPolicy, cancellationToken)
-                .ConfigureAwait(false);
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            for (var index = 0; index < columns.Count; index++)
+                csv.WriteField(columns[index].Title, cancellationToken);
+            await csv.NextRecordAsync(cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+        }
         var rowIndex = options.IncludeHeader ? 2 : 1;
         foreach (var item in data)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            await CsvRecordWriter.WriteAsync(writer, columns.Select((column, index) => FormatValue(column, item,
-                    rowIndex, index + 1, options.Culture)), options.Delimiter, options.Quote, options.NewLine,
-                options.FormulaInjectionPolicy, cancellationToken).ConfigureAwait(false);
+            for (var index = 0; index < columns.Count; index++)
+                csv.WriteField(FormatValue(columns[index], item, rowIndex, index + 1, options.Culture),
+                    cancellationToken);
+            await csv.NextRecordAsync(cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
             rowIndex++;
         }
-        await writer.FlushAsync().ConfigureAwait(false);
+        await csv.FlushAsync(cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
     }
 

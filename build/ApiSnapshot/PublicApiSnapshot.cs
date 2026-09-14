@@ -118,7 +118,7 @@ public sealed class PublicApiSnapshot
         $"method|{type.FullName}.{method.Name}|visibility={GetVisibility(method)}|modifiers={FormatMethodModifiers(method)}"
         + $"|return={FormatTypeName(method.ReturnType)}|returnAttributes={FormatAttributes(method.ReturnParameter)}"
         + $"|params={FormatParameters(method.GetParameters())}|generic={FormatGenericParameters(method.GetGenericArguments())}"
-        + $"|attributes={FormatAttributes(method)}";
+        + $"|attributes={FormatMethodAttributes(method)}";
 
     private static string FormatParameters(IReadOnlyList<ParameterInfo> parameters) =>
         string.Join(",", parameters.Select(parameter =>
@@ -225,6 +225,11 @@ public sealed class PublicApiSnapshot
 
     private static string FormatAttributes(ParameterInfo parameter) =>
         FormatAttributes(CustomAttributeData.GetCustomAttributes(parameter));
+
+    private static string FormatMethodAttributes(MethodInfo method) =>
+        FormatAttributes(CustomAttributeData.GetCustomAttributes(method).Where(attribute =>
+            !string.Equals(attribute.AttributeType.FullName,
+                "System.Runtime.CompilerServices.AsyncStateMachineAttribute", StringComparison.Ordinal)));
 
     private static string FormatAttributes(IEnumerable<CustomAttributeData> attributes) =>
         string.Join(",", attributes.OrderBy(attribute => attribute.AttributeType.FullName, StringComparer.Ordinal)
@@ -506,5 +511,54 @@ public sealed class PublicApiSnapshot
 
             public bool IsTrustedPlatformAssembly { get; }
         }
+    }
+}
+
+internal static class ApiSnapshotFileHash
+{
+    public static string ComputeSha256(string path)
+    {
+        using var stream = File.OpenRead(path);
+        using var sha256 = SHA256.Create();
+        return BitConverter.ToString(sha256.ComputeHash(stream))
+            .Replace("-", string.Empty, StringComparison.Ordinal);
+    }
+
+    public static string ComputeCanonicalTextSha256(string path)
+    {
+        var bytes = File.ReadAllBytes(path);
+        using var normalized = new MemoryStream(bytes.Length);
+        for (var index = 0; index < bytes.Length; index++)
+        {
+            if (bytes[index] == 0x0D)
+            {
+                normalized.WriteByte(0x0A);
+                if (index + 1 < bytes.Length && bytes[index + 1] == 0x0A)
+                    index++;
+                continue;
+            }
+
+            normalized.WriteByte(bytes[index]);
+        }
+
+        using var sha256 = SHA256.Create();
+        return BitConverter.ToString(sha256.ComputeHash(normalized.ToArray()))
+            .Replace("-", string.Empty, StringComparison.Ordinal);
+    }
+
+    public static bool IsSha256(string? value)
+    {
+        if (value is null || value.Length != 64)
+            return false;
+
+        foreach (var character in value)
+        {
+            if (!((character >= '0' && character <= '9')
+                || (character >= 'A' && character <= 'F')
+                || (character >= 'a' && character <= 'f')))
+                return false;
+        }
+
+        return true;
     }
 }

@@ -22,16 +22,17 @@ jobs:
             8.0.x
 
       - name: Restore
-        run: dotnet restore Bing.Offices.sln --locked-mode
+        run: |
+          dotnet restore Bing.Offices.sln
+          dotnet restore tests/Bing.Offices.ResourceProbe/Bing.Offices.ResourceProbe.csproj
 
       - name: Build
-        run: dotnet build Bing.Offices.sln -c Release --no-restore
+        run: |
+          dotnet build Bing.Offices.sln -c Release --no-restore
+          dotnet build tests/Bing.Offices.ResourceProbe/Bing.Offices.ResourceProbe.csproj -c Release --no-restore
 
       - name: Check diff
         run: git diff --check
-
-      - name: API snapshot compare
-        run: dotnet run --project build/ApiSnapshot/ApiSnapshot.csproj -c Release --no-build -- --root output/release --baseline build/api-snapshot-baseline.json
 
       - name: Test
         run: |
@@ -39,12 +40,28 @@ jobs:
           dotnet test tests/Bing.Offices.Tests/Bing.Offices.Tests.csproj -f net8.0 -c Release --no-restore
           dotnet test tests/Bing.Offices.Tests.Integration/Bing.Offices.Tests.Integration.csproj -f net6.0 -c Release --no-restore
           dotnet test tests/Bing.Offices.Tests.Integration/Bing.Offices.Tests.Integration.csproj -f net8.0 -c Release --no-restore
+          dotnet test tests/Bing.Offices.Docs.Tests/Bing.Offices.Docs.Tests.csproj -c Release --no-restore
+
+      - name: Resource and benchmark contracts
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p artifacts/ci-contracts
+          dotnet run --project tests/Bing.Offices.ResourceProbe/Bing.Offices.ResourceProbe.csproj \
+            -c Release --no-build --no-restore -- \
+            --staging-matrix artifacts/ci-contracts/resource-matrix.jsonl 1000 \
+            | tee artifacts/ci-contracts/resource-matrix.log
+          grep -q 'scenarios=36 status=passed' artifacts/ci-contracts/resource-matrix.log
+          dotnet run --project benchmarks/Bing.Offices.Benchmarks/Bing.Offices.Benchmarks.csproj \
+            -c Release --no-build --no-restore -- --list flat \
+            | tee artifacts/ci-contracts/benchmark-list.log
+          grep -q 'RealIoBenchmarks' artifacts/ci-contracts/benchmark-list.log
 
       - name: Pack
         run: |
-          dotnet pack src/Bing.Offices.Abstractions/Bing.Offices.Abstractions.csproj -c Release -o artifacts/packages
-          dotnet pack src/Bing.Offices.Core/Bing.Offices.Core.csproj -c Release -o artifacts/packages
-          dotnet pack src/Bing.Offices.Npoi/Bing.Offices.Npoi.csproj -c Release -o artifacts/packages
+          dotnet pack src/Bing.Offices.Abstractions/Bing.Offices.Abstractions.csproj -c Release --no-restore -o artifacts/packages
+          dotnet pack src/Bing.Offices.Core/Bing.Offices.Core.csproj -c Release --no-restore -o artifacts/packages
+          dotnet pack src/Bing.Offices.Npoi/Bing.Offices.Npoi.csproj -c Release --no-restore -o artifacts/packages
 
       - name: Verify packages
         shell: bash
@@ -55,3 +72,44 @@ jobs:
             unzip -l "$package" | grep -q 'lib/'
             unzip -l "$package" | grep -q '\.xml$'
           done
+
+      - name: API snapshot compare
+        shell: bash
+        run: |
+          mkdir -p artifacts/api-snapshot
+          dotnet run --project build/ApiSnapshot/ApiSnapshot.csproj -c Release --no-build -- --identity-self-test true
+          dotnet run --project build/ApiSnapshot/ApiSnapshot.csproj -c Release --no-build -- \
+            --root output/release --baseline build/api-snapshot-baseline.json --packages artifacts/packages \
+            --repository . --output artifacts/api-snapshot
+
+      - name: Package consumers
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p artifacts/consumer-results artifacts/consumer-cache/net6 artifacts/consumer-cache/net8
+          dotnet restore tests/Bing.Offices.Consumer.Net6/Bing.Offices.Consumer.Net6.csproj \
+            --configfile tests/Bing.Offices.Consumer.Net6/NuGet.Config \
+            --packages artifacts/consumer-cache/net6
+          dotnet restore tests/Bing.Offices.Consumer.Net8/Bing.Offices.Consumer.Net8.csproj \
+            --configfile tests/Bing.Offices.Consumer.Net8/NuGet.Config \
+            --packages artifacts/consumer-cache/net8
+          dotnet build tests/Bing.Offices.Consumer.Net6/Bing.Offices.Consumer.Net6.csproj \
+            -c Release --no-restore | tee artifacts/consumer-results/net6-build.log
+          dotnet build tests/Bing.Offices.Consumer.Net8/Bing.Offices.Consumer.Net8.csproj \
+            -c Release --no-restore | tee artifacts/consumer-results/net8-build.log
+          dotnet run --project tests/Bing.Offices.Consumer.Net6/Bing.Offices.Consumer.Net6.csproj \
+            -c Release --no-build --no-restore | tee artifacts/consumer-results/net6-run.log
+          dotnet run --project tests/Bing.Offices.Consumer.Net8/Bing.Offices.Consumer.Net8.csproj \
+            -c Release --no-build --no-restore | tee artifacts/consumer-results/net8-run.log
+          grep -q 'package-consumer-ok' artifacts/consumer-results/net6-run.log
+          grep -q 'package-consumer-ok' artifacts/consumer-results/net8-run.log
+
+      - name: Upload package evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: bing-offices-package-evidence
+          path: |
+            artifacts/packages
+            artifacts/api-snapshot
+            artifacts/consumer-results
+            artifacts/ci-contracts

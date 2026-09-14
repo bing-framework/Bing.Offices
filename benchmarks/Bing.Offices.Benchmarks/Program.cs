@@ -35,11 +35,23 @@ public static class Program
             TailLatency.Run(args[1], int.Parse(args[2]));
             return;
         }
+        if (args.Length >= 3 && string.Equals(args[0], "--real-io-probe", StringComparison.OrdinalIgnoreCase))
+        {
+            RealIoProbe.Run(args[1], int.Parse(args[2]));
+            return;
+        }
+        if (args.Length >= 5 && string.Equals(args[0], "--real-io-scenario", StringComparison.OrdinalIgnoreCase))
+        {
+            RealIoProbe.RunScenario(args[1], args[2], int.Parse(args[3]), int.Parse(args[4]));
+            return;
+        }
         BenchmarkSwitcher.FromTypes(
             new[]
             {
                 typeof(StreamPipelineBenchmarks),
                 typeof(CsvPipelineBenchmarks),
+                typeof(RealIoBenchmarks),
+                typeof(RealIoPipelineBenchmarks),
                 typeof(GenericSheetDispatchBenchmarks),
                 typeof(FailureWorkbookBenchmarks),
                 typeof(HeaderStyleBenchmarks),

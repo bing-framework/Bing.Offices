@@ -272,6 +272,6 @@ __pycache__/
 .agents/.env.local
 .agents/runtime/*
 
-packages.lock.json
-
 ai_docs/tasks/**/benchmarks/**
+ai_docs/tasks/**/artifacts/**
+packages.lock.json

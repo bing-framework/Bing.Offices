@@ -27,14 +27,8 @@ public class ExcelStreamExtensionsTest
 
         Assert.Throws<ArgumentNullException>(() =>
             ExcelStreamExtensions.ExportToBytes(null, exportRequest));
-        Assert.Throws<ArgumentNullException>(() =>
-            ExcelStreamExtensions.ExportToFile(null, exportRequest, "target.xlsx"));
         await Assert.ThrowsAsync<ArgumentNullException>(() =>
             ExcelStreamExtensions.ExportToBytesAsync(null, exportRequest));
-        Assert.Throws<ArgumentNullException>(() =>
-        {
-            _ = ExcelStreamExtensions.ExportToFileAsync(null, exportRequest, "target.xlsx");
-        });
 
         Assert.Throws<ArgumentNullException>(() =>
             ExcelStreamExtensions.ImportFromBytes<ExcelWorkbook>(null, content, importRequest));
@@ -49,14 +43,8 @@ public class ExcelStreamExtensionsTest
 
         Assert.Throws<ArgumentNullException>(() =>
             ExcelStreamExtensions.ExportToBytes(exporter, null));
-        Assert.Throws<ArgumentNullException>(() =>
-            ExcelStreamExtensions.ExportToFile(exporter, null, "target.xlsx"));
         await Assert.ThrowsAsync<ArgumentNullException>(() =>
             ExcelStreamExtensions.ExportToBytesAsync(exporter, null));
-        Assert.Throws<ArgumentNullException>(() =>
-        {
-            _ = ExcelStreamExtensions.ExportToFileAsync(exporter, null, "target.xlsx");
-        });
 
         Assert.Throws<ArgumentNullException>(() =>
             ExcelStreamExtensions.ImportFromBytes<ExcelWorkbook>(importer, null, importRequest));
@@ -75,12 +63,6 @@ public class ExcelStreamExtensionsTest
         await Assert.ThrowsAsync<ArgumentNullException>(() =>
             ExcelStreamExtensions.ImportFromFileAsync<ExcelWorkbook>(importer, "source.xlsx", null));
 
-        Assert.Throws<ArgumentException>(() =>
-            ExcelStreamExtensions.ExportToFile(exporter, exportRequest, " \t"));
-        Assert.Throws<ArgumentException>(() =>
-        {
-            _ = ExcelStreamExtensions.ExportToFileAsync(exporter, exportRequest, "\r\n");
-        });
         Assert.Throws<ArgumentException>(() =>
             ExcelStreamExtensions.ImportFromFile<ExcelWorkbook>(importer, " ", importRequest));
         await Assert.ThrowsAsync<ArgumentException>(() =>
@@ -173,122 +155,6 @@ public class ExcelStreamExtensionsTest
 
         Assert.Same(expected, actual);
         AssertStreamDisposed(exporter.LastDestination);
-    }
-
-    [Theory]
-    [InlineData(TrackingBehavior.Success)]
-    [InlineData(TrackingBehavior.Failure)]
-    [InlineData(TrackingBehavior.Cancellation)]
-    public void ExportToFile_ShouldForwardRequestAndReleaseTarget(TrackingBehavior behavior)
-    {
-        var exporter = new TrackingExcelExporter { Behavior = behavior };
-        var request = CreateExportRequest();
-        using var cancellation = CreateCancellation(behavior);
-        var path = CreateTemporaryPath(".xlsx");
-
-        try
-        {
-            if (behavior == TrackingBehavior.Success)
-            {
-                ExcelStreamExtensions.ExportToFile(exporter, request, path, cancellation.Token);
-                AssertFileCanBeOpenedExclusivelyAndDeleted(path);
-            }
-            else
-            {
-                var exception = Record.Exception(() =>
-                    ExcelStreamExtensions.ExportToFile(exporter, request, path, cancellation.Token));
-                AssertExpectedBehaviorException(exporter, exception, cancellation.Token);
-            }
-
-            Assert.Same(request, exporter.LastRequest);
-            Assert.Equal(path, exporter.LastPath);
-            Assert.Equal(cancellation.Token, exporter.LastCancellationToken);
-        }
-        finally
-        {
-            DeleteTemporaryPath(path);
-        }
-    }
-
-    [Fact]
-    public void ExportToFile_ShouldPreserveOriginalFailure()
-    {
-        var expected = new InvalidOperationException("Excel 文件导出失败");
-        var exporter = new TrackingExcelExporter
-        {
-            Behavior = TrackingBehavior.Failure,
-            ExceptionToThrow = expected
-        };
-        var path = CreateTemporaryPath(".xlsx");
-
-        try
-        {
-            var actual = Record.Exception(() =>
-                ExcelStreamExtensions.ExportToFile(exporter, CreateExportRequest(), path));
-            Assert.Same(expected, actual);
-        }
-        finally
-        {
-            DeleteTemporaryPath(path);
-        }
-    }
-
-    [Theory]
-    [InlineData(TrackingBehavior.Success)]
-    [InlineData(TrackingBehavior.Failure)]
-    [InlineData(TrackingBehavior.Cancellation)]
-    public async Task ExportToFileAsync_ShouldForwardRequestAndReleaseTarget(TrackingBehavior behavior)
-    {
-        var exporter = new TrackingExcelExporter { Behavior = behavior };
-        var request = CreateExportRequest();
-        using var cancellation = CreateCancellation(behavior);
-        var path = CreateTemporaryPath(".xlsx");
-
-        try
-        {
-            if (behavior == TrackingBehavior.Success)
-            {
-                await ExcelStreamExtensions.ExportToFileAsync(exporter, request, path, cancellation.Token);
-                AssertFileCanBeOpenedExclusivelyAndDeleted(path);
-            }
-            else
-            {
-                var exception = await Record.ExceptionAsync(() =>
-                    ExcelStreamExtensions.ExportToFileAsync(exporter, request, path, cancellation.Token));
-                AssertExpectedBehaviorException(exporter, exception, cancellation.Token);
-            }
-
-            Assert.Same(request, exporter.LastRequest);
-            Assert.Equal(path, exporter.LastPath);
-            Assert.Equal(cancellation.Token, exporter.LastCancellationToken);
-        }
-        finally
-        {
-            DeleteTemporaryPath(path);
-        }
-    }
-
-    [Fact]
-    public async Task ExportToFileAsync_ShouldPreserveOriginalFailure()
-    {
-        var expected = new InvalidOperationException("Excel 异步文件导出失败");
-        var exporter = new TrackingExcelExporter
-        {
-            Behavior = TrackingBehavior.Failure,
-            ExceptionToThrow = expected
-        };
-        var path = CreateTemporaryPath(".xlsx");
-
-        try
-        {
-            var actual = await Record.ExceptionAsync(() => ExcelStreamExtensions.ExportToFileAsync(
-                exporter, CreateExportRequest(), path));
-            Assert.Same(expected, actual);
-        }
-        finally
-        {
-            DeleteTemporaryPath(path);
-        }
     }
 
     [Theory]

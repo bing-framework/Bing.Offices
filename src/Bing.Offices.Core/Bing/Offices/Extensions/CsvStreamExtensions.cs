@@ -27,25 +27,6 @@ public static class CsvStreamExtensions
     }
 
     /// <summary>
-    /// 将实体集合导出为 CSV 文件。
-    /// </summary>
-    /// <typeparam name="T">实体类型。</typeparam>
-    /// <param name="exporter">CSV 导出器。</param>
-    /// <param name="data">实体集合。</param>
-    /// <param name="path">目标文件路径。</param>
-    /// <param name="options">导出选项。</param>
-    /// <param name="cancellationToken">取消令牌。</param>
-    public static void ExportToFile<T>(this ICsvExporter exporter, IEnumerable<T> data, string path,
-        CsvExportOptions<T> options = null, CancellationToken cancellationToken = default) where T : class, new()
-    {
-        if (exporter == null)
-            throw new ArgumentNullException(nameof(exporter));
-        if (string.IsNullOrWhiteSpace(path))
-            throw new ArgumentException("目标文件路径不能为空。", nameof(path));
-        exporter.ExportToFile(data, path, options, cancellationToken);
-    }
-
-    /// <summary>
     /// 异步将实体集合导出为 CSV 字节数组。
     /// </summary>
     /// <typeparam name="T">实体类型。</typeparam>
@@ -62,26 +43,6 @@ public static class CsvStreamExtensions
         using var destination = new MemoryStream();
         await exporter.ExportAsync(data, destination, options, cancellationToken).ConfigureAwait(false);
         return destination.ToArray();
-    }
-
-    /// <summary>
-    /// 异步将实体集合以原子方式导出为 CSV 文件。
-    /// </summary>
-    /// <typeparam name="T">实体类型。</typeparam>
-    /// <param name="exporter">CSV 导出器。</param>
-    /// <param name="data">待导出的实体集合。</param>
-    /// <param name="path">目标文件路径。</param>
-    /// <param name="options">导出选项。</param>
-    /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>表示异步文件导出的任务。</returns>
-    public static Task ExportToFileAsync<T>(this ICsvExporter exporter, IEnumerable<T> data, string path,
-        CsvExportOptions<T> options = null, CancellationToken cancellationToken = default) where T : class, new()
-    {
-        if (exporter == null)
-            throw new ArgumentNullException(nameof(exporter));
-        if (string.IsNullOrWhiteSpace(path))
-            throw new ArgumentException("目标文件路径不能为空。", nameof(path));
-        return exporter.ExportToFileAsync(data, path, options, cancellationToken);
     }
 
     /// <summary>

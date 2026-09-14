@@ -7,6 +7,12 @@ namespace Bing.Offices.Mappings;
 /// <summary>创建隔离映射计划缓存使用的稳定键。</summary>
 internal static class ExcelMappingPlanCacheKey
 {
+    /// <summary>缓存键序列化选项；创建后只读，可在线程间复用。</summary>
+    private static readonly JsonSerializerOptions SerializerOptions = new JsonSerializerOptions
+    {
+        IgnoreNullValues = false
+    };
+
     /// <summary>根据模型、方向、租户和规范化配置创建 SHA-256 Base64 缓存键。</summary>
     internal static string Create<T>(ExcelMappingDocument document, MappingDirection direction,
         ExcelMappingConfiguration configuration) where T : class, new()
@@ -18,7 +24,7 @@ internal static class ExcelMappingPlanCacheKey
             Direction = direction,
             document.ConfigurationVersion,
             Configuration = configuration
-        }, new JsonSerializerOptions { IgnoreNullValues = false });
+        }, SerializerOptions);
         using var sha256 = SHA256.Create();
         return Convert.ToBase64String(sha256.ComputeHash(payload));
     }

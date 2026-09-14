@@ -3,16 +3,12 @@
     <TargetFramework>net8.0</TargetFramework>
     <OutputType>Exe</OutputType>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <IsPackable>false</IsPackable>
+    <Nullable>disable</Nullable>
+    <BingOfficesPackageVersion Condition="'$(BingOfficesPackageVersion)' == ''">2.0.0</BingOfficesPackageVersion>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="BenchmarkDotNet" Version="0.14.0" />
+    <PackageReference Include="Bing.Offices.Npoi" Version="$(BingOfficesPackageVersion)" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\..\src\Bing.Offices.Npoi\Bing.Offices.Npoi.csproj" />
   </ItemGroup>
 </Project>

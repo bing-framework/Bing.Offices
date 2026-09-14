@@ -28,6 +28,12 @@ public class MappingValidationBenchmarks
     private ExcelMappingConfiguration _multiRuleConfiguration = null!;
     private ExcelMappingConfiguration _profileConfiguration = null!;
     private JsonSerializerOptions _cacheKeySerializerOptions = null!;
+    private IExcelMappingPlanFactory _cacheHitPlanFactory = null!;
+    private IExcelMappingPlanFactory _cacheMissPlanFactory = null!;
+    private IExcelMappingPlan _cacheHitPlan = null!;
+    private IExcelMappingPlan _cacheMissWarmPlan = null!;
+    private IExcelMappingPlan? _previousCacheMissPlan;
+    private int _cacheMissSequence;
 
     /// <summary>
     /// 初始化矩阵输入。
@@ -103,12 +109,84 @@ public class MappingValidationBenchmarks
         return Convert.ToBase64String(SHA256.HashData(payload));
     }
 
+    /// <summary>测量每次创建 JsonSerializerOptions 的缓存键基线路径。</summary>
+    [Benchmark(Baseline = true)]
+    public string CacheKeyUtf8BytesPerCallOptions()
+    {
+        var payload = JsonSerializer.SerializeToUtf8Bytes(CreateCacheKeyPayload(),
+            new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.Never });
+        return Convert.ToBase64String(SHA256.HashData(payload));
+    }
+
     /// <summary>测量直接序列化 UTF-8 字节的缓存键路径。</summary>
     [Benchmark]
     public string CacheKeyUtf8Bytes()
     {
         var payload = JsonSerializer.SerializeToUtf8Bytes(CreateCacheKeyPayload(), _cacheKeySerializerOptions);
         return Convert.ToBase64String(SHA256.HashData(payload));
+    }
+
+    /// <summary>测量与生产缓存键相同的 UTF-8 序列化和 SHA-256 创建路径。</summary>
+    [Benchmark]
+    public string CacheKeyCreation()
+    {
+        var payload = JsonSerializer.SerializeToUtf8Bytes(CreateCacheKeyPayload(), _cacheKeySerializerOptions);
+        using var sha256 = SHA256.Create();
+        return Convert.ToBase64String(sha256.ComputeHash(payload));
+    }
+
+    /// <summary>为语义相等但对象实例不同的文档准备真实计划缓存命中。</summary>
+    [IterationSetup(Target = nameof(PlanCacheHit))]
+    public void PreparePlanCacheHit()
+    {
+        _cacheHitPlanFactory = ExcelMappingPlanFactoryProvider.CreateDefault(cacheCapacity: 2);
+        _cacheHitPlan = _cacheHitPlanFactory.Create<BenchmarkRow>(
+            CreateCachePlanDocument("p6-02-hit"), MappingDirection.Import);
+        var equivalent = _cacheHitPlanFactory.Create<BenchmarkRow>(
+            CreateCachePlanDocument("p6-02-hit"), MappingDirection.Import);
+        if (!ReferenceEquals(_cacheHitPlan, equivalent))
+            throw new InvalidOperationException("PLAN_CACHE_HIT semantic equality did not reuse the cached plan.");
+    }
+
+    /// <summary>测量真实计划工厂对语义相等新文档的缓存命中路径。</summary>
+    [Benchmark]
+    public int PlanCacheHit()
+    {
+        var plan = _cacheHitPlanFactory.Create<BenchmarkRow>(
+            CreateCachePlanDocument("p6-02-hit"), MappingDirection.Import);
+        if (!ReferenceEquals(_cacheHitPlan, plan))
+            throw new InvalidOperationException("PLAN_CACHE_HIT returned a different plan.");
+        return plan.Columns.Count;
+    }
+
+    /// <summary>为每次调用生成独立缓存身份，避免重复调用被误测为命中。</summary>
+    [IterationSetup(Target = nameof(PlanCacheMiss))]
+    public void PreparePlanCacheMiss()
+    {
+        _cacheMissPlanFactory = ExcelMappingPlanFactoryProvider.CreateDefault(cacheCapacity: 8);
+        _cacheMissWarmPlan = _cacheMissPlanFactory.Create<BenchmarkRow>(
+            CreateCachePlanDocument("p6-02-warm"), MappingDirection.Import);
+        _cacheMissSequence = 0;
+        _previousCacheMissPlan = null;
+    }
+
+    /// <summary>测量已填充缓存后对新 tenant/configuration 的真实缓存未命中路径。</summary>
+    [Benchmark(OperationsPerInvoke = 4)]
+    public int PlanCacheMiss()
+    {
+        var count = 0;
+        for (var operation = 0; operation < 4; operation++)
+        {
+            var index = _cacheMissSequence++;
+            var plan = _cacheMissPlanFactory.Create<BenchmarkRow>(
+                CreateCachePlanDocument($"p6-02-miss-{index}"), MappingDirection.Import);
+            if (ReferenceEquals(_cacheMissWarmPlan, plan)
+                || ReferenceEquals(_previousCacheMissPlan, plan))
+                throw new InvalidOperationException("PLAN_CACHE_MISS reused a cached plan for a new identity.");
+            _previousCacheMissPlan = plan;
+            count += plan.Columns.Count;
+        }
+        return count;
     }
 
     /// <summary>测量显式 Profile 注册解析。</summary>
@@ -138,6 +216,24 @@ public class MappingValidationBenchmarks
         Direction = MappingDirection.Import,
         _document.ConfigurationVersion,
         Configuration = _configuration
+    };
+
+    private static ExcelMappingDocument CreateCachePlanDocument(string tenantId,
+        string title = "缓存编码") => new()
+    {
+        TenantId = tenantId,
+        ConfigurationVersion = "p6-02",
+        Import = new ExcelMappingConfiguration
+        {
+            Columns =
+            {
+                new ExcelColumnConfiguration
+                {
+                    PropertyName = nameof(BenchmarkRow.Code),
+                    Title = title
+                }
+            }
+        }
     };
 
     private sealed class BenchmarkProfile : IImportMappingProfile<BenchmarkRow>

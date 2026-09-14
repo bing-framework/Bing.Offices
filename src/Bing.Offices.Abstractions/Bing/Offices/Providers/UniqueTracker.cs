@@ -12,6 +12,8 @@ public sealed class UniqueTracker
     private readonly IDictionary<string, HashSet<string>> _pending;
     private readonly IDictionary<string, IDictionary<string, int>> _firstRows;
     private readonly IDictionary<string, IDictionary<string, int>> _pendingFirstRows;
+    private readonly Stack<HashSet<string>> _pendingValueBuffers;
+    private readonly Stack<IDictionary<string, int>> _pendingFirstRowBuffers;
     private readonly int? _maxTrackedValues;
     private readonly IEqualityComparer<string> _comparer;
     private int _trackedValueCount;
@@ -30,6 +32,8 @@ public sealed class UniqueTracker
         _pending = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
         _firstRows = new Dictionary<string, IDictionary<string, int>>(StringComparer.OrdinalIgnoreCase);
         _pendingFirstRows = new Dictionary<string, IDictionary<string, int>>(StringComparer.OrdinalIgnoreCase);
+        _pendingValueBuffers = new Stack<HashSet<string>>();
+        _pendingFirstRowBuffers = new Stack<IDictionary<string, int>>();
         _maxTrackedValues = maxTrackedValues;
         _comparer = comparer ?? StringComparer.OrdinalIgnoreCase;
         foreach (var pair in committed)
@@ -56,9 +60,7 @@ public sealed class UniqueTracker
     /// </summary>
     public void BeginRow()
     {
-        _pending.Clear();
-        _pendingFirstRows.Clear();
-        _pendingValueCount = 0;
+        ClearPending();
     }
 
     /// <summary>
@@ -77,18 +79,19 @@ public sealed class UniqueTracker
             return true;
         if (_committed.TryGetValue(key, out var committedValues) && committedValues.Contains(value))
             return false;
-        if (_pending.TryGetValue(key, out var pendingValues) && pendingValues.Contains(value))
+        var hasPending = _pending.TryGetValue(key, out var pendingValues);
+        if (hasPending && pendingValues.Contains(value))
             return false;
-        if (!_pending.TryGetValue(key, out pendingValues))
-            _pending[key] = pendingValues = new HashSet<string>(_comparer);
         if (_maxTrackedValues.HasValue && _trackedValueCount + _pendingValueCount >= _maxTrackedValues.Value)
             throw new InvalidOperationException($"Unique 跟踪值超过最大数量: {_maxTrackedValues.Value}");
+        if (!hasPending)
+            _pending[key] = pendingValues = RentPendingValues();
         if (pendingValues.Add(value))
             _pendingValueCount++;
         if (rowNumber > 0 && value != null)
         {
             if (!_pendingFirstRows.TryGetValue(key, out var rows))
-                _pendingFirstRows[key] = rows = new Dictionary<string, int>(_comparer);
+                _pendingFirstRows[key] = rows = RentPendingFirstRows();
             if (!rows.ContainsKey(value))
                 rows[value] = rowNumber;
         }
@@ -104,23 +107,23 @@ public sealed class UniqueTracker
         {
             if (!_committed.TryGetValue(pair.Key, out var committedValues))
                 _committed[pair.Key] = committedValues = new HashSet<string>(_comparer);
+            _pendingFirstRows.TryGetValue(pair.Key, out var pendingRows);
+            IDictionary<string, int> firstRows = null;
             foreach (var value in pair.Value)
             {
                 if (committedValues.Add(value))
                     _trackedValueCount++;
-                if (value != null && _pendingFirstRows.TryGetValue(pair.Key, out var pendingRows)
+                if (value != null && pendingRows != null
                     && pendingRows.TryGetValue(value, out var rowNumber))
                 {
-                    if (!_firstRows.TryGetValue(pair.Key, out var firstRows))
+                    if (firstRows == null && !_firstRows.TryGetValue(pair.Key, out firstRows))
                         _firstRows[pair.Key] = firstRows = new Dictionary<string, int>(_comparer);
                     if (!firstRows.ContainsKey(value))
                         firstRows[value] = rowNumber;
                 }
             }
         }
-        _pending.Clear();
-        _pendingFirstRows.Clear();
-        _pendingValueCount = 0;
+        ClearPending();
     }
 
     /// <summary>
@@ -128,7 +131,37 @@ public sealed class UniqueTracker
     /// </summary>
     public void RollbackRow()
     {
+        ClearPending();
+    }
+
+    private HashSet<string> RentPendingValues()
+    {
+        if (_pendingValueBuffers.Count == 0)
+            return new HashSet<string>(_comparer);
+        return _pendingValueBuffers.Pop();
+    }
+
+    private IDictionary<string, int> RentPendingFirstRows()
+    {
+        if (_pendingFirstRowBuffers.Count == 0)
+            return new Dictionary<string, int>(_comparer);
+        return _pendingFirstRowBuffers.Pop();
+    }
+
+    private void ClearPending()
+    {
+        foreach (var pair in _pending)
+        {
+            pair.Value.Clear();
+            _pendingValueBuffers.Push(pair.Value);
+        }
         _pending.Clear();
+
+        foreach (var pair in _pendingFirstRows)
+        {
+            pair.Value.Clear();
+            _pendingFirstRowBuffers.Push(pair.Value);
+        }
         _pendingFirstRows.Clear();
         _pendingValueCount = 0;
     }

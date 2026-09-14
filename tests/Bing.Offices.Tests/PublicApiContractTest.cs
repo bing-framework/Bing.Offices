@@ -672,31 +672,75 @@ public class PublicApiContractTest
         using var document = JsonDocument.Parse(File.ReadAllText(baselinePath, System.Text.Encoding.UTF8));
         var root = document.RootElement;
         Assert.Equal("bing.offices.public-api.v2", root.GetProperty("schema").GetString());
-        Assert.Equal("2.0.0", root.GetProperty("generatorVersion").GetString());
+        Assert.Equal("2.3.0", root.GetProperty("generatorVersion").GetString());
         Assert.False(string.IsNullOrWhiteSpace(root.GetProperty("approvedBy").GetString()),
             "BLOCKED: API baseline approvedBy is empty.");
         Assert.False(string.IsNullOrWhiteSpace(root.GetProperty("approvedAt").GetString()),
             "BLOCKED: API baseline approvedAt is empty.");
 
-        var assemblies = new[]
+        var repositoryRoot = FindRepositoryRoot();
+        var expectedTfm = GetCurrentTargetFramework();
+        var releaseRoot = Path.Combine(repositoryRoot, "output", "release");
+        var releaseDirectories = new[]
         {
-            typeof(IExcelImporter).Assembly,
-            typeof(ExcelMappingConfigurationLoader).Assembly,
-            typeof(NpoiExcelImporter).Assembly
+            Path.Combine(releaseRoot, "netstandard2.0"),
+            Path.Combine(releaseRoot, expectedTfm)
+        };
+        var assemblyPaths = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [typeof(IExcelImporter).Assembly.GetName().Name!] =
+                Path.Combine(releaseRoot, "netstandard2.0", "Bing.Offices.Abstractions.dll"),
+            [typeof(ExcelMappingConfigurationLoader).Assembly.GetName().Name!] =
+                Path.Combine(releaseRoot, "netstandard2.0", "Bing.Offices.Core.dll"),
+            [typeof(NpoiExcelImporter).Assembly.GetName().Name!] =
+                Path.Combine(releaseRoot, expectedTfm, "Bing.Offices.Npoi.dll")
         };
 
-        // Act
-        var actual = assemblies.ToDictionary(assembly => assembly.GetName().Name!,
-            GetPublicMemberSnapshotHash, StringComparer.Ordinal);
-
-        var expectedTfm = GetCurrentTargetFramework();
         Assert.True(root.GetProperty("assemblies").TryGetProperty(expectedTfm, out var expected),
             $"BLOCKED: API baseline is missing {expectedTfm}.");
+
+        var missingPaths = assemblyPaths.Where(pair => !File.Exists(pair.Value))
+            .Select(pair => $"{pair.Key}={pair.Value}").ToArray();
+        Assert.True(missingPaths.Length == 0,
+            $"BLOCKED: unified Release API snapshot input is missing for {expectedTfm}: "
+            + string.Join(", ", missingPaths));
+
+        var additionalAssemblyPaths = releaseDirectories
+            .Where(Directory.Exists)
+            .SelectMany(directory => Directory.EnumerateFiles(directory, "*.dll"))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var actual = assemblyPaths.ToDictionary(
+            pair => pair.Key,
+            pair => PublicApiSnapshot.Load(pair.Value, additionalAssemblyPaths),
+            StringComparer.Ordinal);
+        var mismatches = new List<string>();
         foreach (var pair in actual)
         {
-            var expectedHash = expected.GetProperty(pair.Key).GetProperty("hash").GetString();
-            Assert.Equal(expectedHash, pair.Value);
+            if (!expected.TryGetProperty(pair.Key, out var expectedAssembly))
+            {
+                mismatches.Add(
+                    $"API snapshot mismatch: tfm={expectedTfm}; assembly={pair.Key}; "
+                    + $"path={assemblyPaths[pair.Key]}; baseline assembly is missing.");
+                continue;
+            }
+
+            var expectedHash = expectedAssembly.GetProperty("hash").GetString() ?? string.Empty;
+            var expectedMemberCount = expectedAssembly.GetProperty("memberCount").GetInt32();
+            var expectedLines = expectedAssembly.GetProperty("lines").EnumerateArray()
+                .Select(line => line.GetString() ?? string.Empty).ToArray();
+            if (!string.Equals(expectedHash, pair.Value.Hash, StringComparison.Ordinal)
+                || expectedMemberCount != pair.Value.MemberCount
+                || !expectedLines.SequenceEqual(pair.Value.Lines, StringComparer.Ordinal))
+            {
+                mismatches.Add(BuildSnapshotMismatchMessage(
+                    expectedTfm, pair.Key, assemblyPaths[pair.Key], expectedHash,
+                    pair.Value.Hash, expectedMemberCount, pair.Value.MemberCount,
+                    expectedLines, pair.Value.Lines));
+            }
         }
+
+        Assert.True(mismatches.Count == 0, string.Join(Environment.NewLine, mismatches));
     }
 
     private static string GetCurrentTargetFramework()
@@ -749,12 +793,27 @@ public class PublicApiContractTest
         throw new InvalidOperationException($"Unsupported public member: {member.MemberType}");
     }
 
-    private static string GetPublicMemberSnapshotHash(System.Reflection.Assembly assembly)
+    private static string BuildSnapshotMismatchMessage(
+        string targetFramework,
+        string assemblyName,
+        string assemblyPath,
+        string expectedHash,
+        string actualHash,
+        int expectedMemberCount,
+        int actualMemberCount,
+        IEnumerable<string> expectedLines,
+        IEnumerable<string> actualLines)
     {
-        var directory = Path.GetDirectoryName(assembly.Location)
-            ?? throw new InvalidOperationException($"程序集路径不可用: {assembly.FullName}");
-        return PublicApiSnapshot.Load(assembly.Location,
-            Directory.EnumerateFiles(directory, "*.dll")).Hash;
+        var expectedSet = new HashSet<string>(expectedLines, StringComparer.Ordinal);
+        var actualSet = new HashSet<string>(actualLines, StringComparer.Ordinal);
+        var added = actualSet.Except(expectedSet, StringComparer.Ordinal)
+            .OrderBy(line => line, StringComparer.Ordinal);
+        var removed = expectedSet.Except(actualSet, StringComparer.Ordinal)
+            .OrderBy(line => line, StringComparer.Ordinal);
+        return $"API snapshot mismatch: tfm={targetFramework}; assembly={assemblyName}; "
+            + $"path={assemblyPath}; expectedHash={expectedHash}; actualHash={actualHash}; "
+            + $"expectedMemberCount={expectedMemberCount}; actualMemberCount={actualMemberCount}; "
+            + $"added=[{string.Join(" || ", added)}]; removed=[{string.Join(" || ", removed)}]";
     }
 
     private static IEnumerable<Type> GetSignatureTypes(System.Reflection.MemberInfo member)

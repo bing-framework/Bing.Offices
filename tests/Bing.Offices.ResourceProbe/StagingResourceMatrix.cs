@@ -22,7 +22,7 @@ using NPOI.XSSF.UserModel;
 
 internal static class StagingResourceMatrix
 {
-    private const string TaskId = "BO-RC-20260907-001";
+    private const string TaskId = "BO-RC-20260908-002";
     private const long HybridThresholdBytes = 8L * 1024 * 1024;
     private const long ChildWorkingSetGuardBytes = 2L * 1024 * 1024 * 1024;
     private const int MaxActualParallelism = 1;
@@ -140,6 +140,7 @@ internal static class StagingResourceMatrix
         long allocatedBefore = 0;
         var collectionBefore = new[] { 0, 0, 0 };
         var operationResults = new List<OperationResult>();
+        var requestMetrics = new RequestExecutionMetrics();
         string warmupError = null;
         Exception failure = null;
         try
@@ -160,13 +161,16 @@ internal static class StagingResourceMatrix
             collectionBefore[1] = GC.CollectionCount(1);
             collectionBefore[2] = GC.CollectionCount(2);
             sampler.Start();
-            using var concurrencyGate = new SemaphoreSlim(MaxActualParallelism, MaxActualParallelism);
+            using var concurrencyGate = new SemaphoreSlim(1, 1);
             for (var sample = 0; sample < MeasurementIterations; sample++)
             {
-                var operations = Enumerable.Range(0, Math.Min(concurrency, MaxActualParallelism))
-                    .Select(_ => Task.Run(() => RunOperationWithGateAsync(
-                        concurrencyGate, strategy, scenario, payload, stagingDirectory)))
+                var batch = new RequestBatch(concurrency, requestMetrics);
+                var operations = Enumerable.Range(0, concurrency)
+                    .Select(_ => RunOperationWithGateAsync(
+                        concurrencyGate, batch, strategy, scenario, payload, stagingDirectory))
                     .ToArray();
+                batch.WaitUntilReady().GetAwaiter().GetResult();
+                batch.Start();
                 operationResults.AddRange(Task.WhenAll(operations).GetAwaiter().GetResult());
             }
         }
@@ -196,9 +200,17 @@ internal static class StagingResourceMatrix
             scenario,
             rowCount,
             concurrency,
+            requestedConcurrency = concurrency,
             maxActualParallelism = MaxActualParallelism,
-            measuredActiveOperations = Math.Min(concurrency, MaxActualParallelism),
-            queuedRequestCount = Math.Max(0, concurrency - MaxActualParallelism),
+            actualParallelism = requestMetrics.MaxActiveOperations,
+            measuredActiveOperations = requestMetrics.MaxActiveOperations,
+            submittedRequests = requestMetrics.SubmittedRequests,
+            completedRequests = requestMetrics.CompletedRequests,
+            maxActiveOperations = requestMetrics.MaxActiveOperations,
+            maxQueuedRequests = requestMetrics.MaxQueuedRequests,
+            queuedRequestCount = requestMetrics.MaxQueuedRequests,
+            queueEntryEvents = requestMetrics.QueueEntryEvents,
+            queueExitEvents = requestMetrics.QueueExitEvents,
             hybridThresholdBytes = HybridThresholdBytes,
             warmupIterations = WarmupIterations,
             measurementIterations = MeasurementIterations,
@@ -339,6 +351,7 @@ internal static class StagingResourceMatrix
             strategy,
             scenario,
             concurrency,
+            requestedConcurrency = concurrency,
             rowCount,
             exitCode = process.ExitCode,
             resourceGuardTriggered,
@@ -391,9 +404,32 @@ internal static class StagingResourceMatrix
     }
 
     private static async Task<OperationResult> RunOperationWithGateAsync(SemaphoreSlim concurrencyGate,
-        string strategy, string scenario, Payload payload, string stagingDirectory)
+        RequestBatch batch, string strategy, string scenario, Payload payload, string stagingDirectory)
     {
-        await concurrencyGate.WaitAsync().ConfigureAwait(false);
+        batch.Metrics.RecordSubmitted();
+        batch.SignalReady();
+        await batch.StartSignal.ConfigureAwait(false);
+
+        var waitTask = concurrencyGate.WaitAsync();
+        var enteredQueue = !waitTask.IsCompletedSuccessfully;
+        if (enteredQueue)
+            batch.Metrics.RecordQueueEntry();
+        batch.SignalGateWaitStarted();
+
+        if (enteredQueue)
+        {
+            try
+            {
+                await waitTask.ConfigureAwait(false);
+            }
+            finally
+            {
+                batch.Metrics.RecordQueueExit();
+            }
+        }
+
+        await batch.AllGateWaitsStarted.ConfigureAwait(false);
+        batch.Metrics.RecordActiveStarted();
         try
         {
             return await RunOperationAsync(strategy, scenario, payload, stagingDirectory)
@@ -401,7 +437,100 @@ internal static class StagingResourceMatrix
         }
         finally
         {
+            batch.Metrics.RecordActiveCompleted();
+            batch.Metrics.RecordCompleted();
             concurrencyGate.Release();
+        }
+    }
+
+    private sealed class RequestBatch
+    {
+        private readonly TaskCompletionSource<bool> _ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource<bool> _start = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource<bool> _allGateWaitsStarted =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly int _requestedConcurrency;
+        private int _readyCount;
+        private int _gateWaitStartedCount;
+
+        public RequestBatch(int requestedConcurrency, RequestExecutionMetrics metrics)
+        {
+            _requestedConcurrency = requestedConcurrency;
+            Metrics = metrics;
+        }
+
+        public RequestExecutionMetrics Metrics { get; }
+        public Task StartSignal => _start.Task;
+        public Task AllGateWaitsStarted => _allGateWaitsStarted.Task;
+
+        public Task WaitUntilReady() => _ready.Task;
+
+        public void Start() => _start.TrySetResult(true);
+
+        public void SignalReady()
+        {
+            if (Interlocked.Increment(ref _readyCount) == _requestedConcurrency)
+                _ready.TrySetResult(true);
+        }
+
+        public void SignalGateWaitStarted()
+        {
+            if (Interlocked.Increment(ref _gateWaitStartedCount) == _requestedConcurrency)
+                _allGateWaitsStarted.TrySetResult(true);
+        }
+    }
+
+    private sealed class RequestExecutionMetrics
+    {
+        private int _submittedRequests;
+        private int _completedRequests;
+        private int _activeOperations;
+        private int _maxActiveOperations;
+        private int _queuedRequests;
+        private int _maxQueuedRequests;
+        private int _queueEntryEvents;
+        private int _queueExitEvents;
+
+        public int SubmittedRequests => Volatile.Read(ref _submittedRequests);
+        public int CompletedRequests => Volatile.Read(ref _completedRequests);
+        public int MaxActiveOperations => Volatile.Read(ref _maxActiveOperations);
+        public int MaxQueuedRequests => Volatile.Read(ref _maxQueuedRequests);
+        public int QueueEntryEvents => Volatile.Read(ref _queueEntryEvents);
+        public int QueueExitEvents => Volatile.Read(ref _queueExitEvents);
+
+        public void RecordSubmitted() => Interlocked.Increment(ref _submittedRequests);
+
+        public void RecordCompleted() => Interlocked.Increment(ref _completedRequests);
+
+        public void RecordQueueEntry()
+        {
+            Interlocked.Increment(ref _queueEntryEvents);
+            var queued = Interlocked.Increment(ref _queuedRequests);
+            UpdateMaximum(ref _maxQueuedRequests, queued);
+        }
+
+        public void RecordQueueExit()
+        {
+            Interlocked.Decrement(ref _queuedRequests);
+            Interlocked.Increment(ref _queueExitEvents);
+        }
+
+        public void RecordActiveStarted()
+        {
+            var active = Interlocked.Increment(ref _activeOperations);
+            UpdateMaximum(ref _maxActiveOperations, active);
+        }
+
+        public void RecordActiveCompleted() => Interlocked.Decrement(ref _activeOperations);
+
+        private static void UpdateMaximum(ref int target, int candidate)
+        {
+            while (true)
+            {
+                var current = Volatile.Read(ref target);
+                if (candidate <= current || Interlocked.CompareExchange(ref target, candidate, current) == current)
+                    return;
+            }
         }
     }
 
@@ -602,7 +731,7 @@ internal static class StagingResourceMatrix
         writer.WriteLine();
         writer.WriteLine("## Metrics");
         writer.WriteLine();
-        writer.WriteLine("Each child warms up once, then measures the approved active slice (maximum one NPOI DOM operation) twice. PeakWorkingSet, LOH peak/retained bytes, GC collections and allocated bytes, temporary disk peak/after bytes, throughput, P95 and P99 operation latency, operation errors and cleanup residue are recorded. Logical request concurrency above the active slice is represented as queuedRequestCount; queued requests do not create additional DOM workbooks in the 2C4G profile.");
+        writer.WriteLine("Each child warms up once, then runs two measurement batches. Every batch creates exactly the requested number of lightweight request tasks; submittedRequests, completedRequests, actualParallelism, maxQueuedRequests, queueEntryEvents and queueExitEvents are recorded from the shared SemaphoreSlim(1,1) events. Workbook construction starts only after a request owns the single active slot. PeakWorkingSet, LOH peak/retained bytes, GC collections and allocated bytes, temporary disk peak/after bytes, throughput, P95 and P99 operation latency, operation errors and cleanup residue are also recorded. queuedRequestCount remains as a compatibility alias for the measured maximum queue depth.");
         writer.WriteLine();
         writer.WriteLine("## Strategy Contract");
         writer.WriteLine();

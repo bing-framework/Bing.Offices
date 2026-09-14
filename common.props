@@ -2,7 +2,6 @@
 	<PropertyGroup>
 		<RootNamespace/>
 		<LangVersion>latest</LangVersion>
-		<RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <NoWarn Condition=" '$(Configuration)' == 'Debug' ">$(NoWarn)</NoWarn>
     <NoWarn Condition=" '$(Configuration)' == 'Release' ">$(NoWarn)</NoWarn>
 	</PropertyGroup>

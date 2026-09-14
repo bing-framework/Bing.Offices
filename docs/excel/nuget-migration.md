@@ -17,9 +17,9 @@
 
 失败工作簿输出限制已从 `MaxBytes` 更名为 `MaxSerializedBytes`。该限制只约束失败工作簿序列化输出，不代表原始 Workbook、解压内容、实体或失败输出 DOM 的内存上限。
 
-旧的 `OfficeException` 异常层级、`ExcelSetting`/`SheetSetting` 已从发布 API 移除；CSV 实体实现类不再作为发布 API，调用方应通过 `ICsvImporter`/`ICsvExporter` 或 DI 使用。其余 breaking table 尚未在本任务中获得批准，因此本任务不再扩展删除范围。`dotnet pack` 和本地 package consumer 验证仅用于确认当前 `2.0.0` 包的可消费性。
+旧的 `OfficeException` 异常层级、`ExcelSetting`/`SheetSetting` 已从发布 API 移除；CSV 实体实现类不再作为发布 API，调用方应通过 `ICsvImporter`/`ICsvExporter` 或 DI 使用。本轮另经成员级批准移除四个重复的 `ExportToFile`/`ExportToFileAsync` 扩展声明，接口实例成员保持不变。`dotnet pack` 和本地 package consumer 验证确认当前 `2.0.0` 包的可消费性。
 
-## 候选 API 迁移对照
+## API 迁移对照
 
 下表列出仍保持兼容的旧版入口和候选替代项；已标记移除的类型不应继续在新代码中引用：
 
@@ -36,6 +36,7 @@
 | `OfficeException` 异常层级 | 标准参数/状态异常与结构化导入错误 | 已移除 | Round 6 已批准 |
 | `CsvEntityImporter` / `CsvEntityExporter` | `ICsvImporter` / `ICsvExporter`，优先通过 DI 获取 | 已 internal 化 | Round 6 已批准 |
 | `ICellValueConverter` | `IExcelValueConverter` | 已移除；请迁移到提供程序无关的双向转换器 | 本任务已批准 |
+| `CsvStreamExtensions.ExportToFile*` / `ExcelStreamExtensions.ExportToFile*` | `ICsvExporter.ExportToFile*` / `IExcelExporter.ExportToFile*` | 扩展声明已移除；接口实例成员保留 | FIX-003，`approvedBy=jian玄冰` |
 
 迁移示例：
 
@@ -49,4 +50,4 @@ var request = ExcelImport.Workbook<OrderWorkbook>(builder =>
 	builder.Sheet("订单", workbook => workbook.Rows));
 ```
 
-请在每个 Workbook 请求上调用 `Metadata(...)`；不配置时使用请求级默认值。CSV 调用方应依赖 `ICsvImporter`/`ICsvExporter`，不要直接构造 Core 内部实现。其余候选入口仍保持兼容，只有在单独批准对应 breaking table 后才可删除或重命名。
+请在每个 Workbook 请求上调用 `Metadata(...)`；不配置时使用请求级默认值。CSV 调用方应依赖 `ICsvImporter`/`ICsvExporter`，不要直接构造 Core 内部实现。对于已移除的四个文件导出扩展，直接改为接口实例调用：`exporter.ExportToFile(...)` 或 `await exporter.ExportToFileAsync(...)`。其余未列入本次批准范围的入口保持兼容。

@@ -647,6 +647,38 @@ public class CsvTest
     }
 
     /// <summary>
+    /// 测试 - 多行同步和异步 CSV 导出应产生完全一致的记录字节，并保留 RFC 4180 和公式防护行为。
+    /// </summary>
+    [Fact]
+    public async Task EntityPipeline_AsyncExport_ShouldMatchSyncOutputForMultipleRows()
+    {
+        // Arrange
+        var rows = new[]
+        {
+            new CsvRow { Name = "A,\"B\"", Count = 1, Description = "第一行\r\n第二行" },
+            new CsvRow { Name = "=SUM(A1:A2)", Count = 2, Description = "+formula" },
+            new CsvRow { Name = null, Count = 3, Description = "普通文本" }
+        };
+        using var syncDestination = new MemoryStream();
+        using var asyncDestination = new MemoryStream();
+        var options = new CsvExportOptions<CsvRow>();
+
+        // Act
+        new CsvEntityExporter().Export(rows, syncDestination, options);
+        await new CsvEntityExporter().ExportAsync(rows, asyncDestination, options);
+
+        // Assert
+        var expected =
+            "Name,Count,Description\r\n"
+            + "\"A,\"\"B\"\"\",1,\"第一行\r\n第二行\"\r\n"
+            + "'=SUM(A1:A2),2,'+formula\r\n"
+            + ",3,普通文本\r\n";
+        Assert.Equal(expected, Encoding.UTF8.GetString(syncDestination.ToArray()));
+        Assert.Equal(syncDestination.ToArray(), asyncDestination.ToArray());
+        Assert.True(asyncDestination.CanWrite);
+    }
+
+    /// <summary>
     /// 测试 - Preserve 策略应保留带前导空白的公式文本，不因默认防护规则改变内容。
     /// </summary>
     [Fact]

@@ -28,25 +28,6 @@ public static class ExcelStreamExtensions
     }
 
     /// <summary>
-    /// 将 Workbook 导出请求写入 Excel 文件。
-    /// </summary>
-    /// <param name="exporter">Excel 导出器。</param>
-    /// <param name="request">Workbook 导出请求。</param>
-    /// <param name="path">目标文件路径。</param>
-    /// <param name="cancellationToken">取消令牌。</param>
-    public static void ExportToFile(this IExcelExporter exporter, ExcelWorkbookExportRequest request, string path,
-        CancellationToken cancellationToken = default)
-    {
-        if (exporter == null)
-            throw new ArgumentNullException(nameof(exporter));
-        if (request == null)
-            throw new ArgumentNullException(nameof(request));
-        if (string.IsNullOrWhiteSpace(path))
-            throw new ArgumentException("目标文件路径不能为空。", nameof(path));
-        exporter.ExportToFile(request, path, cancellationToken);
-    }
-
-    /// <summary>
     /// 异步将 Workbook 请求导出为 Excel 字节数组。
     /// </summary>
     /// <param name="exporter">Excel 导出器。</param>
@@ -63,26 +44,6 @@ public static class ExcelStreamExtensions
         using var destination = new MemoryStream();
         await exporter.ExportAsync(request, destination, cancellationToken).ConfigureAwait(false);
         return destination.ToArray();
-    }
-
-    /// <summary>
-    /// 异步将 Workbook 请求以原子方式写入 Excel 文件。
-    /// </summary>
-    /// <param name="exporter">Excel 导出器。</param>
-    /// <param name="request">Workbook 导出请求。</param>
-    /// <param name="path">目标文件路径。</param>
-    /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>表示异步文件导出的任务。</returns>
-    public static Task ExportToFileAsync(this IExcelExporter exporter, ExcelWorkbookExportRequest request,
-        string path, CancellationToken cancellationToken = default)
-    {
-        if (exporter == null)
-            throw new ArgumentNullException(nameof(exporter));
-        if (request == null)
-            throw new ArgumentNullException(nameof(request));
-        if (string.IsNullOrWhiteSpace(path))
-            throw new ArgumentException("目标文件路径不能为空。", nameof(path));
-        return exporter.ExportToFileAsync(request, path, cancellationToken);
     }
 
     /// <summary>
