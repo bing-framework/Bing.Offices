@@ -519,6 +519,11 @@ internal static class ApiSnapshotFileHash
     public static string ComputeSha256(string path)
     {
         using var stream = File.OpenRead(path);
+        return ComputeSha256(stream);
+    }
+
+    public static string ComputeSha256(Stream stream)
+    {
         using var sha256 = SHA256.Create();
         return BitConverter.ToString(sha256.ComputeHash(stream))
             .Replace("-", string.Empty, StringComparison.Ordinal);
@@ -526,7 +531,15 @@ internal static class ApiSnapshotFileHash
 
     public static string ComputeCanonicalTextSha256(string path)
     {
-        var bytes = File.ReadAllBytes(path);
+        using var stream = File.OpenRead(path);
+        return ComputeCanonicalTextSha256(stream);
+    }
+
+    public static string ComputeCanonicalTextSha256(Stream stream)
+    {
+        using var input = new MemoryStream();
+        stream.CopyTo(input);
+        var bytes = input.ToArray();
         using var normalized = new MemoryStream(bytes.Length);
         for (var index = 0; index < bytes.Length; index++)
         {

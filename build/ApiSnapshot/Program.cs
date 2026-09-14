@@ -1,11 +1,12 @@
 using System.Diagnostics;
+using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Bing.Offices.ApiSnapshot;
 
 const string schema = "bing.offices.public-api.v2";
-const string generatorVersion = "2.3.0";
+const string generatorVersion = "2.4.0";
 
 var arguments = ParseArguments(args);
 var root = Path.GetFullPath(arguments.GetValueOrDefault("root") ?? "output/release");
@@ -190,6 +191,7 @@ public sealed class ApiBaselineDocument
 
 public sealed class ApiCandidateIdentity
 {
+    public string ArtifactIdentityFormat { get; set; } = "";
     public string BaseCommit { get; set; } = "";
     public string WorktreeState { get; set; } = "";
     public string CandidateSourceManifestSha256 { get; set; } = "";
@@ -214,6 +216,7 @@ public sealed class ApiMemberDiff
 
 internal static class CandidateIdentityVerifier
 {
+    private const string ArtifactIdentityFormat = "logical-v1";
     internal const string BreakingApprovalPath =
         "ai_docs/tasks/BO-RC-20260908-002/api-breaking-approval.md";
 
@@ -240,19 +243,11 @@ internal static class CandidateIdentityVerifier
     {
         var identity = new ApiCandidateIdentity
         {
-            BaseCommit = candidateCommit
+            BaseCommit = candidateCommit,
+            ArtifactIdentityFormat = ArtifactIdentityFormat
         };
 
-        foreach (var pair in assemblyPaths)
-        {
-            if (!File.Exists(pair.Value))
-            {
-                failures.Add($"capture: candidate assembly is missing: {pair.Value}");
-                continue;
-            }
-
-            identity.AssemblyFiles[pair.Key] = ApiSnapshotFileHash.ComputeSha256(pair.Value);
-        }
+        identity.AssemblyFiles = CaptureAssemblyFiles(assemblyPaths, "capture", failures);
 
         if (string.IsNullOrWhiteSpace(identity.BaseCommit)
             && TryRunGit(repositoryRoot, new[] { "rev-parse", "HEAD" }, out var head, out _))
@@ -292,7 +287,7 @@ internal static class CandidateIdentityVerifier
         }
 
         if (!string.IsNullOrWhiteSpace(packagesRoot))
-            identity.NupkgFiles = CaptureNupkgFiles(packagesRoot, failures);
+            identity.NupkgFiles = CaptureNupkgFiles(packagesRoot, identity.AssemblyFiles, failures);
 
         return identity;
     }
@@ -311,6 +306,10 @@ internal static class CandidateIdentityVerifier
             return;
         }
 
+        if (!string.Equals(identity.ArtifactIdentityFormat, ArtifactIdentityFormat,
+                StringComparison.Ordinal))
+            failures.Add($"candidate identity artifactIdentityFormat is invalid: {identity.ArtifactIdentityFormat}");
+
         if (string.IsNullOrWhiteSpace(identity.BaseCommit)
             || !string.Equals(identity.BaseCommit, baseline.BaselineCommit, StringComparison.Ordinal))
             failures.Add("candidate identity baseCommit does not match baselineCommit");
@@ -324,12 +323,12 @@ internal static class CandidateIdentityVerifier
         else
             failures.Add($"candidate identity source manifest verification failed: {sourceError}");
 
-        ValidateAssemblyFiles(identity.AssemblyFiles, assemblyPaths, failures);
-        ValidateNupkgFiles(identity.NupkgFiles, packagesRoot, failures);
+        var actualAssemblyFiles = ValidateAssemblyFiles(identity.AssemblyFiles, assemblyPaths, failures);
+        ValidateNupkgFiles(identity.NupkgFiles, packagesRoot, actualAssemblyFiles, failures);
         ValidateApprovalFile(identity, repositoryRoot, failures);
     }
 
-    private static void ValidateAssemblyFiles(
+    private static Dictionary<string, string> ValidateAssemblyFiles(
         IReadOnlyDictionary<string, string>? recordedFiles,
         IReadOnlyDictionary<string, string> assemblyPaths,
         List<string> failures)
@@ -338,6 +337,7 @@ internal static class CandidateIdentityVerifier
             pair => NormalizeRelativePath(pair.Key), pair => pair.Value, StringComparer.Ordinal);
         var recorded = NormalizeHashMap(recordedFiles, "assembly", failures);
 
+        var actual = CaptureAssemblyFiles(expectedPaths, "validation", failures);
         foreach (var pair in expectedPaths)
         {
             if (!recorded.TryGetValue(pair.Key, out var expectedHash))
@@ -346,16 +346,20 @@ internal static class CandidateIdentityVerifier
                 continue;
             }
 
-            ValidateFileHash(pair.Value, expectedHash, $"assembly {pair.Key}", failures);
+            if (actual.TryGetValue(pair.Key, out var actualHash))
+                ValidateHash($"assembly {pair.Key}", expectedHash, actualHash, failures);
         }
 
         foreach (var path in recorded.Keys.Except(expectedPaths.Keys, StringComparer.Ordinal))
             failures.Add($"candidate identity contains an unexpected assembly path: {path}");
+
+        return actual;
     }
 
     private static void ValidateNupkgFiles(
         IReadOnlyDictionary<string, string>? recordedFiles,
         string? packagesRoot,
+        IReadOnlyDictionary<string, string> assemblyFiles,
         List<string> failures)
     {
         var recorded = NormalizeHashMap(recordedFiles, "nupkg", failures);
@@ -389,7 +393,24 @@ internal static class CandidateIdentityVerifier
                 continue;
             }
 
-            ValidateFileHash(packagePath, pair.Value, $"nupkg {pair.Key}", failures);
+            if (!ApiSnapshotFileHash.IsSha256(pair.Value))
+                continue;
+            if (!File.Exists(packagePath))
+            {
+                failures.Add($"nupkg {pair.Key} is missing: {packagePath}");
+                continue;
+            }
+
+            try
+            {
+                var actualHash = ComputePackageIdentityHash(packagePath, assemblyFiles);
+                ValidateHash($"nupkg {pair.Key}", pair.Value, actualHash, failures);
+            }
+            catch (Exception exception) when (exception is IOException or InvalidDataException
+                or UnauthorizedAccessException or BadImageFormatException or InvalidOperationException)
+            {
+                failures.Add($"nupkg {pair.Key} could not be canonicalized: {packagePath}; {exception.Message}");
+            }
         }
 
         foreach (var packageId in RequiredPackageIds)
@@ -433,7 +454,8 @@ internal static class CandidateIdentityVerifier
             $"approval file {path}", failures);
     }
 
-    private static Dictionary<string, string> CaptureNupkgFiles(string packagesRoot, List<string> failures)
+    private static Dictionary<string, string> CaptureNupkgFiles(string packagesRoot,
+        IReadOnlyDictionary<string, string> assemblyFiles, List<string> failures)
     {
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
         var fullRoot = Path.GetFullPath(packagesRoot);
@@ -456,10 +478,114 @@ internal static class CandidateIdentityVerifier
             }
 
             var relativePath = NormalizeRelativePath(Path.GetRelativePath(fullRoot, matches[0]));
-            result[relativePath] = ApiSnapshotFileHash.ComputeSha256(matches[0]);
+            try
+            {
+                result[relativePath] = ComputePackageIdentityHash(matches[0], assemblyFiles);
+            }
+            catch (Exception exception) when (exception is IOException or InvalidDataException
+                or UnauthorizedAccessException or BadImageFormatException or InvalidOperationException)
+            {
+                failures.Add($"capture: nupkg could not be canonicalized: {matches[0]}; {exception.Message}");
+            }
         }
 
         return result;
+    }
+
+    private static Dictionary<string, string> CaptureAssemblyFiles(
+        IReadOnlyDictionary<string, string> assemblyPaths, string operation, List<string> failures)
+    {
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        var additionalAssemblyPaths = assemblyPaths.Values
+            .Select(Path.GetDirectoryName)
+            .Where(path => !string.IsNullOrWhiteSpace(path) && Directory.Exists(path!))
+            .SelectMany(path => Directory.EnumerateFiles(path!, "*.dll"))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        foreach (var pair in assemblyPaths)
+        {
+            var relativePath = NormalizeRelativePath(pair.Key);
+            if (!File.Exists(pair.Value))
+            {
+                failures.Add($"{operation}: candidate assembly is missing: {pair.Value}");
+                continue;
+            }
+
+            try
+            {
+                result[relativePath] = ComputeAssemblyIdentityHash(pair.Value, additionalAssemblyPaths);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException
+                or BadImageFormatException or FileLoadException or InvalidOperationException)
+            {
+                failures.Add($"{operation}: candidate assembly could not be canonicalized: {pair.Value}; {exception.Message}");
+            }
+        }
+
+        return result;
+    }
+
+    private static string ComputeAssemblyIdentityHash(string path, IEnumerable<string> additionalAssemblyPaths)
+    {
+        var snapshot = PublicApiSnapshot.Load(path, additionalAssemblyPaths);
+        return ComputeUtf8Sha256(string.Join("\n", new[]
+        {
+            "bing.offices.assembly-identity.v1",
+            snapshot.AssemblyName,
+            snapshot.MemberCount.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            snapshot.Hash
+        }));
+    }
+
+    private static string ComputePackageIdentityHash(string packagePath,
+        IReadOnlyDictionary<string, string> assemblyFiles)
+    {
+        using var archive = ZipFile.OpenRead(packagePath);
+        var entries = new List<string>();
+        foreach (var entry in archive.Entries
+                     .Where(entry => !string.IsNullOrEmpty(entry.Name))
+                     .OrderBy(entry => entry.FullName, StringComparer.Ordinal))
+        {
+            var relativePath = NormalizeRelativePath(entry.FullName);
+            if (string.Equals(relativePath, "package/services/metadata/core-properties/nuget.psmdcp",
+                    StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            entries.Add($"{relativePath}|{ComputePackageEntryIdentityHash(entry, relativePath, assemblyFiles)}");
+        }
+
+        return ComputeUtf8Sha256("bing.offices.nupkg-identity.v1\n" + string.Join("\n", entries));
+    }
+
+    private static string ComputePackageEntryIdentityHash(ZipArchiveEntry entry, string relativePath,
+        IReadOnlyDictionary<string, string> assemblyFiles)
+    {
+        if (relativePath.StartsWith("lib/", StringComparison.OrdinalIgnoreCase)
+            && relativePath.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+        {
+            var assemblyPath = relativePath["lib/".Length..];
+            if (!assemblyFiles.TryGetValue(assemblyPath, out var assemblyHash))
+                throw new InvalidOperationException(
+                    $"package assembly does not match a required Release assembly: {relativePath}");
+            return "assembly:" + assemblyHash;
+        }
+
+        using var stream = entry.Open();
+        return IsCanonicalTextPackageEntry(relativePath)
+            ? "text:" + ApiSnapshotFileHash.ComputeCanonicalTextSha256(stream)
+            : "binary:" + ApiSnapshotFileHash.ComputeSha256(stream);
+    }
+
+    private static bool IsCanonicalTextPackageEntry(string relativePath)
+    {
+        var fileName = Path.GetFileName(relativePath);
+        if (string.Equals(fileName, "LICENSE", StringComparison.OrdinalIgnoreCase)
+            || fileName.StartsWith("README", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return Path.GetExtension(relativePath).ToLowerInvariant() is ".md" or ".txt" or ".xml"
+            or ".nuspec" or ".rels" or ".json" or ".props" or ".targets" or ".config";
     }
 
     private static Dictionary<string, string> NormalizeHashMap(
@@ -481,27 +607,6 @@ internal static class CandidateIdentityVerifier
         return result;
     }
 
-    private static void ValidateFileHash(string path, string expectedHash, string label, List<string> failures)
-    {
-        if (!ApiSnapshotFileHash.IsSha256(expectedHash))
-            return;
-        if (!File.Exists(path))
-        {
-            failures.Add($"{label} is missing: {path}");
-            return;
-        }
-
-        try
-        {
-            var actualHash = ApiSnapshotFileHash.ComputeSha256(path);
-            if (!string.Equals(expectedHash, actualHash, StringComparison.OrdinalIgnoreCase))
-                failures.Add($"{label} SHA-256 mismatch: expected={expectedHash}; actual={actualHash}");
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            failures.Add($"{label} could not be hashed: {path}; {exception.Message}");
-        }
-    }
 
     private static void ValidateCanonicalTextFileHash(string path, string expectedHash, string label,
         List<string> failures)

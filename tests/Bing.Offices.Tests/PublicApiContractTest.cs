@@ -672,11 +672,13 @@ public class PublicApiContractTest
         using var document = JsonDocument.Parse(File.ReadAllText(baselinePath, System.Text.Encoding.UTF8));
         var root = document.RootElement;
         Assert.Equal("bing.offices.public-api.v2", root.GetProperty("schema").GetString());
-        Assert.Equal("2.3.0", root.GetProperty("generatorVersion").GetString());
+        Assert.Equal("2.4.0", root.GetProperty("generatorVersion").GetString());
         Assert.False(string.IsNullOrWhiteSpace(root.GetProperty("approvedBy").GetString()),
             "BLOCKED: API baseline approvedBy is empty.");
         Assert.False(string.IsNullOrWhiteSpace(root.GetProperty("approvedAt").GetString()),
             "BLOCKED: API baseline approvedAt is empty.");
+        Assert.Equal("logical-v1", root.GetProperty("candidateIdentity")
+            .GetProperty("artifactIdentityFormat").GetString());
 
         var repositoryRoot = FindRepositoryRoot();
         var expectedTfm = GetCurrentTargetFramework();

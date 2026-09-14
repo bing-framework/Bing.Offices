@@ -1,10 +1,11 @@
 using System.Diagnostics;
 using System.Text;
+using System.IO.Compression;
 using Bing.Offices.ApiSnapshot;
 
 internal static class CandidateIdentityContractTest
 {
-    private const string GeneratorVersion = "2.3.0";
+    private const string GeneratorVersion = "2.4.0";
 
     public static int Run()
     {
@@ -45,8 +46,9 @@ internal static class CandidateIdentityContractTest
                 ["net8.0/Bing.Offices.Npoi.dll"] =
                     Path.Combine(assemblyRoot, "net8.0", "Bing.Offices.Npoi.dll")
             };
+            var managedAssemblyPath = typeof(CandidateIdentityContractTest).Assembly.Location;
             foreach (var path in assemblyPaths.Values)
-                WriteBytes(path, Utf8(Path.GetFileName(path)));
+                CopyFile(managedAssemblyPath, path);
 
             var packageRoot = Path.Combine(repository, "packages");
             var packageNames = new[]
@@ -56,7 +58,7 @@ internal static class CandidateIdentityContractTest
                 "Bing.Offices.Npoi.2.0.0.nupkg"
             };
             foreach (var packageName in packageNames)
-                WriteBytes(Path.Combine(packageRoot, packageName), Utf8(packageName));
+                CreatePackage(Path.Combine(packageRoot, packageName), packageName, assemblyPaths);
 
             var approvalPath = Path.Combine(repository,
                 CandidateIdentityVerifier.BreakingApprovalPath.Replace('/', Path.DirectorySeparatorChar));
@@ -266,6 +268,65 @@ internal static class CandidateIdentityContractTest
                 Directory.CreateDirectory(targetDirectory);
             File.Copy(sourcePath, targetPath, overwrite: true);
         }
+    }
+
+    private static void CreatePackage(string path, string packageName,
+        IReadOnlyDictionary<string, string> assemblyPaths)
+    {
+        var directory = Path.GetDirectoryName(path);
+        if (directory is not null)
+            Directory.CreateDirectory(directory);
+
+        using var file = File.Create(path);
+        using var archive = new ZipArchive(file, ZipArchiveMode.Create);
+        WritePackageText(archive, "README.md", "package readme\r\n");
+        WritePackageText(archive, "package/services/metadata/core-properties/nuget.psmdcp",
+            $"created={DateTimeOffset.UtcNow:O}\r\n");
+        foreach (var asset in GetPackageAssets(packageName, assemblyPaths))
+        {
+            var entry = archive.CreateEntry("lib/" + asset.Key, CompressionLevel.Optimal);
+            using var input = File.OpenRead(asset.Value);
+            using var output = entry.Open();
+            input.CopyTo(output);
+        }
+    }
+
+    private static IReadOnlyDictionary<string, string> GetPackageAssets(string packageName,
+        IReadOnlyDictionary<string, string> assemblyPaths)
+    {
+        if (packageName.StartsWith("Bing.Offices.Abstractions.", StringComparison.Ordinal))
+            return new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["netstandard2.0/Bing.Offices.Abstractions.dll"] =
+                    assemblyPaths["netstandard2.0/Bing.Offices.Abstractions.dll"]
+            };
+        if (packageName.StartsWith("Bing.Offices.Core.", StringComparison.Ordinal))
+            return new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["netstandard2.0/Bing.Offices.Core.dll"] =
+                    assemblyPaths["netstandard2.0/Bing.Offices.Core.dll"]
+            };
+
+        return new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["net6.0/Bing.Offices.Npoi.dll"] = assemblyPaths["net6.0/Bing.Offices.Npoi.dll"],
+            ["net8.0/Bing.Offices.Npoi.dll"] = assemblyPaths["net8.0/Bing.Offices.Npoi.dll"]
+        };
+    }
+
+    private static void WritePackageText(ZipArchive archive, string path, string value)
+    {
+        var entry = archive.CreateEntry(path, CompressionLevel.Optimal);
+        using var writer = new StreamWriter(entry.Open(), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        writer.Write(value);
+    }
+
+    private static void CopyFile(string sourcePath, string targetPath)
+    {
+        var directory = Path.GetDirectoryName(targetPath);
+        if (directory is not null)
+            Directory.CreateDirectory(directory);
+        File.Copy(sourcePath, targetPath, overwrite: true);
     }
 
     private static byte[] Utf8(string value) => Encoding.UTF8.GetBytes(value);

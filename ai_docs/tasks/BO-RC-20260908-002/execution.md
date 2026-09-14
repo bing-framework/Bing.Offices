@@ -12,7 +12,7 @@ AI_EXECUTION_FINISHED_AT: 2026-09-14T11:17:35.5907039+08:00
 
 - `.gitignore` 新增 `ai_docs/tasks/**/artifacts/**` 与 `packages.lock.json`；四个旧 artifact 仅取消暂存并保留磁盘文件，审批记录迁移至 `ai_docs/tasks/BO-RC-20260908-002/api-breaking-approval.md`。
 - 移除公共 props、Benchmark、ApiSnapshot、ResourceProbe 和双 TFM consumer 的 lockfile 配置；CI 改为普通 restore，API candidate/diff 写入被忽略的临时目录并作为 Actions artifact 上传，删除 artifact 跟踪门禁。
-- API 身份 generator 升级至 `2.3.0`；baseline 仅绑定源清单、4 个 Release 程序集、3 个 nupkg 和任务根审批文件的规范化文本 SHA-256。根级 `framework.props`、`common.props`、`common.tests.props`、`version.props`、`version.dev.props` 已纳入源清单。
+- API 身份 generator 升级至 `2.4.0`；baseline 绑定源清单、4 个 Release 程序集、3 个 nupkg 和任务根审批文件。程序集以规范化公开 API 身份哈希表示，nupkg 以排序条目清单、规范化文本和内嵌程序集身份表示，排除 NuGet 时间元数据 `nuget.psmdcp`，避免 Windows/Linux 原始 PE/ZIP 字节差异造成误报。根级 `framework.props`、`common.props`、`common.tests.props`、`version.props`、`version.dev.props` 已纳入源清单。
 - `PublicApi_AllReleaseAssemblies_ShouldMatchMemberSnapshot` 改为读取 `output/release` 的统一 Abstractions/Core/当前 TFM NPOI，并比较完整 canonical lines；失败信息包含 TFM、程序集、路径、哈希、成员数和 added/removed 成员。批准的 Core `D664...` 保持不变。
 - `identity-self-test` 已覆盖 LF/CRLF clean checkout、源/程序集/nupkg/审批文件篡改、缺失审批文件，以及忽略 artifact/lockfile 不影响身份；测试和构建按 net6 后 net8 串行执行。
 
