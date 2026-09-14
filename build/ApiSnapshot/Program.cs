@@ -8,7 +8,7 @@ using System.Xml.Linq;
 using Bing.Offices.ApiSnapshot;
 
 const string schema = "bing.offices.public-api.v2";
-const string generatorVersion = "2.6.0";
+const string generatorVersion = "2.7.0";
 
 var arguments = ParseArguments(args);
 var root = Path.GetFullPath(arguments.GetValueOrDefault("root") ?? "output/release");
@@ -218,7 +218,7 @@ public sealed class ApiMemberDiff
 
 internal static class CandidateIdentityVerifier
 {
-    private const string ArtifactIdentityFormat = "logical-v2";
+    private const string ArtifactIdentityFormat = "logical-v3";
     internal const string BreakingApprovalPath =
         "ai_docs/tasks/BO-RC-20260908-002/api-breaking-approval.md";
 
@@ -574,15 +574,19 @@ internal static class CandidateIdentityVerifier
         }
 
         using var stream = entry.Open();
-        if (string.Equals(Path.GetExtension(relativePath), ".nuspec", StringComparison.OrdinalIgnoreCase))
-            return "text:" + ComputeNuspecIdentityHash(stream);
+        if (IsXmlPackageEntry(relativePath))
+        {
+            var isNuspec = string.Equals(Path.GetExtension(relativePath), ".nuspec",
+                StringComparison.OrdinalIgnoreCase);
+            return "xml:" + ComputeXmlPackageEntryIdentityHash(stream, isNuspec);
+        }
 
         return IsCanonicalTextPackageEntry(relativePath)
             ? "text:" + ApiSnapshotFileHash.ComputeCanonicalTextSha256(stream)
             : "binary:" + ApiSnapshotFileHash.ComputeSha256(stream);
     }
 
-    private static string ComputeNuspecIdentityHash(Stream stream)
+    private static string ComputeXmlPackageEntryIdentityHash(Stream stream, bool normalizeRepositoryMetadata)
     {
         var settings = new XmlReaderSettings
         {
@@ -593,16 +597,33 @@ internal static class CandidateIdentityVerifier
         using var reader = XmlReader.Create(stream, settings);
         var document = XDocument.Load(reader, LoadOptions.None);
 
-        // NuGet 根据当前 checkout 注入这两个源控元数据，候选源清单已独立绑定实际源码。
-        foreach (var repository in document.Descendants()
-                     .Where(element => string.Equals(element.Name.LocalName, "repository", StringComparison.Ordinal)))
+        if (normalizeRepositoryMetadata)
         {
-            repository.Attribute("branch")?.Remove();
-            repository.Attribute("commit")?.Remove();
+            // NuGet 根据当前 checkout 注入这两个源控元数据，候选源清单已独立绑定实际源码。
+            foreach (var repository in document.Descendants()
+                         .Where(element => string.Equals(element.Name.LocalName, "repository", StringComparison.Ordinal)))
+            {
+                repository.Attribute("branch")?.Remove();
+                repository.Attribute("commit")?.Remove();
+            }
+        }
+
+        // XML 属性顺序、BOM、XML 声明和纯格式化空白不应使跨 OS 的同一包失效。
+        foreach (var element in document.Descendants())
+        {
+            var attributes = element.Attributes()
+                .OrderBy(attribute => attribute.Name.NamespaceName, StringComparer.Ordinal)
+                .ThenBy(attribute => attribute.Name.LocalName, StringComparer.Ordinal)
+                .Select(attribute => new XAttribute(attribute))
+                .ToArray();
+            element.ReplaceAttributes(attributes);
         }
 
         return ComputeUtf8Sha256(document.ToString(SaveOptions.DisableFormatting));
     }
+
+    private static bool IsXmlPackageEntry(string relativePath) =>
+        Path.GetExtension(relativePath).ToLowerInvariant() is ".xml" or ".nuspec" or ".rels";
 
     private static bool IsCanonicalTextPackageEntry(string relativePath)
     {
@@ -611,8 +632,8 @@ internal static class CandidateIdentityVerifier
             || fileName.StartsWith("README", StringComparison.OrdinalIgnoreCase))
             return true;
 
-        return Path.GetExtension(relativePath).ToLowerInvariant() is ".md" or ".txt" or ".xml"
-            or ".nuspec" or ".rels" or ".json" or ".props" or ".targets" or ".config";
+        return Path.GetExtension(relativePath).ToLowerInvariant() is ".md" or ".txt" or ".json"
+            or ".props" or ".targets" or ".config";
     }
 
     private static Dictionary<string, string> NormalizeHashMap(

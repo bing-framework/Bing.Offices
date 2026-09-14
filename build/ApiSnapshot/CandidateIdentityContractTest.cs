@@ -5,7 +5,7 @@ using Bing.Offices.ApiSnapshot;
 
 internal static class CandidateIdentityContractTest
 {
-    private const string GeneratorVersion = "2.6.0";
+    private const string GeneratorVersion = "2.7.0";
 
     public static int Run()
     {
@@ -119,6 +119,20 @@ internal static class CandidateIdentityContractTest
                     assemblyPaths, repositoryCommit: "candidate");
             AssertNoFailures("repository metadata package validation",
                 Validate(baseline, assemblyPaths, repositoryMetadataPackageRoot, repository));
+
+            var equivalentXmlPackageRoot = Path.Combine(repository, "equivalent-xml-packages");
+            foreach (var packageName in packageNames)
+                CreatePackage(Path.Combine(equivalentXmlPackageRoot, packageName), packageName,
+                    assemblyPaths, usePlatformXmlFormatting: true);
+            AssertNoFailures("equivalent XML package validation",
+                Validate(baseline, assemblyPaths, equivalentXmlPackageRoot, repository));
+
+            var tamperedXmlPackageRoot = Path.Combine(repository, "tampered-xml-packages");
+            foreach (var packageName in packageNames)
+                CreatePackage(Path.Combine(tamperedXmlPackageRoot, packageName), packageName,
+                    assemblyPaths, documentationSummary: "tampered");
+            AssertValidationFails("package XML semantic tamper",
+                baseline, assemblyPaths, tamperedXmlPackageRoot, repository);
 
             var tamperedRepositoryPackageRoot = Path.Combine(repository, "tampered-repository-packages");
             foreach (var packageName in packageNames)
@@ -308,7 +322,8 @@ internal static class CandidateIdentityContractTest
 
     private static void CreatePackage(string path, string packageName,
         IReadOnlyDictionary<string, string> assemblyPaths, string repositoryCommit = "base",
-        string repositoryUrl = "https://example.invalid/repository")
+        string repositoryUrl = "https://example.invalid/repository", bool usePlatformXmlFormatting = false,
+        string documentationSummary = "package documentation")
     {
         var directory = Path.GetDirectoryName(path);
         if (directory is not null)
@@ -316,17 +331,32 @@ internal static class CandidateIdentityContractTest
 
         using var file = File.Create(path);
         using var archive = new ZipArchive(file, ZipArchiveMode.Create);
+        var lineEnding = usePlatformXmlFormatting ? "\n" : "\r\n";
+        var repositoryAttributes = usePlatformXmlFormatting
+            ? $"url=\"{repositoryUrl}\" type=\"git\""
+            : $"type=\"git\" url=\"{repositoryUrl}\"";
         WritePackageText(archive, "README.md", "package readme\r\n");
         WritePackageText(archive, "package.nuspec",
-            $"<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n<package><metadata><repository type=\"git\" url=\"{repositoryUrl}\" branch=\"refs/heads/main\" commit=\"{repositoryCommit}\" /></metadata></package>\r\n");
+            $"<?xml version=\"1.0\" encoding=\"utf-8\"?>{lineEnding}<package>{lineEnding}  <metadata>{lineEnding}    <repository {repositoryAttributes} branch=\"refs/heads/main\" commit=\"{repositoryCommit}\" />{lineEnding}  </metadata>{lineEnding}</package>{lineEnding}",
+            usePlatformXmlFormatting);
+        WritePackageText(archive, "_rels/.rels",
+            $"<?xml version=\"1.0\" encoding=\"utf-8\"?>{lineEnding}<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">{lineEnding}  <Relationship Target=\"/{packageName}\" Type=\"http://schemas.microsoft.com/packaging/2010/07/manifest\" Id=\"R1\" />{lineEnding}</Relationships>{lineEnding}",
+            usePlatformXmlFormatting);
+        WritePackageText(archive, "[Content_Types].xml",
+            $"<?xml version=\"1.0\" encoding=\"utf-8\"?>{lineEnding}<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">{lineEnding}  <Default ContentType=\"application/xml\" Extension=\"xml\" />{lineEnding}</Types>{lineEnding}",
+            usePlatformXmlFormatting);
         WritePackageText(archive, "package/services/metadata/core-properties/nuget.psmdcp",
             $"created={DateTimeOffset.UtcNow:O}\r\n");
         foreach (var asset in GetPackageAssets(packageName, assemblyPaths))
         {
             var entry = archive.CreateEntry("lib/" + asset.Key, CompressionLevel.Optimal);
-            using var input = File.OpenRead(asset.Value);
-            using var output = entry.Open();
-            input.CopyTo(output);
+            using (var input = File.OpenRead(asset.Value))
+            using (var output = entry.Open())
+                input.CopyTo(output);
+
+            WritePackageText(archive, "lib/" + Path.ChangeExtension(asset.Key, ".xml"),
+                $"<?xml version=\"1.0\" encoding=\"utf-8\"?>{lineEnding}<doc>{lineEnding}  <members>{lineEnding}    <member name=\"T:Package\"><summary>{documentationSummary}</summary></member>{lineEnding}  </members>{lineEnding}</doc>{lineEnding}",
+                usePlatformXmlFormatting);
         }
     }
 
@@ -353,10 +383,11 @@ internal static class CandidateIdentityContractTest
         };
     }
 
-    private static void WritePackageText(ZipArchive archive, string path, string value)
+    private static void WritePackageText(ZipArchive archive, string path, string value,
+        bool emitUtf8Identifier = false)
     {
         var entry = archive.CreateEntry(path, CompressionLevel.Optimal);
-        using var writer = new StreamWriter(entry.Open(), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        using var writer = new StreamWriter(entry.Open(), new UTF8Encoding(emitUtf8Identifier));
         writer.Write(value);
     }
 

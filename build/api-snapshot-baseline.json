@@ -1,14 +1,14 @@
 ﻿{
   "schema": "bing.offices.public-api.v2",
-  "generatorVersion": "2.6.0",
+  "generatorVersion": "2.7.0",
   "baselineCommit": "e4093f554e7e81d642ff6722a1f8e44d185d39da",
   "approvedBy": "jian玄冰",
   "approvedAt": "2026-09-09T16:54:21+08:00",
   "candidateIdentity": {
-    "artifactIdentityFormat": "logical-v2",
+    "artifactIdentityFormat": "logical-v3",
     "baseCommit": "e4093f554e7e81d642ff6722a1f8e44d185d39da",
     "worktreeState": "dirty",
-    "candidateSourceManifestSha256": "8FABFB60A5FC5505E24BB836309374C9C35A35B98525D213BDE8725AEE569FB0",
+    "candidateSourceManifestSha256": "8C683100D387CADE7647A839FCDF0580F0C504ED2D1272A230AB9D6BB5BD2DDD",
     "breakingApprovalArtifact": "ai_docs/tasks/BO-RC-20260908-002/api-breaking-approval.md",
     "breakingApprovalSha256": "10F4EE17AD5EE9C316962F6AE524C52BFE2799FA97E09623A2E2B842E3459E1B",
     "assemblyFiles": {
@@ -18,9 +18,9 @@
       "net8.0/Bing.Offices.Npoi.dll": "DA96ACC6690CAED284F9740C61F4E1B5A757D80D197E85B66228F6530C29F8CF"
     },
     "nupkgFiles": {
-      "Bing.Offices.Abstractions.2.0.0.nupkg": "7F67534048396F16410D24215A6C16D939A6FB39875E40B753909885D2B11A4F",
-      "Bing.Offices.Core.2.0.0.nupkg": "2D567F86E66CB433DD0119B401735435E8CB838AE4A41A1D312CBA45844F1E30",
-      "Bing.Offices.Npoi.2.0.0.nupkg": "29246E225AD9C4D7E2B1E78EF9299087455AE91D3EED7FBAFB71F0ED81A44303"
+      "Bing.Offices.Abstractions.2.0.0.nupkg": "7899A29DE99D75892AE543082A7956B848F042C4592CD3C140EDD5410CA2BC89",
+      "Bing.Offices.Core.2.0.0.nupkg": "8DD7C0BD2211E2CC077CFE6709F168039CD9213B6877CE3EA46BBD6098DE7E69",
+      "Bing.Offices.Npoi.2.0.0.nupkg": "2AC1FFF2036FA8FCD70F29D91B02D2E61A274CE0E0ED88FEF8BEDC2B84798BAB"
     }
   },
   "assemblies": {
