@@ -3,10 +3,12 @@ using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Xml;
+using System.Xml.Linq;
 using Bing.Offices.ApiSnapshot;
 
 const string schema = "bing.offices.public-api.v2";
-const string generatorVersion = "2.4.0";
+const string generatorVersion = "2.6.0";
 
 var arguments = ParseArguments(args);
 var root = Path.GetFullPath(arguments.GetValueOrDefault("root") ?? "output/release");
@@ -216,7 +218,7 @@ public sealed class ApiMemberDiff
 
 internal static class CandidateIdentityVerifier
 {
-    private const string ArtifactIdentityFormat = "logical-v1";
+    private const string ArtifactIdentityFormat = "logical-v2";
     internal const string BreakingApprovalPath =
         "ai_docs/tasks/BO-RC-20260908-002/api-breaking-approval.md";
 
@@ -229,9 +231,9 @@ internal static class CandidateIdentityVerifier
 
     private static readonly string[] CandidateSourceScope =
     {
-        "src", "tests", "benchmarks", "build/ApiSnapshot", ".github", ".gitattributes", "docs",
-        "README.md", "AGENTS.md", ".gitignore", "framework.props", "common.props",
-        "common.tests.props", "version.props", "version.dev.props"
+        // 只绑定会影响 Release 程序集或 nupkg 内容的输入，避免文档、测试和 CI 配置导致 API 基线失效。
+        "src", "asset", "build/ApiSnapshot", "README.md", "LICENSE", ".gitattributes",
+        "framework.props", "common.props", "Directory.Build.targets", "version.props", "version.dev.props"
     };
 
     public static ApiCandidateIdentity Capture(
@@ -406,7 +408,7 @@ internal static class CandidateIdentityVerifier
                 var actualHash = ComputePackageIdentityHash(packagePath, assemblyFiles);
                 ValidateHash($"nupkg {pair.Key}", pair.Value, actualHash, failures);
             }
-            catch (Exception exception) when (exception is IOException or InvalidDataException
+            catch (Exception exception) when (exception is IOException or InvalidDataException or XmlException
                 or UnauthorizedAccessException or BadImageFormatException or InvalidOperationException)
             {
                 failures.Add($"nupkg {pair.Key} could not be canonicalized: {packagePath}; {exception.Message}");
@@ -482,7 +484,7 @@ internal static class CandidateIdentityVerifier
             {
                 result[relativePath] = ComputePackageIdentityHash(matches[0], assemblyFiles);
             }
-            catch (Exception exception) when (exception is IOException or InvalidDataException
+            catch (Exception exception) when (exception is IOException or InvalidDataException or XmlException
                 or UnauthorizedAccessException or BadImageFormatException or InvalidOperationException)
             {
                 failures.Add($"capture: nupkg could not be canonicalized: {matches[0]}; {exception.Message}");
@@ -572,9 +574,34 @@ internal static class CandidateIdentityVerifier
         }
 
         using var stream = entry.Open();
+        if (string.Equals(Path.GetExtension(relativePath), ".nuspec", StringComparison.OrdinalIgnoreCase))
+            return "text:" + ComputeNuspecIdentityHash(stream);
+
         return IsCanonicalTextPackageEntry(relativePath)
             ? "text:" + ApiSnapshotFileHash.ComputeCanonicalTextSha256(stream)
             : "binary:" + ApiSnapshotFileHash.ComputeSha256(stream);
+    }
+
+    private static string ComputeNuspecIdentityHash(Stream stream)
+    {
+        var settings = new XmlReaderSettings
+        {
+            DtdProcessing = DtdProcessing.Prohibit,
+            IgnoreWhitespace = true,
+            XmlResolver = null
+        };
+        using var reader = XmlReader.Create(stream, settings);
+        var document = XDocument.Load(reader, LoadOptions.None);
+
+        // NuGet 根据当前 checkout 注入这两个源控元数据，候选源清单已独立绑定实际源码。
+        foreach (var repository in document.Descendants()
+                     .Where(element => string.Equals(element.Name.LocalName, "repository", StringComparison.Ordinal)))
+        {
+            repository.Attribute("branch")?.Remove();
+            repository.Attribute("commit")?.Remove();
+        }
+
+        return ComputeUtf8Sha256(document.ToString(SaveOptions.DisableFormatting));
     }
 
     private static bool IsCanonicalTextPackageEntry(string relativePath)

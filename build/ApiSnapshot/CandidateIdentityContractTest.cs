@@ -5,7 +5,7 @@ using Bing.Offices.ApiSnapshot;
 
 internal static class CandidateIdentityContractTest
 {
-    private const string GeneratorVersion = "2.4.0";
+    private const string GeneratorVersion = "2.6.0";
 
     public static int Run()
     {
@@ -23,6 +23,9 @@ internal static class CandidateIdentityContractTest
             WriteBytes(trackedSourcePath, Utf8("class TrackedCandidate { }\r\n"));
             WriteText(Path.Combine(repository, "common.props"), "<Project />\r\n");
             WriteText(Path.Combine(repository, "framework.props"), "<Project />\r\n");
+            WriteText(Path.Combine(repository, "asset", "props", "package.props"), "<Project />\r\n");
+            WriteText(Path.Combine(repository, "README.md"), "package readme\r\n");
+            WriteText(Path.Combine(repository, "LICENSE"), "license\r\n");
             WriteBytes(Path.Combine(repository, "tests", "Base.lock"), Utf8("base-lock\r\n"));
             RunGit(repository, "add", "--all");
             RunGit(repository, "commit", "--quiet", "--no-gpg-sign", "-m", "base");
@@ -85,6 +88,18 @@ internal static class CandidateIdentityContractTest
                 throw new InvalidOperationException(
                     "ignored task artifacts and packages.lock.json changed the candidate source manifest.");
 
+            WriteText(Path.Combine(repository, "docs", "release-note.md"), "documentation only\r\n");
+            WriteBytes(Path.Combine(repository, "tests", "Candidate.lock"), Utf8("candidate-lock-2\r\n"));
+            WriteText(Path.Combine(repository, ".github", "workflows", "ci.yml"), "name: CI\r\n");
+            var releaseUnrelatedCaptureFailures = new List<string>();
+            var releaseUnrelatedCapture = CandidateIdentityVerifier.Capture(
+                assemblyPaths, packageRoot, repository, baseCommit, releaseUnrelatedCaptureFailures);
+            AssertNoFailures("release-unrelated file capture", releaseUnrelatedCaptureFailures);
+            if (!string.Equals(sourceManifestHash, releaseUnrelatedCapture.CandidateSourceManifestSha256,
+                    StringComparison.Ordinal))
+                throw new InvalidOperationException(
+                    "documentation, tests or CI configuration changed the candidate source manifest.");
+
             var baseline = new ApiBaselineDocument
             {
                 Schema = "bing.offices.public-api.v2",
@@ -97,6 +112,20 @@ internal static class CandidateIdentityContractTest
 
             AssertNoFailures("dirty validation",
                 Validate(baseline, assemblyPaths, packageRoot, repository));
+
+            var repositoryMetadataPackageRoot = Path.Combine(repository, "repository-metadata-packages");
+            foreach (var packageName in packageNames)
+                CreatePackage(Path.Combine(repositoryMetadataPackageRoot, packageName), packageName,
+                    assemblyPaths, repositoryCommit: "candidate");
+            AssertNoFailures("repository metadata package validation",
+                Validate(baseline, assemblyPaths, repositoryMetadataPackageRoot, repository));
+
+            var tamperedRepositoryPackageRoot = Path.Combine(repository, "tampered-repository-packages");
+            foreach (var packageName in packageNames)
+                CreatePackage(Path.Combine(tamperedRepositoryPackageRoot, packageName), packageName,
+                    assemblyPaths, repositoryCommit: "candidate", repositoryUrl: "https://example.invalid/tampered");
+            AssertValidationFails("repository URL package tamper",
+                baseline, assemblyPaths, tamperedRepositoryPackageRoot, repository);
 
             RunGit(repository, "add", "--all");
             RunGit(repository, "commit", "--quiet", "--no-gpg-sign", "-m", "candidate");
@@ -130,7 +159,14 @@ internal static class CandidateIdentityContractTest
                 baseline, linuxPaths.Assemblies, linuxPaths.PackageRoot, linuxCheckout);
             WriteBytes(rootPropsPath, originalRootProps);
 
-            var untrackedSourcePath = Path.Combine(linuxCheckout, "tests", "UntrackedTamper.cs");
+            var packagePropsPath = Path.Combine(linuxCheckout, "asset", "props", "package.props");
+            var originalPackageProps = File.ReadAllBytes(packagePropsPath);
+            WriteText(packagePropsPath, "<Project><PropertyGroup><Tampered>true</Tampered></PropertyGroup></Project>\n");
+            AssertValidationFails("package asset tamper",
+                baseline, linuxPaths.Assemblies, linuxPaths.PackageRoot, linuxCheckout);
+            WriteBytes(packagePropsPath, originalPackageProps);
+
+            var untrackedSourcePath = Path.Combine(linuxCheckout, "src", "UntrackedTamper.cs");
             WriteText(untrackedSourcePath, "class UntrackedTamper { }\n");
             AssertValidationFails("untracked source tamper",
                 baseline, linuxPaths.Assemblies, linuxPaths.PackageRoot, linuxCheckout);
@@ -169,7 +205,7 @@ internal static class CandidateIdentityContractTest
             Console.WriteLine(
                 "API identity clean-checkout contract passed for LF and CRLF checkouts; "
                 + "source, assembly, nupkg and approval tamper checks failed as expected; "
-                + "ignored artifacts and lockfiles were excluded.");
+                + "ignored artifacts, lockfiles and release-unrelated files were excluded.");
             return 0;
         }
         catch (Exception exception)
@@ -271,7 +307,8 @@ internal static class CandidateIdentityContractTest
     }
 
     private static void CreatePackage(string path, string packageName,
-        IReadOnlyDictionary<string, string> assemblyPaths)
+        IReadOnlyDictionary<string, string> assemblyPaths, string repositoryCommit = "base",
+        string repositoryUrl = "https://example.invalid/repository")
     {
         var directory = Path.GetDirectoryName(path);
         if (directory is not null)
@@ -280,6 +317,8 @@ internal static class CandidateIdentityContractTest
         using var file = File.Create(path);
         using var archive = new ZipArchive(file, ZipArchiveMode.Create);
         WritePackageText(archive, "README.md", "package readme\r\n");
+        WritePackageText(archive, "package.nuspec",
+            $"<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n<package><metadata><repository type=\"git\" url=\"{repositoryUrl}\" branch=\"refs/heads/main\" commit=\"{repositoryCommit}\" /></metadata></package>\r\n");
         WritePackageText(archive, "package/services/metadata/core-properties/nuget.psmdcp",
             $"created={DateTimeOffset.UtcNow:O}\r\n");
         foreach (var asset in GetPackageAssets(packageName, assemblyPaths))
