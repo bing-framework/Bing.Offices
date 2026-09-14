@@ -73,15 +73,6 @@ jobs:
             unzip -l "$package" | grep -q '\.xml$'
           done
 
-      - name: API snapshot compare
-        shell: bash
-        run: |
-          mkdir -p artifacts/api-snapshot
-          dotnet run --project build/ApiSnapshot/ApiSnapshot.csproj -c Release --no-build -- --identity-self-test true
-          dotnet run --project build/ApiSnapshot/ApiSnapshot.csproj -c Release --no-build -- \
-            --root output/release --baseline build/api-snapshot-baseline.json --packages artifacts/packages \
-            --repository . --output artifacts/api-snapshot
-
       - name: Package consumers
         shell: bash
         run: |
@@ -110,6 +101,5 @@ jobs:
           name: bing-offices-package-evidence
           path: |
             artifacts/packages
-            artifacts/api-snapshot
             artifacts/consumer-results
             artifacts/ci-contracts

@@ -506,3 +506,10 @@ AI_EXECUTION_FINISHED_AT: 2026-09-14T11:17:35.5907039+08:00
 - 未自动执行 `git commit`。
 - 未自动执行 `git push`。
 - 未自动创建 PR。
+
+### Round 11（CI API Snapshot 阶段停用）
+
+- 决策：GitHub CI 不再执行独立的 `API snapshot compare` 阶段，因此不再运行 candidate identity、nupkg/source identity 或 `identity-self-test`。
+- 范围：删除 CI workflow 中的 API snapshot 命令和 `artifacts/api-snapshot` 上传路径；Restore、Release build、双 TFM Unit/Integration、Pack、包结构校验、Package Consumer 和其他 CI evidence 保持不变。
+- 保留：`build/ApiSnapshot` 工具、`build/api-snapshot-baseline.json`、`PublicApiContractTest` 及相关测试项目链接继续保留。Unit 阶段仍验证公开 API 双 TFM 成员快照和批准元数据，供本地及 CI Test 阶段发现公共 API 漂移。
+- 约束：本轮不修改公共 API、生产实现、API baseline 或历史 Review 原件；API 快照仍可通过本地命令手动运行。
