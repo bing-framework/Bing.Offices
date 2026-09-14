@@ -1,6 +1,6 @@
-<!-- AI_EXECUTION_STATUS: COMPLETED -->
+<!-- AI_EXECUTION_STATUS: PARTIAL -->
 AI_TASK_ID: BO-RC-20260908-002
-AI_EXECUTION_FINISHED_AT: 2026-09-14T11:17:35.5907039+08:00
+AI_EXECUTION_FINISHED_AT: 2026-09-14T17:09:19.5421972+08:00
 
 # 实施执行报告
 
@@ -513,3 +513,14 @@ AI_EXECUTION_FINISHED_AT: 2026-09-14T11:17:35.5907039+08:00
 - 范围：删除 CI workflow 中的 API snapshot 命令和 `artifacts/api-snapshot` 上传路径；Restore、Release build、双 TFM Unit/Integration、Pack、包结构校验、Package Consumer 和其他 CI evidence 保持不变。
 - 保留：`build/ApiSnapshot` 工具、`build/api-snapshot-baseline.json`、`PublicApiContractTest` 及相关测试项目链接继续保留。Unit 阶段仍验证公开 API 双 TFM 成员快照和批准元数据，供本地及 CI Test 阶段发现公共 API 漂移。
 - 约束：本轮不修改公共 API、生产实现、API baseline 或历史 Review 原件；API 快照仍可通过本地命令手动运行。
+
+### Round 12（Package Consumer 跨平台还原修复）
+
+- 根因：GitHub Linux runner 的 Package consumers 阶段报告 NU1100。消费者 NuGet.Config 的本地 task-feed 使用 Windows 反斜杠相对路径，结合 PackageSourceMapping 后未被识别为可用的本地包源；该错误不是 Bing.Offices.Npoi 缺少 lib/net6.0 或 lib/net8.0 资产。
+- 修复：Consumer.Net6 与 Consumer.Net8 的本地包源统一改为跨平台的 ../../artifacts/packages；task-feed 对 Bing.Offices.* 的映射和 nuget.org 对第三方依赖的映射保持不变。
+- 发布决策：保留 Package consumers 阶段。它从刚生成的 nupkg 通过外部 PackageReference 项目执行 restore、build、run，并输出 package-consumer-ok，是发布包实际可消费性的必要门禁。
+- 范围：未修改公开 API、包版本、消费者程序、API Snapshot 工具或无关的 chinese-comments 技能改动；packages.lock.json 继续忽略，不作为本地验证输入。
+- 验证：Release solution build 通过，0 error，存在 1 个既有 NU1900 漏洞源访问警告；三个 2.0.0 nupkg 均重新打包成功。NPOI 包含 lib/net6.0 与 lib/net8.0 的 DLL/XML 资产。
+- 验证：从 HEAD 归档生成的干净消费者副本不含 packages.lock.json，使用独立缓存按 net6 后 net8 串行 restore/build/run；两套消费者均输出 package-consumer-ok。net6 仅有 NETSDK1138 的生命周期警告，net8 无警告和错误。
+- 验证：两个 NuGet.Config 的 XML、task-feed 与 nuget.org 映射均通过检查；Package consumers 阶段及其 CI workflow 未被删除或改动；git diff --check 退出码为 0，输出的 CRLF/LF 提示来自既有 ProfileFixtures 文件。
+- 环境说明：本机首次 restore 受到 NuGet.org TLS 凭证限制，随后在获准网络访问后用全新缓存完成验证；GitHub ubuntu-latest 的下一次运行仍是最终 Linux runner 证据。

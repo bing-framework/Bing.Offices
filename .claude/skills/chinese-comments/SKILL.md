@@ -1,6 +1,8 @@
 ---
 name: chinese-comments
 description: 为 C#/.NET 代码补全或审查中文 XML 文档注释，并保持行为、成员签名和公开契约不变。
+metadata:
+  version: 1.1.0
 ---
 
 # 中文注释规范
