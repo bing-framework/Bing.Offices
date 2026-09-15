@@ -10,7 +10,7 @@ internal sealed class ExcelImportRuntime
     /// <summary>指示行数上限错误是否已加入结果，避免重复报告。</summary>
     private bool _rowLimitReported;
 
-    /// <summary>使用请求资源限制初始化工作簿级运行时状态。</summary>
+    /// <summary>初始化一个 <see cref="ExcelImportRuntime" /> 类型的实例。</summary>
     /// <param name="limits">导入请求配置的资源限制。</param>
     internal ExcelImportRuntime(ExcelResourceLimits limits)
     {
@@ -48,6 +48,7 @@ internal sealed class ExcelImportRuntime
     }
 }
 
+/// <summary>跟踪工作簿图片资源的数量和字节配额。</summary>
 internal sealed class ExcelImageResourceTracker
 {
     /// <summary>工作簿允许读取的最大图片数量。</summary>
@@ -61,7 +62,7 @@ internal sealed class ExcelImageResourceTracker
     /// <summary>已接纳图片的累计字节数。</summary>
     private long _totalBytes;
 
-    /// <summary>从导入请求资源限制初始化图片配额跟踪器。</summary>
+    /// <summary>初始化一个 <see cref="ExcelImageResourceTracker" /> 类型的实例。</summary>
     /// <param name="limits">导入请求配置的资源限制。</param>
     internal ExcelImageResourceTracker(ExcelResourceLimits limits)
     {
@@ -85,18 +86,20 @@ internal sealed class ExcelImageResourceTracker
     }
 }
 
+/// <summary>指示图片资源超出导入限制。</summary>
 internal sealed class ImageResourceLimitException : InvalidOperationException
 {
-    /// <summary>使用图片资源限制错误消息初始化异常。</summary>
+    /// <summary>初始化一个 <see cref="ImageResourceLimitException" /> 类型的实例。</summary>
     /// <param name="message">描述超出图片资源限制的消息。</param>
     internal ImageResourceLimitException(string message) : base(message)
     {
     }
 }
 
+/// <summary>记录导入实体来源工作表和行号。</summary>
 internal sealed class SourceLocation
 {
-    /// <summary>使用导入实体的来源工作表和行号初始化位置。</summary>
+    /// <summary>初始化一个 <see cref="SourceLocation" /> 类型的实例。</summary>
     /// <param name="sheetName">实体所属的工作表名称。</param>
     /// <param name="rowIndex">实体所在的一基数据行号。</param>
     internal SourceLocation(string sheetName, int rowIndex)

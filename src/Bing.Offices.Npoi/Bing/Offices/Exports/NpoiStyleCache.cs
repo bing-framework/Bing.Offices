@@ -17,6 +17,9 @@ internal static class NpoiStyleCache
     /// <summary>
     /// 获取或创建规范化样式。
     /// </summary>
+    /// <param name="workbook">目标工作簿。</param>
+    /// <param name="definition">完整样式定义；为空时返回工作簿默认样式。</param>
+    /// <returns>缓存中的规范化工作簿样式。</returns>
     internal static ICellStyle GetOrCreate(IWorkbook workbook, ExcelCellStyle definition)
     {
         if (definition == null)
@@ -27,6 +30,10 @@ internal static class NpoiStyleCache
     /// <summary>
     /// 将请求样式逐属性叠加到现有样式，保留模板中的未覆盖属性。
     /// </summary>
+    /// <param name="workbook">目标工作簿。</param>
+    /// <param name="baseStyle">模板或已有的基础样式。</param>
+    /// <param name="overlay">需要叠加的样式定义；为空时返回基础样式。</param>
+    /// <returns>缓存中的组合样式。</returns>
     internal static ICellStyle Compose(IWorkbook workbook, ICellStyle baseStyle, ExcelCellStyle overlay)
     {
         if (overlay == null)
@@ -37,6 +44,10 @@ internal static class NpoiStyleCache
     /// <summary>
     /// 使用 Workbook 级缓存应用实体表头字体，避免按单元格重复创建样式和字体。
     /// </summary>
+    /// <param name="workbook">目标工作簿。</param>
+    /// <param name="baseStyle">表头使用的基础样式。</param>
+    /// <param name="attribute">实体表头样式特性。</param>
+    /// <returns>应用表头字体后的缓存样式。</returns>
     internal static ICellStyle ApplyHeaderAttribute(IWorkbook workbook, ICellStyle baseStyle,
         HeaderAttribute attribute)
     {
@@ -44,6 +55,7 @@ internal static class NpoiStyleCache
             .ApplyHeaderAttribute(workbook, baseStyle, attribute);
     }
 
+    /// <summary>按工作簿保存样式、组合样式和字体缓存。</summary>
     private sealed class Cache
     {
         /// <summary>按完整样式定义缓存的工作簿原生样式。</summary>

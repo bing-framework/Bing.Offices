@@ -158,7 +158,7 @@ public static class MappingProfileServiceCollectionExtensions
         /// <summary>已注册 Profile 的运行时类型。</summary>
         private readonly Type _profileType;
 
-        /// <summary>创建包含方向描述符键的 Profile 注册记录。</summary>
+        /// <summary>初始化一个 <see cref="MappingProfileRegistration" /> 类型的实例。</summary>
         /// <param name="profileType">Profile 实现类型。</param>
         /// <param name="profileName">稳定 Profile 名称；为空时使用类型全名。</param>
         public MappingProfileRegistration(Type profileType, string profileName)
@@ -170,9 +170,9 @@ public static class MappingProfileServiceCollectionExtensions
 
         /// <summary>获取已注册 Profile 的运行时类型。</summary>
         public Type ProfileType => _profileType;
-        /// <summary>获取 Profile 的稳定注册名称。</summary>
+        /// <summary>获取Profile 的稳定注册名称。</summary>
         public string ProfileName { get; }
-        /// <summary>获取 Profile 产生的方向和模型描述符键。</summary>
+        /// <summary>获取Profile 产生的方向和模型描述符键。</summary>
         public IReadOnlyList<string> Keys { get; }
 
         /// <summary>从 DI 容器解析 Profile 实例并创建方向描述符。</summary>
@@ -186,7 +186,7 @@ public static class MappingProfileServiceCollectionExtensions
     /// <summary>保存程序集扫描阶段发现的 Profile 类型及可选名称。</summary>
     private sealed class ProfileRegistrationType
     {
-        /// <summary>创建待注册的 Profile 类型记录。</summary>
+        /// <summary>初始化一个 <see cref="ProfileRegistrationType" /> 类型的实例。</summary>
         /// <param name="profileType">Profile 实现类型。</param>
         /// <param name="profileName">可选的稳定 Profile 名称。</param>
         public ProfileRegistrationType(Type profileType, string profileName)

@@ -5,9 +5,7 @@
 /// </summary>
 public sealed class ExcelHeaderRow
 {
-    /// <summary>
-    /// 初始化一个<see cref="ExcelHeaderRow"/>类型的实例。
-    /// </summary>
+    /// <summary>初始化一个 <see cref="ExcelHeaderRow" /> 类型的实例。</summary>
     /// <param name="rowIndex">从零开始的行索引。</param>
     /// <param name="cells">表头单元格集合。</param>
     public ExcelHeaderRow(int rowIndex, IReadOnlyList<ExcelHeaderCell> cells)

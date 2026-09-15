@@ -11,6 +11,7 @@ internal static class ColorResolver
     /// 解析
     /// </summary>
     /// <param name="color">颜色枚举</param>
+    /// <returns>对应的 NPOI 短整型颜色索引。</returns>
     public static short Resolve(Color color)
     {
         switch (color)

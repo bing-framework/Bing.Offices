@@ -8,9 +8,10 @@ using Bing.Offices.Providers;
 
 namespace Bing.Offices.Mappings;
 
+/// <summary>动态列映射的不可变运行时实现。</summary>
 internal sealed class ExcelDynamicMappingColumn : IExcelDynamicMappingColumn
 {
-    /// <summary>从动态列配置及已绑定的转换器和校验器创建不可变动态列计划。</summary>
+    /// <summary>初始化一个 <see cref="ExcelDynamicMappingColumn" /> 类型的实例。</summary>
     /// <param name="column">规范化后的动态列配置。</param>
     /// <param name="converters">已绑定的值转换器。</param>
     /// <param name="validations">已绑定的校验规则。</param>

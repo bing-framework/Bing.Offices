@@ -11,9 +11,7 @@ namespace Bing.Offices.Imports;
 /// </summary>
 internal sealed class NpoiResolvedSheet
 {
-    /// <summary>
-    /// 初始化已解析的工作表请求。
-    /// </summary>
+    /// <summary>初始化一个 <see cref="NpoiResolvedSheet" /> 类型的实例。</summary>
     /// <param name="request">原始工作表请求。</param>
     /// <param name="index">工作簿中的零基物理索引；未找到时为 -1。</param>
     /// <param name="name">工作簿中的物理工作表名称；未找到时为 null。</param>
@@ -33,7 +31,7 @@ internal sealed class NpoiResolvedSheet
     /// <summary>获取工作簿中的物理工作表名称。</summary>
     public string Name { get; }
 
-    /// <summary>获取 selector 是否成功解析到物理工作表。</summary>
+    /// <summary>获取selector 是否成功解析到物理工作表。</summary>
     public bool Exists => Index >= 0;
 }
 
@@ -42,16 +40,20 @@ internal sealed class NpoiResolvedSheet
 /// </summary>
 internal sealed class NpoiImportPlanBuilder
 {
+    /// <summary>调用指定实体类型的工作簿映射计划构建逻辑。</summary>
+    /// <param name="target">执行计划构建的导入计划构建器。</param>
+    /// <param name="request">当前工作表导入请求。</param>
+    /// <param name="sheetNames">工作簿中的物理工作表名称集合。</param>
+    /// <returns>按请求生成的工作簿映射计划。</returns>
     private delegate IExcelMappingWorkbookPlan CreatePlanInvoker(NpoiImportPlanBuilder target,
         ExcelSheetImportRequest request, IReadOnlyList<string> sheetNames);
 
+    /// <summary>按工作表实体运行时类型缓存导入计划委托，避免重复反射构造。</summary>
     private static readonly ConcurrentDictionary<Type, CreatePlanInvoker> CreatePlanInvokers = new();
     /// <summary>将请求映射文档编译为不可变工作簿映射计划的工厂。</summary>
     private readonly IExcelMappingPlanFactory _mappingPlanFactory;
 
-    /// <summary>
-    /// 初始化导入计划构建器。
-    /// </summary>
+    /// <summary>初始化一个 <see cref="NpoiImportPlanBuilder" /> 类型的实例。</summary>
     /// <param name="mappingPlanFactory">方向化映射计划工厂。</param>
     public NpoiImportPlanBuilder(IExcelMappingPlanFactory mappingPlanFactory)
     {
@@ -96,6 +98,11 @@ internal sealed class NpoiImportPlanBuilder
         return CreatePlanInvokers.GetOrAdd(request.ItemType, CreatePlanInvokerForType)(this, request, sheetNames);
     }
 
+    /// <summary>
+    /// 为运行时实体类型创建泛型工作簿计划委托。
+    /// </summary>
+    /// <param name="itemType">工作表实体的运行时类型。</param>
+    /// <returns>绑定到指定实体类型的工作簿计划委托。</returns>
     private static CreatePlanInvoker CreatePlanInvokerForType(Type itemType)
     {
         var method = typeof(NpoiImportPlanBuilder).GetMethod(nameof(CreateTypedWorkbookPlan),

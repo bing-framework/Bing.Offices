@@ -322,6 +322,14 @@ public static partial class SheetExtensions
     /// <summary>
     /// 原地移动图片锚点，保留图片关系、类型及样式。
     /// </summary>
+    /// <param name="anchor">待移动的图片锚点。</param>
+    /// <param name="minRow">匹配区域最小行索引。</param>
+    /// <param name="maxRow">匹配区域最大行索引。</param>
+    /// <param name="minCol">匹配区域最小列索引。</param>
+    /// <param name="maxCol">匹配区域最大列索引。</param>
+    /// <param name="onlyInternal">是否仅移动完全位于区域内的锚点。</param>
+    /// <param name="moveRowCount">行偏移量。</param>
+    /// <param name="moveColCount">列偏移量。</param>
     private static void MovePictureAnchor(IClientAnchor anchor, int? minRow, int? maxRow, int? minCol, int? maxCol,
         bool onlyInternal, int moveRowCount, int moveColCount)
     {
@@ -415,6 +423,13 @@ public static partial class SheetExtensions
     /// <summary>
     /// 通过内部适配器执行图片写入；仅供职责级测试确定性注入 NPOI 后置阶段失败。
     /// </summary>
+    /// <param name="sheet">目标工作表。</param>
+    /// <param name="row">图片锚点的零基行索引。</param>
+    /// <param name="col">图片锚点的零基列索引。</param>
+    /// <param name="pictureBytes">图片二进制内容。</param>
+    /// <param name="pictureType">图片格式。</param>
+    /// <param name="adapter">执行 NPOI 图片变更的适配器。</param>
+    /// <returns>图片数据写入成功且形状创建完成时为 true；NPOI 在工作簿变更前拒绝数据时为 false。</returns>
     internal static bool TryAddPicture(ISheet sheet, int row, int col, byte[] pictureBytes,
         PictureType pictureType, IPictureMutationAdapter adapter)
     {
@@ -475,26 +490,54 @@ public static partial class SheetExtensions
 /// <summary>图片写入阶段适配器；测试可替换以确定性验证失败原子性合同。</summary>
 internal interface IPictureMutationAdapter
 {
+    /// <summary>将图片数据注册到工作簿并返回图片索引。</summary>
+    /// <param name="sheet">用于访问目标工作簿的工作表。</param>
+    /// <param name="pictureBytes">图片二进制内容。</param>
+    /// <param name="pictureType">图片格式。</param>
+    /// <returns>工作簿中新增图片的索引。</returns>
     int AddPicture(ISheet sheet, byte[] pictureBytes, PictureType pictureType);
+
+    /// <summary>创建工作簿图片使用的客户端锚点。</summary>
+    /// <param name="sheet">用于访问目标工作簿的工作表。</param>
+    /// <returns>新建的客户端锚点。</returns>
     IClientAnchor CreateClientAnchor(ISheet sheet);
+
+    /// <summary>获取工作表现有的绘图容器，必要时创建新的容器。</summary>
+    /// <param name="sheet">目标工作表。</param>
+    /// <returns>工作表的绘图容器。</returns>
     IDrawing GetOrCreateDrawing(ISheet sheet);
+
+    /// <summary>根据锚点和图片索引创建图片形状。</summary>
+    /// <param name="drawing">目标绘图容器。</param>
+    /// <param name="anchor">图片位置锚点。</param>
+    /// <param name="pictureIndex">工作簿中的图片索引。</param>
+    /// <returns>新建的图片形状。</returns>
     IPicture CreatePicture(IDrawing drawing, IClientAnchor anchor, int pictureIndex);
+
+    /// <summary>按图片原始尺寸调整图片形状大小。</summary>
+    /// <param name="picture">待调整的图片形状。</param>
     void Resize(IPicture picture);
 }
 
+/// <summary>使用 NPOI API 执行图片写入和尺寸调整。</summary>
 internal sealed class DefaultPictureMutationAdapter : IPictureMutationAdapter
 {
+    /// <inheritdoc />
     public int AddPicture(ISheet sheet, byte[] pictureBytes, PictureType pictureType)
         => sheet.Workbook.AddPicture(pictureBytes, pictureType);
 
+    /// <inheritdoc />
     public IClientAnchor CreateClientAnchor(ISheet sheet)
         => sheet.Workbook.GetCreationHelper().CreateClientAnchor();
 
+    /// <inheritdoc />
     public IDrawing GetOrCreateDrawing(ISheet sheet)
         => sheet.DrawingPatriarch ?? sheet.CreateDrawingPatriarch();
 
+    /// <inheritdoc />
     public IPicture CreatePicture(IDrawing drawing, IClientAnchor anchor, int pictureIndex)
         => drawing.CreatePicture(anchor, pictureIndex);
 
+    /// <inheritdoc />
     public void Resize(IPicture picture) => picture.Resize();
 }

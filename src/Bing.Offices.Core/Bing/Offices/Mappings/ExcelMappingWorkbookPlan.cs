@@ -5,9 +5,10 @@ using Bing.Offices.Providers;
 
 namespace Bing.Offices.Mappings;
 
+/// <summary>多个工作表映射计划的不可变集合。</summary>
 internal sealed class ExcelMappingWorkbookPlan : IExcelMappingWorkbookPlan
 {
-    /// <summary>从工作表映射计划创建不可变 Workbook 计划。</summary>
+    /// <summary>初始化一个 <see cref="ExcelMappingWorkbookPlan" /> 类型的实例。</summary>
     /// <param name="sheets">按请求顺序排列的工作表计划。</param>
     internal ExcelMappingWorkbookPlan(IReadOnlyList<IExcelMappingSheetPlan> sheets)
     {
@@ -17,9 +18,10 @@ internal sealed class ExcelMappingWorkbookPlan : IExcelMappingWorkbookPlan
     /// <inheritdoc />
     public IReadOnlyList<IExcelMappingSheetPlan> Sheets { get; }
 }
+/// <summary>单个工作表名称及映射计划的不可变描述。</summary>
 internal sealed class ExcelMappingSheetPlan : IExcelMappingSheetPlan
 {
-    /// <summary>为指定工作表名称和列映射创建计划。</summary>
+    /// <summary>初始化一个 <see cref="ExcelMappingSheetPlan" /> 类型的实例。</summary>
     /// <param name="name">工作表名称。</param>
     /// <param name="mapping">工作表使用的列映射计划。</param>
     internal ExcelMappingSheetPlan(string name, IExcelMappingPlan mapping)

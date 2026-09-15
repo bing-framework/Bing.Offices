@@ -27,12 +27,12 @@ internal sealed class ExcelMappingPlanFactory : IExcelMappingPlanFactory
     private readonly IReadOnlyList<INamedExcelValidationRule> _namedValidationRules;
     /// <summary>映射计划缓存允许保留的最大条目数。</summary>
     private readonly int _cacheCapacity;
-    /// <summary>按规范化配置哈希缓存的延迟映射计划。</summary>
+    /// <summary>按租户、模型、方向和规范化配置键缓存延迟创建的映射计划。</summary>
     private readonly ConcurrentDictionary<string, Lazy<IExcelMappingPlan>> _planCache = new();
     /// <summary>按创建顺序记录缓存键，用于近似先进先出淘汰。</summary>
     private readonly ConcurrentQueue<string> _cacheOrder = new();
 
-    /// <summary>使用转换器、校验规则和可选 Profile 注册表初始化计划工厂。</summary>
+    /// <summary>初始化一个 <see cref="ExcelMappingPlanFactory" /> 类型的实例。</summary>
     /// <param name="valueConverters">可绑定到映射列的值转换器。</param>
     /// <param name="validationRules">可绑定到校验特性的规则。</param>
     /// <param name="namedValidationRules">可按名称绑定的校验规则。</param>
@@ -369,9 +369,10 @@ internal sealed class ExcelMappingPlanFactory : IExcelMappingPlanFactory
         return rule ?? throw new InvalidOperationException($"未找到特性对应的校验规则: {attribute.GetType().FullName}");
     }
 
+    /// <summary>解析后的映射配置及来源信息快照。</summary>
     private sealed class ResolvedMapping
     {
-        /// <summary>创建已解析的映射来源快照。</summary>
+        /// <summary>初始化一个 <see cref="ResolvedMapping" /> 类型的实例。</summary>
         /// <param name="configuration">合并后的方向配置。</param>
         /// <param name="profileName">来源 Profile 名称。</param>
         /// <param name="modelAlias">来源模型别名。</param>

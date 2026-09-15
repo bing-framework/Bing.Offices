@@ -5,9 +5,10 @@ using Bing.Offices.Providers;
 
 namespace Bing.Offices.Mappings;
 
+/// <summary>编译后的映射样式配置。</summary>
 internal sealed class ExcelMappingStyle : IExcelMappingStyle
 {
-    /// <summary>从规范化样式配置创建不可变映射样式。</summary>
+    /// <summary>初始化一个 <see cref="ExcelMappingStyle" /> 类型的实例。</summary>
     /// <param name="style">样式配置；为 null 时创建空样式。</param>
     internal ExcelMappingStyle(ExcelMappingStyleConfiguration style)
     {
@@ -22,9 +23,10 @@ internal sealed class ExcelMappingStyle : IExcelMappingStyle
     /// <inheritdoc />
     public string NumberFormat { get; }
 }
+/// <summary>编译后的映射布局配置。</summary>
 internal sealed class ExcelMappingLayout : IExcelMappingLayout
 {
-    /// <summary>从规范化布局配置创建不可变映射布局。</summary>
+    /// <summary>初始化一个 <see cref="ExcelMappingLayout" /> 类型的实例。</summary>
     /// <param name="layout">布局配置；为 null 时创建空布局。</param>
     internal ExcelMappingLayout(ExcelMappingLayoutConfiguration layout)
     {

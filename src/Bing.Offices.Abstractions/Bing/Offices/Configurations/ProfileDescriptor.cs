@@ -5,9 +5,7 @@
 /// </summary>
 public sealed class ProfileDescriptor
 {
-    /// <summary>
-    /// 初始化 Profile 描述。
-    /// </summary>
+    /// <summary>初始化一个 <see cref="ProfileDescriptor" /> 类型的实例。</summary>
     /// <param name="name">Profile 名称。</param>
     /// <param name="direction">映射方向。</param>
     /// <param name="modelType">方向对应的模型类型。</param>
@@ -29,7 +27,7 @@ public sealed class ProfileDescriptor
     }
 
     /// <summary>
-    /// 获取 Profile 名称。
+    /// 获取Profile 名称。
     /// </summary>
     public string Name { get; }
 
@@ -50,9 +48,10 @@ public sealed class ProfileDescriptor
         MappingConfigurationCloner.Clone(ConfigurationSnapshot, MappingSourceKind.Profile);
 
     /// <summary>
-    /// 获取 Profile 实现类型。
+    /// 获取Profile 实现类型。
     /// </summary>
     public Type ProfileType { get; }
 
+    /// <summary>获取不可变的 Profile 配置快照。</summary>
     private ExcelMappingConfiguration ConfigurationSnapshot { get; }
 }

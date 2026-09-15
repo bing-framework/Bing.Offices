@@ -9,12 +9,17 @@ namespace Bing.Offices.Mappings;
 /// </summary>
 internal static class ExcelValueConverterBindingResolver
 {
+    /// <summary>按转换器实例缓存其对属性类型的支持能力。</summary>
     private static readonly ConditionalWeakTable<IExcelValueConverter,
         ConcurrentDictionary<Type, bool>> Capabilities = new();
 
     /// <summary>
     /// 解析指定名称和类型的转换器。
     /// </summary>
+    /// <param name="converters">可供解析的值转换器集合。</param>
+    /// <param name="converterName">可选的命名转换器名称。</param>
+    /// <param name="propertyType">目标属性类型。</param>
+    /// <returns>按名称或能力匹配的转换器集合。</returns>
     public static IReadOnlyList<IExcelValueConverter> Resolve(IEnumerable<IExcelValueConverter> converters,
         string converterName, Type propertyType)
     {
@@ -32,6 +37,10 @@ internal static class ExcelValueConverterBindingResolver
         return named;
     }
 
+    /// <summary>判断并缓存转换器对指定属性类型的支持能力。</summary>
+    /// <param name="converter">待检查的值转换器。</param>
+    /// <param name="propertyType">目标属性类型。</param>
+    /// <returns>转换器支持该属性类型时为 true。</returns>
     private static bool CanConvert(IExcelValueConverter converter, Type propertyType)
     {
         var cache = Capabilities.GetValue(converter, _ => new ConcurrentDictionary<Type, bool>());

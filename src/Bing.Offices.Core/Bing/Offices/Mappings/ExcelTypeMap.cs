@@ -6,9 +6,7 @@
 /// <typeparam name="T">实体类型。</typeparam>
 internal sealed class ExcelTypeMap<T>
 {
-    /// <summary>
-    /// 初始化一个<see cref="ExcelTypeMap{T}"/>类型的实例。
-    /// </summary>
+    /// <summary>初始化一个 <see cref="ExcelTypeMap{T}" /> 类型的实例。</summary>
     /// <param name="properties">属性映射集合。</param>
     internal ExcelTypeMap(IReadOnlyList<ExcelPropertyMap> properties) => Properties = properties;
 

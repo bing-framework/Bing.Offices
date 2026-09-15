@@ -6,9 +6,7 @@
 /// <typeparam name="T">实体类型。</typeparam>
 internal sealed class ExcelImportResult<T>
 {
-    /// <summary>
-    /// 初始化一个<see cref="ExcelImportResult{T}"/>类型的实例。
-    /// </summary>
+    /// <summary>初始化一个 <see cref="ExcelImportResult{T}" /> 类型的实例。</summary>
     /// <param name="items">成功导入的实体。</param>
     /// <param name="errors">导入错误。</param>
     public ExcelImportResult(IReadOnlyList<T> items, IReadOnlyList<ExcelImportError> errors)

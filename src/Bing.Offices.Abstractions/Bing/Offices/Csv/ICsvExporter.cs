@@ -22,13 +22,13 @@ public interface ICsvExporter
     /// <param name="destination">目标流。调用完成后保持打开。</param>
     /// <param name="options">CSV 导出选项。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>表示异步导出的任务。</returns>
     Task ExportAsync<T>(IEnumerable<T> data, Stream destination, CsvExportOptions<T> options = null,
         CancellationToken cancellationToken = default) where T : class, new();
 
     /// <summary>
-    /// 将实体集合以原子方式写入 CSV 文件；文件提交异常也在 exporter 观察边界内分发。
+    /// 将实体集合以原子方式写入 CSV 文件。
     /// </summary>
+    /// <remarks>文件提交异常也在 exporter 观察边界内分发。</remarks>
     /// <typeparam name="T">实体类型。</typeparam>
     /// <param name="data">待导出的实体集合。</param>
     /// <param name="path">目标文件路径。</param>
@@ -43,7 +43,6 @@ public interface ICsvExporter
     /// <param name="path">目标文件路径。</param>
     /// <param name="options">CSV 导出选项。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>表示异步文件导出的任务。</returns>
     Task ExportToFileAsync<T>(IEnumerable<T> data, string path, CsvExportOptions<T> options = null,
         CancellationToken cancellationToken = default) where T : class, new();
 }

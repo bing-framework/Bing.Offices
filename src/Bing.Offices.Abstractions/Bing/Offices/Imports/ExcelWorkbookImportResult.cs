@@ -5,9 +5,15 @@ namespace Bing.Offices.Imports;
 /// <summary>
 /// Workbook 导入结果。
 /// </summary>
+/// <typeparam name="TWorkbook">承载各工作表实体的工作簿模型类型。</typeparam>
 public sealed class ExcelWorkbookImportResult<TWorkbook> where TWorkbook : class, new()
 {
-    /// <summary>创建工作簿导入结果。</summary>
+    /// <summary>初始化一个 <see cref="ExcelWorkbookImportResult{TWorkbook}" /> 类型的实例。</summary>
+    /// <param name="workbook">导入得到的根 Workbook 模型。</param>
+    /// <param name="sheets">各工作表导入结果。</param>
+    /// <param name="errors">关系和结构化导入错误。</param>
+    /// <param name="errorsTruncated">是否因错误数量上限而停止收集。</param>
+    /// <param name="maxErrors">生效的最大错误数；未限制时为 <see langword="null" />。</param>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public ExcelWorkbookImportResult(TWorkbook workbook, IReadOnlyList<ExcelSheetImportResult> sheets,
         IReadOnlyList<ExcelImportError> errors, bool errorsTruncated, int? maxErrors)
@@ -55,7 +61,11 @@ public sealed class ExcelWorkbookImportResult<TWorkbook> where TWorkbook : class
 /// </summary>
 public sealed class ExcelSheetImportResult
 {
-    /// <summary>创建 Sheet 导入结果。</summary>
+    /// <summary>初始化一个 <see cref="ExcelSheetImportResult" /> 类型的实例。</summary>
+    /// <param name="name">工作表名称。</param>
+    /// <param name="itemType">工作表实体类型。</param>
+    /// <param name="sourceRows">每个导入实体对应的源行索引。</param>
+    /// <param name="errors">当前工作表的导入错误。</param>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public ExcelSheetImportResult(string name, Type itemType,
         IReadOnlyList<int> sourceRows, IReadOnlyList<ExcelImportError> errors)
@@ -67,7 +77,7 @@ public sealed class ExcelSheetImportResult
     }
 
     /// <summary>
-    /// 获取 Sheet 名称。
+    /// 获取Sheet 名称。
     /// </summary>
     public string Name { get; }
 

@@ -16,6 +16,7 @@ public static class ExcelValidationRules
     /// <summary>
     /// 创建无状态内置校验规则。
     /// </summary>
+    /// <returns>按固定执行顺序排列的内置校验规则集合。</returns>
     public static IReadOnlyList<IExcelValidationRule> CreateDefault() => new IExcelValidationRule[]
     {
         new RequiredExcelValidationRule(),

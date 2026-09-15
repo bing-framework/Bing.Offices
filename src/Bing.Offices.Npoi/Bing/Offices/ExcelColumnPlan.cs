@@ -21,7 +21,7 @@ namespace Bing.Offices;
 /// </summary>
 internal sealed class ExcelColumnPlan
 {
-    /// <summary>根据映射列及反射属性创建导入导出共享的列执行计划。</summary>
+    /// <summary>初始化一个 <see cref="ExcelColumnPlan" /> 类型的实例。</summary>
     /// <param name="headerName">当前工作表中使用的表头名称。</param>
     /// <param name="property">提供程序无关的列映射。</param>
     /// <param name="isDynamic">是否为运行时定义的动态列。</param>
@@ -191,6 +191,9 @@ internal sealed class ExcelColumnPlan
     }
 
     /// <summary>写入属性并解包反射调用产生的目标异常。</summary>
+    /// <param name="property">待写入的实体属性。</param>
+    /// <param name="instance">接收属性值的实体实例。</param>
+    /// <param name="value">要写入属性的值。</param>
     private static void SetPropertyValue(PropertyInfo property, object instance, object value)
     {
         try

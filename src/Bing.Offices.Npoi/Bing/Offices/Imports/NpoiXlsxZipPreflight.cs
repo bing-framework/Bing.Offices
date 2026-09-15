@@ -9,6 +9,13 @@ namespace Bing.Offices.Imports;
 /// </summary>
 internal static class NpoiXlsxZipPreflight
 {
+    /// <summary>
+    /// 在创建 Workbook DOM 前校验 XLSX ZIP 的条目、大小和 XML 安全预算。
+    /// </summary>
+    /// <param name="source">待预检且可定位的输入流。</param>
+    /// <param name="limits">ZIP、工作表和 XML 资源限制。</param>
+    /// <param name="cancellationToken">预检过程中检查的取消令牌。</param>
+    /// <remarks>进入 ZIP 预检流程的可定位流在预检完成或失败后会恢复到开头。</remarks>
     internal static void Validate(Stream source, ExcelResourceLimits limits,
         CancellationToken cancellationToken = default)
     {
@@ -88,6 +95,11 @@ internal static class NpoiXlsxZipPreflight
         }
     }
 
+    /// <summary>
+    /// 根据文件头判断输入流是否为 ZIP 格式。
+    /// </summary>
+    /// <param name="source">待判断且可定位的输入流。</param>
+    /// <returns>文件头符合 ZIP 签名时为 true，否则为 false。</returns>
     private static bool IsZip(Stream source)
     {
         var originalPosition = source.Position;
@@ -101,9 +113,18 @@ internal static class NpoiXlsxZipPreflight
                 || (header[2] == 0x07 && header[3] == 0x08));
     }
 
+    /// <summary>
+    /// 判断 ZIP 条目是否为工作表 XML 文件。
+    /// </summary>
+    /// <param name="name">ZIP 条目名称。</param>
+    /// <returns>条目位于工作表目录且以 XML 扩展名结尾时为 true。</returns>
     private static bool IsWorksheet(string name) => name.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase)
         && name.EndsWith(".xml", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// 校验 ZIP 条目路径不包含绝对路径或目录穿越片段。
+    /// </summary>
+    /// <param name="name">待校验的 ZIP 条目名称。</param>
     private static void ValidateEntryPath(string name)
     {
         if (string.IsNullOrWhiteSpace(name) || name.StartsWith("/", StringComparison.Ordinal)
@@ -112,12 +133,25 @@ internal static class NpoiXlsxZipPreflight
             Throw($"XLSX ZIP entry 路径无效: {name}");
     }
 
+    /// <summary>
+    /// 校验 XML 部件大小不超过配置上限。
+    /// </summary>
+    /// <param name="actual">实际字节数。</param>
+    /// <param name="maximum">允许的最大字节数；为空时不限制。</param>
+    /// <param name="name">超限部件名称。</param>
     private static void ValidateSize(long actual, long? maximum, string name)
     {
         if (maximum.HasValue && actual > maximum.Value)
             Throw($"XLSX XML 部件超过限制: {name}");
     }
 
+    /// <summary>
+    /// 读取 XML 条目并执行 DTD、字符数和嵌套深度安全校验。
+    /// </summary>
+    /// <param name="entry">待检查的 ZIP XML 条目。</param>
+    /// <param name="cancellationToken">读取过程中检查的取消令牌。</param>
+    /// <param name="maxCharacters">允许统计的最大字符数；为空时不限制。</param>
+    /// <param name="maxDepth">允许的最大 XML 嵌套深度；为空时不限制。</param>
     private static void ValidateXmlSafety(ZipArchiveEntry entry, CancellationToken cancellationToken,
         long? maxCharacters, int? maxDepth)
     {
@@ -156,6 +190,10 @@ internal static class NpoiXlsxZipPreflight
         }
     }
 
+    /// <summary>
+    /// 创建并抛出资源限制异常。
+    /// </summary>
+    /// <param name="message">资源限制原因。</param>
     private static void Throw(string message) => throw new BingOfficesResourceLimitException(message,
         provider: "NPOI", operation: BingOfficesOperation.Import, stage: BingOfficesStage.Preflight);
 }

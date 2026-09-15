@@ -13,6 +13,7 @@ internal static class PropertyInfoExtensions
     /// 是否有忽略属性
     /// </summary>
     /// <param name="propertyInfo">属性信息</param>
+    /// <returns>属性声明 <see cref="NotMappedAttribute" /> 或 <see cref="ExcelIgnoreAttribute" /> 时为 <see langword="true" />。</returns>
     internal static bool HasIgnore(this PropertyInfo propertyInfo)
     {
         if (propertyInfo.IsDefined(typeof(NotMappedAttribute)))

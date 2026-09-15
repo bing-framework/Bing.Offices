@@ -8,6 +8,7 @@ namespace Bing.Offices.Imports;
 /// <summary>
 /// NPOI 导入器内部执行选项，不作为公开兼容 API 暴露。
 /// </summary>
+/// <typeparam name="T">导入实体类型。</typeparam>
 internal sealed class ExcelImportExecutionOptions<T> where T : class, new()
 {
     /// <summary>获取或设置工作表在工作簿中的零基索引。</summary>

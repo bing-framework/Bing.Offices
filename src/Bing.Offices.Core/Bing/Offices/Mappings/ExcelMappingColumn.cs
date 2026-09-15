@@ -10,9 +10,10 @@ using Bing.Offices.Providers;
 
 namespace Bing.Offices.Mappings;
 
+/// <summary>固定属性列映射的不可变运行时实现。</summary>
 internal sealed class ExcelMappingColumn : IExcelMappingColumn, IExcelCompiledMappingColumn
 {
-    /// <summary>从属性映射及已绑定规则创建不可变列计划。</summary>
+    /// <summary>初始化一个 <see cref="ExcelMappingColumn" /> 类型的实例。</summary>
     /// <param name="property">已解析的实体属性映射。</param>
     /// <param name="valueConverters">已绑定的值转换器。</param>
     /// <param name="validationBindings">已绑定的校验规则。</param>
@@ -78,12 +79,12 @@ internal sealed class ExcelMappingColumn : IExcelMappingColumn, IExcelCompiledMa
     public IReadOnlyList<IExcelValueConverter> ValueConverters { get; }
     /// <inheritdoc />
     public IReadOnlyList<IExcelValidationBinding> ValidationBindings { get; }
-    /// <summary>获取映射到的实体属性元数据。</summary>
+    /// <inheritdoc />
     public PropertyInfo Property { get; }
-    /// <summary>获取从实体读取属性值的委托。</summary>
+    /// <inheritdoc />
     public Func<object, object> Getter { get; }
-    /// <summary>获取将转换后值写入实体属性的委托。</summary>
+    /// <inheritdoc />
     public Action<object, object> Setter { get; }
-    /// <summary>获取实体属性上的特性快照。</summary>
+    /// <inheritdoc />
     public IReadOnlyList<Attribute> Attributes { get; }
 }

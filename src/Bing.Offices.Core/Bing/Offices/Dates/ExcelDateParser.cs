@@ -16,6 +16,7 @@ public enum ExcelDateOffsetPolicy
 /// <summary>Excel 与 CSV 共用的确定性日期解析器。</summary>
 internal static class ExcelDateParser
 {
+    /// <summary>未指定格式时使用的默认日期格式（yyyy-MM-dd）。</summary>
     private const string DefaultDateFormat = "yyyy-MM-dd";
 
     /// <summary>
@@ -150,6 +151,9 @@ internal static class ExcelDateParser
         return true;
     }
 
+    /// <summary>判断日期文本是否显式包含时区偏移或 UTC 标记。</summary>
+    /// <param name="text">待检查的日期文本。</param>
+    /// <returns>文本包含可识别的显式时区信息时为 true。</returns>
     private static bool HasExplicitOffset(string text)
     {
         if (string.IsNullOrEmpty(text))
@@ -161,6 +165,10 @@ internal static class ExcelDateParser
             && text[separator + 3] == ':';
     }
 
+    /// <summary>将 Excel 序列日期转换为无时区日期时间。</summary>
+    /// <param name="serial">Excel 序列日期数值。</param>
+    /// <param name="isDate1904">是否使用 1904 日期系统。</param>
+    /// <returns>对应的无时区日期时间。</returns>
     private static DateTime FromExcelSerial(double serial, bool isDate1904)
     {
         if (isDate1904)
@@ -169,6 +177,12 @@ internal static class ExcelDateParser
         return baseDate.AddDays(serial >= 60 ? serial - 1 : serial);
     }
 
+    /// <summary>尝试按 Excel 日期系统将序列值转换为日期或时间。</summary>
+    /// <param name="serial">Excel 序列日期数值。</param>
+    /// <param name="timeOnly">是否只保留序列值中的时间部分。</param>
+    /// <param name="isDate1904">是否使用 1904 日期系统。</param>
+    /// <param name="value">转换得到的无时区日期时间。</param>
+    /// <returns>序列值在支持范围内时为 true。</returns>
     private static bool TryFromExcelSerial(double serial, bool timeOnly, bool isDate1904,
         out DateTime value)
     {

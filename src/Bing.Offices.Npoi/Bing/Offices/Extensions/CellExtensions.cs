@@ -272,6 +272,7 @@ public static partial class CellExtensions
     /// 检查 decimal 经过 Excel 双精度存储后能否精确还原。
     /// </summary>
     /// <param name="value">待检查的小数值。</param>
+    /// <returns>小数经双精度往返后仍完全相等时为 <see langword="true" />，否则为 <see langword="false" />。</returns>
     private static bool CanRoundTripDecimal(decimal value)
     {
         var doubleValue = Convert.ToDouble(value, CultureInfo.InvariantCulture);
@@ -354,6 +355,8 @@ public static partial class CellExtensions
     /// <summary>
     /// 判断值是否为 Excel 可写入的数值类型。
     /// </summary>
+    /// <param name="value">待检查的值。</param>
+    /// <returns>值属于 Excel 可写入的数值类型时为 <see langword="true" />，否则为 <see langword="false" />。</returns>
     private static bool IsNumeric(object value)
     {
         var typeCode = Type.GetTypeCode(value.GetType());

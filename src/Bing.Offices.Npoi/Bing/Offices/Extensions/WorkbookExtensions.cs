@@ -69,12 +69,11 @@ public static class WorkbookExtensions
 
     #region AddSheet(添加工作表)
 
-    /// <summary>
-    /// 添加工作表
-    /// </summary>
-    /// <param name="workbook">工作簿</param>
-    /// <param name="name">工作表名称</param>
-    /// <param name="heads">表头</param>
+    /// <summary>创建带有表头行和默认表头样式的工作表。</summary>
+    /// <param name="workbook">目标工作簿。</param>
+    /// <param name="name">工作表名称。</param>
+    /// <param name="heads">按列顺序写入的表头文本。</param>
+    /// <returns>新创建的工作表。</returns>
     public static ISheet AddSheet(this IWorkbook workbook, string name, List<string> heads)
     {
         if (heads is null)
@@ -92,10 +91,9 @@ public static class WorkbookExtensions
 
     #region DefaultHeadStyle(默认表头样式)
 
-    /// <summary>
-    /// 默认表头样式
-    /// </summary>
-    /// <param name="workbook">工作簿</param>
+    /// <summary>创建默认表头单元格样式。</summary>
+    /// <param name="workbook">目标工作簿。</param>
+    /// <returns>已配置加粗、居中、黄色填充和边框的单元格样式。</returns>
     public static ICellStyle DefaultHeadStyle(this IWorkbook workbook)
     {
         var style = workbook.CreateCellStyle();
@@ -118,10 +116,9 @@ public static class WorkbookExtensions
 
     #region DefaultBodyStyle(默认正文样式)
 
-    /// <summary>
-    /// 默认正文样式
-    /// </summary>
-    /// <param name="workbook">工作簿</param>
+    /// <summary>创建默认正文单元格样式。</summary>
+    /// <param name="workbook">目标工作簿。</param>
+    /// <returns>已配置居中和边框的单元格样式。</returns>
     public static ICellStyle DefaultBodyStyle(this IWorkbook workbook)
     {
         var style = workbook.CreateCellStyle();

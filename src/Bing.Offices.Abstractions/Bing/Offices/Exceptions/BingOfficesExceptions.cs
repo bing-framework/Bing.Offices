@@ -66,7 +66,17 @@ public interface IBingOfficesExceptionObserver
 /// <summary>Bing.Offices 公共运行异常基类。</summary>
 public abstract class BingOfficesException : InvalidOperationException
 {
-    /// <summary>初始化公共运行异常。</summary>
+    /// <summary>初始化一个 <see cref="BingOfficesException" /> 类型的实例。</summary>
+    /// <param name="code">稳定错误码。</param>
+    /// <param name="operation">发生异常的操作类型。</param>
+    /// <param name="provider">报告异常的提供程序名称。</param>
+    /// <param name="stage">发生异常的处理阶段。</param>
+    /// <param name="message">异常消息。</param>
+    /// <param name="innerException">导致当前异常的内部异常。</param>
+    /// <param name="sheetName">相关工作表名称；未知时为 <see langword="null" />。</param>
+    /// <param name="rowIndex">相关的一基行号；未知时为 <see langword="null" />。</param>
+    /// <param name="columnIndex">相关的一基列号；未知时为 <see langword="null" />。</param>
+    /// <param name="propertyName">相关模型属性名称；未知时为 <see langword="null" />。</param>
     public BingOfficesException(BingOfficesErrorCode code, BingOfficesOperation operation,
         string provider, BingOfficesStage stage, string message, Exception innerException = null,
         string sheetName = null, int? rowIndex = null, int? columnIndex = null, string propertyName = null)

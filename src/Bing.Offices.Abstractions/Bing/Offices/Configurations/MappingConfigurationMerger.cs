@@ -9,6 +9,10 @@ public static class MappingConfigurationMerger
     /// <summary>
     /// 将高优先级映射配置合并到低优先级配置上。
     /// </summary>
+    /// <param name="lower">低优先级映射配置。</param>
+    /// <param name="higher">高优先级映射配置；为 <see langword="null" /> 时保留低优先级配置。</param>
+    /// <param name="sourceKind">合并结果的来源类型。</param>
+    /// <returns>合并后的独立映射配置；两个输入均为 <see langword="null" /> 时返回 <see langword="null" />。</returns>
     public static ExcelMappingConfiguration Merge(ExcelMappingConfiguration lower,
         ExcelMappingConfiguration higher, MappingSourceKind sourceKind)
     {
@@ -75,6 +79,10 @@ public static class MappingConfigurationMerger
         return result;
     }
 
+    /// <summary>合并两级映射样式配置。</summary>
+    /// <param name="lower">低优先级样式配置。</param>
+    /// <param name="higher">高优先级样式配置。</param>
+    /// <returns>合并后的样式配置；合并后为空时返回 <see langword="null" />。</returns>
     private static ExcelMappingStyleConfiguration MergeStyle(ExcelMappingStyleConfiguration lower,
         ExcelMappingStyleConfiguration higher)
     {
@@ -90,6 +98,10 @@ public static class MappingConfigurationMerger
             : result;
     }
 
+    /// <summary>合并两级映射布局配置。</summary>
+    /// <param name="lower">低优先级布局配置。</param>
+    /// <param name="higher">高优先级布局配置。</param>
+    /// <returns>合并后的布局配置；合并后为空时返回 <see langword="null" />。</returns>
     private static ExcelMappingLayoutConfiguration MergeLayout(ExcelMappingLayoutConfiguration lower,
         ExcelMappingLayoutConfiguration higher)
     {
@@ -101,6 +113,9 @@ public static class MappingConfigurationMerger
         return !result.ColumnIndex.HasValue && result.PlacementKey == null ? null : result;
     }
 
+    /// <summary>将高优先级列配置合并到目标列配置。</summary>
+    /// <param name="target">接收合并结果的列配置。</param>
+    /// <param name="source">提供覆盖值和清除标记的高优先级列配置。</param>
     private static void MergeColumn(ExcelColumnConfiguration target, ExcelColumnConfiguration source)
     {
         if (source.ClearTitle)

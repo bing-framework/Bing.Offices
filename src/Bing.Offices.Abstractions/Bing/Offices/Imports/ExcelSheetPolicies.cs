@@ -40,6 +40,10 @@ public enum ExcelSheetSelectorKind
 /// </summary>
 public sealed class ExcelSheetSelector
 {
+    /// <summary>初始化一个 <see cref="ExcelSheetSelector" /> 类型的实例。</summary>
+    /// <param name="kind">选择方式。</param>
+    /// <param name="name">按名称选择时使用的工作表名称。</param>
+    /// <param name="index">按索引选择时使用的零基索引。</param>
     private ExcelSheetSelector(ExcelSheetSelectorKind kind, string name, int? index)
     {
         Kind = kind;
@@ -48,6 +52,8 @@ public sealed class ExcelSheetSelector
     }
 
     /// <summary>按名称创建选择器。</summary>
+    /// <param name="name">工作表名称。</param>
+    /// <returns>按名称选择工作表的选择器。</returns>
     public static ExcelSheetSelector ByName(string name)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -56,6 +62,8 @@ public sealed class ExcelSheetSelector
     }
 
     /// <summary>按从零开始的索引创建选择器。</summary>
+    /// <param name="index">工作表的零基索引。</param>
+    /// <returns>按索引选择工作表的选择器。</returns>
     public static ExcelSheetSelector ByIndex(int index)
     {
         if (index < 0)
@@ -66,10 +74,10 @@ public sealed class ExcelSheetSelector
     /// <summary>获取选择方式。</summary>
     public ExcelSheetSelectorKind Kind { get; }
 
-    /// <summary>获取名称选择值。</summary>
+    /// <summary>获取名称选择值；仅 <see cref="ExcelSheetSelectorKind.ByName"/> 模式有值，按索引选择时为 null。</summary>
     public string Name { get; }
 
-    /// <summary>获取索引选择值。</summary>
+    /// <summary>获取索引选择值；仅 <see cref="ExcelSheetSelectorKind.ByIndex"/> 模式有值，按名称选择时为 null。</summary>
     public int? Index { get; }
 }
 
@@ -78,6 +86,9 @@ public sealed class ExcelSheetSelector
 /// </summary>
 public sealed class ExcelReadColumnRange
 {
+    /// <summary>初始化一个 <see cref="ExcelReadColumnRange" /> 类型的实例。</summary>
+    /// <param name="startIndex">起始列的零基索引。</param>
+    /// <param name="count">要读取的列数。</param>
     private ExcelReadColumnRange(int startIndex, int count)
     {
         StartIndex = startIndex;
@@ -85,6 +96,9 @@ public sealed class ExcelReadColumnRange
     }
 
     /// <summary>创建列读取范围。</summary>
+    /// <param name="startIndex">起始列的零基索引。</param>
+    /// <param name="count">要读取的列数。</param>
+    /// <returns>验证通过的列读取范围。</returns>
     public static ExcelReadColumnRange Create(int startIndex, int count)
     {
         if (startIndex < 0)
@@ -103,6 +117,8 @@ public sealed class ExcelReadColumnRange
     public int Count { get; }
 
     /// <summary>判断指定列是否在范围内。</summary>
+    /// <param name="columnIndex">待检查的零基列索引。</param>
+    /// <returns>列索引位于当前范围内时为 <see langword="true" />，否则为 <see langword="false" />。</returns>
     public bool Contains(int columnIndex) => columnIndex >= StartIndex && columnIndex < StartIndex + Count;
 }
 

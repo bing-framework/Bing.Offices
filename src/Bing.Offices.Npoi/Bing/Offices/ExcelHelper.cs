@@ -77,6 +77,7 @@ internal static class ExcelHelper
     /// <summary>
     /// 创建默认的 XLSX 工作簿。
     /// </summary>
+    /// <returns>新建的 XLSX 工作簿。</returns>
     public static NPOI.SS.UserModel.IWorkbook PrepareWorkbook() => PrepareWorkbook(true);
 
     /// <summary>
@@ -108,6 +109,9 @@ internal static class ExcelHelper
         return workbook;
     }
 
+    /// <summary>将工作簿元数据应用到指定的 NPOI 工作簿。</summary>
+    /// <param name="workbook">接收元数据的 NPOI 工作簿。</param>
+    /// <param name="metadata">要应用的工作簿元数据。</param>
     internal static void ApplyWorkbookMetadata(NPOI.SS.UserModel.IWorkbook workbook,
         ExcelWorkbookMetadataOptions metadata)
     {

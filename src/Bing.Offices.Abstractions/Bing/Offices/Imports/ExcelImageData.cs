@@ -5,9 +5,13 @@
 /// </summary>
 public sealed class ExcelImageData
 {
-    /// <summary>
-    /// 创建图片数据。
-    /// </summary>
+    /// <summary>初始化一个 <see cref="ExcelImageData" /> 类型的实例。</summary>
+    /// <param name="bytes">图片二进制内容。</param>
+    /// <param name="contentType">图片 MIME 类型。</param>
+    /// <param name="rowNumber">图片左上角的一基行号。</param>
+    /// <param name="columnNumber">图片左上角的一基列号。</param>
+    /// <param name="endRowNumber">图片右下角的结束行号；未指定时为 0。</param>
+    /// <param name="endColumnNumber">图片右下角的结束列号；未指定时为 0。</param>
     public ExcelImageData(byte[] bytes, string contentType, int rowNumber, int columnNumber,
         int endRowNumber = 0, int endColumnNumber = 0)
     {
@@ -24,7 +28,7 @@ public sealed class ExcelImageData
     /// <summary>获取图片字节。</summary>
     public byte[] Bytes { get; }
 
-    /// <summary>获取 MIME 类型。</summary>
+    /// <summary>获取MIME 类型。</summary>
     public string ContentType { get; }
 
     /// <summary>获取一开始的锚点行号。</summary>

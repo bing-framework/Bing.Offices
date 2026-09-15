@@ -10,15 +10,13 @@ namespace Bing.Offices.Mappings;
 /// </summary>
 internal sealed class ExcelPropertyMap
 {
-    /// <summary>
-    /// 初始化一个<see cref="ExcelPropertyMap"/>类型的实例。
-    /// </summary>
+    /// <summary>初始化一个 <see cref="ExcelPropertyMap" /> 类型的实例。</summary>
     /// <param name="property">属性元数据。</param>
     /// <param name="title">默认列标题。</param>
     /// <param name="formatter">默认格式化字符串。</param>
     /// <param name="ignored">是否忽略。</param>
-    /// <param name="importWhitespace">导入文本空白策略。</param>
     /// <param name="isDynamicColumn">是否为动态列。</param>
+    /// <param name="importWhitespace">导入文本空白策略。</param>
     /// <param name="decimalScale">小数精度。</param>
     /// <param name="converterName">值转换器名称。</param>
     /// <param name="validationRuleNames">校验规则名称集合。</param>

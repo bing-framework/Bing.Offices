@@ -70,9 +70,7 @@ internal static class NpoiFailureWorkbookSerialization
         /// <summary>失败工作簿序列化允许写入的最大字节数。</summary>
         private readonly long? _maxBytes;
 
-        /// <summary>
-        /// 初始化受限写入流。
-        /// </summary>
+        /// <summary>初始化一个 <see cref="LimitedWriteStream" /> 类型的实例。</summary>
         /// <param name="inner">实际写入流。</param>
         /// <param name="maxBytes">最大允许字节数。</param>
         internal LimitedWriteStream(Stream inner, long? maxBytes)

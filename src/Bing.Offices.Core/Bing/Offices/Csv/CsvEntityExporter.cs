@@ -25,9 +25,7 @@ internal sealed partial class CsvEntityExporter : ICsvExporter
     /// <summary>观察并记录公共 CSV 运行异常。</summary>
     private readonly BingOfficesExceptionDispatcher _exceptionDispatcher;
 
-    /// <summary>
-    /// 初始化一个<see cref="CsvEntityExporter"/>类型的实例。
-    /// </summary>
+    /// <summary>初始化一个 <see cref="CsvEntityExporter" /> 类型的实例。</summary>
     /// <param name="valueConverters">值转换器集合。</param>
     /// <param name="mappingPlanFactory">方向化映射计划工厂。</param>
     /// <param name="exceptionObservers">接收公共运行异常的观察器集合。</param>
@@ -158,6 +156,12 @@ internal sealed partial class CsvEntityExporter : ICsvExporter
         }
     }
 
+    /// <summary>同步执行 CSV 列计划创建、字段格式化和记录写入。</summary>
+    /// <typeparam name="T">导出实体类型。</typeparam>
+    /// <param name="data">待导出的实体集合。</param>
+    /// <param name="destination">接收 CSV 内容的目标流；由调用方负责生命周期。</param>
+    /// <param name="options">当前导出选项。</param>
+    /// <param name="cancellationToken">导出过程中检查的取消令牌。</param>
     private void ExportCore<T>(IEnumerable<T> data, Stream destination, CsvExportOptions<T> options,
         CancellationToken cancellationToken) where T : class, new()
     {
@@ -212,6 +216,13 @@ internal sealed partial class CsvEntityExporter : ICsvExporter
         csv.Flush();
     }
 
+    /// <summary>异步执行 CSV 列计划创建、字段格式化和记录写入。</summary>
+    /// <typeparam name="T">导出实体类型。</typeparam>
+    /// <param name="data">待导出的实体集合。</param>
+    /// <param name="destination">接收 CSV 内容的目标流；由调用方负责生命周期。</param>
+    /// <param name="options">当前导出选项。</param>
+    /// <param name="cancellationToken">导出过程中检查的取消令牌。</param>
+    /// <remarks>异步路径使用异步文本刷新，避免以同步 IO 伪装异步操作。</remarks>
     private async Task ExportCoreAsync<T>(IEnumerable<T> data, Stream destination,
         CsvExportOptions<T> options, CancellationToken cancellationToken) where T : class, new()
     {
@@ -377,6 +388,9 @@ internal sealed partial class CsvEntityExporter : ICsvExporter
     }
 
     /// <summary>DateTimeOffset 使用不依赖区域性的往返格式，其他值沿用请求 Culture。</summary>
+    /// <param name="value">待格式化的标量值。</param>
+    /// <param name="culture">其他标量值使用的区域性。</param>
+    /// <returns>格式化后的文本；空值表示为空字符串。</returns>
     private static string FormatScalarValue(object value, CultureInfo culture) =>
         value is DateTimeOffset dateTimeOffset
             ? dateTimeOffset.ToString("O", CultureInfo.InvariantCulture)
@@ -425,9 +439,10 @@ internal sealed partial class CsvEntityExporter : ICsvExporter
         return string.Equals(mappedValue, Convert.ToString(value, culture), StringComparison.Ordinal);
     }
 
+    /// <summary>保存一个 CSV 输出列的绑定和动态列信息。</summary>
     private sealed class CsvExportColumn
     {
-        /// <summary>使用属性绑定和可选动态列计划创建导出列。</summary>
+        /// <summary>初始化一个 <see cref="CsvExportColumn" /> 类型的实例。</summary>
         /// <param name="property">实体属性绑定。</param>
         /// <param name="title">输出表头标题。</param>
         /// <param name="isDynamic">是否从实体动态字典中读取值。</param>

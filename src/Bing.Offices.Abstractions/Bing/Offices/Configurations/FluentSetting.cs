@@ -9,7 +9,9 @@ public sealed class FluentSetting<TImport, TExport>
     where TImport : class, new()
     where TExport : class, new()
 {
+    /// <summary>保存导入方向的 Fluent 配置器实例。</summary>
     private readonly ImportMappingBuilder<TImport> _import = new();
+    /// <summary>保存导出方向的 Fluent 配置器实例。</summary>
     private readonly ExportMappingBuilder<TExport> _export = new();
 
     /// <summary>
@@ -25,10 +27,12 @@ public sealed class FluentSetting<TImport, TExport>
     /// <summary>
     /// 创建导入配置快照。
     /// </summary>
+    /// <returns>当前导入方向的独立配置快照。</returns>
     public ExcelMappingConfiguration BuildImportConfiguration() => _import.Build(MappingSourceKind.Profile);
 
     /// <summary>
     /// 创建导出配置快照。
     /// </summary>
+    /// <returns>当前导出方向的独立配置快照。</returns>
     public ExcelMappingConfiguration BuildExportConfiguration() => _export.Build(MappingSourceKind.Profile);
 }

@@ -10,6 +10,13 @@ namespace Bing.Offices.Imports;
 /// </summary>
 internal static class NpoiFailureWorkbookPreflight
 {
+    /// <summary>
+    /// 在创建失败工作簿前校验候选错误、图片和目标对象资源预算。
+    /// </summary>
+    /// <param name="source">包含原始工作表的源工作簿。</param>
+    /// <param name="errors">待写入失败工作簿的导入错误集合。</param>
+    /// <param name="resolvedSheetRequests">按实际工作表名称索引的导入请求。</param>
+    /// <param name="options">失败工作簿输出及资源限制选项。</param>
     internal static void Validate(IWorkbook source,
         IReadOnlyCollection<ExcelImportError> errors,
         IReadOnlyDictionary<string, ExcelSheetImportRequest> resolvedSheetRequests,
@@ -65,13 +72,20 @@ internal static class NpoiFailureWorkbookPreflight
         }
     }
 
+    /// <summary>
+    /// 创建失败工作簿预检阶段的资源限制异常。
+    /// </summary>
+    /// <param name="message">资源限制原因。</param>
+    /// <returns>带有 NPOI 导入阶段信息的资源限制异常。</returns>
     private static BingOfficesResourceLimitException CreateLimitException(string message) =>
         new(message, provider: "NPOI", operation: BingOfficesOperation.Import,
             stage: BingOfficesStage.Preflight);
 
     /// <summary>
-    /// 只统计 drawing shape 数量，避免预算检查为了读取图片数据而先分配 PictureInfo 和字节数组。
+    /// 统计 drawing 中的图片数量和数据字节数，供失败工作簿资源预算使用。
     /// </summary>
+    /// <param name="workbook">待统计图片的源工作簿。</param>
+    /// <returns>预计处理的图片数量和字节数。</returns>
     private static PictureBudgetEstimate CountPictures(IWorkbook workbook)
     {
         var count = 0;
@@ -108,15 +122,21 @@ internal static class NpoiFailureWorkbookPreflight
         return new PictureBudgetEstimate(count, bytes);
     }
 
+    /// <summary>保存失败工作簿图片预检得到的数量和字节数。</summary>
     private readonly struct PictureBudgetEstimate
     {
+        /// <summary>初始化一个 <see cref="PictureBudgetEstimate" /> 类型的实例。</summary>
+        /// <param name="count">预计处理的图片数量。</param>
+        /// <param name="bytes">预计处理的图片数据大小（字节）。</param>
         internal PictureBudgetEstimate(int count, long bytes)
         {
             Count = count;
             Bytes = bytes;
         }
 
+        /// <summary>获取预计处理的图片数量。</summary>
         internal int Count { get; }
+        /// <summary>获取预计处理的图片数据大小（字节）。</summary>
         internal long Bytes { get; }
     }
 }

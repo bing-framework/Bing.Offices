@@ -18,11 +18,21 @@ internal static class AtomicFileCommitter
         => Commit(path, write, cancellationToken, format, DefaultFileSystem);
 
     /// <summary>将异步写入结果原子提交到目标路径。</summary>
+    /// <param name="path">最终输出文件路径。</param>
+    /// <param name="writeAsync">向临时输出流异步写入内容的操作。</param>
+    /// <param name="cancellationToken">提交过程检查的取消令牌。</param>
+    /// <param name="format">用于临时文件清理错误上下文的格式名称。</param>
     internal static Task CommitAsync(string path, Func<Stream, CancellationToken, Task> writeAsync,
         CancellationToken cancellationToken, string format)
         => CommitAsync(path, writeAsync, cancellationToken, format, DefaultFileSystem);
 
     /// <summary>使用指定文件系统适配器异步写入并提交文件。</summary>
+    /// <param name="path">最终输出文件路径。</param>
+    /// <param name="writeAsync">向临时输出流异步写入内容的操作。</param>
+    /// <param name="cancellationToken">提交过程检查的取消令牌。</param>
+    /// <param name="format">用于临时文件清理错误上下文的格式名称。</param>
+    /// <param name="fileSystem">负责文件创建、替换、移动和清理的适配器。</param>
+    /// <remarks>只有写入完成并刷新临时文件后才替换最终目标；取消或失败时会清理临时文件。</remarks>
     internal static async Task CommitAsync(string path, Func<Stream, CancellationToken, Task> writeAsync,
         CancellationToken cancellationToken, string format, IAtomicFileSystem fileSystem)
     {
@@ -161,18 +171,30 @@ internal static class AtomicFileCommitter
 internal interface IAtomicFileSystem
 {
     /// <summary>以独占创建方式打开临时输出文件。</summary>
+    /// <param name="path">要创建的临时文件路径。</param>
+    /// <returns>以写入方式打开的临时文件流。</returns>
     Stream CreateFile(string path);
     /// <summary>将已写入流的内容持久化到存储介质。</summary>
+    /// <param name="stream">需要持久化的输出流。</param>
     void Flush(Stream stream);
     /// <summary>异步写入并完成与同步提交一致的持久化边界。</summary>
+    /// <param name="stream">需要持久化的输出流。</param>
+    /// <param name="cancellationToken">刷新过程中检查的取消令牌。</param>
     Task FlushAsync(Stream stream, CancellationToken cancellationToken);
     /// <summary>确定目标文件是否存在。</summary>
+    /// <param name="path">要检查的文件路径。</param>
+    /// <returns>文件存在时为 <see langword="true" />，否则为 <see langword="false" />。</returns>
     bool Exists(string path);
     /// <summary>以临时文件替换已存在的目标文件。</summary>
+    /// <param name="sourcePath">临时源文件路径。</param>
+    /// <param name="destinationPath">要替换的目标文件路径。</param>
     void Replace(string sourcePath, string destinationPath);
     /// <summary>将临时文件移动为此前不存在的目标文件。</summary>
+    /// <param name="sourcePath">临时源文件路径。</param>
+    /// <param name="destinationPath">要创建的目标文件路径。</param>
     void Move(string sourcePath, string destinationPath);
     /// <summary>删除提交失败遗留的临时文件。</summary>
+    /// <param name="path">要删除的临时文件路径。</param>
     void Delete(string path);
 }
 

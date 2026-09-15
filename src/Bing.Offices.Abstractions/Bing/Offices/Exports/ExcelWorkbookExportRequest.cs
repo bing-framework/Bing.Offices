@@ -8,6 +8,13 @@ namespace Bing.Offices.Exports;
 /// </summary>
 public sealed class ExcelWorkbookExportRequest
 {
+    /// <summary>初始化一个 <see cref="ExcelWorkbookExportRequest" /> 类型的实例。</summary>
+    /// <param name="sheets">按输出顺序排列的工作表请求。</param>
+    /// <param name="template">可选的模板输入流。</param>
+    /// <param name="leaveTemplateOpen">是否由调用方继续持有模板流。</param>
+    /// <param name="format">目标 Excel 文件格式。</param>
+    /// <param name="metadata">工作簿元数据配置。</param>
+    /// <param name="metadataSpecified">调用方是否显式设置过元数据。</param>
     internal ExcelWorkbookExportRequest(IReadOnlyList<ExcelSheetExportRequest> sheets, Stream template,
         bool leaveTemplateOpen, ExcelFormat format, ExcelWorkbookMetadataOptions metadata,
         bool metadataSpecified)
@@ -56,6 +63,28 @@ public sealed class ExcelWorkbookExportRequest
 [EditorBrowsable(EditorBrowsableState.Never)]
 public sealed class ExcelSheetExportRequest
 {
+    /// <summary>初始化一个 <see cref="ExcelSheetExportRequest" /> 类型的实例。</summary>
+    /// <param name="name">工作表名称。</param>
+    /// <param name="itemType">工作表数据项类型。</param>
+    /// <param name="data">待写入的数据集合。</param>
+    /// <param name="headerRowIndex">表头所在的零基行索引。</param>
+    /// <param name="dataRowStartIndex">正文起始行的零基索引。</param>
+    /// <param name="dynamicColumns">请求级动态列定义。</param>
+    /// <param name="failOnUnknownDynamicValues">遇到未知动态值时是否失败。</param>
+    /// <param name="dynamicGetter">从数据项读取动态列值的委托。</param>
+    /// <param name="sheetStyle">工作表级样式配置。</param>
+    /// <param name="headerStyle">表头样式配置。</param>
+    /// <param name="bodyStyle">正文样式配置。</param>
+    /// <param name="templateRegion">模板中用于定位工作表区域的名称。</param>
+    /// <param name="hidden">导出后是否隐藏工作表。</param>
+    /// <param name="charts">待创建的图表定义。</param>
+    /// <param name="headerRows">多行表头定义。</param>
+    /// <param name="mappingConfiguration">请求级映射配置。</param>
+    /// <param name="mappingDocument">规范化映射文档。</param>
+    /// <param name="culture">文本格式化使用的区域性。</param>
+    /// <param name="columnWidth">列宽计算和应用选项。</param>
+    /// <param name="commentConflictPolicy">批注冲突处理策略。</param>
+    /// <param name="templateCellOverwritePolicy">模板单元格被覆盖时的处理策略。</param>
     internal ExcelSheetExportRequest(string name, Type itemType, System.Collections.IEnumerable data,
         int headerRowIndex, int dataRowStartIndex, IReadOnlyList<ExcelDynamicColumnDefinition> dynamicColumns,
         bool failOnUnknownDynamicValues, Func<object, IDictionary<string, object>> dynamicGetter,
@@ -128,14 +157,14 @@ public sealed class ExcelSheetExportRequest
     public int DynamicColumnCount => DynamicColumns.Count;
 
     /// <summary>
-    /// 获取 Sheet 是否隐藏。
+    /// 获取Sheet 是否隐藏。
     /// </summary>
     public bool Hidden { get; }
 
-    /// <summary>获取 Sheet 数据项类型。</summary>
+    /// <summary>获取Sheet 数据项类型。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Type ItemType { get; }
-    /// <summary>获取 Sheet 数据序列。</summary>
+    /// <summary>获取Sheet 数据序列。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public System.Collections.IEnumerable Data { get; }
     /// <summary>获取动态列定义。</summary>
@@ -147,7 +176,7 @@ public sealed class ExcelSheetExportRequest
     /// <summary>获取动态值读取器。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Func<object, IDictionary<string, object>> DynamicGetter { get; }
-    /// <summary>获取 Sheet 样式。</summary>
+    /// <summary>获取Sheet 样式。</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Styles.ExcelCellStyle SheetStyle { get; }
     /// <summary>获取表头样式。</summary>

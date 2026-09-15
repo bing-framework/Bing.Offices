@@ -11,9 +11,10 @@ public sealed class BingOfficesExceptionDispatcher
     public const string ObservedKey = "Bing.Offices.ExceptionObserved";
     /// <summary>保存观察器失败诊断的 Data 键。</summary>
     public const string ObserverFailureKey = "Bing.Offices.ExceptionObserverFailure";
+    /// <summary>用于接收公共异常通知的观察器集合。</summary>
     private readonly IReadOnlyList<IBingOfficesExceptionObserver> _observers;
 
-    /// <summary>使用观察器集合创建异常分发器。</summary>
+    /// <summary>初始化一个 <see cref="BingOfficesExceptionDispatcher" /> 类型的实例。</summary>
     /// <param name="observers">接收公共异常的观察器集合。</param>
     public BingOfficesExceptionDispatcher(IEnumerable<IBingOfficesExceptionObserver> observers = null)
     {
@@ -48,6 +49,9 @@ public sealed class BingOfficesExceptionDispatcher
         }
     }
 
+    /// <summary>记录异常观察器失败，避免观察器异常覆盖原始异常。</summary>
+    /// <param name="exception">正在通知观察器的公共异常。</param>
+    /// <param name="observerException">观察器抛出的异常。</param>
     private static void AddObserverFailure(BingOfficesException exception, Exception observerException)
     {
         lock (exception)

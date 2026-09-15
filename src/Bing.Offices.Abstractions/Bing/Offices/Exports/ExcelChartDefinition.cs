@@ -21,25 +21,26 @@ public enum ExcelChartType
 public sealed class ExcelChartAnchor
 {
     /// <summary>
-    /// 起始行索引。
+    /// 获取或初始化起始行索引。
     /// </summary>
     public int StartRow { get; init; }
 
     /// <summary>
-    /// 起始列索引。
+    /// 获取或初始化起始列索引。
     /// </summary>
     public int StartColumn { get; init; }
 
     /// <summary>
-    /// 结束行索引（不包含）。
+    /// 获取或初始化结束行索引（不包含）。
     /// </summary>
     public int EndRow { get; init; }
 
     /// <summary>
-    /// 结束列索引（不包含）。
+    /// 获取或初始化结束列索引（不包含）。
     /// </summary>
     public int EndColumn { get; init; }
 
+    /// <summary>验证图表定位区域的行列边界。</summary>
     internal void Validate()
     {
         if (StartRow < 0 || StartColumn < 0 || EndRow <= StartRow || EndColumn <= StartColumn)
@@ -53,20 +54,22 @@ public sealed class ExcelChartAnchor
 public sealed class ExcelChartRange
 {
     /// <summary>
-    /// 数据列稳定 Key。
+    /// 获取或初始化数据列稳定 Key。
     /// </summary>
     public string ColumnKey { get; init; }
 
     /// <summary>
-    /// 数据起始行索引（不含表头）。为 null 时使用当前 Sheet 数据起始行。
+    /// 获取或初始化数据起始行索引（不含表头）。为 null 时使用当前 Sheet 数据起始行。
     /// </summary>
     public int? StartRow { get; init; }
 
     /// <summary>
-    /// 数据结束行索引（不包含）。为 null 时使用当前 Sheet 最后一行之后。
+    /// 获取或初始化数据结束行索引（不包含）。为 null 时使用当前 Sheet 最后一行之后。
     /// </summary>
     public int? EndRow { get; init; }
 
+    /// <summary>验证图表数据范围的列键和行边界。</summary>
+    /// <param name="parameterName">发生验证错误时使用的参数名称。</param>
     internal void Validate(string parameterName)
     {
         if (string.IsNullOrWhiteSpace(ColumnKey))
@@ -86,15 +89,17 @@ public sealed class ExcelChartRange
 public sealed class ExcelChartSeries
 {
     /// <summary>
-    /// 系列显示名称。
+    /// 获取或初始化系列显示名称。
     /// </summary>
     public string Name { get; init; }
 
     /// <summary>
-    /// 系列数值范围。
+    /// 获取或初始化系列数值范围。
     /// </summary>
     public ExcelChartRange Values { get; init; }
 
+    /// <summary>验证图表系列名称和数值范围。</summary>
+    /// <param name="parameterName">发生验证错误时使用的参数名称。</param>
     internal void Validate(string parameterName)
     {
         if (string.IsNullOrWhiteSpace(Name))
@@ -111,27 +116,27 @@ public sealed class ExcelChartSeries
 public sealed class ExcelChartDefinition
 {
     /// <summary>
-    /// 图表标题。
+    /// 获取或初始化图表标题。
     /// </summary>
     public string Title { get; init; }
 
     /// <summary>
-    /// 图表类型。
+    /// 获取或初始化图表类型。
     /// </summary>
     public ExcelChartType Type { get; init; }
 
     /// <summary>
-    /// 分类轴范围。
+    /// 获取或初始化分类轴范围。
     /// </summary>
     public ExcelChartRange Categories { get; init; }
 
     /// <summary>
-    /// 数值系列。
+    /// 获取或初始化数值系列。
     /// </summary>
     public IReadOnlyList<ExcelChartSeries> Series { get; init; } = Array.Empty<ExcelChartSeries>();
 
     /// <summary>
-    /// 图表定位区域。
+    /// 获取或初始化图表定位区域。
     /// </summary>
     public ExcelChartAnchor Anchor { get; init; }
 

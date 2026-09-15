@@ -8,7 +8,7 @@ internal sealed class NpoiNonDisposingStream : Stream
     /// <summary>在写入或刷新边界检查的取消令牌。</summary>
     private readonly CancellationToken _cancellationToken;
 
-    /// <summary>创建不会关闭底层流的 NPOI 流包装器。</summary>
+    /// <summary>初始化一个 <see cref="NpoiNonDisposingStream" /> 类型的实例。</summary>
     /// <param name="inner">由调用方负责释放的底层流。</param>
     /// <param name="cancellationToken">写入和刷新期间检查的取消令牌。</param>
     public NpoiNonDisposingStream(Stream inner, CancellationToken cancellationToken = default)
@@ -46,8 +46,8 @@ internal sealed class NpoiNonDisposingStream : Stream
         _inner.Write(buffer, offset, count);
         _cancellationToken.ThrowIfCancellationRequested();
     }
-    /// <summary>刷新底层流但不释放调用方拥有的流。</summary>
-    /// <param name="disposing">指示释放流程是否由 Dispose 调用触发。</param>
+    /// <inheritdoc />
+    /// <remarks>释放包装器时刷新底层流，但不关闭由调用方拥有的底层流。</remarks>
     protected override void Dispose(bool disposing)
     {
         if (disposing)

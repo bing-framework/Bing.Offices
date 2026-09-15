@@ -29,9 +29,7 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
     /// <summary>观察并记录公共 CSV 运行异常。</summary>
     private readonly BingOfficesExceptionDispatcher _exceptionDispatcher;
 
-    /// <summary>
-    /// 初始化一个<see cref="CsvEntityImporter"/>类型的实例。
-    /// </summary>
+    /// <summary>初始化一个 <see cref="CsvEntityImporter" /> 类型的实例。</summary>
     /// <param name="valueConverters">值转换器集合。</param>
     /// <param name="validationRules">属性校验规则集合。</param>
     /// <param name="namedValidationRules">命名配置校验规则集合。</param>
@@ -125,6 +123,12 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
         }
     }
 
+    /// <summary>异步执行 CSV 解析、转换、校验和实体构造。</summary>
+    /// <typeparam name="T">导入实体类型。</typeparam>
+    /// <param name="source">提供 CSV 内容的源流；由调用方负责生命周期。</param>
+    /// <param name="options">当前导入选项。</param>
+    /// <param name="cancellationToken">导入过程中检查的取消令牌。</param>
+    /// <returns>包含成功实体、错误信息和截断状态的导入结果。</returns>
     private async Task<CsvImportResult<T>> ImportCoreAsync<T>(Stream source, CsvImportOptions<T> options,
         CancellationToken cancellationToken) where T : class, new()
     {
@@ -336,10 +340,17 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
         return new CsvImportResult<T>(items, errors, isTruncated, options.MaxErrors);
     }
 
+    /// <summary>表示已按导入策略停止继续读取 CSV 的内部控制异常。</summary>
     private sealed class CsvImportStopException : Exception
     {
     }
 
+    /// <summary>同步执行 CSV 解析、转换、校验和实体构造。</summary>
+    /// <typeparam name="T">导入实体类型。</typeparam>
+    /// <param name="source">提供 CSV 内容的源流；由调用方负责生命周期。</param>
+    /// <param name="options">当前导入选项。</param>
+    /// <param name="cancellationToken">导入过程中检查的取消令牌。</param>
+    /// <returns>包含成功实体、错误信息和截断状态的导入结果。</returns>
     private CsvImportResult<T> ImportCore<T>(Stream source, CsvImportOptions<T> options,
         CancellationToken cancellationToken) where T : class, new()
     {
@@ -761,8 +772,11 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
     private static IReadOnlyList<IExcelValidationBinding> GetValidationBindings(CsvColumn column) =>
         column.DynamicColumn?.ValidationBindings ?? column.Property.ValidationBindings;
 
+    /// <summary>表示当前 CSV 值未通过配置校验的内部控制异常。</summary>
     private sealed class ValidationFailedException : Exception
     {
+        /// <summary>初始化一个 <see cref="ValidationFailedException" /> 类型的实例。</summary>
+        /// <param name="message">校验失败消息。</param>
         public ValidationFailedException(string message) : base(message)
         {
         }

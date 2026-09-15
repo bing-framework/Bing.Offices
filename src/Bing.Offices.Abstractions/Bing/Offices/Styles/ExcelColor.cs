@@ -6,20 +6,17 @@
 public sealed class ExcelColor
 {
     /// <summary>
-    /// 获取或设置 ARGB 十六进制颜色，例如 <c>FF1F4E79</c>。
+    /// 获取或初始化ARGB 十六进制颜色，例如 <c>FF1F4E79</c>。
     /// </summary>
     public string Argb { get; init; }
 
-    /// <summary>
-    /// 创建颜色描述。
-    /// </summary>
+    /// <summary>初始化一个 <see cref="ExcelColor" /> 类型的实例。</summary>
     public ExcelColor()
     {
     }
 
-    /// <summary>
-    /// 创建颜色描述。
-    /// </summary>
+    /// <summary>初始化一个 <see cref="ExcelColor" /> 类型的实例。</summary>
+    /// <param name="argb">ARGB 十六进制颜色文本。</param>
     public ExcelColor(string argb) => Argb = argb;
 }
 

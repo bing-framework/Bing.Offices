@@ -8,9 +8,7 @@ using Bing.Offices.Conversions;
 /// </summary>
 public sealed class ExcelValidationContext
 {
-    /// <summary>
-    /// 初始化一个<see cref="ExcelValidationContext"/>类型的实例。
-    /// </summary>
+    /// <summary>初始化一个 <see cref="ExcelValidationContext" /> 类型的实例。</summary>
     /// <param name="value">原始单元格文本。</param>
     /// <param name="sheetName">工作表名称。</param>
     /// <param name="rowIndex">从一开始的行号。</param>

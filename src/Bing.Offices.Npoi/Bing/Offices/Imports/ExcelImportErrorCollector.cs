@@ -12,14 +12,14 @@ internal sealed class ExcelImportErrorCollector
     /// <summary>当前收集器视图中的错误集合。</summary>
     private readonly List<ExcelImportError> _errors = new();
 
-    /// <summary>使用指定的根错误上限初始化收集器。</summary>
+    /// <summary>初始化一个 <see cref="ExcelImportErrorCollector" /> 类型的实例。</summary>
     /// <param name="maxErrors">允许保留的最大错误数；为 null 时不限制。</param>
     internal ExcelImportErrorCollector(int? maxErrors)
     {
         _maxErrors = maxErrors;
     }
 
-    /// <summary>创建共享根错误上限的工作表级错误视图。</summary>
+    /// <summary>初始化一个 <see cref="ExcelImportErrorCollector" /> 类型的实例。</summary>
     /// <param name="parent">负责全局限制的父级收集器。</param>
     private ExcelImportErrorCollector(ExcelImportErrorCollector parent)
     {

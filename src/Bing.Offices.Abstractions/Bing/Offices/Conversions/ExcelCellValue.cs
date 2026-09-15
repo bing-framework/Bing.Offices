@@ -5,9 +5,7 @@
 /// </summary>
 public sealed class ExcelCellValue
 {
-    /// <summary>
-    /// 初始化一个<see cref="ExcelCellValue"/>类型的实例。
-    /// </summary>
+    /// <summary>初始化一个 <see cref="ExcelCellValue" /> 类型的实例。</summary>
     /// <param name="value">供默认转换使用的原始值。</param>
     /// <param name="text">单元格显示文本。</param>
     /// <param name="kind">逻辑单元格类型。</param>

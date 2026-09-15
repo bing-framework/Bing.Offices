@@ -9,6 +9,8 @@ internal static class NpoiExportColumnPlanner
 /// <summary>
 /// 检查动态列定义和列键唯一性。
 /// </summary>
+/// <param name="definitions">待检查的动态列定义。</param>
+/// <param name="columns">已生成的固定和动态列计划。</param>
 internal static void ValidateDynamicColumns(IReadOnlyList<ExcelDynamicColumnDefinition> definitions,
     IReadOnlyList<ExcelColumnPlan> columns)
 {

@@ -15,9 +15,7 @@ namespace Bing.Offices.Imports;
 /// </summary>
 internal sealed class NpoiImportRowMaterializer
 {
-    /// <summary>
-    /// 初始化行物化器。
-    /// </summary>
+    /// <summary>初始化一个 <see cref="NpoiImportRowMaterializer" /> 类型的实例。</summary>
     internal NpoiImportRowMaterializer()
     {
     }
@@ -354,6 +352,18 @@ internal sealed class NpoiImportRowMaterializer
     /// <summary>
     /// 按列配置校验转换后的值和唯一性。
     /// </summary>
+    /// <param name="value">单元格规范化后的文本值。</param>
+    /// <param name="cellValue">单元格的结构化值。</param>
+    /// <param name="convertedValue">按列类型转换后的值。</param>
+    /// <param name="column">当前列执行计划。</param>
+    /// <param name="duplicateValues">兼容旧校验规则的重复值状态。</param>
+    /// <param name="uniqueTracker">负责当前行唯一值预留的跟踪器。</param>
+    /// <param name="sheetName">用于错误定位的工作表名称。</param>
+    /// <param name="rowIndex">当前行的零基索引。</param>
+    /// <param name="validateMode">发生校验失败后的继续策略。</param>
+    /// <param name="culture">校验上下文使用的区域性。</param>
+    /// <param name="errors">接收校验错误的收集器。</param>
+    /// <returns>值通过配置校验和唯一性检查时为 true，否则为 false。</returns>
     private static bool ValidateColumnValue(string value, ExcelCellValue cellValue, object convertedValue,
         ExcelColumnPlan column, IDictionary<string, HashSet<string>> duplicateValues,
         UniqueTracker uniqueTracker, string sheetName, int rowIndex, ValidateMode validateMode,
@@ -448,6 +458,9 @@ internal sealed class NpoiImportRowMaterializer
     /// <summary>
     /// 规范化单元格值中的正文空白。
     /// </summary>
+    /// <param name="cellValue">待规范化的结构化单元格值。</param>
+    /// <param name="policy">正文文本的空白处理策略。</param>
+    /// <returns>规范化后的单元格值；无需处理或输入为空时返回原值。</returns>
     private static ExcelCellValue NormalizeCellValue(ExcelCellValue cellValue, ExcelWhitespacePolicy policy)
     {
         if (cellValue == null || cellValue.Kind != ExcelCellKind.Text && cellValue.Kind != ExcelCellKind.Formula)
@@ -462,6 +475,10 @@ internal sealed class NpoiImportRowMaterializer
     /// <summary>
     /// 查找指定行列位置的图片。
     /// </summary>
+    /// <param name="imageIndex">按零基行列坐标索引的图片集合。</param>
+    /// <param name="row">图片所在行的零基索引。</param>
+    /// <param name="column">图片所在列的零基索引。</param>
+    /// <returns>指定位置的图片集合；没有图片时返回 <see langword="null" />。</returns>
     private static IReadOnlyList<PictureInfo> FindImages(
         IReadOnlyDictionary<(int Row, int Column), IReadOnlyList<PictureInfo>> imageIndex, int row, int column)
     {
@@ -471,6 +488,8 @@ internal sealed class NpoiImportRowMaterializer
     /// <summary>
     /// 判断目标类型是否为图片或图片集合。
     /// </summary>
+    /// <param name="type">待判断的目标类型。</param>
+    /// <returns>类型可接收图片或图片集合时为 true，否则为 false。</returns>
     private static bool IsImageType(Type type)
     {
         if (type == null || type == typeof(byte[]) || type == typeof(ExcelImageData))
@@ -489,6 +508,10 @@ internal sealed class NpoiImportRowMaterializer
     /// <summary>
     /// 将图片集合转换为目标属性类型。
     /// </summary>
+    /// <param name="pictures">待转换的图片集合。</param>
+    /// <param name="targetType">目标属性类型。</param>
+    /// <param name="policy">多图片转换策略。</param>
+    /// <returns>按目标类型和策略生成的图片值。</returns>
     private static object ConvertImages(IReadOnlyList<PictureInfo> pictures, Type targetType,
         ExcelImageMultiplicityPolicy policy)
     {
@@ -513,6 +536,8 @@ internal sealed class NpoiImportRowMaterializer
     /// <summary>
     /// 解析图片集合元素类型。
     /// </summary>
+    /// <param name="type">待解析的集合或元素类型。</param>
+    /// <returns>支持的图片元素类型；无法解析时返回 <see langword="null" />。</returns>
     private static Type GetImageElementType(Type type)
     {
         if (type == null)
@@ -535,6 +560,9 @@ internal sealed class NpoiImportRowMaterializer
     /// <summary>
     /// 将单张图片转换为目标属性类型。
     /// </summary>
+    /// <param name="picture">待转换的图片信息。</param>
+    /// <param name="targetType">目标属性类型。</param>
+    /// <returns>按目标类型生成的单张图片值。</returns>
     private static object ConvertImage(PictureInfo picture, Type targetType)
     {
         if (targetType == typeof(byte[]))
@@ -546,6 +574,8 @@ internal sealed class NpoiImportRowMaterializer
     /// <summary>
     /// 根据图片头部识别常见图片内容类型。
     /// </summary>
+    /// <param name="bytes">图片二进制内容。</param>
+    /// <returns>识别出的 MIME 类型；无法识别时按 PNG 处理。</returns>
     private static string ResolveImageContentType(byte[] bytes)
     {
         if (bytes?.Length >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF)
@@ -558,6 +588,8 @@ internal sealed class NpoiImportRowMaterializer
     /// <summary>
     /// 映射验证绑定到公共导入错误码。
     /// </summary>
+    /// <param name="binding">产生校验结果的规则绑定。</param>
+    /// <returns>与绑定类型对应的导入错误码。</returns>
     private static ExcelImportErrorCode GetValidationErrorCode(IExcelValidationBinding binding) =>
         binding.Kind == ExcelValidationBindingKind.MaxLength
             ? ExcelImportErrorCode.MaxLength
@@ -568,6 +600,8 @@ internal sealed class NpoiImportRowMaterializer
     /// <summary>
     /// 获取固定列或动态列的错误定位键。
     /// </summary>
+    /// <param name="column">当前列执行计划。</param>
+    /// <returns>动态列键或固定列属性名。</returns>
     private static string GetErrorColumnKey(ExcelColumnPlan column) =>
         column.IsDynamic ? column.Key : column.Property.Name;
 }

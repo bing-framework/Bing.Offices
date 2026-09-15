@@ -15,6 +15,8 @@ public interface IExcelValidationBinding
     string ErrorMessage { get; }
 
     /// <summary>执行当前绑定。</summary>
+    /// <param name="context">当前单元格的校验上下文。</param>
+    /// <returns>校验通过时为 <see langword="true"/>，否则为 <see langword="false"/>。</returns>
     bool Validate(ExcelValidationContext context);
 }
 

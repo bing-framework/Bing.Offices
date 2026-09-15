@@ -1,7 +1,7 @@
 ﻿namespace Bing.Offices.Configurations;
 
 /// <summary>
-/// Excel 属性列的请求级配置。
+/// Excel 属性列配置。
 /// </summary>
 public sealed class ExcelColumnConfiguration
 {
@@ -126,7 +126,7 @@ public sealed class ExcelColumnConfiguration
     public ExcelValueMappingMergeMode? ValueMappingMergeMode { get; set; }
 
     /// <summary>
-    /// 图片列出现多个图片时的处理策略。
+    /// 获取或设置图片列出现多个图片时的处理策略。
     /// </summary>
     public Imports.ExcelImageMultiplicityPolicy? ImageMultiplicity { get; set; }
 

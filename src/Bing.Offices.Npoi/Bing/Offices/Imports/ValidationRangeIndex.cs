@@ -10,7 +10,7 @@ internal sealed class ValidationRangeIndex
     /// <summary>按行区间组织的根节点。</summary>
     private readonly ValidationRangeNode _root;
 
-    /// <summary>使用行区间索引根节点创建查询索引。</summary>
+    /// <summary>初始化一个 <see cref="ValidationRangeIndex" /> 类型的实例。</summary>
     /// <param name="root">已构建的行区间根节点。</param>
     private ValidationRangeIndex(ValidationRangeNode root) => _root = root;
 
@@ -65,9 +65,10 @@ internal sealed class ValidationRangeIndex
         return result.Count == 0 ? System.Array.Empty<IDataValidation>() : result;
     }
 
+    /// <summary>按行区间组织校验范围索引的内部节点。</summary>
     private sealed class ValidationRangeNode
     {
-        /// <summary>创建包含行区间重叠项及左右子树的节点。</summary>
+        /// <summary>初始化一个 <see cref="ValidationRangeNode" /> 类型的实例。</summary>
         /// <param name="center">当前节点的中心行号。</param>
         /// <param name="overlaps">覆盖中心行的区间集合。</param>
         /// <param name="left">中心行左侧的子树。</param>
@@ -142,9 +143,10 @@ internal sealed class ValidationRangeIndex
         }
     }
 
+    /// <summary>按列区间组织校验范围索引的内部节点。</summary>
     private sealed class ValidationRangeColumnNode
     {
-        /// <summary>创建包含列区间重叠项及左右子树的节点。</summary>
+        /// <summary>初始化一个 <see cref="ValidationRangeColumnNode" /> 类型的实例。</summary>
         /// <param name="center">当前节点的中心列号。</param>
         /// <param name="overlaps">覆盖中心列的区间集合。</param>
         /// <param name="left">中心列左侧的子树。</param>
@@ -248,9 +250,10 @@ internal sealed class ValidationRangeIndex
         }
     }
 
+    /// <summary>记录一个裁剪后的校验行列区间。</summary>
     private sealed class ValidationRangeEntry
     {
-        /// <summary>创建一个包含闭合行列边界的校验区间条目。</summary>
+        /// <summary>初始化一个 <see cref="ValidationRangeEntry" /> 类型的实例。</summary>
         /// <param name="firstRow">最小零基行号。</param>
         /// <param name="lastRow">最大零基行号。</param>
         /// <param name="firstColumn">最小零基列号。</param>

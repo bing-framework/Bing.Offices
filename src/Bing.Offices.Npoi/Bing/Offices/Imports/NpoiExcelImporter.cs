@@ -17,6 +17,22 @@ namespace Bing.Offices.Imports;
 /// </summary>
 public sealed class NpoiExcelImporter : IExcelImporter
 {
+    /// <summary>调用指定工作簿根类型的泛型工作表导入逻辑。</summary>
+    /// <typeparam name="TWorkbook">工作簿根实体类型。</typeparam>
+    /// <param name="target">执行工作表导入的导入器。</param>
+    /// <param name="sheet">待读取的 NPOI 工作表。</param>
+    /// <param name="request">当前工作表导入请求。</param>
+    /// <param name="root">接收导入实体的工作簿根对象。</param>
+    /// <param name="sheetResults">接收工作表导入结果的集合。</param>
+    /// <param name="errors">接收导入错误的收集器。</param>
+    /// <param name="validationMode">当前导入验证模式。</param>
+    /// <param name="resourceLimits">当前导入资源限制。</param>
+    /// <param name="unsupportedFeaturePolicy">不支持功能的处理策略。</param>
+    /// <param name="sourceLocations">实体到源工作表位置的映射。</param>
+    /// <param name="runtime">当前导入运行时状态。</param>
+    /// <param name="isDate1904">工作簿是否使用 1904 日期系统。</param>
+    /// <param name="cancellationToken">导入过程中检查的取消令牌。</param>
+    /// <param name="mappingPlan">当前工作表的映射计划。</param>
     private delegate void ImportSheetInvoker<TWorkbook>(NpoiExcelImporter target, ISheet sheet,
         ExcelSheetImportRequest request, TWorkbook root, ICollection<ExcelSheetImportResult> sheetResults,
         ExcelImportErrorCollector errors, ExcelImportValidationMode validationMode,
@@ -24,8 +40,11 @@ public sealed class NpoiExcelImporter : IExcelImporter
         IDictionary<object, SourceLocation> sourceLocations, ExcelImportRuntime runtime, bool isDate1904,
         CancellationToken cancellationToken, IExcelMappingPlan mappingPlan) where TWorkbook : class, new();
 
+    /// <summary>缓存指定工作簿根类型的工作表导入委托。</summary>
+    /// <typeparam name="TWorkbook">工作簿根实体类型。</typeparam>
     private static class ImportSheetInvokerCache<TWorkbook> where TWorkbook : class, new()
     {
+        /// <summary>按工作表实体运行时类型缓存当前工作簿根类型的导入委托。</summary>
         internal static readonly ConcurrentDictionary<Type, ImportSheetInvoker<TWorkbook>> Invokers = new();
     }
     /// <summary>
@@ -62,9 +81,7 @@ public sealed class NpoiExcelImporter : IExcelImporter
     /// <summary>负责失败工作簿外围异步输出的可替换 staging 策略。</summary>
     private readonly INpoiAsyncStagingFactory _asyncStagingFactory;
 
-    /// <summary>
-    /// 初始化一个<see cref="NpoiExcelImporter"/>类型的实例。
-    /// </summary>
+    /// <summary>初始化一个 <see cref="NpoiExcelImporter" /> 类型的实例。</summary>
     /// <param name="validationRules">校验规则集合。</param>
     /// <param name="valueConverters">值转换器集合。</param>
     /// <param name="namedValidationRules">命名配置校验规则集合。</param>
@@ -80,6 +97,13 @@ public sealed class NpoiExcelImporter : IExcelImporter
     {
     }
 
+    /// <summary>初始化一个 <see cref="NpoiExcelImporter" /> 类型的实例。</summary>
+    /// <param name="validationRules">校验规则集合。</param>
+    /// <param name="valueConverters">值转换器集合。</param>
+    /// <param name="namedValidationRules">命名配置校验规则集合。</param>
+    /// <param name="mappingPlanFactory">方向化映射计划工厂。</param>
+    /// <param name="exceptionObservers">接收公共运行异常的观察器集合。</param>
+    /// <param name="asyncStagingFactory">失败工作簿外围异步输出的 staging 工厂。</param>
     internal NpoiExcelImporter(IEnumerable<IExcelValidationRule> validationRules,
         IEnumerable<IExcelValueConverter> valueConverters,
         IEnumerable<INamedExcelValidationRule> namedValidationRules,
@@ -99,6 +123,8 @@ public sealed class NpoiExcelImporter : IExcelImporter
         _asyncStagingFactory = asyncStagingFactory ?? throw new ArgumentNullException(nameof(asyncStagingFactory));
     }
 
+    /// <summary>初始化一个 <see cref="NpoiExcelImporter" /> 类型的实例。</summary>
+    /// <param name="asyncStagingFactory">失败工作簿外围异步输出的 staging 工厂。</param>
     internal NpoiExcelImporter(INpoiAsyncStagingFactory asyncStagingFactory)
         : this(null, null, null, null, null, asyncStagingFactory)
     {
@@ -286,6 +312,15 @@ public sealed class NpoiExcelImporter : IExcelImporter
         }
     }
 
+    /// <summary>
+    /// 将源流缓冲到内存后执行工作簿导入。
+    /// </summary>
+    /// <typeparam name="TWorkbook">工作簿根实体类型。</typeparam>
+    /// <param name="source">待导入的源流。</param>
+    /// <param name="request">工作簿导入请求。</param>
+    /// <param name="cancellationToken">缓冲和导入过程中检查的取消令牌。</param>
+    /// <param name="failureDestinationOverride">可选的失败工作簿输出流。</param>
+    /// <returns>包含根实体、工作表结果和错误集合的导入结果。</returns>
     private ExcelWorkbookImportResult<TWorkbook> ImportCore<TWorkbook>(Stream source,
         ExcelWorkbookImportRequest<TWorkbook> request, CancellationToken cancellationToken,
         Stream failureDestinationOverride = null)
@@ -296,6 +331,15 @@ public sealed class NpoiExcelImporter : IExcelImporter
         return ImportBufferedCore(bufferedSource, request, cancellationToken, failureDestinationOverride);
     }
 
+    /// <summary>
+    /// 从已缓冲源流创建 NPOI 工作簿并执行各工作表导入。
+    /// </summary>
+    /// <typeparam name="TWorkbook">工作簿根实体类型。</typeparam>
+    /// <param name="bufferedSource">已定位到可读取内容的缓冲源流。</param>
+    /// <param name="request">工作簿导入请求。</param>
+    /// <param name="cancellationToken">导入过程中检查的取消令牌。</param>
+    /// <param name="failureDestinationOverride">可选的失败工作簿输出流。</param>
+    /// <returns>包含根实体、工作表结果和错误集合的导入结果。</returns>
     private ExcelWorkbookImportResult<TWorkbook> ImportBufferedCore<TWorkbook>(Stream bufferedSource,
         ExcelWorkbookImportRequest<TWorkbook> request, CancellationToken cancellationToken,
         Stream failureDestinationOverride = null)
@@ -441,6 +485,20 @@ public sealed class NpoiExcelImporter : IExcelImporter
     /// <summary>
     /// 通过一次类型擦除调用执行单个 Sheet 导入计划。
     /// </summary>
+    /// <typeparam name="TWorkbook">工作簿根实体类型。</typeparam>
+    /// <param name="sheet">待导入的 NPOI 工作表。</param>
+    /// <param name="request">当前工作表导入请求。</param>
+    /// <param name="root">接收导入实体的工作簿根对象。</param>
+    /// <param name="sheetResults">接收工作表导入结果的集合。</param>
+    /// <param name="errors">接收导入错误的收集器。</param>
+    /// <param name="validationMode">当前导入验证模式。</param>
+    /// <param name="resourceLimits">当前导入资源限制。</param>
+    /// <param name="unsupportedFeaturePolicy">不支持功能的处理策略。</param>
+    /// <param name="sourceLocations">实体到源工作表位置的映射。</param>
+    /// <param name="runtime">当前导入运行时状态。</param>
+    /// <param name="cancellationToken">导入过程中检查的取消令牌。</param>
+    /// <param name="mappingPlan">当前工作表的映射计划。</param>
+    /// <param name="isDate1904">工作簿是否使用 1904 日期系统。</param>
     private void ImportTypedSheet<TWorkbook>(ISheet sheet, ExcelSheetImportRequest request, TWorkbook root,
         ICollection<ExcelSheetImportResult> sheetResults, ExcelImportErrorCollector errors,
         ExcelImportValidationMode validationMode, ExcelResourceLimits resourceLimits,
@@ -456,6 +514,12 @@ public sealed class NpoiExcelImporter : IExcelImporter
             isDate1904, cancellationToken, mappingPlan);
     }
 
+    /// <summary>
+    /// 为运行时实体类型创建泛型工作表导入委托。
+    /// </summary>
+    /// <typeparam name="TWorkbook">工作簿根实体类型。</typeparam>
+    /// <param name="itemType">工作表实体的运行时类型。</param>
+    /// <returns>绑定到指定实体类型的工作表导入委托。</returns>
     private static ImportSheetInvoker<TWorkbook> CreateImportSheetInvoker<TWorkbook>(Type itemType)
         where TWorkbook : class, new()
     {
@@ -467,6 +531,21 @@ public sealed class NpoiExcelImporter : IExcelImporter
     /// <summary>
     /// 导入一个具体实体类型，并将成功项写入 Workbook 根集合。
     /// </summary>
+    /// <typeparam name="TWorkbook">工作簿根实体类型。</typeparam>
+    /// <typeparam name="TItem">当前工作表的实体类型。</typeparam>
+    /// <param name="sheet">待导入的 NPOI 工作表。</param>
+    /// <param name="request">当前工作表导入请求。</param>
+    /// <param name="root">接收导入实体的工作簿根对象。</param>
+    /// <param name="sheetResults">接收工作表导入结果的集合。</param>
+    /// <param name="errors">接收导入错误的收集器。</param>
+    /// <param name="validationMode">当前导入验证模式。</param>
+    /// <param name="resourceLimits">当前导入资源限制。</param>
+    /// <param name="unsupportedFeaturePolicy">不支持功能的处理策略。</param>
+    /// <param name="sourceLocations">实体到源工作表位置的映射。</param>
+    /// <param name="runtime">当前导入运行时状态。</param>
+    /// <param name="isDate1904">工作簿是否使用 1904 日期系统。</param>
+    /// <param name="cancellationToken">导入过程中检查的取消令牌。</param>
+    /// <param name="mappingPlan">当前工作表的映射计划。</param>
     private void ImportTypedSheetCore<TWorkbook, TItem>(ISheet sheet, ExcelSheetImportRequest request,
         TWorkbook root, ICollection<ExcelSheetImportResult> sheetResults, ExcelImportErrorCollector errors,
         ExcelImportValidationMode validationMode, ExcelResourceLimits resourceLimits,
@@ -631,6 +710,9 @@ public sealed class NpoiExcelImporter : IExcelImporter
     /// <summary>
     /// 映射 NPOI 单元格类型到提供程序无关的逻辑类型。
     /// </summary>
+    /// <param name="cellType">NPOI 单元格类型。</param>
+    /// <param name="cell">用于判断日期格式的单元格。</param>
+    /// <returns>提供程序无关的单元格逻辑类型。</returns>
     private static ExcelCellKind ResolveCellKind(CellType cellType, ICell cell) => cellType switch
     {
         CellType.Blank => ExcelCellKind.Empty,

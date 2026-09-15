@@ -178,6 +178,8 @@ public static class ExcelMappingConfigurationLoader
     /// <summary>
     /// 将 normalized v2 文档写为 JSON。
     /// </summary>
+    /// <param name="document">待验证并序列化的映射文档。</param>
+    /// <returns>格式化后的 JSON 文本。</returns>
     public static string ToJson(ExcelMappingDocument document)
         => ExecuteConfiguration(() =>
         {
@@ -193,6 +195,8 @@ public static class ExcelMappingConfigurationLoader
     /// <summary>
     /// 将 normalized v2 文档写为 XML。
     /// </summary>
+    /// <param name="document">待验证并序列化的映射文档。</param>
+    /// <returns>包含 UTF-8 声明的 XML 文本。</returns>
     public static string ToXml(ExcelMappingDocument document)
         => ExecuteConfiguration(() =>
         {
@@ -203,6 +207,10 @@ public static class ExcelMappingConfigurationLoader
             return writer.ToString();
         });
 
+    /// <summary>执行配置加载或序列化操作，并统一包装未分类的配置异常。</summary>
+    /// <typeparam name="T">操作的返回类型。</typeparam>
+    /// <param name="action">待执行的配置操作。</param>
+    /// <returns>配置操作产生的结果。</returns>
     private static T ExecuteConfiguration<T>(Func<T> action)
     {
         try
@@ -298,18 +306,21 @@ public static class ExcelMappingConfigurationLoader
         throw new XmlMappingValidationException($"未知 XML 属性: /ExcelMappingDocument/@{eventArgs.Attr?.Name ?? eventArgs.Attr?.LocalName}");
     }
 
+    /// <summary>表示映射 XML 包含未支持节点或属性的异常。</summary>
     private sealed class XmlMappingValidationException : InvalidOperationException
     {
-        /// <summary>使用 XML 映射结构错误消息初始化异常。</summary>
+        /// <summary>初始化一个 <see cref="XmlMappingValidationException" /> 类型的实例。</summary>
         /// <param name="message">描述未知或无效 XML 成员的消息。</param>
         public XmlMappingValidationException(string message) : base(message)
         {
         }
     }
 
+    /// <summary>以 UTF-8 声明编码的字符串写入器。</summary>
     private sealed class Utf8StringWriter : StringWriter
     {
-        /// <summary>获取序列化 XML 文本应声明的 UTF-8 编码。</summary>
+        /// <inheritdoc />
+        /// <remarks>始终返回 UTF-8，以确保序列化 XML 声明与实际输出编码一致。</remarks>
         public override Encoding Encoding => Encoding.UTF8;
     }
 }
@@ -319,9 +330,11 @@ public static class ExcelMappingConfigurationLoader
 /// </summary>
 internal sealed class DefaultExcelMappingConfigurationLoader : IExcelMappingConfigurationLoader
 {
+    /// <summary>向注册的观察器转发配置加载异常。</summary>
     private readonly BingOfficesExceptionDispatcher _exceptionDispatcher;
 
-    /// <summary>使用当前 DI 容器中的异常观察器初始化推荐配置加载入口。</summary>
+    /// <summary>初始化一个 <see cref="DefaultExcelMappingConfigurationLoader" /> 类型的实例。</summary>
+    /// <param name="exceptionObservers">接收配置加载异常的可选观察器集合。</param>
     public DefaultExcelMappingConfigurationLoader(IEnumerable<IBingOfficesExceptionObserver> exceptionObservers = null)
     {
         _exceptionDispatcher = new BingOfficesExceptionDispatcher(exceptionObservers);
@@ -343,6 +356,9 @@ internal sealed class DefaultExcelMappingConfigurationLoader : IExcelMappingConf
     public ExcelMappingDocument FromXmlDocument(Stream source) =>
         Execute(() => ExcelMappingConfigurationLoader.FromXmlDocument(source));
 
+    /// <summary>执行默认加载操作，并将配置异常通知观察器。</summary>
+    /// <param name="load">待执行的映射文档加载操作。</param>
+    /// <returns>加载后的映射文档。</returns>
     private ExcelMappingDocument Execute(Func<ExcelMappingDocument> load)
     {
         try

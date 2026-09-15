@@ -1,7 +1,7 @@
 ﻿namespace Bing.Offices.Configurations;
 
 /// <summary>
-/// Excel 请求级映射配置。
+/// 按映射方向组织列、动态列、样式和布局的配置。
 /// </summary>
 public sealed class ExcelMappingConfiguration
 {

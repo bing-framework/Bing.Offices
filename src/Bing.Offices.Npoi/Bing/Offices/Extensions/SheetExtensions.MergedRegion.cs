@@ -142,6 +142,9 @@ public static partial class SheetExtensions
     /// <summary>
     /// 判断两个合并区域是否相交。
     /// </summary>
+    /// <param name="first">第一个合并区域。</param>
+    /// <param name="second">第二个合并区域。</param>
+    /// <returns>两个区域存在行列交集时为 <see langword="true" />，否则为 <see langword="false" />。</returns>
     private static bool IsIntersect(CellRangeAddress first, CellRangeAddress second) =>
         first.FirstRow <= second.LastRow && first.LastRow >= second.FirstRow &&
         first.FirstColumn <= second.LastColumn && first.LastColumn >= second.FirstColumn;

@@ -10,6 +10,8 @@ internal static class ExcelValidationBindingFactory
     /// <summary>
     /// 创建命名校验绑定。
     /// </summary>
+    /// <param name="rule">待绑定的命名校验规则。</param>
+    /// <returns>统一的校验绑定实例。</returns>
     public static IExcelValidationBinding CreateNamed(INamedExcelValidationRule rule)
     {
         if (rule == null)

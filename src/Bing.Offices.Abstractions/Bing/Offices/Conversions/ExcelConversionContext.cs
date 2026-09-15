@@ -7,9 +7,7 @@ using System.Globalization;
 /// </summary>
 public sealed class ExcelConversionContext
 {
-    /// <summary>
-    /// 初始化一个<see cref="ExcelConversionContext"/>类型的实例。
-    /// </summary>
+    /// <summary>初始化一个 <see cref="ExcelConversionContext" /> 类型的实例。</summary>
     /// <param name="value">当前原始值。</param>
     /// <param name="propertyName">目标属性名称。</param>
     /// <param name="propertyType">目标属性类型。</param>

@@ -6,9 +6,7 @@
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
 public sealed class ExcelRangeAttribute : FilterAttributeBase
 {
-    /// <summary>
-    /// 初始化一个<see cref="ExcelRangeAttribute"/>实例。
-    /// </summary>
+    /// <summary>初始化一个 <see cref="ExcelRangeAttribute" /> 类型的实例。</summary>
     /// <param name="min">最小值。</param>
     /// <param name="max">最大值。</param>
     public ExcelRangeAttribute(double min, double max)

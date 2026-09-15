@@ -13,7 +13,7 @@ namespace Bing.Offices.Csv;
 /// <summary>保存 CSV 列与实体属性之间的反射、转换器和校验绑定。</summary>
 internal sealed class CsvPropertyBinding
 {
-    /// <summary>创建 CSV 属性绑定。</summary>
+    /// <summary>初始化一个 <see cref="CsvPropertyBinding" /> 类型的实例。</summary>
     /// <param name="mapping">跨提供程序列映射。</param>
     /// <param name="property">目标实体属性。</param>
     /// <param name="getter">读取实体属性值的委托。</param>
@@ -39,9 +39,9 @@ internal sealed class CsvPropertyBinding
     internal PropertyInfo Property { get; }
     /// <summary>获取实体属性名称。</summary>
     internal string Name => Mapping.Name;
-    /// <summary>获取 CSV 列标题。</summary>
+    /// <summary>获取CSV 列标题。</summary>
     internal string Title => Mapping.Title;
-    /// <summary>获取 CSV 标题别名。</summary>
+    /// <summary>获取CSV 标题别名。</summary>
     internal IReadOnlyList<string> Aliases => Mapping.Aliases;
     /// <summary>获取值格式化字符串。</summary>
     internal string Formatter => Mapping.Formatter;

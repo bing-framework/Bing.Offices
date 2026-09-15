@@ -11,16 +11,19 @@ namespace Bing.Offices.Exports;
 /// </summary>
 internal sealed class NpoiExportPlanBuilder
 {
+    /// <summary>调用指定实体类型的工作簿映射计划构建逻辑。</summary>
+    /// <param name="target">执行计划构建的导出计划构建器。</param>
+    /// <param name="request">当前工作表导出请求。</param>
+    /// <param name="sheetNames">共享同一映射计划的工作表名称。</param>
     private delegate IExcelMappingWorkbookPlan CreatePlanInvoker(NpoiExportPlanBuilder target,
         ExcelSheetExportRequest request, IReadOnlyList<string> sheetNames);
 
+    /// <summary>按工作表实体运行时类型缓存导出计划委托，避免重复反射构造。</summary>
     private static readonly ConcurrentDictionary<Type, CreatePlanInvoker> CreatePlanInvokers = new();
     /// <summary>将请求映射文档编译为不可变工作簿映射计划的工厂。</summary>
     private readonly IExcelMappingPlanFactory _mappingPlanFactory;
 
-    /// <summary>
-    /// 初始化导出计划构建器。
-    /// </summary>
+    /// <summary>初始化一个 <see cref="NpoiExportPlanBuilder" /> 类型的实例。</summary>
     /// <param name="mappingPlanFactory">方向化映射计划工厂。</param>
     public NpoiExportPlanBuilder(IExcelMappingPlanFactory mappingPlanFactory)
     {
@@ -64,6 +67,11 @@ internal sealed class NpoiExportPlanBuilder
         return CreatePlanInvokers.GetOrAdd(request.ItemType, CreatePlanInvokerForType)(this, request, sheetNames);
     }
 
+    /// <summary>
+    /// 为运行时实体类型创建泛型工作簿计划委托。
+    /// </summary>
+    /// <param name="itemType">工作表实体的运行时类型。</param>
+    /// <returns>绑定到指定实体类型的工作簿计划委托。</returns>
     private static CreatePlanInvoker CreatePlanInvokerForType(Type itemType)
     {
         var method = typeof(NpoiExportPlanBuilder).GetMethod(nameof(CreateTypedWorkbookPlan),

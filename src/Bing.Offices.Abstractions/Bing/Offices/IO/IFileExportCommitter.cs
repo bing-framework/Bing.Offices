@@ -20,7 +20,6 @@ public interface IFileExportCommitter
     /// <param name="writeAsync">写入临时文件的异步操作。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <param name="format">导出格式名称。</param>
-    /// <returns>表示提交操作的任务。</returns>
     Task CommitAsync(string path, Func<Stream, CancellationToken, Task> writeAsync,
         CancellationToken cancellationToken, string format);
 }

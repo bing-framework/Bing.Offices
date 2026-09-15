@@ -12,15 +12,25 @@ namespace Bing.Offices.Imports;
 /// </summary>
 internal sealed class NpoiImportSheetExecutor
 {
+    /// <summary>负责将工作表行转换为实体并收集字段错误的物化器。</summary>
     private readonly NpoiImportRowMaterializer _rowMaterializer;
 
-    /// <summary>创建工作表执行器。</summary>
+    /// <summary>初始化一个 <see cref="NpoiImportSheetExecutor" /> 类型的实例。</summary>
+    /// <param name="rowMaterializer">负责将工作表行物化为实体的执行器。</param>
     internal NpoiImportSheetExecutor(NpoiImportRowMaterializer rowMaterializer)
     {
         _rowMaterializer = rowMaterializer ?? throw new ArgumentNullException(nameof(rowMaterializer));
     }
 
-    /// <summary>执行单个泛型工作表的行导入，并返回成功行索引。</summary>
+    /// <summary>执行单个泛型工作表的行导入，并通过输出集合记录成功行索引。</summary>
+    /// <typeparam name="T">当前工作表的实体类型。</typeparam>
+    /// <param name="sheet">待导入的 NPOI 工作表。</param>
+    /// <param name="options">当前实体类型的导入执行选项。</param>
+    /// <param name="items">接收成功导入实体的集合。</param>
+    /// <param name="errors">接收导入错误的收集器。</param>
+    /// <param name="runtime">当前导入运行时状态。</param>
+    /// <param name="cancellationToken">逐行导入过程中检查的取消令牌。</param>
+    /// <param name="sourceRows">接收成功实体对应源行索引的集合；为空时不记录。</param>
     internal void Execute<T>(ISheet sheet, ExcelImportExecutionOptions<T> options, ICollection<T> items,
         ExcelImportErrorCollector errors, ExcelImportRuntime runtime, CancellationToken cancellationToken,
         ICollection<int> sourceRows = null) where T : class, new()
@@ -139,10 +149,22 @@ internal sealed class NpoiImportSheetExecutor
         }
     }
 
+    /// <summary>
+    /// 判断导入验证模式是否启用配置校验规则。
+    /// </summary>
+    /// <param name="mode">当前导入验证模式。</param>
+    /// <returns>模式包含配置校验时为 true，否则为 false。</returns>
     private static bool IsConfiguredValidationEnabled(ExcelImportValidationMode mode) =>
         mode == ExcelImportValidationMode.ConfiguredRules
         || mode == ExcelImportValidationMode.ConfiguredAndWorkbook;
 
+    /// <summary>
+    /// 根据表头和映射计划创建列执行计划。
+    /// </summary>
+    /// <typeparam name="T">导入实体类型。</typeparam>
+    /// <param name="header">包含导入表头的工作表行。</param>
+    /// <param name="options">当前实体类型的导入执行选项。</param>
+    /// <returns>按零基列索引排列的列执行计划。</returns>
     private static IReadOnlyDictionary<int, ExcelColumnPlan> CreateColumns<T>(IRow header,
         ExcelImportExecutionOptions<T> options) where T : class, new()
     {
@@ -221,6 +243,13 @@ internal sealed class NpoiImportSheetExecutor
         return columns;
     }
 
+    /// <summary>
+    /// 按标题或别名查找动态列定义。
+    /// </summary>
+    /// <param name="headerName">待匹配的表头文本。</param>
+    /// <param name="definitions">可用的动态列定义集合。</param>
+    /// <param name="comparison">表头名称比较规则。</param>
+    /// <returns>匹配的动态列定义；未匹配时返回 <see langword="null" />。</returns>
     private static IExcelDynamicMappingColumn FindDynamicDefinition(string headerName,
         IReadOnlyList<IExcelDynamicMappingColumn> definitions, ExcelNameComparison comparison) =>
         (definitions ?? Array.Empty<IExcelDynamicMappingColumn>()).FirstOrDefault(definition =>
@@ -228,6 +257,11 @@ internal sealed class NpoiImportSheetExecutor
             || (definition.Aliases ?? Array.Empty<string>()).Any(alias =>
                 string.Equals(alias, headerName, ToStringComparison(comparison))));
 
+    /// <summary>
+    /// 将内部动态列映射转换为导入执行定义。
+    /// </summary>
+    /// <param name="column">内部动态列映射。</param>
+    /// <returns>可供导入列计划使用的动态列定义。</returns>
     private static ExcelDynamicColumnDefinition CreateDynamicDefinition(IExcelDynamicMappingColumn column) => new()
     {
         Key = column.Key,
@@ -244,6 +278,11 @@ internal sealed class NpoiImportSheetExecutor
         ImageMultiplicity = column.ImageMultiplicity
     };
 
+    /// <summary>
+    /// 解析动态列相对于固定列的放置键。
+    /// </summary>
+    /// <param name="placementKey">before/after 形式的放置键；为空时不指定位置。</param>
+    /// <returns>解析出的列放置定义；键为空时返回 <see langword="null" />。</returns>
     private static ExcelColumnPlacement CreatePlacement(string placementKey)
     {
         if (string.IsNullOrWhiteSpace(placementKey))
@@ -255,6 +294,11 @@ internal sealed class NpoiImportSheetExecutor
             ? ExcelColumnPlacement.Before(key) : ExcelColumnPlacement.After(key);
     }
 
+    /// <summary>
+    /// 将动态列类型名称解析为 CLR 类型。
+    /// </summary>
+    /// <param name="name">允许列表中的类型名称；为空时按 string 处理。</param>
+    /// <returns>解析出的 CLR 类型。</returns>
     private static Type ResolveDynamicType(string name) => (name ?? "string").ToLowerInvariant() switch
     {
         "object" => typeof(object), "string" => typeof(string), "boolean" or "bool" => typeof(bool),
@@ -265,6 +309,13 @@ internal sealed class NpoiImportSheetExecutor
         _ => throw new NpoiSheetStructureException($"动态列数据类型不在允许列表中: {name}")
     };
 
+    /// <summary>
+    /// 按标题、别名或属性名查找固定列映射。
+    /// </summary>
+    /// <param name="properties">可用的固定列映射集合。</param>
+    /// <param name="headerName">待匹配的表头文本。</param>
+    /// <param name="comparison">表头名称比较规则。</param>
+    /// <returns>匹配的固定列映射；未匹配时返回 <see langword="null" />。</returns>
     private static IExcelMappingColumn FindProperty(IEnumerable<IExcelMappingColumn> properties, string headerName,
         ExcelNameComparison comparison)
     {
@@ -274,9 +325,19 @@ internal sealed class NpoiImportSheetExecutor
             || string.Equals(property.Name, headerName, stringComparison));
     }
 
+    /// <summary>
+    /// 将导入名称比较策略转换为字符串比较枚举。
+    /// </summary>
+    /// <param name="comparison">导入名称比较策略。</param>
+    /// <returns>对应的字符串比较方式。</returns>
     private static StringComparison ToStringComparison(ExcelNameComparison comparison) =>
         comparison == ExcelNameComparison.Ordinal ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
 
+    /// <summary>
+    /// 根据字符串比较枚举创建对应的比较器。
+    /// </summary>
+    /// <param name="comparison">字符串比较方式。</param>
+    /// <returns>对应的字符串比较器。</returns>
     private static StringComparer CreateStringComparer(StringComparison comparison) => comparison switch
     {
         StringComparison.Ordinal => StringComparer.Ordinal,
@@ -290,7 +351,10 @@ internal sealed class NpoiImportSheetExecutor
 
 }
 
+/// <summary>表示导入工作表结构不符合请求的异常。</summary>
 internal sealed class NpoiSheetStructureException : InvalidOperationException
 {
+    /// <summary>初始化一个 <see cref="NpoiSheetStructureException" /> 类型的实例。</summary>
+    /// <param name="message">描述工作表结构错误的消息。</param>
     internal NpoiSheetStructureException(string message) : base(message) { }
 }

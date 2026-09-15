@@ -169,6 +169,7 @@ public static partial class SheetExtensions
     /// <param name="targetMinCol">目标最小列索引</param>
     /// <param name="targetMaxCol">目标最大列索引</param>
     /// <param name="onlyInternal">仅在内部</param>
+    /// <returns>目标区域符合内部或相交条件时为 <see langword="true" />，否则为 <see langword="false" />。</returns>
     private static bool IsInternalOrIntersect(int? rangeMinRow, int? rangeMaxRow, int? rangeMinCol,
         int? rangeMaxCol, int targetMinRow, int targetMaxRow, int targetMinCol, int targetMaxCol, bool onlyInternal)
     {

@@ -155,6 +155,8 @@ internal static class ExcelTypeMapFactory
     /// <summary>
     /// 验证请求配置应用后的固定列标题保持唯一。
     /// </summary>
+    /// <param name="properties">待检查的属性映射集合。</param>
+    /// <param name="configuration">用于计算最终标题的列配置。</param>
     private static void ValidateTitles(IEnumerable<ExcelPropertyMap> properties, ExcelMappingConfiguration configuration)
     {
         var titles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -293,6 +295,10 @@ internal static class ExcelTypeMapFactory
         return new ReadOnlyDictionary<string, object>(values);
     }
 
+    /// <summary>根据列配置创建标题别名，并在配置自定义别名时移除重复值。</summary>
+    /// <param name="configuration">当前列配置。</param>
+    /// <param name="defaults">基础映射提供的默认别名。</param>
+    /// <returns>配置要求使用的标题别名集合。</returns>
     private static IReadOnlyList<string> CreateAliases(ExcelColumnConfiguration configuration,
         IReadOnlyList<string> defaults)
     {
@@ -315,6 +321,7 @@ internal static class ExcelTypeMapFactory
     /// </summary>
     /// <param name="configuration">列配置。</param>
     /// <param name="defaultNames">配置未指定规则时继承的默认规则名称。</param>
+    /// <returns>按配置合并后的命名校验规则名称。</returns>
     private static IReadOnlyList<string> CreateValidationRuleNames(ExcelColumnConfiguration configuration,
         IReadOnlyList<string> defaultNames = null)
     {
@@ -341,6 +348,7 @@ internal static class ExcelTypeMapFactory
     /// </summary>
     /// <param name="value">配置值文本。</param>
     /// <param name="propertyType">目标属性类型。</param>
+    /// <returns>转换为目标属性类型的配置值。</returns>
     private static object ConvertConfigurationValue(string value, Type propertyType)
     {
         var targetType = Nullable.GetUnderlyingType(propertyType) ?? propertyType;
@@ -365,6 +373,7 @@ internal static class ExcelTypeMapFactory
     /// 编译属性读取器。
     /// </summary>
     /// <param name="property">属性元数据。</param>
+    /// <returns>读取属性值的委托。</returns>
     private static Func<object, object> CreateGetter(PropertyInfo property)
     {
         var instance = Expression.Parameter(typeof(object), "instance");
@@ -376,6 +385,7 @@ internal static class ExcelTypeMapFactory
     /// 编译属性写入器。
     /// </summary>
     /// <param name="property">属性元数据。</param>
+    /// <returns>写入属性值的委托。</returns>
     private static Action<object, object> CreateSetter(PropertyInfo property)
     {
         if (!property.CanWrite)

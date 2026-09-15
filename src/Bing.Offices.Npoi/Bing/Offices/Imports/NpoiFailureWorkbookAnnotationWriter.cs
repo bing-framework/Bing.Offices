@@ -7,6 +7,12 @@ namespace Bing.Offices.Imports;
 /// <summary>Failure Workbook 的汇总工作表和错误批注职责。</summary>
 internal static class NpoiFailureWorkbookAnnotationWriter
 {
+    /// <summary>
+    /// 将导入错误写入失败工作簿汇总工作表。
+    /// </summary>
+    /// <param name="workbook">待写入汇总工作表的工作簿。</param>
+    /// <param name="errors">待写入的导入错误集合。</param>
+    /// <param name="cancellationToken">写入过程中检查的取消令牌。</param>
     internal static void WriteSummary(IWorkbook workbook, IReadOnlyCollection<ExcelImportError> errors,
         CancellationToken cancellationToken)
     {
@@ -40,6 +46,12 @@ internal static class NpoiFailureWorkbookAnnotationWriter
         }
     }
 
+    /// <summary>
+    /// 将导入错误作为批注写回原始工作表单元格。
+    /// </summary>
+    /// <param name="workbook">包含原始工作表的工作簿。</param>
+    /// <param name="errors">待标注的导入错误集合。</param>
+    /// <param name="conflictPolicy">已有批注时的处理策略。</param>
     internal static void AnnotateErrors(IWorkbook workbook, IReadOnlyCollection<ExcelImportError> errors,
         ExcelImportCommentConflictPolicy conflictPolicy)
     {
@@ -77,6 +89,11 @@ internal static class NpoiFailureWorkbookAnnotationWriter
         }
     }
 
+    /// <summary>
+    /// 将错误原始值转换为汇总表可写入的文本。
+    /// </summary>
+    /// <param name="value">错误记录中的原始值。</param>
+    /// <returns>用于汇总表的文本；二进制值显示其字节数。</returns>
     private static string FormatRawValue(object value) => value is byte[] bytes
         ? $"<binary:{bytes.Length}>"
         : Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;

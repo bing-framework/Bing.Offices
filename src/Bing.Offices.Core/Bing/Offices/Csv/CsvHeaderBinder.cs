@@ -25,7 +25,14 @@ internal static class CsvHeaderBinder
         return Bind(records.Current, properties, dynamicProperties, dynamicColumns, requireExpectedHeaders, maxColumns);
     }
 
-    /// <summary>使用已异步读取的首条记录创建列绑定。</summary>
+    /// <summary>使用已读取的首条记录创建列绑定。</summary>
+    /// <param name="header">CSV 首条记录中的表头文本。</param>
+    /// <param name="properties">可绑定的固定属性集合。</param>
+    /// <param name="dynamicProperties">可绑定的动态字典属性集合。</param>
+    /// <param name="dynamicColumns">已编译的动态列表头映射。</param>
+    /// <param name="requireExpectedHeaders">是否要求所有固定属性均出现在表头中。</param>
+    /// <param name="maxColumns">允许读取的最大表头列数。</param>
+    /// <returns>按源 CSV 列索引排列的绑定列集合。</returns>
     public static IReadOnlyList<CsvColumn> Bind(IReadOnlyList<string> header,
         IReadOnlyCollection<CsvPropertyBinding> properties,
         IReadOnlyCollection<CsvPropertyBinding> dynamicProperties,
@@ -88,7 +95,7 @@ internal static class CsvHeaderBinder
 /// <summary>表示一个 CSV 源列及其固定或动态实体属性绑定。</summary>
 internal sealed class CsvColumn
 {
-    /// <summary>使用列索引、属性绑定和可选动态列计划创建 CSV 列。</summary>
+    /// <summary>初始化一个 <see cref="CsvColumn" /> 类型的实例。</summary>
     /// <param name="index">源 CSV 中的零基列索引。</param>
     /// <param name="property">固定或动态目标属性绑定。</param>
     /// <param name="headerName">源 CSV 表头名称。</param>

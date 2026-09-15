@@ -20,6 +20,9 @@ internal static class ExcelMappingDocumentValidator
     /// <summary>
     /// 验证 JSON 元素名称和值的结构边界。
     /// </summary>
+    /// <param name="element">待验证的 JSON 元素。</param>
+    /// <param name="path">元素在文档中的 JSON 路径。</param>
+    /// <param name="isV2">是否按 v2 文档根结构解释顶层属性。</param>
     internal static void ValidateJsonElement(JsonElement element, string path, bool isV2)
     {
         if (element.ValueKind == JsonValueKind.String)
@@ -48,6 +51,8 @@ internal static class ExcelMappingDocumentValidator
     /// <summary>
     /// 验证 XML 节点名称、属性和层级结构。
     /// </summary>
+    /// <param name="root">待验证的 XML 根元素。</param>
+    /// <param name="isV2">是否要求 v2 映射文档根元素。</param>
     internal static void ValidateXmlShape(XElement root, bool isV2)
     {
         if (root == null)
@@ -61,6 +66,8 @@ internal static class ExcelMappingDocumentValidator
     /// <summary>
     /// 验证映射文档的版本、方向配置和业务字段限制。
     /// </summary>
+    /// <param name="document">待验证的规范化映射文档。</param>
+    /// <param name="modelAliases">可选的模型别名注册表。</param>
     internal static void ValidateDocument(ExcelMappingDocument document, ExcelModelAliasRegistry modelAliases)
     {
         if (document == null)
@@ -76,6 +83,9 @@ internal static class ExcelMappingDocumentValidator
     /// <summary>
     /// 验证单个方向配置及其列、动态列和校验规则限制。
     /// </summary>
+    /// <param name="configuration">待验证的方向配置；为 null 时跳过该方向。</param>
+    /// <param name="path">配置在文档中的诊断路径。</param>
+    /// <param name="modelAliases">可选的模型别名注册表。</param>
     private static void ValidateConfiguration(ExcelMappingConfiguration configuration, string path,
         ExcelModelAliasRegistry modelAliases)
     {
@@ -184,6 +194,8 @@ internal static class ExcelMappingDocumentValidator
     /// <summary>
     /// 验证单个 XML 节点的属性和已知子节点。
     /// </summary>
+    /// <param name="element">待验证的 XML 元素。</param>
+    /// <param name="path">元素在文档中的诊断路径。</param>
     private static void ValidateXmlElement(XElement element, string path)
     {
         foreach (var attribute in element.Attributes())
@@ -204,6 +216,9 @@ internal static class ExcelMappingDocumentValidator
     /// <summary>
     /// 判断 XML 子节点是否属于当前 schema。
     /// </summary>
+    /// <param name="parent">父节点名称。</param>
+    /// <param name="child">待判断的子节点名称。</param>
+    /// <returns>子节点属于允许的 schema 时为 true。</returns>
     private static bool IsKnownXmlElement(string parent, string child)
     {
         if (parent == nameof(ExcelMappingDocument))
@@ -297,6 +312,10 @@ internal static class ExcelMappingDocumentValidator
     /// <summary>
     /// 判断 JSON 属性是否属于当前 schema。
     /// </summary>
+    /// <param name="path">父元素在文档中的 JSON 路径。</param>
+    /// <param name="propertyName">待判断的 JSON 属性名。</param>
+    /// <param name="isV2">是否按 v2 文档 schema 判断根属性。</param>
+    /// <returns>属性属于允许的 schema 时为 true。</returns>
     private static bool IsKnownJsonProperty(string path, string propertyName, bool isV2)
     {
         var names = path == "$"
@@ -326,6 +345,8 @@ internal static class ExcelMappingDocumentValidator
     /// <summary>
     /// 验证文本字段长度。
     /// </summary>
+    /// <param name="value">待验证的文本；为 null 时不执行长度检查。</param>
+    /// <param name="path">文本字段的诊断路径。</param>
     private static void ValidateText(string value, string path)
     {
         if (value != null && value.Length > MaxStringLength)
@@ -335,6 +356,8 @@ internal static class ExcelMappingDocumentValidator
     /// <summary>
     /// 验证动态列相对位置键。
     /// </summary>
+    /// <param name="value">相对位置键，格式为 before:列键 或 after:列键。</param>
+    /// <param name="path">位置键的诊断路径。</param>
     private static void ValidatePlacementKey(string value, string path)
     {
         ValidateText(value, path);
@@ -352,6 +375,8 @@ internal static class ExcelMappingDocumentValidator
     /// <summary>
     /// 验证业务别名不是 CLR 或程序集限定类型名。
     /// </summary>
+    /// <param name="value">待验证的业务别名；为空时不执行检查。</param>
+    /// <param name="path">别名字段的诊断路径。</param>
     private static void ValidateBusinessAlias(string value, string path)
     {
         if (string.IsNullOrWhiteSpace(value))

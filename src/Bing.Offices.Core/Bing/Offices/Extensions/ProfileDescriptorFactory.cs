@@ -4,6 +4,7 @@ using Bing.Offices.Configurations;
 
 namespace Bing.Offices.Extensions;
 
+/// <summary>根据映射 Profile 契约生成运行时描述符。</summary>
 internal static class ProfileDescriptorFactory
 {
     /// <summary>单模型导入 Profile 的开放泛型契约类型。</summary>

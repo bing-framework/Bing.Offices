@@ -9,10 +9,17 @@ namespace Bing.Offices.Imports;
 /// </summary>
 internal static class NpoiRelationBinder
 {
+    /// <summary>执行一组已编译的 Excel 父子关系绑定。</summary>
+    /// <param name="root">接收关系绑定结果的工作簿根实体。</param>
+    /// <param name="request">定义父项、子项及关联键选择器的关系请求。</param>
+    /// <param name="errors">接收绑定错误的导入错误收集器。</param>
+    /// <param name="sourceLocations">实体到原始工作表位置的映射。</param>
+    /// <param name="cancellationToken">遍历关系集合时检查的取消令牌。</param>
     private delegate void BindInvoker(object root, ExcelRelationRequest request,
         ExcelImportErrorCollector errors, IReadOnlyDictionary<object, SourceLocation> sourceLocations,
         CancellationToken cancellationToken);
 
+    /// <summary>按工作簿、父项、子项和关联键类型隔离关系绑定委托缓存。</summary>
     private static readonly ConcurrentDictionary<(Type Workbook, Type Parent, Type Child, Type Key), BindInvoker>
         BindInvokers = new();
 
@@ -35,9 +42,19 @@ internal static class NpoiRelationBinder
     }
 
     /// <summary>检查指定关系类型组合是否已有缓存委托，仅供职责级测试验证缓存合同。</summary>
+    /// <param name="workbookType">工作簿根实体类型。</param>
+    /// <param name="parentType">父项实体类型。</param>
+    /// <param name="childType">子项实体类型。</param>
+    /// <param name="keyType">父子关联键类型。</param>
+    /// <returns>指定类型组合已有缓存委托时为 true，否则为 false。</returns>
     internal static bool IsCached(Type workbookType, Type parentType, Type childType, Type keyType) =>
         BindInvokers.ContainsKey((workbookType, parentType, childType, keyType));
 
+    /// <summary>
+    /// 为关系类型组合创建泛型绑定委托。
+    /// </summary>
+    /// <param name="key">工作簿、父项、子项和关联键类型组合。</param>
+    /// <returns>绑定到指定类型组合的关系处理委托。</returns>
     private static BindInvoker CreateBindInvoker((Type Workbook, Type Parent, Type Child, Type Key) key)
     {
         var method = typeof(NpoiRelationBinder).GetMethod(nameof(CreateTypedBindInvoker),
@@ -46,6 +63,14 @@ internal static class NpoiRelationBinder
         return (BindInvoker)method.Invoke(null, null)!;
     }
 
+    /// <summary>
+    /// 创建调用具体泛型关系绑定核心方法的委托。
+    /// </summary>
+    /// <typeparam name="TWorkbook">工作簿根实体类型。</typeparam>
+    /// <typeparam name="TParent">父项实体类型。</typeparam>
+    /// <typeparam name="TChild">子项实体类型。</typeparam>
+    /// <typeparam name="TKey">父子关联键类型。</typeparam>
+    /// <returns>调用具体泛型绑定核心方法的委托。</returns>
     private static BindInvoker CreateTypedBindInvoker<TWorkbook, TParent, TChild, TKey>()
         where TWorkbook : class, new()
         where TParent : class

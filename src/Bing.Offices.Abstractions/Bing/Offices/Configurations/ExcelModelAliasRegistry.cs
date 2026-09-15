@@ -14,6 +14,8 @@ public sealed class ExcelModelAliasRegistry
     /// <summary>
     /// 注册一个业务模型别名。
     /// </summary>
+    /// <param name="alias">要注册的业务模型别名。</param>
+    /// <returns>当前别名注册表实例。</returns>
     public ExcelModelAliasRegistry Register(string alias)
     {
         ValidateAlias(alias);
@@ -24,6 +26,10 @@ public sealed class ExcelModelAliasRegistry
     /// <summary>
     /// 注册业务别名及其批准的模型/Profile 身份。
     /// </summary>
+    /// <param name="alias">要注册的业务模型别名。</param>
+    /// <param name="modelType">允许使用该别名的模型类型。</param>
+    /// <param name="profileName">允许使用该别名的 Profile 名称；为 <see langword="null" /> 时不限制 Profile。</param>
+    /// <returns>当前别名注册表实例。</returns>
     public ExcelModelAliasRegistry Register(string alias, Type modelType, string profileName = null)
     {
         ValidateAlias(alias);
@@ -38,6 +44,8 @@ public sealed class ExcelModelAliasRegistry
     /// <summary>
     /// 判断别名是否已注册。
     /// </summary>
+    /// <param name="alias">要查询的业务模型别名。</param>
+    /// <returns>别名已注册时为 <see langword="true" />，否则为 <see langword="false" />。</returns>
     public bool Contains(string alias) => !string.IsNullOrWhiteSpace(alias) && _aliases.ContainsKey(alias);
 
     /// <summary>
@@ -48,6 +56,10 @@ public sealed class ExcelModelAliasRegistry
     /// <summary>
     /// 尝试解析业务别名的批准模型/Profile 身份。
     /// </summary>
+    /// <param name="alias">要解析的业务模型别名。</param>
+    /// <param name="modelType">输出允许使用该别名的模型类型。</param>
+    /// <param name="profileName">输出允许使用该别名的 Profile 名称；未限制时为 <see langword="null" />。</param>
+    /// <returns>找到别名注册项时为 <see langword="true" />，否则为 <see langword="false" />。</returns>
     public bool TryResolve(string alias, out Type modelType, out string profileName)
     {
         modelType = null;
@@ -62,7 +74,7 @@ public sealed class ExcelModelAliasRegistry
     /// <summary>保存单个业务别名关联的可选模型类型和 Profile 名称。</summary>
     private sealed class ExcelModelAliasRegistration
     {
-        /// <summary>创建模型别名注册记录。</summary>
+        /// <summary>初始化一个 <see cref="ExcelModelAliasRegistration" /> 类型的实例。</summary>
         /// <param name="modelType">批准的模型类型；仅注册名称时可为空。</param>
         /// <param name="profileName">批准的 Profile 名称；未限制时可为空。</param>
         internal ExcelModelAliasRegistration(Type modelType, string profileName)
@@ -77,6 +89,8 @@ public sealed class ExcelModelAliasRegistry
         internal string ProfileName { get; }
     }
 
+    /// <summary>验证业务模型别名符合稳定别名格式。</summary>
+    /// <param name="alias">待验证的业务模型别名。</param>
     private static void ValidateAlias(string alias)
     {
         if (string.IsNullOrWhiteSpace(alias))

@@ -12,6 +12,7 @@ public interface ICsvImporter
     /// <param name="source">输入流。调用完成后保持打开。</param>
     /// <param name="options">CSV 导入选项。</param>
     /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>导入得到的实体集合及逐行错误信息。</returns>
     CsvImportResult<T> Import<T>(Stream source, CsvImportOptions<T> options = null,
         CancellationToken cancellationToken = default) where T : class, new();
 

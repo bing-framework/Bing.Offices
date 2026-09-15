@@ -104,6 +104,13 @@ public static class CsvStreamExtensions
         return ImportFromBytesAsyncCore(importer, content, options, cancellationToken);
     }
 
+    /// <summary>通过内存流执行 CSV 字节数组的异步导入。</summary>
+    /// <typeparam name="T">导入实体类型。</typeparam>
+    /// <param name="importer">执行导入的 CSV 导入器。</param>
+    /// <param name="content">CSV 文件内容。</param>
+    /// <param name="options">导入选项。</param>
+    /// <param name="cancellationToken">导入过程中检查的取消令牌。</param>
+    /// <returns>包含实体、错误和截断状态的导入结果。</returns>
     private static async Task<CsvImportResult<T>> ImportFromBytesAsyncCore<T>(ICsvImporter importer, byte[] content,
         CsvImportOptions<T> options, CancellationToken cancellationToken) where T : class, new()
     {

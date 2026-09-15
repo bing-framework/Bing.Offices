@@ -19,5 +19,6 @@ public interface INamedExcelValidationRule
     /// 校验当前单元格值。
     /// </summary>
     /// <param name="context">校验上下文。</param>
+    /// <returns>校验通过时为 <see langword="true"/>，否则为 <see langword="false"/>。</returns>
     bool Validate(ExcelValidationContext context);
 }

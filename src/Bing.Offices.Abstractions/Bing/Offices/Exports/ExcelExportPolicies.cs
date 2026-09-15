@@ -52,19 +52,19 @@ public enum ExcelTemplateCellOverwritePolicy
 /// </summary>
 public sealed class ExcelColumnWidthOptions
 {
-    /// <summary>列宽计算模式。</summary>
+    /// <summary>获取或初始化列宽计算模式；默认值为 <see cref="ExcelColumnWidthMode.None"/>。</summary>
     public ExcelColumnWidthMode Mode { get; init; }
 
-    /// <summary>Fixed 模式宽度。</summary>
+    /// <summary>获取或初始化Fixed 模式使用的固定宽度，单位为 Excel 字符；其他模式不使用此值。</summary>
     public double? FixedWidth { get; init; }
 
-    /// <summary>最小字符宽度。</summary>
+    /// <summary>获取或初始化启用列宽计算时的最小宽度，单位为 Excel 字符；为 null 时不设下限。</summary>
     public double? MinWidth { get; init; }
 
-    /// <summary>最大字符宽度。</summary>
+    /// <summary>获取或初始化启用列宽计算时的最大宽度，单位为 Excel 字符；为 null 时按 255 个字符限制。</summary>
     public double? MaxWidth { get; init; }
 
-    /// <summary>Adaptive 模式最多采样的数据行数。</summary>
+    /// <summary>获取或初始化Adaptive 模式最多采样的数据行数，默认值为 100；其他模式不使用此值。</summary>
     public int SampleRows { get; init; } = 100;
 
     /// <summary>验证列宽配置。</summary>

@@ -6,9 +6,7 @@
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = true, Inherited = false)]
 public sealed class ExcelRegexAttribute : FilterAttributeBase
 {
-    /// <summary>
-    /// 初始化一个<see cref="ExcelRegexAttribute"/>实例。
-    /// </summary>
+    /// <summary>初始化一个 <see cref="ExcelRegexAttribute" /> 类型的实例。</summary>
     /// <param name="pattern">正则表达式。</param>
     public ExcelRegexAttribute(string pattern)
     {

@@ -8,15 +8,11 @@ namespace Bing.Offices.Attributes;
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
 public sealed class ExcelDateAttribute : FilterAttributeBase
 {
-    /// <summary>
-    /// 使用精确日期格式初始化校验特性。
-    /// </summary>
+    /// <summary>初始化一个 <see cref="ExcelDateAttribute" /> 类型的实例。</summary>
     /// <param name="format">日期格式。</param>
     public ExcelDateAttribute(string format) => Format = format;
 
-    /// <summary>
-    /// 使用默认 ISO 日期格式初始化校验特性。
-    /// </summary>
+    /// <summary>初始化一个 <see cref="ExcelDateAttribute" /> 类型的实例。</summary>
     public ExcelDateAttribute()
     {
     }

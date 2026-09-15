@@ -6,9 +6,7 @@
 /// <typeparam name="T">实体类型。</typeparam>
 public sealed class CsvImportResult<T>
 {
-    /// <summary>
-    /// 初始化一个<see cref="CsvImportResult{T}"/>类型的实例。
-    /// </summary>
+    /// <summary>初始化一个 <see cref="CsvImportResult{T}" /> 类型的实例。</summary>
     /// <param name="items">成功导入的实体集合。</param>
     /// <param name="errors">导入错误集合。</param>
     /// <param name="isTruncated">是否因资源限制而提前截断。</param>

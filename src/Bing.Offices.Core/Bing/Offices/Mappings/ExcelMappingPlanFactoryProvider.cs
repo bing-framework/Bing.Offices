@@ -24,6 +24,7 @@ public static class ExcelMappingPlanFactoryProvider
     /// <param name="profileRegistry">可选的方向 Profile 注册表。</param>
     /// <param name="modelAliases">可选的模型别名注册表。</param>
     /// <param name="cacheCapacity">映射计划缓存的最大条目数。</param>
+    /// <returns>使用给定扩展点和缓存容量创建的映射计划工厂。</returns>
     public static IExcelMappingPlanFactory CreateDefault(
         IEnumerable<IExcelValueConverter> valueConverters = null,
         IEnumerable<IExcelValidationRule> validationRules = null,
@@ -38,6 +39,7 @@ public static class ExcelMappingPlanFactoryProvider
     /// 由 Core 注册默认映射计划工厂；已预注册的实现保持优先。
     /// </summary>
     /// <param name="services">服务集合。</param>
+    /// <returns>已注册默认 Core 服务的同一服务集合。</returns>
     public static IServiceCollection RegisterDefault(IServiceCollection services)
     {
         if (services == null)

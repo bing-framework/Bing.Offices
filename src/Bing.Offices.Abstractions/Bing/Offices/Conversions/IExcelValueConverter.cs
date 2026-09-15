@@ -9,6 +9,7 @@ public interface IExcelValueConverter
     /// 判断转换器是否支持指定属性类型。
     /// </summary>
     /// <param name="propertyType">属性类型。</param>
+    /// <returns>支持该属性类型时为 <see langword="true"/>，否则为 <see langword="false"/>。</returns>
     bool CanConvert(Type propertyType);
 
     /// <summary>

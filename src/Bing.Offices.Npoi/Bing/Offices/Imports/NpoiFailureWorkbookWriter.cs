@@ -223,6 +223,10 @@ internal static class NpoiFailureWorkbookWriter
     }
 
     /// <summary>将异步 staging 目标作为唯一序列化目标，避免再创建第二个失败工作簿临时文件。</summary>
+    /// <param name="outputWorkbook">待序列化的失败工作簿。</param>
+    /// <param name="destination">接收序列化内容的目标流。</param>
+    /// <param name="options">失败工作簿输出和大小限制选项。</param>
+    /// <param name="cancellationToken">序列化完成后检查的取消令牌。</param>
     private static void SerializeToDestination(IWorkbook outputWorkbook, Stream destination,
         ExcelImportFailureOptions options, CancellationToken cancellationToken)
     {

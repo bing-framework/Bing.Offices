@@ -114,6 +114,13 @@ public static class ExcelStreamExtensions
         return ImportFromBytesAsyncCore(importer, content, request, cancellationToken);
     }
 
+    /// <summary>通过内存流执行 Excel 字节数组的异步 Workbook 导入。</summary>
+    /// <typeparam name="TWorkbook">Workbook 根实体类型。</typeparam>
+    /// <param name="importer">执行导入的 Excel 导入器。</param>
+    /// <param name="content">Excel 文件内容。</param>
+    /// <param name="request">Workbook 导入请求。</param>
+    /// <param name="cancellationToken">导入过程中检查的取消令牌。</param>
+    /// <returns>包含 Workbook 实例、错误和截断状态的导入结果。</returns>
     private static async Task<ExcelWorkbookImportResult<TWorkbook>> ImportFromBytesAsyncCore<TWorkbook>(
         IExcelImporter importer, byte[] content, ExcelWorkbookImportRequest<TWorkbook> request,
         CancellationToken cancellationToken) where TWorkbook : class, new()

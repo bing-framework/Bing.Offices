@@ -8,6 +8,8 @@ public static class ExcelExport
     /// <summary>
     /// 创建 Workbook 导出请求。
     /// </summary>
+    /// <param name="configure">用于配置 Workbook 导出选项的委托。</param>
+    /// <returns>已完成配置的 Workbook 导出请求。</returns>
     public static ExcelWorkbookExportRequest Workbook(Action<ExcelWorkbookExportBuilder> configure)
     {
         if (configure == null)
@@ -23,15 +25,22 @@ public static class ExcelExport
 /// </summary>
 public sealed class ExcelWorkbookExportBuilder
 {
+    /// <summary>按配置顺序保存待导出的工作表请求。</summary>
     private readonly List<ExcelSheetExportRequest> _sheets = new List<ExcelSheetExportRequest>();
+    /// <summary>导出时使用的模板流；未设置时从空 Workbook 创建。</summary>
     private Stream _template;
+    /// <summary>导出完成后是否保持模板流打开。</summary>
     private bool _leaveTemplateOpen;
+    /// <summary>目标 Excel 文件格式，默认为 Xlsx。</summary>
     private ExcelFormat _format = ExcelFormat.Xlsx;
+    /// <summary>待写入 Workbook 的元数据；未设置时不覆盖元数据。</summary>
     private ExcelWorkbookMetadataOptions _metadata;
 
     /// <summary>
     /// 设置输出格式。
     /// </summary>
+    /// <param name="format">要生成的 Excel 文件格式。</param>
+    /// <returns>当前构建器，用于继续配置 Workbook。</returns>
     public ExcelWorkbookExportBuilder Format(ExcelFormat format)
     {
         _format = format;
@@ -41,6 +50,8 @@ public sealed class ExcelWorkbookExportBuilder
     /// <summary>
     /// 设置 Workbook 元数据。
     /// </summary>
+    /// <param name="metadata">要写入 Workbook 的元数据；不能为 null。</param>
+    /// <returns>当前构建器，用于继续配置 Workbook。</returns>
     public ExcelWorkbookExportBuilder Metadata(ExcelWorkbookMetadataOptions metadata)
     {
         _metadata = metadata ?? throw new ArgumentNullException(nameof(metadata));
@@ -50,6 +61,9 @@ public sealed class ExcelWorkbookExportBuilder
     /// <summary>
     /// 使用已有模板作为 Workbook 来源。
     /// </summary>
+    /// <param name="templateStream">可读取的模板流。</param>
+    /// <param name="leaveOpen">完成导出后是否保持模板流打开。</param>
+    /// <returns>当前构建器，用于继续配置 Workbook。</returns>
     public ExcelWorkbookExportBuilder UseTemplate(Stream templateStream, bool leaveOpen = false)
     {
         if (templateStream == null)
@@ -64,6 +78,11 @@ public sealed class ExcelWorkbookExportBuilder
     /// <summary>
     /// 添加一个强类型 Sheet。
     /// </summary>
+    /// <typeparam name="T">Sheet 数据项类型。</typeparam>
+    /// <param name="name">工作表名称。</param>
+    /// <param name="data">要写入工作表的数据集合。</param>
+    /// <param name="configure">用于配置当前 Sheet 的可选委托。</param>
+    /// <returns>当前构建器，用于继续配置 Workbook。</returns>
     public ExcelWorkbookExportBuilder AddSheet<T>(string name, IEnumerable<T> data,
         Action<ExcelSheetExportBuilder<T>> configure = null) where T : class, new()
     {
@@ -76,8 +95,16 @@ public sealed class ExcelWorkbookExportBuilder
     }
 
     /// <summary>
-    /// 添加导航集合 Sheet。该方法等价于一次 SelectMany 后的强类型 AddSheet。
+    /// 添加导航集合 Sheet。
     /// </summary>
+    /// <remarks>该方法等价于一次 SelectMany 后的强类型 AddSheet。</remarks>
+    /// <typeparam name="TParent">父实体类型。</typeparam>
+    /// <typeparam name="TChild">导航集合中的子实体类型。</typeparam>
+    /// <param name="name">工作表名称。</param>
+    /// <param name="parents">父实体集合。</param>
+    /// <param name="navigation">从父实体获取子实体集合的函数。</param>
+    /// <param name="configure">用于配置当前 Sheet 的可选委托。</param>
+    /// <returns>当前构建器，用于继续配置 Workbook。</returns>
     public ExcelWorkbookExportBuilder AddNavigationSheet<TParent, TChild>(string name, IEnumerable<TParent> parents,
         Func<TParent, IEnumerable<TChild>> navigation,
         Action<ExcelSheetExportBuilder<TChild>> configure = null)
@@ -92,6 +119,8 @@ public sealed class ExcelWorkbookExportBuilder
         return AddSheet(name, data, configure);
     }
 
+    /// <summary>验证并生成不可变 Workbook 导出请求。</summary>
+    /// <returns>已完成校验的 Workbook 导出请求。</returns>
     internal ExcelWorkbookExportRequest Build()
     {
         if (_sheets.Count == 0)

@@ -1,7 +1,11 @@
 ﻿namespace Bing.Offices.Configurations;
 
+/// <summary>复制映射文档及其方向配置的内部辅助类。</summary>
 internal static class MappingDocumentCloner
 {
+    /// <summary>复制映射文档及其方向配置。</summary>
+    /// <param name="document">待复制的映射文档。</param>
+    /// <returns>映射文档的独立副本；输入为 <see langword="null" /> 时返回 <see langword="null" />。</returns>
     internal static ExcelMappingDocument Clone(ExcelMappingDocument document)
     {
         if (document == null)
