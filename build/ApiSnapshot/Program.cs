@@ -60,7 +60,8 @@ foreach (var tfm in targetFrameworks)
     {
         Path.Combine(root, "netstandard2.0", "Bing.Offices.Abstractions.dll"),
         Path.Combine(root, "netstandard2.0", "Bing.Offices.Core.dll"),
-        Path.Combine(root, tfm, "Bing.Offices.Npoi.dll")
+        Path.Combine(root, tfm, "Bing.Offices.Npoi.dll"),
+        Path.Combine(root, tfm, "Bing.Offices.MiniExcel.dll")
     };
     if (paths.Any(path => !File.Exists(path)))
     {
@@ -177,7 +178,11 @@ static Dictionary<string, string> GetCandidateAssemblyPaths(string root) =>
         ["net6.0/Bing.Offices.Npoi.dll"] =
             Path.Combine(root, "net6.0", "Bing.Offices.Npoi.dll"),
         ["net8.0/Bing.Offices.Npoi.dll"] =
-            Path.Combine(root, "net8.0", "Bing.Offices.Npoi.dll")
+            Path.Combine(root, "net8.0", "Bing.Offices.Npoi.dll"),
+        ["net6.0/Bing.Offices.MiniExcel.dll"] =
+            Path.Combine(root, "net6.0", "Bing.Offices.MiniExcel.dll"),
+        ["net8.0/Bing.Offices.MiniExcel.dll"] =
+            Path.Combine(root, "net8.0", "Bing.Offices.MiniExcel.dll")
     };
 
 public sealed class ApiBaselineDocument
@@ -226,7 +231,8 @@ internal static class CandidateIdentityVerifier
     {
         "Bing.Offices.Abstractions",
         "Bing.Offices.Core",
-        "Bing.Offices.Npoi"
+        "Bing.Offices.Npoi",
+        "Bing.Offices.MiniExcel"
     };
 
     private static readonly string[] CandidateSourceScope =
@@ -289,7 +295,7 @@ internal static class CandidateIdentityVerifier
         }
 
         if (!string.IsNullOrWhiteSpace(packagesRoot))
-            identity.NupkgFiles = CaptureNupkgFiles(packagesRoot, identity.AssemblyFiles, failures);
+            identity.NupkgFiles = CaptureNupkgFiles(packagesRoot, identity.AssemblyFiles, assemblyPaths, failures);
 
         return identity;
     }
@@ -326,7 +332,7 @@ internal static class CandidateIdentityVerifier
             failures.Add($"candidate identity source manifest verification failed: {sourceError}");
 
         var actualAssemblyFiles = ValidateAssemblyFiles(identity.AssemblyFiles, assemblyPaths, failures);
-        ValidateNupkgFiles(identity.NupkgFiles, packagesRoot, actualAssemblyFiles, failures);
+        ValidateNupkgFiles(identity.NupkgFiles, packagesRoot, actualAssemblyFiles, assemblyPaths, failures);
         ValidateApprovalFile(identity, repositoryRoot, failures);
     }
 
@@ -362,11 +368,12 @@ internal static class CandidateIdentityVerifier
         IReadOnlyDictionary<string, string>? recordedFiles,
         string? packagesRoot,
         IReadOnlyDictionary<string, string> assemblyFiles,
+        IReadOnlyDictionary<string, string> assemblyPaths,
         List<string> failures)
     {
         var recorded = NormalizeHashMap(recordedFiles, "nupkg", failures);
         if (recorded.Count < RequiredPackageIds.Length)
-            failures.Add("candidate identity must contain hashes for the three production nupkg files");
+            failures.Add("candidate identity must contain hashes for the four production nupkg files");
         if (string.IsNullOrWhiteSpace(packagesRoot))
         {
             failures.Add("nupkg hash verification requires --packages <directory>");
@@ -405,11 +412,11 @@ internal static class CandidateIdentityVerifier
 
             try
             {
-                var actualHash = ComputePackageIdentityHash(packagePath, assemblyFiles);
+                var actualHash = ComputePackageIdentityHash(packagePath, assemblyFiles, assemblyPaths);
                 ValidateHash($"nupkg {pair.Key}", pair.Value, actualHash, failures);
             }
             catch (Exception exception) when (exception is IOException or InvalidDataException or XmlException
-                or UnauthorizedAccessException or BadImageFormatException or InvalidOperationException)
+                or UnauthorizedAccessException or BadImageFormatException or FileLoadException or InvalidOperationException)
             {
                 failures.Add($"nupkg {pair.Key} could not be canonicalized: {packagePath}; {exception.Message}");
             }
@@ -457,7 +464,8 @@ internal static class CandidateIdentityVerifier
     }
 
     private static Dictionary<string, string> CaptureNupkgFiles(string packagesRoot,
-        IReadOnlyDictionary<string, string> assemblyFiles, List<string> failures)
+        IReadOnlyDictionary<string, string> assemblyFiles,
+        IReadOnlyDictionary<string, string> assemblyPaths, List<string> failures)
     {
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
         var fullRoot = Path.GetFullPath(packagesRoot);
@@ -482,10 +490,10 @@ internal static class CandidateIdentityVerifier
             var relativePath = NormalizeRelativePath(Path.GetRelativePath(fullRoot, matches[0]));
             try
             {
-                result[relativePath] = ComputePackageIdentityHash(matches[0], assemblyFiles);
+                result[relativePath] = ComputePackageIdentityHash(matches[0], assemblyFiles, assemblyPaths);
             }
             catch (Exception exception) when (exception is IOException or InvalidDataException or XmlException
-                or UnauthorizedAccessException or BadImageFormatException or InvalidOperationException)
+                or UnauthorizedAccessException or BadImageFormatException or FileLoadException or InvalidOperationException)
             {
                 failures.Add($"capture: nupkg could not be canonicalized: {matches[0]}; {exception.Message}");
             }
@@ -541,7 +549,8 @@ internal static class CandidateIdentityVerifier
     }
 
     private static string ComputePackageIdentityHash(string packagePath,
-        IReadOnlyDictionary<string, string> assemblyFiles)
+        IReadOnlyDictionary<string, string> assemblyFiles,
+        IReadOnlyDictionary<string, string> assemblyPaths)
     {
         using var archive = ZipFile.OpenRead(packagePath);
         var entries = new List<string>();
@@ -554,14 +563,15 @@ internal static class CandidateIdentityVerifier
                     StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            entries.Add($"{relativePath}|{ComputePackageEntryIdentityHash(entry, relativePath, assemblyFiles)}");
+            entries.Add($"{relativePath}|{ComputePackageEntryIdentityHash(entry, relativePath, assemblyFiles, assemblyPaths)}");
         }
 
         return ComputeUtf8Sha256("bing.offices.nupkg-identity.v1\n" + string.Join("\n", entries));
     }
 
     private static string ComputePackageEntryIdentityHash(ZipArchiveEntry entry, string relativePath,
-        IReadOnlyDictionary<string, string> assemblyFiles)
+        IReadOnlyDictionary<string, string> assemblyFiles,
+        IReadOnlyDictionary<string, string> assemblyPaths)
     {
         if (relativePath.StartsWith("lib/", StringComparison.OrdinalIgnoreCase)
             && relativePath.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
@@ -570,7 +580,29 @@ internal static class CandidateIdentityVerifier
             if (!assemblyFiles.TryGetValue(assemblyPath, out var assemblyHash))
                 throw new InvalidOperationException(
                     $"package assembly does not match a required Release assembly: {relativePath}");
-            return "assembly:" + assemblyHash;
+            // 包内 DLL 必须独立读取和校验，不能只凭资产路径复用 Release 身份。
+            var temporaryDirectory = Path.Combine(Path.GetTempPath(), $"bing-offices-package-dll-{Guid.NewGuid():N}");
+            Directory.CreateDirectory(temporaryDirectory);
+            try
+            {
+                var extractedPath = Path.Combine(temporaryDirectory, Path.GetFileName(assemblyPath));
+                using (var input = entry.Open())
+                using (var output = File.Create(extractedPath))
+                    input.CopyTo(output);
+                var dependencies = assemblyPaths.Values
+                    .Select(Path.GetDirectoryName)
+                    .Where(directory => directory is not null && Directory.Exists(directory))
+                    .SelectMany(directory => Directory.EnumerateFiles(directory!, "*.dll"));
+                var actualHash = ComputeAssemblyIdentityHash(extractedPath, dependencies);
+                if (!string.Equals(actualHash, assemblyHash, StringComparison.Ordinal))
+                    throw new InvalidOperationException(
+                        $"package assembly identity does not match the required Release assembly: {relativePath}");
+                return "assembly:" + actualHash;
+            }
+            finally
+            {
+                Directory.Delete(temporaryDirectory, recursive: true);
+            }
         }
 
         using var stream = entry.Open();

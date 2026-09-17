@@ -4,11 +4,15 @@ using Bing.Offices.Csv;
 using Bing.Offices.Exports;
 using Bing.Offices.Extensions;
 using Bing.Offices.Imports;
+using Bing.Offices.MiniExcel.Extensions;
 using Bing.Offices.Npoi.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using NPOI.XSSF.UserModel;
 
 var directory = Path.Combine(Path.GetTempPath(), "Bing.Offices.Consumer", Guid.NewGuid().ToString("N"));
+var packageVersion = Environment.GetEnvironmentVariable("BING_OFFICES_PACKAGE_VERSION");
+if (string.IsNullOrWhiteSpace(packageVersion))
+    throw new InvalidOperationException("BING_OFFICES_PACKAGE_VERSION must identify the packages under test.");
 Directory.CreateDirectory(directory);
 
 try
@@ -64,6 +68,14 @@ try
     var directBytes = await directExporter.ExportToBytesAsync(workbookRequest);
     var directResult = await directImporter.ImportFromBytesAsync(directBytes, importRequest);
 
+    using var miniProvider = new ServiceCollection()
+        .AddBingOfficesMiniExcel()
+        .BuildServiceProvider();
+    var miniExporter = miniProvider.GetRequiredService<IExcelExporter>();
+    var miniImporter = miniProvider.GetRequiredService<IExcelImporter>();
+    var miniBytes = await ExcelStreamExtensions.ExportToBytesAsync(miniExporter, workbookRequest);
+    var miniResult = await ExcelStreamExtensions.ImportFromBytesAsync(miniImporter, miniBytes, importRequest);
+
     using var extensionWorkbook = new XSSFWorkbook();
     var extensionSheet = extensionWorkbook.CreateSheet("Extensions");
     extensionSheet.CreateRow(0).Value(0, "extension");
@@ -78,11 +90,13 @@ try
         "Excel file sync/async verification failed.");
     Ensure(directResult.Workbook.Rows.Count == 1 && directBytes.Length > 0,
         "Direct NPOI provider verification failed.");
+    Ensure(miniResult.Workbook.Rows.Count == 1 && miniBytes.Length > 0,
+        "MiniExcel provider verification failed.");
     Ensure(extensionWorkbook.GetExcelFormat() == ExcelFormat.Xlsx
         && extensionSheet.GetRow(0).GetCell(0).GetStringValue() == "extension",
         "NPOI extension verification failed.");
 
-    Console.WriteLine($"package-consumer-ok tfm={System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription} package=Bing.Offices.Npoi/{Environment.GetEnvironmentVariable("BING_OFFICES_PACKAGE_VERSION") ?? "2.0.0"} csvBytes={csvAsyncBytes.Length} excelBytes={excelAsyncBytes.Length} npoiExtensions=ok");
+    Console.WriteLine($"package-consumer-ok tfm={System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription} packages=Bing.Offices.Npoi+Bing.Offices.MiniExcel/{packageVersion} csvBytes={csvAsyncBytes.Length} excelBytes={excelAsyncBytes.Length} miniExcelBytes={miniBytes.Length} npoiExtensions=ok");
 }
 finally
 {

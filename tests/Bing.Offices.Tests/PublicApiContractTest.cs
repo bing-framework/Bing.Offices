@@ -190,6 +190,9 @@ public class PublicApiContractTest
             ["Bing.Offices.Npoi:Bing.Offices.Npoi.Extensions.FontExtensions"] = "Provider User API",
             ["Bing.Offices.Npoi:Bing.Offices.Exports.NpoiExcelExporter"] = "Provider User API",
             ["Bing.Offices.Npoi:Bing.Offices.Imports.NpoiExcelImporter"] = "Provider User API",
+            ["Bing.Offices.MiniExcel:Bing.Offices.Exports.MiniExcelExcelExporter"] = "Provider User API",
+            ["Bing.Offices.MiniExcel:Bing.Offices.Imports.MiniExcelExcelImporter"] = "Provider User API",
+            ["Bing.Offices.MiniExcel:Bing.Offices.MiniExcel.Extensions.ExcelMiniExcelServiceCollectionExtensions"] = "User API",
         };
 
     private static readonly IReadOnlyDictionary<string, ApiMemberGovernancePolicy> ApiMemberGovernancePolicies =
@@ -421,13 +424,17 @@ public class PublicApiContractTest
             "Bing.Offices.Npoi:Bing.Offices.Npoi.Extensions.WorkbookExtensions",
             "Bing.Offices.Npoi:Bing.Offices.Exports.NpoiExcelExporter",
             "Bing.Offices.Npoi:Bing.Offices.Imports.NpoiExcelImporter",
+            "Bing.Offices.MiniExcel:Bing.Offices.Exports.MiniExcelExcelExporter",
+            "Bing.Offices.MiniExcel:Bing.Offices.Imports.MiniExcelExcelImporter",
+            "Bing.Offices.MiniExcel:Bing.Offices.MiniExcel.Extensions.ExcelMiniExcelServiceCollectionExtensions",
             "Bing.Offices.Core:Bing.Offices.Extensions.MappingProfileServiceCollectionExtensions"
         };
         var assemblies = new[]
         {
             typeof(IExcelImporter).Assembly,
             typeof(ExcelMappingConfigurationLoader).Assembly,
-            typeof(NpoiExcelImporter).Assembly
+            typeof(NpoiExcelImporter).Assembly,
+            typeof(MiniExcelExcelImporter).Assembly
         };
 
         // Act
@@ -486,7 +493,8 @@ public class PublicApiContractTest
         {
             typeof(IExcelImporter).Assembly,
             typeof(ExcelMappingConfigurationLoader).Assembly,
-            typeof(NpoiExcelImporter).Assembly
+            typeof(NpoiExcelImporter).Assembly,
+            typeof(MiniExcelExcelImporter).Assembly
         };
 
         // Act
@@ -535,7 +543,7 @@ public class PublicApiContractTest
     }
 
     /// <summary>
-    /// 测试 - 发布程序集不得包含指向 Core/NPOI 的生产 InternalsVisibleTo，仅允许测试友元。
+    /// 测试 - 发布程序集之间不得通过生产 InternalsVisibleTo 共享实现；测试友元可按需保留。
     /// </summary>
     [Fact]
     public void PublicApi_ProductionAssemblies_ShouldNotExposeProductionFriendAssemblies()
@@ -545,7 +553,8 @@ public class PublicApiContractTest
         {
             typeof(IExcelImporter).Assembly,
             typeof(ExcelMappingConfigurationLoader).Assembly,
-            typeof(NpoiExcelImporter).Assembly
+            typeof(NpoiExcelImporter).Assembly,
+            typeof(MiniExcelExcelImporter).Assembly
         };
 
         // Act
@@ -661,7 +670,7 @@ public class PublicApiContractTest
     }
 
     /// <summary>
-    /// 测试 - Abstractions、Core 和 NPOI 程序集的全部公开成员应匹配批准快照。
+    /// 测试 - Abstractions、Core、NPOI 和 MiniExcel 程序集的全部公开成员应匹配批准快照。
     /// </summary>
     [Fact]
     public void PublicApi_AllReleaseAssemblies_ShouldMatchMemberSnapshot()
@@ -695,7 +704,9 @@ public class PublicApiContractTest
             [typeof(ExcelMappingConfigurationLoader).Assembly.GetName().Name!] =
                 Path.Combine(releaseRoot, "netstandard2.0", "Bing.Offices.Core.dll"),
             [typeof(NpoiExcelImporter).Assembly.GetName().Name!] =
-                Path.Combine(releaseRoot, expectedTfm, "Bing.Offices.Npoi.dll")
+                Path.Combine(releaseRoot, expectedTfm, "Bing.Offices.Npoi.dll"),
+            [typeof(MiniExcelExcelImporter).Assembly.GetName().Name!] =
+                Path.Combine(releaseRoot, expectedTfm, "Bing.Offices.MiniExcel.dll")
         };
 
         Assert.True(root.GetProperty("assemblies").TryGetProperty(expectedTfm, out var expected),

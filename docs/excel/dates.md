@@ -4,6 +4,8 @@ Excel 与 CSV 共用确定性日期解析合同。默认文本格式是 `yyyy-MM
 
 Excel 数值日期、公式缓存日期和文本日期按实际 CellKind 处理。工作簿的 1900/1904 date windowing 会传入解析器；nullable、空白和非法日期仍按列校验与错误收集策略处理。
 
+MiniExcel 在 XLSX 解析前读取 `xl/workbook.xml` 的 `workbookPr/@date1904`，并把标志传入同一解析合同；真实 ZIP fixture 已验证标志读取和流位置恢复。适配层同时从 worksheet XML 保留日期单元格的原始 numeric serial，再交由 Core 统一处理 1900/1904 边界和负数线性语义；只有非 numeric 文本或无法使用 serial 的原生值才走文本/原生日期路径。
+
 `DateTimeOffset` 默认以 invariant ISO round-trip (`O`) 文本导出到 Excel 和 CSV，从而保留值与 offset，不依赖本机时区。带显式 offset 的 ISO 文本可直接导入。无 offset 文本或 `DateTime` 不能隐式转换为 `DateTimeOffset`；调用方必须选择 `ExcelDateOffsetPolicy.UseFixedOffset` 并设置 `OffsetMinutes`。默认策略 `RequireExplicitOffset` 会拒绝缺少 offset 的值。
 
 跨时区部署不改变上述结果。本项目的专项测试分别在 `TZ=UTC` 与 `TZ=Pacific Standard Time` 下执行 XLS、XLSX 和 CSV 往返，并断言相同值和 offset。

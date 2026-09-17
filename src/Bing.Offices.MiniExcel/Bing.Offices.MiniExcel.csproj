@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>Bing.Offices.MiniExcel</AssemblyName>
+    <PackageId>Bing.Offices.MiniExcel</PackageId>
+    <Description>Bing.Offices 的 MiniExcel Provider。</Description>
+  </PropertyGroup>
+
+  <Import Project="..\..\framework.props" />
+
+  <PropertyGroup>
+    <PackageTags>bing;dotnetcore;aspnetcore;excel;</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Bing.Offices.Core\Bing.Offices.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Bing.Offices.Core\Bing\Offices\IO\ExcelXlsxZipPreflight.cs"
+             Link="Bing\Offices\Internals\ExcelXlsxZipPreflight.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MiniExcel" Version="$(MiniExcelPackageVersion)" />
+  </ItemGroup>
+
+  <ItemGroup Condition=" '$(TargetFramework)' == 'net6.0' ">
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="6.0.0" />
+  </ItemGroup>
+
+  <ItemGroup Condition=" '$(TargetFramework)' == 'net8.0' ">
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.0" />
+  </ItemGroup>
+</Project>

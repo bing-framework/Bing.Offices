@@ -413,7 +413,8 @@ public sealed class AsyncPipelineTest
         var exporter = new Bing.Offices.Exports.NpoiExcelExporter(exceptionObservers: new[] { observer });
         var request = ExcelExport.Workbook(workbook => workbook.AddSheet("Sheet1",
             new[] { new ExcelRow { Code = "A", Count = 1 } }));
-        var targetDirectory = Path.GetTempPath();
+        var targetDirectory = Path.Combine(Path.GetTempPath(), "Bing.Offices.MissingParent",
+            Guid.NewGuid().ToString("N"), "target.xlsx");
 
         var exception = await Assert.ThrowsAsync<BingOfficesFileCommitException>(() =>
             exporter.ExportToFileAsync(request, targetDirectory));

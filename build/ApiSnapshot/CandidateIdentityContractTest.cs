@@ -47,7 +47,11 @@ internal static class CandidateIdentityContractTest
                 ["net6.0/Bing.Offices.Npoi.dll"] =
                     Path.Combine(assemblyRoot, "net6.0", "Bing.Offices.Npoi.dll"),
                 ["net8.0/Bing.Offices.Npoi.dll"] =
-                    Path.Combine(assemblyRoot, "net8.0", "Bing.Offices.Npoi.dll")
+                    Path.Combine(assemblyRoot, "net8.0", "Bing.Offices.Npoi.dll"),
+                ["net6.0/Bing.Offices.MiniExcel.dll"] =
+                    Path.Combine(assemblyRoot, "net6.0", "Bing.Offices.MiniExcel.dll"),
+                ["net8.0/Bing.Offices.MiniExcel.dll"] =
+                    Path.Combine(assemblyRoot, "net8.0", "Bing.Offices.MiniExcel.dll")
             };
             var managedAssemblyPath = typeof(CandidateIdentityContractTest).Assembly.Location;
             foreach (var path in assemblyPaths.Values)
@@ -58,7 +62,8 @@ internal static class CandidateIdentityContractTest
             {
                 "Bing.Offices.Abstractions.2.0.0.nupkg",
                 "Bing.Offices.Core.2.0.0.nupkg",
-                "Bing.Offices.Npoi.2.0.0.nupkg"
+                "Bing.Offices.Npoi.2.0.0.nupkg",
+                "Bing.Offices.MiniExcel.2.0.0.nupkg"
             };
             foreach (var packageName in packageNames)
                 CreatePackage(Path.Combine(packageRoot, packageName), packageName, assemblyPaths);
@@ -126,6 +131,27 @@ internal static class CandidateIdentityContractTest
                     assemblyPaths, usePlatformXmlFormatting: true);
             AssertNoFailures("equivalent XML package validation",
                 Validate(baseline, assemblyPaths, equivalentXmlPackageRoot, repository));
+
+            var dllScenarios = new (string Name, byte[]? Content, string? ReplacementPath)[]
+            {
+                ("corrupt", Utf8("not a managed DLL"), null),
+                ("missing", null, null),
+                ("wrong managed assembly", File.ReadAllBytes(typeof(ZipArchive).Assembly.Location), null),
+                ("wrong TFM", File.ReadAllBytes(managedAssemblyPath), "lib/net9.0/Bing.Offices.MiniExcel.dll")
+            };
+            foreach (var scenario in dllScenarios)
+            {
+                var scenarioRoot = Path.Combine(temporaryRoot, scenario.Name + "-dll-packages");
+                foreach (var packageName in packageNames)
+                    CopyFile(Path.Combine(packageRoot, packageName), Path.Combine(scenarioRoot, packageName));
+                var changedPackage = Path.Combine(scenarioRoot, packageNames[3]);
+                ReplacePackageDll(changedPackage, "lib/net8.0/Bing.Offices.MiniExcel.dll", scenario.Content,
+                    scenario.ReplacementPath);
+                var scenarioFailures = Validate(baseline, assemblyPaths, scenarioRoot, repository);
+                if (!scenarioFailures.Any(failure => failure.Contains("nupkg " + packageNames[3], StringComparison.Ordinal)))
+                    throw new InvalidOperationException($"{scenario.Name} package DLL did not fail package identity verification.");
+                Console.WriteLine($"Package DLL identity scenario rejected as expected: {scenario.Name}");
+            }
 
             var tamperedXmlPackageRoot = Path.Combine(repository, "tampered-xml-packages");
             foreach (var packageName in packageNames)
@@ -360,6 +386,20 @@ internal static class CandidateIdentityContractTest
         }
     }
 
+    private static void ReplacePackageDll(string packagePath, string assetPath, byte[]? content,
+        string? replacementPath = null)
+    {
+        using var archive = ZipFile.Open(packagePath, ZipArchiveMode.Update);
+        var existing = archive.GetEntry(assetPath)
+            ?? throw new InvalidOperationException($"Fixture DLL is missing: {assetPath}");
+        existing.Delete();
+        if (content is null)
+            return;
+        var replacement = archive.CreateEntry(replacementPath ?? assetPath);
+        using var output = replacement.Open();
+        output.Write(content, 0, content.Length);
+    }
+
     private static IReadOnlyDictionary<string, string> GetPackageAssets(string packageName,
         IReadOnlyDictionary<string, string> assemblyPaths)
     {
@@ -374,6 +414,14 @@ internal static class CandidateIdentityContractTest
             {
                 ["netstandard2.0/Bing.Offices.Core.dll"] =
                     assemblyPaths["netstandard2.0/Bing.Offices.Core.dll"]
+            };
+        if (packageName.StartsWith("Bing.Offices.MiniExcel.", StringComparison.Ordinal))
+            return new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["net6.0/Bing.Offices.MiniExcel.dll"] =
+                    assemblyPaths["net6.0/Bing.Offices.MiniExcel.dll"],
+                ["net8.0/Bing.Offices.MiniExcel.dll"] =
+                    assemblyPaths["net8.0/Bing.Offices.MiniExcel.dll"]
             };
 
         return new Dictionary<string, string>(StringComparer.Ordinal)

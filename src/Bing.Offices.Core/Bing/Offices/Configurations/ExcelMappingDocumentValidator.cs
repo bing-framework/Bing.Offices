@@ -326,17 +326,20 @@ internal static class ExcelMappingDocumentValidator
                 ? new[] { "sourceKind", "profile", "modelAlias", "columns", "dynamicColumns", "dynamicColumnKeysToRemove", "dynamicColumnMergeMode", "style", "layout", "clearDynamicColumns", "resetStyle", "resetLayout" }
                 : path.EndsWith(".dynamicColumns", StringComparison.Ordinal)
                     ? new[] { "key", "title", "aliases", "dataTypeName", "order", "converterName", "validatorName", "validationRuleNames", "validationRules", "numberFormat", "columnIndex", "placementKey", "imageMultiplicity" }
-                    : path.EndsWith(".validationRules", StringComparison.Ordinal) || path.Contains(".validationRules[", StringComparison.Ordinal)
+                    : path.EndsWith(".validationRules", StringComparison.Ordinal)
+                        || path.IndexOf(".validationRules[", StringComparison.Ordinal) >= 0
                         ? new[] { "name", "pattern", "format", "cultureName", "min", "max", "maxValue", "maxLength", "ignoreEmpty" }
-                        : path.Contains(".dynamicColumns[", StringComparison.Ordinal)
+                        : path.IndexOf(".dynamicColumns[", StringComparison.Ordinal) >= 0
                             ? new[] { "key", "title", "aliases", "dataTypeName", "order", "converterName", "validatorName", "validationRuleNames", "validationRules", "numberFormat", "columnIndex", "placementKey", "imageMultiplicity" }
                             : path.EndsWith(".style", StringComparison.Ordinal)
                                 ? new[] { "headerStyleKey", "clearHeaderStyleKey", "bodyStyleKey", "clearBodyStyleKey", "numberFormat", "clearNumberFormat" }
                                 : path.EndsWith(".layout", StringComparison.Ordinal)
                                     ? new[] { "columnIndex", "resetColumnIndex", "placementKey", "clearPlacementKey" }
-                                    : path.EndsWith(".valueMappings", StringComparison.Ordinal) || path.Contains(".valueMappings[", StringComparison.Ordinal)
+                                    : path.EndsWith(".valueMappings", StringComparison.Ordinal)
+                                        || path.IndexOf(".valueMappings[", StringComparison.Ordinal) >= 0
                                         ? new[] { "text", "value" }
-                                        : path.EndsWith(".columns", StringComparison.Ordinal) || path.Contains(".columns[", StringComparison.Ordinal)
+                                        : path.EndsWith(".columns", StringComparison.Ordinal)
+                                            || path.IndexOf(".columns[", StringComparison.Ordinal) >= 0
                                             ? new[] { "propertyName", "title", "clearTitle", "aliases", "clearAliases", "columnIndex", "resetColumnIndex", "ignored", "resetIgnored", "formatter", "clearFormatter", "decimalScale", "resetDecimalScale", "converterName", "clearConverterName", "importWhitespace", "resetImportWhitespace", "validationRuleNames", "validationRuleNamesToRemove", "clearValidationRules", "validationRuleMergeMode", "valueMappings", "clearValueMappings", "valueMappingMergeMode", "imageMultiplicity", "resetImageMultiplicity" }
                                             : Array.Empty<string>();
         return names.Any(name => string.Equals(name, propertyName, StringComparison.OrdinalIgnoreCase));

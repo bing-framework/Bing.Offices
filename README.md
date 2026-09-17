@@ -6,10 +6,11 @@ Bing.Offices是Bing应用框架的 Excel 导入导出类库。
 
 ## Runtime 与异步边界
 
-- `Bing.Offices.Npoi`、Unit Tests 和 Integration Tests 支持 `.NET 6` 与 `.NET 8`；Abstractions/Core 继续提供 `netstandard2.0` 资产。
+- `Bing.Offices.Npoi`、`Bing.Offices.MiniExcel`、Unit Tests 和 Integration Tests 支持 `.NET 6` 与 `.NET 8`；Abstractions/Core 继续提供 `netstandard2.0` 资产。
 - Excel 和 CSV 同时提供 Sync 与 Async API。CSV 的 Reader/Writer、Excel 的文件/Stream 复制和文件 flush 使用真实异步 IO，并继续传递 `CancellationToken`。
 - NPOI `WorkbookFactory.Create`、Workbook DOM 操作和 `workbook.Write` 没有异步 API，因此 Excel Async 不承诺 DOM 阶段完全异步，也不使用 `Task.Run` 伪装异步。
 - NPOI-specific 扩展位于 `Bing.Offices.Npoi.Extensions`；provider-neutral 文件/字节扩展位于 `Bing.Offices.Extensions`。
+- MiniExcel-specific 扩展位于 `Bing.Offices.MiniExcel.Extensions`；应用启动时选择一个 Excel Provider，业务代码继续依赖 `IExcelImporter`/`IExcelExporter`。
 
 ## Nuget Packages
 |Nuget|版本号|说明|
@@ -17,20 +18,24 @@ Bing.Offices是Bing应用框架的 Excel 导入导出类库。
 |Bing.Offices.Abstractions|[![NuGet Badge](https://buildstats.info/nuget/Bing.Offices.Abstractions?includePreReleases=true)](https://www.nuget.org/packages/Bing.Offices.Abstractions)|
 |Bing.Offices.Core|[![NuGet Badge](https://buildstats.info/nuget/Bing.Offices.Core?includePreReleases=true)](https://www.nuget.org/packages/Bing.Offices.Core)|
 |Bing.Offices.Npoi|[![NuGet Badge](https://buildstats.info/nuget/Bing.Offices.Npoi?includePreReleases=true)](https://www.nuget.org/packages/Bing.Offices.Npoi)|
+|Bing.Offices.MiniExcel|独立的 XLSX 流式 Provider；发布后按版本选择使用|
 
 ## 实现功能
 - Excel 导入
 - Excel 导出
 - Workbook Request 异构多 Sheet、动态列、模板、样式和结构化错误
 - XLSX 柱状图、折线图和饼图
+- MiniExcel Provider 的常规 XLSX 导入导出；100K 行受控探针已验证，500K/1M 和生产机器峰值仍为 `NOT_VERIFIED`
 
 ## Excel 文档
 
 - [高级 Excel 导入导出](docs/excel/README.md)
+- [Excel Provider 能力与边界](docs/excel/09-providers.md)
 
 ## 依赖类库
 - [Bing.Utils](https://github.com/bing-framework/Bing.NetCore)
 - [NPOI](https://github.com/tonyqus/npoi)
+- [MiniExcel](https://github.com/mini-software/MiniExcel)
 
 ## Demo
 

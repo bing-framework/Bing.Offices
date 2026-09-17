@@ -116,6 +116,53 @@ public sealed class ExcelDateParserTest
     }
 
     /// <summary>
+    /// 测试 - 固定 offset 超出 DateTimeOffset 合法范围时应报告解析失败。
+    /// </summary>
+    [Fact]
+    public void TryParse_DateTimeOffset_ShouldRejectInvalidFixedOffset()
+    {
+        var attribute = new ExcelDateAttribute
+        {
+            OffsetPolicy = ExcelDateOffsetPolicy.UseFixedOffset,
+            OffsetMinutes = 15 * 60
+        };
+
+        var result = ExcelDateParser.TryParse(
+            new ExcelCellValue(1d, "1", ExcelCellKind.Number), "1", typeof(DateTimeOffset),
+            CultureInfo.InvariantCulture, attribute, out _);
+
+        Assert.False(result);
+    }
+
+    /// <summary>
+    /// 测试 - nullable DateTimeOffset 仍遵守显式与固定 offset 合同。
+    /// </summary>
+    [Fact]
+    public void TryParse_NullableDateTimeOffset_ShouldHonorOffsetPolicy()
+    {
+        var native = new ExcelCellValue(
+            new DateTime(2026, 9, 4, 12, 30, 0, DateTimeKind.Local),
+            "native", ExcelCellKind.DateTime);
+        var fixedAttribute = new ExcelDateAttribute
+        {
+            OffsetPolicy = ExcelDateOffsetPolicy.UseFixedOffset,
+            OffsetMinutes = 480
+        };
+
+        var fixedResult = ExcelDateParser.TryParse(native, native.Text, typeof(DateTimeOffset?),
+            CultureInfo.InvariantCulture, fixedAttribute, out var fixedValue);
+        var explicitText = "2026-09-04T12:30:00+08:00";
+        var explicitResult = ExcelDateParser.TryParse(
+            new ExcelCellValue(explicitText, explicitText, ExcelCellKind.Text), explicitText,
+            typeof(DateTimeOffset?), CultureInfo.InvariantCulture, null, out var explicitValue);
+
+        Assert.True(fixedResult);
+        Assert.Equal(TimeSpan.FromHours(8), ((DateTimeOffset)fixedValue).Offset);
+        Assert.True(explicitResult);
+        Assert.Equal(TimeSpan.FromHours(8), ((DateTimeOffset)explicitValue).Offset);
+    }
+
+    /// <summary>
     /// 测试 - 原生日期值应优先于显示文本，且 serial 应区分 1900 与 1904 日期系统。
     /// </summary>
     [Fact]
@@ -134,6 +181,15 @@ public sealed class ExcelDateParserTest
             CultureInfo.InvariantCulture, null, out var value1900);
         var serial1904Result = ExcelDateParser.TryParse(serial1904, serial1904.Text, typeof(DateTime),
             CultureInfo.InvariantCulture, null, out var value1904);
+        var serialOffsetRejected = ExcelDateParser.TryParse(serial1904, serial1904.Text,
+            typeof(DateTimeOffset), CultureInfo.InvariantCulture, null, out _);
+        var fixedOffsetAttribute = new ExcelDateAttribute
+        {
+            OffsetPolicy = ExcelDateOffsetPolicy.UseFixedOffset,
+            OffsetMinutes = 480
+        };
+        var serialOffsetResult = ExcelDateParser.TryParse(serial1904, serial1904.Text,
+            typeof(DateTimeOffset), CultureInfo.InvariantCulture, fixedOffsetAttribute, out var offset1904);
 
         // Assert
         Assert.True(nativeResult);
@@ -143,6 +199,36 @@ public sealed class ExcelDateParserTest
         Assert.Equal(new DateTime(1900, 3, 1), value1900);
         Assert.True(serial1904Result);
         Assert.Equal(new DateTime(1904, 1, 1), value1904);
+        Assert.False(serialOffsetRejected);
+        Assert.True(serialOffsetResult);
+        Assert.Equal(new DateTimeOffset(1904, 1, 1, 0, 0, 0, TimeSpan.FromHours(8)), offset1904);
+    }
+
+    /// <summary>
+    /// 测试 - 负数 serial 在两个 Excel 日期系统中均按工作簿零点线性计算。
+    /// </summary>
+    [Fact]
+    public void TryParse_NegativeSerials_ShouldUseLinearExcelDays()
+    {
+        var cases = new[]
+        {
+            (Serial: -1.25d, IsDate1904: false, Expected: new DateTime(1899, 12, 29, 18, 0, 0)),
+            (Serial: -0.25d, IsDate1904: false, Expected: new DateTime(1899, 12, 30, 18, 0, 0)),
+            (Serial: -1.25d, IsDate1904: true, Expected: new DateTime(1903, 12, 30, 18, 0, 0)),
+            (Serial: -0.25d, IsDate1904: true, Expected: new DateTime(1903, 12, 31, 18, 0, 0))
+        };
+
+        foreach (var testCase in cases)
+        {
+            var text = testCase.Serial.ToString(CultureInfo.InvariantCulture);
+            var cell = new ExcelCellValue(testCase.Serial, text, ExcelCellKind.Number,
+                isDate1904: testCase.IsDate1904);
+            var result = ExcelDateParser.TryParse(cell, text, typeof(DateTime),
+                CultureInfo.InvariantCulture, null, out var value);
+
+            Assert.True(result);
+            Assert.Equal(testCase.Expected, value);
+        }
     }
 
     /// <summary>

@@ -696,7 +696,8 @@ public sealed class NpoiExcelImporter : IExcelImporter
         object value = effectiveType switch
         {
             CellType.Boolean => cell.BooleanCellValue,
-            CellType.Numeric when DateUtil.IsCellDateFormatted(cell) => cell.DateCellValue,
+            // 保留日期单元格的原始 serial，由 Core 统一应用 1900/1904 日期系统规则。
+            CellType.Numeric when DateUtil.IsCellDateFormatted(cell) => cell.NumericCellValue,
             CellType.Numeric => cell.NumericCellValue,
             CellType.Error => null,
             _ => GetRawStringValue(cell)

@@ -22,6 +22,7 @@
   <ItemGroup>
     <Compile Include="..\..\build\ApiSnapshot\PublicApiSnapshot.cs" Link="ApiSnapshot\PublicApiSnapshot.cs" />
     <ProjectReference Include="..\..\src\Bing.Offices.Npoi\Bing.Offices.Npoi.csproj" />
+    <ProjectReference Include="..\..\src\Bing.Offices.MiniExcel\Bing.Offices.MiniExcel.csproj" />
     <ProjectReference Include="..\Bing.Offices.ProfileFixtures\Bing.Offices.ProfileFixtures.csproj" />
     <ProjectReference Include="..\Bing.Offices.ResourceProbe\Bing.Offices.ResourceProbe.csproj"
               Condition="'$(TargetFramework)' == 'net8.0'" />

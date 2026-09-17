@@ -4,6 +4,7 @@ using System.Runtime;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
+using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Running;
 
 namespace Bing.Offices.Benchmarks;
@@ -45,6 +46,24 @@ public static class Program
             RealIoProbe.RunScenario(args[1], args[2], int.Parse(args[3]), int.Parse(args[4]));
             return;
         }
+        if (args.Length >= 3 && string.Equals(args[0], "--mini-excel-probe", StringComparison.OrdinalIgnoreCase))
+        {
+            MiniExcelProbe.Run(args[1], int.Parse(args[2]));
+            return;
+        }
+        if (args.Length >= 4 && string.Equals(args[0], "--provider-comparison-probe",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            var phase = args.Length >= 5
+                ? args[4]
+                : Environment.GetEnvironmentVariable("BING_OFFICES_BENCHMARK_PHASE") ?? "after";
+            ProviderComparisonProbe.RunAsync(args[1], int.Parse(args[2]), int.Parse(args[3]), phase)
+                .GetAwaiter().GetResult();
+            return;
+        }
+        var benchmarkArtifacts = Path.Combine(FindRepositoryRoot(), "artifacts", "benchmarks");
+        var benchmarkConfig = ManualConfig.Create(DefaultConfig.Instance)
+            .WithArtifactsPath(benchmarkArtifacts);
         BenchmarkSwitcher.FromTypes(
             new[]
             {
@@ -52,6 +71,8 @@ public static class Program
                 typeof(CsvPipelineBenchmarks),
                 typeof(RealIoBenchmarks),
                 typeof(RealIoPipelineBenchmarks),
+                typeof(MiniExcelRealIoBenchmarks),
+                typeof(ProviderComparisonBenchmarks),
                 typeof(GenericSheetDispatchBenchmarks),
                 typeof(FailureWorkbookBenchmarks),
                 typeof(HeaderStyleBenchmarks),
@@ -62,7 +83,18 @@ public static class Program
                 typeof(TenantPlanCacheBenchmarks),
                 typeof(RegexCacheBenchmarks),
                 typeof(UniqueJournalBenchmarks)
-            }).Run(args);
+            }).Run(args, benchmarkConfig);
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        for (var directory = new DirectoryInfo(Directory.GetCurrentDirectory()); directory != null;
+             directory = directory.Parent)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "Bing.Offices.sln")))
+                return directory.FullName;
+        }
+        throw new InvalidOperationException("无法定位 Bing.Offices 仓库根目录。");
     }
 
     private static class ResourceProbe

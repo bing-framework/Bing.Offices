@@ -6,5 +6,7 @@
     <BingUtilsPackageVersion>1.5.0</BingUtilsPackageVersion>
     <!-- Npoi packages -->
     <NpoiPackageVersion>[2.7.4]</NpoiPackageVersion>
+    <!-- MiniExcel packages -->
+    <MiniExcelPackageVersion>[1.46.0]</MiniExcelPackageVersion>
   </PropertyGroup>
 </Project>

@@ -19,6 +19,12 @@ internal static class ExcelDateParser
     /// <summary>未指定格式时使用的默认日期格式（yyyy-MM-dd）。</summary>
     private const string DefaultDateFormat = "yyyy-MM-dd";
 
+    /// <summary>Excel 1900 日期系统的零点。</summary>
+    private static readonly DateTime Excel1900Epoch = new DateTime(1899, 12, 31);
+
+    /// <summary>一天包含的毫秒数，用于跨目标框架保持 serial 精度。</summary>
+    private const double MillisecondsPerDay = 86400000d;
+
     /// <summary>
     /// 按日期特性配置将单元格值转换为目标日期类型。
     /// </summary>
@@ -36,21 +42,58 @@ internal static class ExcelDateParser
         var effectiveType = Nullable.GetUnderlyingType(targetType) ?? targetType;
         if (effectiveType != typeof(DateTime) && effectiveType != typeof(DateTimeOffset))
             return false;
-        if (cell?.Value is DateTime dateTime && effectiveType == typeof(DateTime))
+        if (cell?.Value is DateTime dateTime)
         {
-            value = DateTime.SpecifyKind(dateTime, DateTimeKind.Unspecified);
-            return true;
+            var unspecified = DateTime.SpecifyKind(dateTime, DateTimeKind.Unspecified);
+            if (effectiveType == typeof(DateTime))
+            {
+                value = unspecified;
+                return true;
+            }
+            if (effectiveType == typeof(DateTimeOffset))
+            {
+                if (!TryGetFixedOffset(attribute, out var offset))
+                    return false;
+                try
+                {
+                    value = new DateTimeOffset(unspecified, offset);
+                    return true;
+                }
+                catch (ArgumentException)
+                {
+                    return false;
+                }
+            }
         }
-        if (cell?.Value is DateTimeOffset dateTimeOffset && effectiveType == typeof(DateTimeOffset))
+        if (cell?.Value is DateTimeOffset dateTimeOffset)
         {
-            value = dateTimeOffset;
-            return true;
+            if (effectiveType == typeof(DateTimeOffset))
+            {
+                value = dateTimeOffset;
+                return true;
+            }
+            if (effectiveType == typeof(DateTime))
+            {
+                value = DateTime.SpecifyKind(dateTimeOffset.DateTime, DateTimeKind.Unspecified);
+                return true;
+            }
         }
-        if (cell?.Value is double serial && effectiveType == typeof(DateTime))
+        if (cell?.Value is double serial
+            && (effectiveType == typeof(DateTime) || effectiveType == typeof(DateTimeOffset)))
         {
             try
             {
-                value = DateTime.SpecifyKind(FromExcelSerial(serial, cell.IsDate1904), DateTimeKind.Unspecified);
+                var date = DateTime.SpecifyKind(FromExcelSerial(serial, cell.IsDate1904),
+                    DateTimeKind.Unspecified);
+                // DateTime 可隐式转换为 DateTimeOffset；显式分支避免条件表达式把无时区值转换成本地 offset。
+                if (effectiveType == typeof(DateTime))
+                    value = date;
+                else
+                {
+                    if (!TryGetFixedOffset(attribute, out var offset))
+                        return false;
+                    value = new DateTimeOffset(date, offset);
+                }
                 return true;
             }
             catch (ArgumentException)
@@ -106,6 +149,10 @@ internal static class ExcelDateParser
             return true;
         }
         catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (OverflowException)
         {
             return false;
         }
@@ -165,16 +212,63 @@ internal static class ExcelDateParser
             && text[separator + 3] == ':';
     }
 
+    /// <summary>获取无显式 offset 日期使用的固定偏移。</summary>
+    /// <param name="attribute">日期输入配置。</param>
+    /// <param name="offset">配置的时间偏移。</param>
+    /// <returns>配置为固定偏移且包含偏移分钟时为 true。</returns>
+    private static bool TryGetFixedOffset(ExcelDateAttribute attribute, out TimeSpan offset)
+    {
+        offset = default;
+        if ((attribute?.OffsetPolicy ?? ExcelDateOffsetPolicy.RequireExplicitOffset)
+            != ExcelDateOffsetPolicy.UseFixedOffset
+            || !attribute.OffsetMinutes.HasValue)
+            return false;
+        try
+        {
+            offset = TimeSpan.FromMinutes(attribute.OffsetMinutes.Value);
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (OverflowException)
+        {
+            return false;
+        }
+    }
+
     /// <summary>将 Excel 序列日期转换为无时区日期时间。</summary>
     /// <param name="serial">Excel 序列日期数值。</param>
     /// <param name="isDate1904">是否使用 1904 日期系统。</param>
     /// <returns>对应的无时区日期时间。</returns>
     private static DateTime FromExcelSerial(double serial, bool isDate1904)
     {
+        // 负数不能通过 FromOADate 往返：OA 日期会把负数的小数部分按相反方向折叠。
+        // 1904 日期系统没有伪闰日，所有 serial 均按工作簿零点线性计算。
         if (isDate1904)
-            return new DateTime(1904, 1, 1).AddDays(serial);
-        var baseDate = new DateTime(1899, 12, 31);
-        return baseDate.AddDays(serial >= 60 ? serial - 1 : serial);
+            return AddLinearExcelDays(new DateTime(1904, 1, 1), serial);
+
+        if (serial < 0d)
+            return AddLinearExcelDays(Excel1900Epoch, serial);
+
+        // Excel 1900 系统保留序列 60 的伪闰日；其余序列映射到 OLE Automation 日期时，
+        // 60 之前整体向后补一天，60 本身由 FromOADate 保持为 1900-02-28。
+        return DateTime.FromOADate(serial < 60d ? serial + 1d : serial);
+    }
+
+    /// <summary>按 Excel serial 线性加日期并固定到毫秒精度。</summary>
+    /// <param name="epoch">工作簿日期系统零点。</param>
+    /// <param name="serial">待增加的 serial 天数。</param>
+    /// <returns>线性转换后的日期时间。</returns>
+    private static DateTime AddLinearExcelDays(DateTime epoch, double serial)
+    {
+        if (double.IsNaN(serial) || double.IsInfinity(serial))
+            throw new ArgumentException("Excel serial 必须是有限数值。", nameof(serial));
+        var milliseconds = serial * MillisecondsPerDay;
+        if (milliseconds > long.MaxValue || milliseconds < long.MinValue)
+            throw new ArgumentException("Excel serial 超出支持范围。", nameof(serial));
+        return epoch.AddMilliseconds(Math.Round(milliseconds, MidpointRounding.AwayFromZero));
     }
 
     /// <summary>尝试按 Excel 日期系统将序列值转换为日期或时间。</summary>

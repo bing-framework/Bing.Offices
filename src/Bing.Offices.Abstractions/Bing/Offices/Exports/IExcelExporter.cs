@@ -17,7 +17,7 @@ public interface IExcelExporter
     /// <summary>
     /// 将 Workbook 请求以异步文件/流 IO 写入目标流。
     /// </summary>
-    /// <remarks>NPOI Workbook DOM 的构建和序列化阶段仍为同步阶段。</remarks>
+    /// <remarks>具体 Provider 的工作簿构建或序列化阶段可能仍为同步阶段；异步契约覆盖外围流写入。</remarks>
     /// <param name="request">Workbook 导出请求。</param>
     /// <param name="destination">调用方拥有的目标流。</param>
     /// <param name="cancellationToken">取消令牌。</param>

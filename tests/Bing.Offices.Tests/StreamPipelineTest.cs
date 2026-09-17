@@ -956,6 +956,25 @@ public class StreamPipelineTest
     }
 
     /// <summary>
+    /// 测试 - JSON 数组路径中的未知字段应继续按对应 schema 被拒绝。
+    /// </summary>
+    /// <param name="json">包含未知字段的 v2 JSON 映射文档。</param>
+    /// <param name="expectedPath">异常消息中应出现的未知字段路径。</param>
+    [Theory]
+    [InlineData("{\"version\":2,\"import\":{\"columns\":[{\"propertyName\":\"Name\",\"unknown\":true}]}}", "$.import.columns[0].unknown")]
+    [InlineData("{\"version\":2,\"import\":{\"dynamicColumns\":[{\"key\":\"extra\",\"unknown\":true}]}}", "$.import.dynamicColumns[0].unknown")]
+    [InlineData("{\"version\":2,\"import\":{\"dynamicColumns\":[{\"key\":\"extra\",\"validationRules\":[{\"name\":\"rule\",\"unknown\":true}]}]}}", "$.import.dynamicColumns[0].validationRules[0].unknown")]
+    [InlineData("{\"version\":2,\"import\":{\"columns\":[{\"propertyName\":\"Name\",\"valueMappings\":[{\"text\":\"yes\",\"unknown\":true}]}]}}", "$.import.columns[0].valueMappings[0].unknown")]
+    public void MappingConfigurationLoader_JsonArrayPaths_ShouldRejectUnknownFields(string json,
+        string expectedPath)
+    {
+        var exception = Assert.Throws<BingOfficesConfigurationException>(() =>
+            ExcelMappingConfigurationLoader.FromJsonDocument(json));
+
+        Assert.Contains(expectedPath, exception.InnerException.Message);
+    }
+
+    /// <summary>
     /// 测试 - v2 文档流读取应保持调用方流可用，XML DTD/外部实体仍必须被禁止。
     /// </summary>
     [Fact]
