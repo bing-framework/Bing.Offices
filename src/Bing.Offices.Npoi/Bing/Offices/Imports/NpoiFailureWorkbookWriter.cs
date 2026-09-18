@@ -24,7 +24,9 @@ internal static class NpoiFailureWorkbookWriter
         => Write(workbook, options, errors, resolvedSheetRequests, cancellationToken,
             new SystemFailureWorkbookFileSystem(), null);
 
-    /// <summary>使用指定文件系统适配器写出失败工作簿，便于测试临时文件操作。</summary>
+    /// <summary>
+    /// 使用指定文件系统适配器写出失败工作簿，便于测试临时文件操作。
+    /// </summary>
     /// <param name="workbook">原始导入工作簿。</param>
     /// <param name="options">失败工作簿输出选项。</param>
     /// <param name="errors">已收集的导入错误。</param>
@@ -222,7 +224,9 @@ internal static class NpoiFailureWorkbookWriter
         }
     }
 
-    /// <summary>将异步 staging 目标作为唯一序列化目标，避免再创建第二个失败工作簿临时文件。</summary>
+    /// <summary>
+    /// 将异步 staging 目标作为唯一序列化目标，避免再创建第二个失败工作簿临时文件。
+    /// </summary>
     /// <param name="outputWorkbook">待序列化的失败工作簿。</param>
     /// <param name="destination">接收序列化内容的目标流。</param>
     /// <param name="options">失败工作簿输出和大小限制选项。</param>
@@ -285,7 +289,9 @@ internal static class NpoiFailureWorkbookWriter
         cancellationToken.ThrowIfCancellationRequested();
     }
 
-    /// <summary>删除失败工作簿临时文件，并将清理失败写入诊断或主异常。</summary>
+    /// <summary>
+    /// 删除失败工作簿临时文件，并将清理失败写入诊断或主异常。
+    /// </summary>
     /// <param name="options">失败工作簿输出选项和诊断接收器。</param>
     /// <param name="temporaryPath">待删除的临时文件路径。</param>
     /// <param name="primaryException">提交失败时的主异常。</param>

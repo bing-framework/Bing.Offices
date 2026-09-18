@@ -13,7 +13,7 @@ Bing是一个.net core平台下的应用框架，旨在于提升小型团队的�
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\Bing.Offices.Core\Bing\Offices\IO\ExcelXlsxZipPreflight.cs"
+    <Compile Include="..\provider-shared\ExcelXlsxZipPreflight.cs"
              Link="Bing\Offices\Imports\ExcelXlsxZipPreflight.cs" />
   </ItemGroup>
 

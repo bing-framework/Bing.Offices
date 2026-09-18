@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
@@ -16,13 +16,34 @@ using Bing.Offices.IO;
 using Bing.Offices.Npoi.Extensions;
 using NPOI.SS.UserModel;
 
+/// <summary>
+/// 提供测试场景使用的资源矩阵。
+/// </summary>
 internal static class StagingEntrypointMatrix
 {
+    /// <summary>
+    /// 资源入口矩阵任务标识。
+    /// </summary>
     private const string TaskId = "BO-RC-20260908-002";
+    /// <summary>
+    /// 入口矩阵使用的 staging 策略名称。
+    /// </summary>
     private const string Strategy = "TempFile";
+    /// <summary>
+    /// 每个入口与行数组合的重复次数。
+    /// </summary>
     private const int RepetitionCount = 3;
+    /// <summary>
+    /// 混合 staging 迁移到临时文件的字节阈值。
+    /// </summary>
     private const long HybridThresholdBytes = 8L * 1024 * 1024;
+    /// <summary>
+    /// 入口矩阵测试覆盖的数据行数集合。
+    /// </summary>
     private static readonly int[] RowCounts = { 1000, 10000, 100000 };
+    /// <summary>
+    /// 入口矩阵测试覆盖的 Excel 导出入口名称集合。
+    /// </summary>
     private static readonly string[] Entrypoints =
     {
         "Export",
@@ -31,14 +52,34 @@ internal static class StagingEntrypointMatrix
         "ExportToFileAsync"
     };
 
+    /// <summary>
+    /// 表示失败场景使用的测试夹具。
+    /// </summary>
     private enum FailureMode
     {
+        /// <summary>
+        /// 表示未发生失败。
+        /// </summary>
         None,
+        /// <summary>
+        /// 表示资源探测的初始化阶段。
+        /// </summary>
         Setup,
+        /// <summary>
+        /// 表示资源探测的采样阶段。
+        /// </summary>
         Sampler,
+        /// <summary>
+        /// 表示资源探测的解析阶段。
+        /// </summary>
         Parser
     }
 
+    /// <summary>
+    /// 运行。
+    /// </summary>
+    /// <param name="artifactPath">目标文件或目录路径。</param>
+    /// <returns>计算得到的数值。</returns>
     public static int Run(string artifactPath)
     {
         var fullPath = Path.GetFullPath(artifactPath);
@@ -64,19 +105,24 @@ internal static class StagingEntrypointMatrix
         writer.Flush();
 
         foreach (var rowCount in RowCounts)
-        foreach (var entrypoint in Entrypoints)
-        for (var repetition = 1; repetition <= RepetitionCount; repetition++)
-        {
-            var result = RunOne(entrypoint, rowCount, repetition, FailureMode.None);
-            writer.WriteLine(JsonSerializer.Serialize(result));
-            writer.Flush();
-            passed &= result.Status == "passed";
-        }
+            foreach (var entrypoint in Entrypoints)
+                for (var repetition = 1; repetition <= RepetitionCount; repetition++)
+                {
+                    var result = RunOne(entrypoint, rowCount, repetition, FailureMode.None);
+                    writer.WriteLine(JsonSerializer.Serialize(result));
+                    writer.Flush();
+                    passed &= result.Status == "passed";
+                }
 
         Console.WriteLine($"STAGING_ENTRYPOINTS artifact={fullPath} scenarios={RowCounts.Length * Entrypoints.Length * RepetitionCount} status={(passed ? "passed" : "failed")}");
         return passed ? 0 : 1;
     }
 
+    /// <summary>
+    /// 运行失败路径探针。
+    /// </summary>
+    /// <param name="artifactPath">目标文件或目录路径。</param>
+    /// <returns>计算得到的数值。</returns>
     public static int RunFailureProbe(string artifactPath)
     {
         var fullPath = Path.GetFullPath(artifactPath);
@@ -109,6 +155,14 @@ internal static class StagingEntrypointMatrix
         return passed ? 0 : 1;
     }
 
+    /// <summary>
+    /// 运行单个入口探针场景。
+    /// </summary>
+    /// <param name="entrypoint">入口结果。</param>
+    /// <param name="rowCount">要处理的数据行数。</param>
+    /// <param name="repetition">重复次数。</param>
+    /// <param name="failureMode">失败处理模式。</param>
+    /// <returns>包含输出校验、资源指标、清理状态和错误信息的入口探测结果。</returns>
     private static EntrypointResult RunOne(string entrypoint, int rowCount, int repetition,
         FailureMode failureMode)
     {
@@ -296,6 +350,13 @@ internal static class StagingEntrypointMatrix
         };
     }
 
+    /// <summary>
+    /// 尝试重新打开工作簿。
+    /// </summary>
+    /// <param name="outputBytes">待处理的字节内容。</param>
+    /// <param name="rowCount">要处理的数据行数。</param>
+    /// <param name="error">错误信息。</param>
+    /// <returns>工作簿可重新打开且首尾行内容匹配时为 true；发生异常时为 false。</returns>
     private static bool TryReopenWorkbook(byte[] outputBytes, int rowCount, out string error)
     {
         error = null;
@@ -323,6 +384,11 @@ internal static class StagingEntrypointMatrix
         }
     }
 
+    /// <summary>
+    /// 创建导出器。
+    /// </summary>
+    /// <param name="directory">目标目录路径。</param>
+    /// <returns>配置了测试暂存工厂的 NPOI 导出器。</returns>
     private static IExcelExporter CreateExporter(string directory)
     {
         var factory = CreateStagingFactory(directory);
@@ -333,6 +399,11 @@ internal static class StagingEntrypointMatrix
         return (IExcelExporter)constructor.Invoke(new object[] { new DefaultFileExportCommitter(), factory });
     }
 
+    /// <summary>
+    /// 创建暂存工厂实例。
+    /// </summary>
+    /// <param name="directory">目标目录路径。</param>
+    /// <returns>使用指定暂存策略、阈值和目录的 NPOI 暂存工厂实例。</returns>
     private static object CreateStagingFactory(string directory)
     {
         var assembly = typeof(NpoiExcelExporter).Assembly;
@@ -343,6 +414,12 @@ internal static class StagingEntrypointMatrix
             new object[] { strategyValue, HybridThresholdBytes, directory }, CultureInfo.InvariantCulture);
     }
 
+    /// <summary>
+    /// 尝试删除暂存目录。
+    /// </summary>
+    /// <param name="directory">目标目录路径。</param>
+    /// <param name="exception">测试期间要传播的异常。</param>
+    /// <returns>目录已删除或原本不存在时为 true；删除失败时为 false。</returns>
     private static bool TryDeleteDirectory(string directory, out Exception exception)
     {
         exception = null;
@@ -364,53 +441,176 @@ internal static class StagingEntrypointMatrix
         }
     }
 
+    /// <summary>
+    /// 表示测试使用的一行数据模型。
+    /// </summary>
     private sealed class EntrypointRow
     {
+        /// <summary>
+        /// 获取或设置编码。
+        /// </summary>
         public string Code { get; set; }
+        /// <summary>
+        /// 获取或设置数量。
+        /// </summary>
         public int Quantity { get; set; }
+        /// <summary>
+        /// 获取或设置描述。
+        /// </summary>
         public string Description { get; set; }
     }
 
+    /// <summary>
+    /// 表示测试场景的结果数据模型。
+    /// </summary>
     private sealed class EntrypointResult
     {
+        /// <summary>
+        /// 获取或设置任务标识。
+        /// </summary>
         public string TaskId { get; set; }
+        /// <summary>
+        /// 获取或设置策略。
+        /// </summary>
         public string Strategy { get; set; }
+        /// <summary>
+        /// 获取或设置入口名称。
+        /// </summary>
         public string Entrypoint { get; set; }
+        /// <summary>
+        /// 获取或设置失败模式。
+        /// </summary>
         public string FailureMode { get; set; }
+        /// <summary>
+        /// 获取或设置行数。
+        /// </summary>
         public int RowCount { get; set; }
+        /// <summary>
+        /// 获取或设置重复次数。
+        /// </summary>
         public int Repetition { get; set; }
+        /// <summary>
+        /// 获取或设置耗时（毫秒）。
+        /// </summary>
         public double ElapsedMilliseconds { get; set; }
+        /// <summary>
+        /// 获取或设置已分配字节数。
+        /// </summary>
         public long AllocatedBytes { get; set; }
+        /// <summary>
+        /// 获取或设置第 0 代 GC 次数。
+        /// </summary>
         public int Gen0Collections { get; set; }
+        /// <summary>
+        /// 获取或设置第 1 代 GC 次数。
+        /// </summary>
         public int Gen1Collections { get; set; }
+        /// <summary>
+        /// 获取或设置第 2 代 GC 次数。
+        /// </summary>
         public int Gen2Collections { get; set; }
+        /// <summary>
+        /// 获取或设置峰值工作集字节数。
+        /// </summary>
         public long PeakWorkingSetBytes { get; set; }
+        /// <summary>
+        /// 获取或设置临时磁盘峰值字节数。
+        /// </summary>
         public long TemporaryDiskPeakBytes { get; set; }
+        /// <summary>
+        /// 获取或设置临时文件峰值数量。
+        /// </summary>
         public int TemporaryFilePeakCount { get; set; }
+        /// <summary>
+        /// 获取或设置完成后的临时磁盘字节数。
+        /// </summary>
         public long TemporaryDiskBytesAfter { get; set; }
+        /// <summary>
+        /// 获取或设置残留文件集合。
+        /// </summary>
         public int LeftoverFiles { get; set; }
+        /// <summary>
+        /// 获取或设置输出数据字节数。
+        /// </summary>
         public long OutputBytes { get; set; }
+        /// <summary>
+        /// 获取或设置输出数据 SHA-256 摘要。
+        /// </summary>
         public string OutputSha256 { get; set; }
+        /// <summary>
+        /// 获取或设置文件句柄重开是否适用。
+        /// </summary>
         public bool FileHandleReopenApplicable { get; set; }
+        /// <summary>
+        /// 获取或设置文件句柄重开是否成功。
+        /// </summary>
         public bool? FileHandleReopenSucceeded { get; set; }
+        /// <summary>
+        /// 获取或设置解析器是否成功重新打开。
+        /// </summary>
         public bool ParserReopenSucceeded { get; set; }
+        /// <summary>
+        /// 获取或设置是否成功重新打开。
+        /// </summary>
         public bool ReopenSucceeded { get; set; }
+        /// <summary>
+        /// 获取或设置采样是否成功。
+        /// </summary>
         public bool SamplingSucceeded { get; set; }
+        /// <summary>
+        /// 获取或设置清理是否成功。
+        /// </summary>
         public bool CleanupSucceeded { get; set; }
+        /// <summary>
+        /// 获取或设置状态。
+        /// </summary>
         public string Status { get; set; }
+        /// <summary>
+        /// 获取或设置异常。
+        /// </summary>
         public string Exception { get; set; }
     }
 
+    /// <summary>
+    /// 提供资源探测场景使用的采样器。
+    /// </summary>
     private sealed class DirectorySampler
     {
+        /// <summary>
+        /// 采样器监控的工作目录路径。
+        /// </summary>
         private readonly string _directory;
+        /// <summary>
+        /// 采样时排除的输出文件路径。
+        /// </summary>
         private readonly string _excludedPath;
+        /// <summary>
+        /// 是否在采样过程中注入失败。
+        /// </summary>
         private readonly bool _injectFailure;
+        /// <summary>
+        /// 停止目录采样的取消源。
+        /// </summary>
         private readonly CancellationTokenSource _cancellation = new();
+        /// <summary>
+        /// 目录采样后台任务。
+        /// </summary>
         private Task _task;
+        /// <summary>
+        /// 采样期间观测到的临时文件总字节峰值。
+        /// </summary>
         private long _peakBytes;
+        /// <summary>
+        /// 采样期间观测到的临时文件数量峰值。
+        /// </summary>
         private int _peakFiles;
 
+        /// <summary>
+        /// 初始化一个 <see cref="DirectorySampler" /> 类型的实例。
+        /// </summary>
+        /// <param name="directory">待采样的工作目录。</param>
+        /// <param name="excludedPath">不纳入采样的输出文件路径；null 表示不排除。</param>
+        /// <param name="injectFailure">是否在采样时注入 IO 异常。</param>
         public DirectorySampler(string directory, string excludedPath, bool injectFailure)
         {
             _directory = directory;
@@ -418,11 +618,26 @@ internal static class StagingEntrypointMatrix
             _injectFailure = injectFailure;
         }
 
+        /// <summary>
+        /// 获取峰值字节数。
+        /// </summary>
         public long PeakBytes => Interlocked.Read(ref _peakBytes);
+        /// <summary>
+        /// 获取峰值文件数。
+        /// </summary>
         public int PeakFiles => Volatile.Read(ref _peakFiles);
+        /// <summary>
+        /// 获取或设置瞬时文件数量。
+        /// </summary>
         public int TransientFileCount { get; private set; }
+        /// <summary>
+        /// 获取或设置完成后的瞬时字节数。
+        /// </summary>
         public long TransientBytesAfter { get; private set; }
 
+        /// <summary>
+        /// 开始资源采样或请求批次。
+        /// </summary>
         public void Start() => _task = Task.Run(async () =>
         {
             while (!_cancellation.IsCancellationRequested)
@@ -439,6 +654,9 @@ internal static class StagingEntrypointMatrix
             }
         });
 
+        /// <summary>
+        /// 停止资源采样。
+        /// </summary>
         public void Stop()
         {
             Exception failure = null;
@@ -464,6 +682,9 @@ internal static class StagingEntrypointMatrix
                 throw failure;
         }
 
+        /// <summary>
+        /// 采样暂存目录的文件状态。
+        /// </summary>
         private void Sample()
         {
             if (_injectFailure)
@@ -474,6 +695,10 @@ internal static class StagingEntrypointMatrix
             UpdateMaximum(ref _peakFiles, files.Count);
         }
 
+        /// <summary>
+        /// 获取目录中的临时文件。
+        /// </summary>
+        /// <returns>目录中除输出文件外的临时文件路径列表；目录不存在时为空列表。</returns>
         private List<string> GetTransientFiles() => Directory.Exists(_directory)
             ? Directory.GetFiles(_directory, "*", SearchOption.AllDirectories)
                 .Where(path => _excludedPath == null
@@ -481,6 +706,11 @@ internal static class StagingEntrypointMatrix
                 .ToList()
             : new List<string>();
 
+        /// <summary>
+        /// 获取文件长度。
+        /// </summary>
+        /// <param name="path">目标文件或目录路径。</param>
+        /// <returns>文件长度，单位为字节；读取失败时返回 0。</returns>
         private static long GetFileLength(string path)
         {
             try
@@ -493,6 +723,11 @@ internal static class StagingEntrypointMatrix
             }
         }
 
+        /// <summary>
+        /// 更新采样值的最大值。
+        /// </summary>
+        /// <param name="target">目标对象。</param>
+        /// <param name="candidate">候选项。</param>
         private static void UpdateMaximum(ref long target, long candidate)
         {
             while (true)
@@ -503,6 +738,11 @@ internal static class StagingEntrypointMatrix
             }
         }
 
+        /// <summary>
+        /// 更新采样值的最大值。
+        /// </summary>
+        /// <param name="target">目标对象。</param>
+        /// <param name="candidate">候选项。</param>
         private static void UpdateMaximum(ref int target, int candidate)
         {
             while (true)

@@ -2,7 +2,12 @@
 
 namespace Bing.Offices.IO;
 
-/// <summary>默认文件提交实现；具体 exporter 负责异常观察。</summary>
+/// <summary>
+/// 默认文件提交实现。
+/// </summary>
+/// <remarks>
+/// 异常观察由具体导出器负责。
+/// </remarks>
 [EditorBrowsable(EditorBrowsableState.Never)]
 public sealed class DefaultFileExportCommitter : IFileExportCommitter
 {

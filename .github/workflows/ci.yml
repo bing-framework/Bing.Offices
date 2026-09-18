@@ -3,12 +3,24 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
+    inputs:
+      run_large:
+        description: '运行 Category=Large 的职责测试与发布 workload'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
 
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+  DOTNET_NOLOGO: 'true'
+
 jobs:
-  build-and-test:
+  build:
+    name: Release build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -21,44 +33,299 @@ jobs:
             6.0.x
             8.0.x
 
+      - name: Capture version files
+        shell: bash
+        run: |
+          echo "BING_VERSION_PROPS_SHA=$(sha256sum version.props | cut -d' ' -f1 | tr '[:lower:]' '[:upper:]')" >> "$GITHUB_ENV"
+          echo "BING_VERSION_DEV_PROPS_SHA=$(sha256sum version.dev.props | cut -d' ' -f1 | tr '[:lower:]' '[:upper:]')" >> "$GITHUB_ENV"
+
+      - name: Restore
+        run: dotnet restore Bing.Offices.sln
+
+      - name: Build
+        run: dotnet build Bing.Offices.sln -c Release --no-restore
+
+      - name: Check diff and version files
+        shell: bash
+        run: |
+          git diff --check
+          test "$(sha256sum version.props | cut -d' ' -f1 | tr '[:lower:]' '[:upper:]')" = "$BING_VERSION_PROPS_SHA"
+          test "$(sha256sum version.dev.props | cut -d' ' -f1 | tr '[:lower:]' '[:upper:]')" = "$BING_VERSION_DEV_PROPS_SHA"
+
+  tests:
+    name: ${{ matrix.role }} / ${{ matrix.tfm }}
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - role: unit-common
+            project: tests/Bing.Offices.Tests/Bing.Offices.Tests.csproj
+            tfm: net6.0
+          - role: unit-common
+            project: tests/Bing.Offices.Tests/Bing.Offices.Tests.csproj
+            tfm: net8.0
+          - role: unit-npoi
+            project: tests/Bing.Offices.Npoi.Tests/Bing.Offices.Npoi.Tests.csproj
+            tfm: net6.0
+          - role: unit-npoi
+            project: tests/Bing.Offices.Npoi.Tests/Bing.Offices.Npoi.Tests.csproj
+            tfm: net8.0
+          - role: unit-miniexcel
+            project: tests/Bing.Offices.MiniExcel.Tests/Bing.Offices.MiniExcel.Tests.csproj
+            tfm: net6.0
+          - role: unit-miniexcel
+            project: tests/Bing.Offices.MiniExcel.Tests/Bing.Offices.MiniExcel.Tests.csproj
+            tfm: net8.0
+          - role: integration-npoi
+            project: tests/Bing.Offices.Npoi.Tests.Integration/Bing.Offices.Npoi.Tests.Integration.csproj
+            tfm: net6.0
+          - role: integration-npoi
+            project: tests/Bing.Offices.Npoi.Tests.Integration/Bing.Offices.Npoi.Tests.Integration.csproj
+            tfm: net8.0
+          - role: integration-miniexcel
+            project: tests/Bing.Offices.MiniExcel.Tests.Integration/Bing.Offices.MiniExcel.Tests.Integration.csproj
+            tfm: net6.0
+          - role: integration-miniexcel
+            project: tests/Bing.Offices.MiniExcel.Tests.Integration/Bing.Offices.MiniExcel.Tests.Integration.csproj
+            tfm: net8.0
+          - role: integration-cross-provider
+            project: tests/Bing.Offices.Tests.Integration/Bing.Offices.Tests.Integration.csproj
+            tfm: net6.0
+          - role: integration-cross-provider
+            project: tests/Bing.Offices.Tests.Integration/Bing.Offices.Tests.Integration.csproj
+            tfm: net8.0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            6.0.x
+            8.0.x
+
+      - name: Restore
+        run: dotnet restore ${{ matrix.project }}
+
+      - name: Test
+        env:
+          PUBLIC_EXTENSION_COVERAGE_REPORT: artifacts/tests/${{ matrix.role }}/${{ matrix.tfm }}/public-extension-coverage.md
+        run: |
+          dotnet test ${{ matrix.project }} -f ${{ matrix.tfm }} -c Release --no-restore --filter "Category!=Large"             --results-directory artifacts/tests/${{ matrix.role }}/${{ matrix.tfm }}             --logger "trx;LogFileName=${{ matrix.role }}-${{ matrix.tfm }}.trx"
+
+      - name: Upload test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tests-${{ matrix.role }}-${{ matrix.tfm }}
+          path: artifacts/tests/${{ matrix.role }}/${{ matrix.tfm }}
+
+  large-tests:
+    name: large / ${{ matrix.role }} / ${{ matrix.tfm }}
+    if: github.event_name == 'workflow_dispatch' && inputs.run_large == true
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - role: unit-common
+            project: tests/Bing.Offices.Tests/Bing.Offices.Tests.csproj
+            tfm: net6.0
+          - role: unit-common
+            project: tests/Bing.Offices.Tests/Bing.Offices.Tests.csproj
+            tfm: net8.0
+          - role: unit-npoi
+            project: tests/Bing.Offices.Npoi.Tests/Bing.Offices.Npoi.Tests.csproj
+            tfm: net6.0
+          - role: unit-npoi
+            project: tests/Bing.Offices.Npoi.Tests/Bing.Offices.Npoi.Tests.csproj
+            tfm: net8.0
+          - role: unit-miniexcel
+            project: tests/Bing.Offices.MiniExcel.Tests/Bing.Offices.MiniExcel.Tests.csproj
+            tfm: net6.0
+          - role: unit-miniexcel
+            project: tests/Bing.Offices.MiniExcel.Tests/Bing.Offices.MiniExcel.Tests.csproj
+            tfm: net8.0
+          - role: integration-npoi
+            project: tests/Bing.Offices.Npoi.Tests.Integration/Bing.Offices.Npoi.Tests.Integration.csproj
+            tfm: net6.0
+          - role: integration-npoi
+            project: tests/Bing.Offices.Npoi.Tests.Integration/Bing.Offices.Npoi.Tests.Integration.csproj
+            tfm: net8.0
+          - role: integration-miniexcel
+            project: tests/Bing.Offices.MiniExcel.Tests.Integration/Bing.Offices.MiniExcel.Tests.Integration.csproj
+            tfm: net6.0
+          - role: integration-miniexcel
+            project: tests/Bing.Offices.MiniExcel.Tests.Integration/Bing.Offices.MiniExcel.Tests.Integration.csproj
+            tfm: net8.0
+          - role: integration-cross-provider
+            project: tests/Bing.Offices.Tests.Integration/Bing.Offices.Tests.Integration.csproj
+            tfm: net6.0
+          - role: integration-cross-provider
+            project: tests/Bing.Offices.Tests.Integration/Bing.Offices.Tests.Integration.csproj
+            tfm: net8.0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            6.0.x
+            8.0.x
+
+      - name: Restore
+        run: dotnet restore ${{ matrix.project }}
+
+      - name: Test Large
+        run: |
+          dotnet test ${{ matrix.project }} -f ${{ matrix.tfm }} -c Release --no-restore --filter "Category=Large"             --results-directory artifacts/tests/large/${{ matrix.role }}/${{ matrix.tfm }}             --logger "trx;LogFileName=large-${{ matrix.role }}-${{ matrix.tfm }}.trx"
+
+      - name: Upload Large evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tests-large-${{ matrix.role }}-${{ matrix.tfm }}
+          path: artifacts/tests/large/${{ matrix.role }}/${{ matrix.tfm }}
+
+  docs:
+    name: docs
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore tests/Bing.Offices.Docs.Tests/Bing.Offices.Docs.Tests.csproj
+
+      - name: Test documentation contracts
+        run: |
+          dotnet test tests/Bing.Offices.Docs.Tests/Bing.Offices.Docs.Tests.csproj -c Release --no-restore             --results-directory artifacts/tests/docs             --logger "trx;LogFileName=docs-net8.trx"
+
+      - name: Upload documentation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tests-docs
+          path: artifacts/tests/docs
+
+  resource-gate:
+    name: resource matrix
+    needs: [build, tests, docs]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore and build resource probe
+        run: |
+          dotnet restore tests/Bing.Offices.ResourceProbe/Bing.Offices.ResourceProbe.csproj
+          dotnet build tests/Bing.Offices.ResourceProbe/Bing.Offices.ResourceProbe.csproj -c Release --no-restore
+
+      - name: Run 100K resource matrix
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p artifacts/resource
+          dotnet run --project tests/Bing.Offices.ResourceProbe/Bing.Offices.ResourceProbe.csproj -c Release --no-build --no-restore -- --staging-matrix artifacts/resource/resource-matrix.jsonl 100000 | tee artifacts/resource/resource-matrix.log
+          grep -q 'scenarios=36 status=passed' artifacts/resource/resource-matrix.log
+
+      - name: Upload resource evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-resource
+          path: artifacts/resource
+
+  benchmark-gate:
+    name: benchmark and performance probes
+    needs: [build, tests, docs]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore and build benchmarks
+        run: |
+          dotnet restore benchmarks/Bing.Offices.Benchmarks/Bing.Offices.Benchmarks.csproj
+          dotnet build benchmarks/Bing.Offices.Benchmarks/Bing.Offices.Benchmarks.csproj -c Release --no-restore
+
+      - name: Run benchmark contracts and 100K probes
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p artifacts/benchmarks
+          dotnet run --project benchmarks/Bing.Offices.Benchmarks/Bing.Offices.Benchmarks.csproj -c Release --no-build --no-restore -- --list flat | tee artifacts/benchmarks/benchmark-list.log
+          grep -q 'RealIoBenchmarks' artifacts/benchmarks/benchmark-list.log
+          grep -q 'MiniExcelRealIoBenchmarks' artifacts/benchmarks/benchmark-list.log
+          dotnet run --project benchmarks/Bing.Offices.Benchmarks/Bing.Offices.Benchmarks.csproj -c Release --no-build --no-restore -- --provider-comparison-probe artifacts/benchmarks/provider-npoi-100k.json 100000 3 after npoi | tee artifacts/benchmarks/provider-npoi.log
+          dotnet run --project benchmarks/Bing.Offices.Benchmarks/Bing.Offices.Benchmarks.csproj -c Release --no-build --no-restore -- --provider-comparison-probe artifacts/benchmarks/provider-miniexcel-100k.json 100000 3 after miniexcel | tee artifacts/benchmarks/provider-miniexcel.log
+          grep -q 'providerCount=1 rows=100000 repetitions=3 phase=after status=passed' artifacts/benchmarks/provider-npoi.log
+          grep -q 'providerCount=1 rows=100000 repetitions=3 phase=after status=passed' artifacts/benchmarks/provider-miniexcel.log
+          dotnet run --project benchmarks/Bing.Offices.Benchmarks/Bing.Offices.Benchmarks.csproj -c Release --no-build --no-restore -- --real-io-probe artifacts/benchmarks/real-io.json 3 | tee artifacts/benchmarks/real-io.log
+          grep -q 'scenarios=24 repetitions=3 status=passed' artifacts/benchmarks/real-io.log
+
+      - name: Upload benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-benchmarks
+          path: artifacts/benchmarks
+
+  release-gates:
+    name: packages and consumers
+    needs: [build, tests, docs]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            6.0.x
+            8.0.x
+
+      - name: Capture version files
+        shell: bash
+        run: |
+          echo "BING_VERSION_PROPS_SHA=$(sha256sum version.props | cut -d' ' -f1 | tr '[:lower:]' '[:upper:]')" >> "$GITHUB_ENV"
+          echo "BING_VERSION_DEV_PROPS_SHA=$(sha256sum version.dev.props | cut -d' ' -f1 | tr '[:lower:]' '[:upper:]')" >> "$GITHUB_ENV"
+
       - name: Restore
         run: |
           dotnet restore Bing.Offices.sln
           dotnet restore tests/Bing.Offices.ResourceProbe/Bing.Offices.ResourceProbe.csproj
 
-      - name: Build
+      - name: Build release gates
         run: |
           dotnet build Bing.Offices.sln -c Release --no-restore
           dotnet build tests/Bing.Offices.ResourceProbe/Bing.Offices.ResourceProbe.csproj -c Release --no-restore
 
-      - name: Check diff
-        run: git diff --check
-
-      - name: Test
-        run: |
-          dotnet test tests/Bing.Offices.Tests/Bing.Offices.Tests.csproj -f net6.0 -c Release --no-restore --results-directory artifacts/tests/unit/net6 --logger "trx;LogFileName=unit-net6.trx"
-          dotnet test tests/Bing.Offices.Tests/Bing.Offices.Tests.csproj -f net8.0 -c Release --no-restore --results-directory artifacts/tests/unit/net8 --logger "trx;LogFileName=unit-net8.trx"
-          dotnet test tests/Bing.Offices.Tests.Integration/Bing.Offices.Tests.Integration.csproj -f net6.0 -c Release --no-restore --results-directory artifacts/tests/integration/net6 --logger "trx;LogFileName=integration-net6.trx"
-          dotnet test tests/Bing.Offices.Tests.Integration/Bing.Offices.Tests.Integration.csproj -f net8.0 -c Release --no-restore --results-directory artifacts/tests/integration/net8 --logger "trx;LogFileName=integration-net8.trx"
-          dotnet test tests/Bing.Offices.Docs.Tests/Bing.Offices.Docs.Tests.csproj -c Release --no-restore --results-directory artifacts/tests/docs --logger "trx;LogFileName=docs-net8.trx"
-
-      - name: Resource and benchmark contracts
-        shell: bash
-        run: |
-          set -o pipefail
-          mkdir -p artifacts/ci-contracts
-          dotnet run --project tests/Bing.Offices.ResourceProbe/Bing.Offices.ResourceProbe.csproj \
-            -c Release --no-build --no-restore -- \
-            --staging-matrix artifacts/ci-contracts/resource-matrix.jsonl 1000 \
-            | tee artifacts/ci-contracts/resource-matrix.log
-          grep -q 'scenarios=36 status=passed' artifacts/ci-contracts/resource-matrix.log
-          dotnet run --project benchmarks/Bing.Offices.Benchmarks/Bing.Offices.Benchmarks.csproj \
-            -c Release --no-build --no-restore -- --list flat \
-            | tee artifacts/ci-contracts/benchmark-list.log
-          grep -q 'RealIoBenchmarks' artifacts/ci-contracts/benchmark-list.log
-          grep -q 'MiniExcelRealIoBenchmarks' artifacts/ci-contracts/benchmark-list.log
-
       - name: Pack
+        shell: bash
         run: |
           rm -rf artifacts/packages
           mkdir -p artifacts/packages
@@ -76,11 +343,9 @@ jobs:
             unzip -l "$package" | grep -q 'lib/'
             unzip -l "$package" | grep -q '\.xml$'
           done
-          mapfile -t mini_packages < <(find artifacts/packages -maxdepth 1 -type f \
-            -name 'Bing.Offices.MiniExcel.*.nupkg' ! -name '*.snupkg' | sort)
+          mapfile -t mini_packages < <(find artifacts/packages -maxdepth 1 -type f             -name 'Bing.Offices.MiniExcel.*.nupkg' ! -name '*.snupkg' | sort)
           test "${#mini_packages[@]}" -eq 1
-          package_version="$(unzip -p "${mini_packages[0]}" '*.nuspec' \
-            | sed -n 's:.*<version>\([^<]*\)</version>.*:\1:p' | head -n 1)"
+          package_version="$(unzip -p "${mini_packages[0]}" '*.nuspec'             | python3 -c 'import sys, xml.etree.ElementTree as ET; root=ET.parse(sys.stdin).getroot(); ns={"n":"http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd"}; print(root.findtext(".//n:version", namespaces=ns) or root.findtext(".//version") or "")')"
           test -n "$package_version"
           for package_id in Bing.Offices.Abstractions Bing.Offices.Core Bing.Offices.Npoi Bing.Offices.MiniExcel; do
             test -f "artifacts/packages/${package_id}.${package_version}.nupkg"
@@ -96,56 +361,68 @@ jobs:
         run: |
           set -o pipefail
           mkdir -p artifacts/consumers/results artifacts/consumers/cache/net6 artifacts/consumers/cache/net8
-          dotnet restore tests/Bing.Offices.Consumer.Net6/Bing.Offices.Consumer.Net6.csproj \
-            --configfile tests/Bing.Offices.Consumer.Net6/NuGet.Config \
-            --packages artifacts/consumers/cache/net6 \
-            -p:BingOfficesPackageVersion="$BING_OFFICES_PACKAGE_VERSION"
-          dotnet restore tests/Bing.Offices.Consumer.Net8/Bing.Offices.Consumer.Net8.csproj \
-            --configfile tests/Bing.Offices.Consumer.Net8/NuGet.Config \
-            --packages artifacts/consumers/cache/net8 \
-            -p:BingOfficesPackageVersion="$BING_OFFICES_PACKAGE_VERSION"
-          dotnet build tests/Bing.Offices.Consumer.Net6/Bing.Offices.Consumer.Net6.csproj \
-            -c Release --no-restore -p:BingOfficesPackageVersion="$BING_OFFICES_PACKAGE_VERSION" \
-            | tee artifacts/consumers/results/net6-build.log
-          dotnet build tests/Bing.Offices.Consumer.Net8/Bing.Offices.Consumer.Net8.csproj \
-            -c Release --no-restore -p:BingOfficesPackageVersion="$BING_OFFICES_PACKAGE_VERSION" \
-            | tee artifacts/consumers/results/net8-build.log
-          dotnet run --project tests/Bing.Offices.Consumer.Net6/Bing.Offices.Consumer.Net6.csproj \
-            -c Release --no-build --no-restore -p:BingOfficesPackageVersion="$BING_OFFICES_PACKAGE_VERSION" \
-            | tee artifacts/consumers/results/net6-run.log
-          dotnet run --project tests/Bing.Offices.Consumer.Net8/Bing.Offices.Consumer.Net8.csproj \
-            -c Release --no-build --no-restore -p:BingOfficesPackageVersion="$BING_OFFICES_PACKAGE_VERSION" \
-            | tee artifacts/consumers/results/net8-run.log
+          dotnet restore tests/Bing.Offices.Consumer.Net6/Bing.Offices.Consumer.Net6.csproj             --configfile tests/Bing.Offices.Consumer.Net6/NuGet.Config             --packages artifacts/consumers/cache/net6             -p:BingOfficesPackageVersion="$BING_OFFICES_PACKAGE_VERSION"
+          dotnet restore tests/Bing.Offices.Consumer.Net8/Bing.Offices.Consumer.Net8.csproj             --configfile tests/Bing.Offices.Consumer.Net8/NuGet.Config             --packages artifacts/consumers/cache/net8             -p:BingOfficesPackageVersion="$BING_OFFICES_PACKAGE_VERSION"
+          dotnet build tests/Bing.Offices.Consumer.Net6/Bing.Offices.Consumer.Net6.csproj             -c Release --no-restore -p:BingOfficesPackageVersion="$BING_OFFICES_PACKAGE_VERSION"             | tee artifacts/consumers/results/net6-build.log
+          dotnet build tests/Bing.Offices.Consumer.Net8/Bing.Offices.Consumer.Net8.csproj             -c Release --no-restore -p:BingOfficesPackageVersion="$BING_OFFICES_PACKAGE_VERSION"             | tee artifacts/consumers/results/net8-build.log
+          dotnet run --project tests/Bing.Offices.Consumer.Net6/Bing.Offices.Consumer.Net6.csproj             -c Release --no-build --no-restore -p:BingOfficesPackageVersion="$BING_OFFICES_PACKAGE_VERSION"             | tee artifacts/consumers/results/net6-run.log
+          dotnet run --project tests/Bing.Offices.Consumer.Net8/Bing.Offices.Consumer.Net8.csproj             -c Release --no-build --no-restore -p:BingOfficesPackageVersion="$BING_OFFICES_PACKAGE_VERSION"             | tee artifacts/consumers/results/net8-run.log
           grep -q "Bing.Offices.Npoi+Bing.Offices.MiniExcel/$BING_OFFICES_PACKAGE_VERSION" artifacts/consumers/results/net6-run.log
           grep -q "Bing.Offices.Npoi+Bing.Offices.MiniExcel/$BING_OFFICES_PACKAGE_VERSION" artifacts/consumers/results/net8-run.log
 
-      - name: Governance checks
-        shell: bash
-        run: |
-          mkdir -p artifacts/api
-          dotnet run --project build/ApiSnapshot/ApiSnapshot.csproj \
-            -c Release --no-build --no-restore -- --identity-self-test true \
-            | tee artifacts/api/identity-self-test.log
-          dotnet run --project build/ApiSnapshot/ApiSnapshot.csproj \
-            -c Release --no-build --no-restore -- \
-            --root output/release \
-            --baseline build/api-snapshot-baseline.json \
-            --packages artifacts/packages \
-            --repository . \
-            --output artifacts/api/compare \
-            | tee artifacts/api/compare.log
-          test "$(sha256sum version.props | cut -d' ' -f1 | tr '[:lower:]' '[:upper:]')" = "77FEBEC429F841DC839F84FED57A48AE4159DF2EA92A15AD808BB3027C39B0D1"
-          test "$(sha256sum version.dev.props | cut -d' ' -f1 | tr '[:lower:]' '[:upper:]')" = "BABFE7703A15E1C11F46B45D34BC59D7913ECB1E3DCFDA901E72F4D60A8D134D"
-          test -z "$(find src tests benchmarks -type d \
-            \( -name artifacts -o -name TestResults -o -name BenchmarkDotNet.Artifacts \) -print -quit)"
-
-      - name: Upload package evidence
+      - name: Upload release evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: bing-offices-package-evidence
+          name: bing-offices-release-evidence
           path: |
             artifacts/packages
             artifacts/consumers/results
             artifacts/ci-contracts
-            artifacts/api
-            artifacts/tests
+
+  api-gate:
+    name: API snapshot and governance
+    needs: release-gates
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Capture version files
+        shell: bash
+        run: |
+          echo "BING_VERSION_PROPS_SHA=$(sha256sum version.props | cut -d' ' -f1 | tr '[:lower:]' '[:upper:]')" >> "$GITHUB_ENV"
+          echo "BING_VERSION_DEV_PROPS_SHA=$(sha256sum version.dev.props | cut -d' ' -f1 | tr '[:lower:]' '[:upper:]')" >> "$GITHUB_ENV"
+
+      - name: Download package evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: bing-offices-release-evidence
+          path: artifacts
+
+      - name: Restore and build API snapshot
+        run: |
+          dotnet restore Bing.Offices.sln
+          dotnet build Bing.Offices.sln -c Release --no-restore
+
+      - name: Run API governance checks
+        shell: bash
+        run: |
+          mkdir -p artifacts/api
+          dotnet run --project build/ApiSnapshot/ApiSnapshot.csproj -c Release --no-build --no-restore -- --identity-self-test true | tee artifacts/api/identity-self-test.log
+          dotnet run --project build/ApiSnapshot/ApiSnapshot.csproj -c Release --no-build --no-restore -- --root output/release --baseline build/api-snapshot-baseline.json --packages artifacts/packages --repository . --output artifacts/api/compare | tee artifacts/api/compare.log
+          test "$(sha256sum version.props | cut -d' ' -f1 | tr '[:lower:]' '[:upper:]')" = "$BING_VERSION_PROPS_SHA"
+          test "$(sha256sum version.dev.props | cut -d' ' -f1 | tr '[:lower:]' '[:upper:]')" = "$BING_VERSION_DEV_PROPS_SHA"
+          test -z "$(find src tests benchmarks -type d \( -name artifacts -o -name TestResults -o -name BenchmarkDotNet.Artifacts \) -print -quit)"
+
+      - name: Upload API evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-api
+          path: artifacts/api

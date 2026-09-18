@@ -15,7 +15,7 @@ public interface IExcelExporter
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 将 Workbook 请求以异步文件/流 IO 写入目标流。
+    /// 将 Workbook 请求写入目标流。
     /// </summary>
     /// <remarks>具体 Provider 的工作簿构建或序列化阶段可能仍为同步阶段；异步契约覆盖外围流写入。</remarks>
     /// <param name="request">Workbook 导出请求。</param>
@@ -35,8 +35,11 @@ public interface IExcelExporter
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 将 Workbook 请求以原子方式异步写入文件。
+    /// 将 Workbook 请求以原子方式写入文件。
     /// </summary>
+    /// <remarks>
+    /// 使用异步文件/流 IO 执行外围写入。
+    /// </remarks>
     /// <param name="request">Workbook 导出请求。</param>
     /// <param name="path">目标文件路径。</param>
     /// <param name="cancellationToken">取消令牌。</param>

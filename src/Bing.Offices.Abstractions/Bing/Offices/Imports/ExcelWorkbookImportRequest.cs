@@ -10,7 +10,9 @@ namespace Bing.Offices.Imports;
 /// <typeparam name="TWorkbook">承载各工作表实体的工作簿模型类型。</typeparam>
 public sealed class ExcelWorkbookImportRequest<TWorkbook> where TWorkbook : class, new()
 {
-    /// <summary>初始化一个 <see cref="ExcelWorkbookImportRequest{TWorkbook}" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="ExcelWorkbookImportRequest{TWorkbook}" /> 类型的实例。
+    /// </summary>
     /// <param name="sheets">按配置顺序排列的工作表请求。</param>
     /// <param name="relations">工作簿父子关系请求。</param>
     /// <param name="sheetNameComparison">工作表名称比较策略。</param>
@@ -37,25 +39,39 @@ public sealed class ExcelWorkbookImportRequest<TWorkbook> where TWorkbook : clas
     /// </summary>
     public int SheetCount => Sheets.Count;
 
-    /// <summary>获取不可变 Sheet 导入描述。</summary>
+    /// <summary>
+    /// 获取不可变 Sheet 导入描述。
+    /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public IReadOnlyList<ExcelSheetImportRequest> Sheets { get; }
-    /// <summary>获取父子关系描述。</summary>
+    /// <summary>
+    /// 获取父子关系描述。
+    /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public IReadOnlyList<ExcelRelationRequest> Relations { get; }
-    /// <summary>获取Sheet 名称比较策略。</summary>
+    /// <summary>
+    /// 获取Sheet 名称比较策略。
+    /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public ExcelNameComparison SheetNameComparison { get; }
-    /// <summary>获取输入资源限制。</summary>
+    /// <summary>
+    /// 获取输入资源限制。
+    /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public ExcelResourceLimits ResourceLimits { get; }
-    /// <summary>获取失败工作簿选项。</summary>
+    /// <summary>
+    /// 获取失败工作簿选项。
+    /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public ExcelImportFailureOptions FailureOptions { get; }
-    /// <summary>获取校验模式。</summary>
+    /// <summary>
+    /// 获取校验模式。
+    /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public ExcelImportValidationMode ValidationMode { get; }
-    /// <summary>获取不支持特性策略。</summary>
+    /// <summary>
+    /// 获取不支持特性策略。
+    /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public ExcelUnsupportedFeaturePolicy UnsupportedFeaturePolicy { get; }
 }
@@ -66,7 +82,9 @@ public sealed class ExcelWorkbookImportRequest<TWorkbook> where TWorkbook : clas
 [EditorBrowsable(EditorBrowsableState.Never)]
 public sealed class ExcelSheetImportRequest
 {
-    /// <summary>初始化一个 <see cref="ExcelSheetImportRequest" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="ExcelSheetImportRequest" /> 类型的实例。
+    /// </summary>
     /// <param name="name">工作表显示名称。</param>
     /// <param name="selector">源工作表选择器。</param>
     /// <param name="itemType">工作表数据项类型。</param>
@@ -151,58 +169,94 @@ public sealed class ExcelSheetImportRequest
     /// </summary>
     public int DynamicColumnCount => DynamicColumns.Count;
 
-    /// <summary>获取Sheet 数据项类型。</summary>
+    /// <summary>
+    /// 获取Sheet 数据项类型。
+    /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Type ItemType { get; }
-    /// <summary>获取目标集合读取器。</summary>
+    /// <summary>
+    /// 获取目标集合读取器。
+    /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Func<object, object> Target { get; }
-    /// <summary>获取动态列定义。</summary>
+    /// <summary>
+    /// 获取动态列定义。
+    /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public IReadOnlyList<Exports.ExcelDynamicColumnDefinition> DynamicColumns { get; }
-    /// <summary>获取动态目标表达式。</summary>
+    /// <summary>
+    /// 获取动态目标表达式。
+    /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Expression DynamicTarget { get; }
-    /// <summary>获取是否要求预期表头。</summary>
+    /// <summary>
+    /// 获取是否要求预期表头。
+    /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public bool RequireExpectedHeaders { get; }
-    /// <summary>获取单元格校验模式。</summary>
+    /// <summary>
+    /// 获取单元格校验模式。
+    /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public ValidateMode ValidateMode { get; }
-    /// <summary>获取解析区域性。</summary>
+    /// <summary>
+    /// 获取解析区域性。
+    /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public System.Globalization.CultureInfo Culture { get; }
-    /// <summary>获取映射配置。</summary>
+    /// <summary>
+    /// 获取映射配置。
+    /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Configurations.ExcelMappingConfiguration MappingConfiguration { get; }
-    /// <summary>获取映射文档。</summary>
+    /// <summary>
+    /// 获取映射文档。
+    /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Configurations.ExcelMappingDocument MappingDocument { get; }
-    /// <summary>获取动态目标读取器。</summary>
+    /// <summary>
+    /// 获取动态目标读取器。
+    /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Func<object, object> DynamicTargetGetter { get; }
-    /// <summary>获取最大读取列数。</summary>
+    /// <summary>
+    /// 获取最大读取列数。
+    /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public int MaxReadColumns { get; }
-    /// <summary>获取读取列范围。</summary>
+    /// <summary>
+    /// 获取读取列范围。
+    /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public ExcelReadColumnRange ReadColumnRange { get; }
-    /// <summary>获取表头比较策略。</summary>
+    /// <summary>
+    /// 获取表头比较策略。
+    /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public ExcelNameComparison HeaderComparison { get; }
-    /// <summary>获取表头空白处理策略。</summary>
+    /// <summary>
+    /// 获取表头空白处理策略。
+    /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public ExcelWhitespacePolicy HeaderWhitespace { get; }
-    /// <summary>获取正文空白处理策略。</summary>
+    /// <summary>
+    /// 获取正文空白处理策略。
+    /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public ExcelWhitespacePolicy BodyWhitespace { get; }
-    /// <summary>获取是否拒绝未知动态列。</summary>
+    /// <summary>
+    /// 获取是否拒绝未知动态列。
+    /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public bool FailOnUnknownDynamicColumns { get; }
-    /// <summary>获取是否报告空行。</summary>
+    /// <summary>
+    /// 获取是否报告空行。
+    /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public bool ReportEmptyRows { get; }
-    /// <summary>获取是否遇到首个空行即停止。</summary>
+    /// <summary>
+    /// 获取是否遇到首个空行即停止。
+    /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public bool StopAtFirstEmptyRow { get; }
 }
@@ -213,7 +267,9 @@ public sealed class ExcelSheetImportRequest
 [EditorBrowsable(EditorBrowsableState.Never)]
 public sealed class ExcelRelationRequest
 {
-    /// <summary>初始化一个 <see cref="ExcelRelationRequest" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="ExcelRelationRequest" /> 类型的实例。
+    /// </summary>
     /// <param name="parents">读取父实体集合的委托。</param>
     /// <param name="children">读取子实体集合的委托。</param>
     /// <param name="parentKey">读取父实体关联键的委托。</param>
@@ -236,32 +292,50 @@ public sealed class ExcelRelationRequest
         Comparer = comparer;
     }
 
-    /// <summary>获取父集合读取器。</summary>
+    /// <summary>
+    /// 获取父集合读取器。
+    /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Func<object, object> Parents { get; }
-    /// <summary>获取子集合读取器。</summary>
+    /// <summary>
+    /// 获取子集合读取器。
+    /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Func<object, object> Children { get; }
-    /// <summary>获取父键委托。</summary>
+    /// <summary>
+    /// 获取父键委托。
+    /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Delegate ParentKey { get; }
-    /// <summary>获取子键委托。</summary>
+    /// <summary>
+    /// 获取子键委托。
+    /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Delegate ChildKey { get; }
-    /// <summary>获取子导航属性写入器。</summary>
+    /// <summary>
+    /// 获取子导航属性写入器。
+    /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Func<object, object> Navigation { get; }
-    /// <summary>获取父实体类型。</summary>
+    /// <summary>
+    /// 获取父实体类型。
+    /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Type ParentType { get; }
-    /// <summary>获取子实体类型。</summary>
+    /// <summary>
+    /// 获取子实体类型。
+    /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Type ChildType { get; }
-    /// <summary>获取键比较器。</summary>
+    /// <summary>
+    /// 获取键比较器。
+    /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public object Comparer { get; }
 
-    /// <summary>根据父子表达式创建关系执行描述。</summary>
+    /// <summary>
+    /// 根据父子表达式创建关系执行描述。
+    /// </summary>
     /// <typeparam name="TWorkbook">工作簿模型类型。</typeparam>
     /// <typeparam name="TParent">父实体类型。</typeparam>
     /// <typeparam name="TChild">子实体类型。</typeparam>

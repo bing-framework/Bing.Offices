@@ -1,6 +1,8 @@
 ﻿namespace Bing.Offices.Styles;
 
-/// <summary>与 Excel 提供程序无关的单元格样式快照。</summary>
+/// <summary>
+/// 与 Excel 提供程序无关的单元格样式快照。
+/// </summary>
 public sealed class ExcelCellStyle
 {
     /// <summary>

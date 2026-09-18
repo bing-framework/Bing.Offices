@@ -9,7 +9,9 @@ namespace Bing.Offices.Configurations;
 /// <typeparam name="T">导出模型类型。</typeparam>
 public sealed class ExportMappingBuilder<T> where T : class, new()
 {
-    /// <summary>保存当前导出方向尚未构建的可变列配置。</summary>
+    /// <summary>
+    /// 保存当前导出方向尚未构建的可变列配置。
+    /// </summary>
     private readonly ExcelMappingConfiguration _configuration = new();
 
     /// <summary>
@@ -52,12 +54,18 @@ public sealed class ExportMappingBuilder<T> where T : class, new()
 /// <typeparam name="TProperty">当前属性的类型。</typeparam>
 public sealed class ExportColumnMappingBuilder<T, TProperty> where T : class, new()
 {
-    /// <summary>返回当前属性配置器所属的导出构建器。</summary>
+    /// <summary>
+    /// 保存当前属性配置器所属的导出构建器。
+    /// </summary>
     private readonly ExportMappingBuilder<T> _owner;
-    /// <summary>当前属性对应的可变列配置。</summary>
+    /// <summary>
+    /// 当前属性对应的可变列配置。
+    /// </summary>
     private readonly ExcelColumnConfiguration _configuration;
 
-    /// <summary>初始化一个 <see cref="ExportColumnMappingBuilder{T,TProperty}" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="ExportColumnMappingBuilder{T,TProperty}" /> 类型的实例。
+    /// </summary>
     /// <param name="owner">当前属性配置器所属的导出构建器。</param>
     /// <param name="configuration">当前属性对应的可变列配置。</param>
     internal ExportColumnMappingBuilder(ExportMappingBuilder<T> owner, ExcelColumnConfiguration configuration)
@@ -110,7 +118,9 @@ public sealed class ExportColumnMappingBuilder<T, TProperty> where T : class, ne
         return this;
     }
 
-    /// <summary>设置导出值转换器名称。</summary>
+    /// <summary>
+    /// 设置导出值转换器名称。
+    /// </summary>
     /// <param name="converterName">要绑定的命名转换器名称。</param>
     /// <returns>当前属性配置器，用于继续配置。</returns>
     public ExportColumnMappingBuilder<T, TProperty> HasConverter(string converterName)
@@ -119,7 +129,9 @@ public sealed class ExportColumnMappingBuilder<T, TProperty> where T : class, ne
         return this;
     }
 
-    /// <summary>设置属性值到导出显示文本的映射。</summary>
+    /// <summary>
+    /// 设置属性值到导出显示文本的映射。
+    /// </summary>
     /// <param name="text">导出文件中显示的文本。</param>
     /// <param name="value">需要映射的属性值。</param>
     /// <returns>当前属性配置器，用于继续配置。</returns>

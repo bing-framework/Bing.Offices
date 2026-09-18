@@ -5,11 +5,17 @@
 /// </summary>
 public enum ExcelImportFailureWorkbookMode
 {
-    /// <summary>不生成失败工作簿。</summary>
+    /// <summary>
+    /// 不生成失败工作簿。
+    /// </summary>
     None,
-    /// <summary>在原工作簿副本上标记错误。</summary>
+    /// <summary>
+    /// 在原工作簿副本上标记错误。
+    /// </summary>
     AnnotatedOriginal,
-    /// <summary>只输出包含失败行的工作簿。</summary>
+    /// <summary>
+    /// 只输出包含失败行的工作簿。
+    /// </summary>
     ErrorRowsOnly
 }
 
@@ -18,7 +24,9 @@ public enum ExcelImportFailureWorkbookMode
 /// </summary>
 public sealed class ExcelImportFailureDiagnostic
 {
-    /// <summary>初始化一个 <see cref="ExcelImportFailureDiagnostic" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="ExcelImportFailureDiagnostic" /> 类型的实例。
+    /// </summary>
     /// <param name="code">诊断代码。</param>
     /// <param name="temporaryPath">未包含工作簿内容的临时文件路径。</param>
     /// <param name="exception">清理或输出阶段捕获的异常。</param>
@@ -29,13 +37,19 @@ public sealed class ExcelImportFailureDiagnostic
         Exception = exception;
     }
 
-    /// <summary>获取诊断代码。</summary>
+    /// <summary>
+    /// 获取诊断代码。
+    /// </summary>
     public string Code { get; }
 
-    /// <summary>获取未包含工作簿内容的临时文件路径。</summary>
+    /// <summary>
+    /// 获取未包含工作簿内容的临时文件路径。
+    /// </summary>
     public string TemporaryPath { get; }
 
-    /// <summary>获取清理异常。</summary>
+    /// <summary>
+    /// 获取清理异常。
+    /// </summary>
     public Exception Exception { get; }
 }
 
@@ -44,13 +58,21 @@ public sealed class ExcelImportFailureDiagnostic
 /// </summary>
 public enum ExcelImportCommentConflictPolicy
 {
-    /// <summary>保留已有批注，不追加失败信息。</summary>
+    /// <summary>
+    /// 保留已有批注，不追加失败信息。
+    /// </summary>
     Preserve,
-    /// <summary>在已有批注后追加失败信息。</summary>
+    /// <summary>
+    /// 在已有批注后追加失败信息。
+    /// </summary>
     Append,
-    /// <summary>用失败信息替换已有批注。</summary>
+    /// <summary>
+    /// 用失败信息替换已有批注。
+    /// </summary>
     Replace,
-    /// <summary>存在已有批注时直接失败。</summary>
+    /// <summary>
+    /// 存在已有批注时直接失败。
+    /// </summary>
     Fail
 }
 
@@ -59,13 +81,21 @@ public enum ExcelImportCommentConflictPolicy
 /// </summary>
 public enum ExcelImportValidationMode
 {
-    /// <summary>禁用配置和工作簿原生规则。</summary>
+    /// <summary>
+    /// 禁用配置和工作簿原生规则。
+    /// </summary>
     Disabled,
-    /// <summary>只执行配置和属性规则。</summary>
+    /// <summary>
+    /// 只执行配置和属性规则。
+    /// </summary>
     ConfiguredRules,
-    /// <summary>只执行工作簿原生规则。</summary>
+    /// <summary>
+    /// 只执行工作簿原生规则。
+    /// </summary>
     WorkbookRules,
-    /// <summary>同时执行配置和工作簿规则。</summary>
+    /// <summary>
+    /// 同时执行配置和工作簿规则。
+    /// </summary>
     ConfiguredAndWorkbook
 }
 
@@ -74,11 +104,17 @@ public enum ExcelImportValidationMode
 /// </summary>
 public enum ExcelImageMultiplicityPolicy
 {
-    /// <summary>只绑定第一张图片。</summary>
+    /// <summary>
+    /// 只绑定第一张图片。
+    /// </summary>
     First,
-    /// <summary>绑定全部图片。</summary>
+    /// <summary>
+    /// 绑定全部图片。
+    /// </summary>
     All,
-    /// <summary>出现多张图片时报告错误。</summary>
+    /// <summary>
+    /// 出现多张图片时报告错误。
+    /// </summary>
     Fail
 }
 
@@ -87,9 +123,12 @@ public enum ExcelImageMultiplicityPolicy
 /// </summary>
 public enum ExcelUnsupportedFeaturePolicy
 {
-    /// <summary>报告为导入错误。</summary>
+    /// <summary>
+    /// 报告为导入错误。
+    /// </summary>
     Report,
-    /// <summary>直接拒绝导入。</summary>
+    /// <summary>
+    /// 直接拒绝导入。
+    /// </summary>
     Fail
 }
-

@@ -21,7 +21,9 @@ namespace Bing.Offices;
 /// </summary>
 internal sealed class ExcelColumnPlan
 {
-    /// <summary>初始化一个 <see cref="ExcelColumnPlan" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="ExcelColumnPlan" /> 类型的实例。
+    /// </summary>
     /// <param name="headerName">当前工作表中使用的表头名称。</param>
     /// <param name="property">提供程序无关的列映射。</param>
     /// <param name="isDynamic">是否为运行时定义的动态列。</param>
@@ -74,62 +76,118 @@ internal sealed class ExcelColumnPlan
         ValidationBindings = validationBindings ?? Array.Empty<IExcelValidationBinding>();
     }
 
-    /// <summary>获取实际匹配到的表头名称。</summary>
+    /// <summary>
+    /// 获取实际匹配到的表头名称。
+    /// </summary>
     internal string HeaderName { get; }
-    /// <summary>获取导出时写入的列标题。</summary>
+    /// <summary>
+    /// 获取导出时写入的列标题。
+    /// </summary>
     internal string Title { get; }
-    /// <summary>获取提供程序无关的列映射。</summary>
+    /// <summary>
+    /// 获取提供程序无关的列映射。
+    /// </summary>
     internal IExcelMappingColumn Property { get; }
-    /// <summary>获取实体上对应的反射属性。</summary>
+    /// <summary>
+    /// 获取实体上对应的反射属性。
+    /// </summary>
     internal PropertyInfo ReflectionProperty { get; }
-    /// <summary>获取是否为运行时定义的动态列。</summary>
+    /// <summary>
+    /// 获取是否为运行时定义的动态列。
+    /// </summary>
     internal bool IsDynamic { get; }
-    /// <summary>获取工作表中的零基列索引。</summary>
+    /// <summary>
+    /// 获取工作表中的零基列索引。
+    /// </summary>
     internal int ColumnIndex { get; }
-    /// <summary>获取动态列的请求级定义；固定列时为 null。</summary>
+    /// <summary>
+    /// 获取动态列的请求级定义；固定列时为 null。
+    /// </summary>
     internal ExcelDynamicColumnDefinition DynamicDefinition { get; }
-    /// <summary>获取用于错误定位和动态字典访问的稳定列键。</summary>
+    /// <summary>
+    /// 获取用于错误定位和动态字典访问的稳定列键。
+    /// </summary>
     internal string Key { get; }
-    /// <summary>获取从实体读取当前列值的委托。</summary>
+    /// <summary>
+    /// 获取从实体读取当前列值的委托。
+    /// </summary>
     internal Func<object, object> Getter { get; }
-    /// <summary>获取将转换后值写回实体的委托。</summary>
+    /// <summary>
+    /// 获取将转换后值写回实体的委托。
+    /// </summary>
     internal Action<object, object> Setter { get; }
-    /// <summary>获取显式配置的转换器名称。</summary>
+    /// <summary>
+    /// 获取显式配置的转换器名称。
+    /// </summary>
     internal string ConverterName { get; }
-    /// <summary>获取配置的命名校验规则名称。</summary>
+    /// <summary>
+    /// 获取配置的命名校验规则名称。
+    /// </summary>
     internal IReadOnlyList<string> ValidationRuleNames { get; }
-    /// <summary>获取兼容的单个命名校验规则名称。</summary>
+    /// <summary>
+    /// 获取兼容的单个命名校验规则名称。
+    /// </summary>
     internal string ValidatorName { get; }
-    /// <summary>获取当前列最终使用的值类型。</summary>
+    /// <summary>
+    /// 获取当前列最终使用的值类型。
+    /// </summary>
     internal Type ValueType { get; }
-    /// <summary>获取导出值使用的格式化字符串。</summary>
+    /// <summary>
+    /// 获取导出值使用的格式化字符串。
+    /// </summary>
     internal string Formatter { get; }
-    /// <summary>获取未指定格式化字符串时的十进制小数位数。</summary>
+    /// <summary>
+    /// 获取未指定格式化字符串时的十进制小数位数。
+    /// </summary>
     internal byte? DecimalScale { get; }
-    /// <summary>获取显示文本到配置值文本的映射。</summary>
+    /// <summary>
+    /// 获取显示文本到配置值文本的映射。
+    /// </summary>
     internal IReadOnlyDictionary<string, string> ValueMap { get; }
-    /// <summary>获取是否忽略该映射列。</summary>
+    /// <summary>
+    /// 获取是否忽略该映射列。
+    /// </summary>
     internal bool Ignored { get; }
-    /// <summary>获取是否对列值执行唯一性校验。</summary>
+    /// <summary>
+    /// 获取是否对列值执行唯一性校验。
+    /// </summary>
     internal bool IsUnique { get; }
-    /// <summary>获取唯一性校验是否忽略空值。</summary>
+    /// <summary>
+    /// 获取唯一性校验是否忽略空值。
+    /// </summary>
     internal bool UniqueIgnoreEmpty { get; }
-    /// <summary>获取列属性是否声明合并单元格行为。</summary>
+    /// <summary>
+    /// 获取列属性是否声明合并单元格行为。
+    /// </summary>
     internal bool IsMerged { get; }
-    /// <summary>获取同一单元格含多个图片时使用的处理策略。</summary>
+    /// <summary>
+    /// 获取同一单元格含多个图片时使用的处理策略。
+    /// </summary>
     internal ExcelImageMultiplicityPolicy ImageMultiplicity { get; }
-    /// <summary>获取动态列表头使用的样式。</summary>
+    /// <summary>
+    /// 获取动态列表头使用的样式。
+    /// </summary>
     internal ExcelCellStyle HeaderStyle { get; }
-    /// <summary>获取动态列数据单元格使用的样式。</summary>
+    /// <summary>
+    /// 获取动态列数据单元格使用的样式。
+    /// </summary>
     internal ExcelCellStyle BodyStyle { get; }
-    /// <summary>获取按优先级绑定的值转换器。</summary>
+    /// <summary>
+    /// 获取按优先级绑定的值转换器。
+    /// </summary>
     internal IReadOnlyList<IExcelValueConverter> ValueConverters { get; }
-    /// <summary>获取按配置绑定的校验规则。</summary>
+    /// <summary>
+    /// 获取按配置绑定的校验规则。
+    /// </summary>
     internal IReadOnlyList<IExcelValidationBinding> ValidationBindings { get; }
-    /// <summary>获取属性声明的日期输入配置。</summary>
+    /// <summary>
+    /// 获取属性声明的日期输入配置。
+    /// </summary>
     internal ExcelDateAttribute DateAttribute { get; }
 
-    /// <summary>将导入文本转换为当前列的目标值。</summary>
+    /// <summary>
+    /// 将导入文本转换为当前列的目标值。
+    /// </summary>
     /// <param name="value">规范化后的文本值。</param>
     /// <param name="cellValue">保留原始类型和公式信息的单元格值。</param>
     /// <param name="sheetName">单元格所在工作表名称。</param>
@@ -190,7 +248,9 @@ internal sealed class ExcelColumnPlan
         return Convert.ChangeType(value, targetType, culture);
     }
 
-    /// <summary>写入属性并解包反射调用产生的目标异常。</summary>
+    /// <summary>
+    /// 写入属性并解包反射调用产生的目标异常。
+    /// </summary>
     /// <param name="property">待写入的实体属性。</param>
     /// <param name="instance">接收属性值的实体实例。</param>
     /// <param name="value">要写入属性的值。</param>
@@ -207,7 +267,9 @@ internal sealed class ExcelColumnPlan
         }
     }
 
-    /// <summary>将实体属性值转换为可写入工作表的值。</summary>
+    /// <summary>
+    /// 将实体属性值转换为可写入工作表的值。
+    /// </summary>
     /// <param name="value">实体属性的当前值。</param>
     /// <param name="sheetName">目标工作表名称。</param>
     /// <param name="rowIndex">目标单元格的一基行号。</param>
@@ -290,7 +352,9 @@ internal sealed class ExcelColumnPlan
         }
     }
 
-    /// <summary>按照列格式和精度规则将值写入单元格。</summary>
+    /// <summary>
+    /// 按照列格式和精度规则将值写入单元格。
+    /// </summary>
     /// <param name="cell">目标 NPOI 单元格。</param>
     /// <param name="value">已转换的列值。</param>
     internal void WriteValue(ICell cell, object value)
@@ -301,7 +365,9 @@ internal sealed class ExcelColumnPlan
             cell.SetValue(value, DecimalScale);
     }
 
-    /// <summary>将配置值映射文本转换为目标列类型。</summary>
+    /// <summary>
+    /// 将配置值映射文本转换为目标列类型。
+    /// </summary>
     /// <param name="value">映射配置中保存的文本值。</param>
     /// <param name="culture">值转换使用的区域性。</param>
     /// <returns>目标类型的映射值；文本为空引用时返回 null。</returns>
@@ -326,7 +392,9 @@ internal sealed class ExcelColumnPlan
         return Convert.ChangeType(value, targetType, culture);
     }
 
-    /// <summary>比较配置映射值与当前实体值的文本表示。</summary>
+    /// <summary>
+    /// 比较配置映射值与当前实体值的文本表示。
+    /// </summary>
     /// <param name="mappingValue">映射配置中的值。</param>
     /// <param name="value">待比较的实体值。</param>
     /// <param name="culture">格式化实体值使用的区域性。</param>

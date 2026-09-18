@@ -31,19 +31,33 @@ public static class ExcelImport
 /// <typeparam name="TWorkbook">根 Workbook 模型类型。</typeparam>
 public sealed class ExcelWorkbookImportBuilder<TWorkbook> where TWorkbook : class, new()
 {
-    /// <summary>按配置顺序保存待导入的工作表请求。</summary>
+    /// <summary>
+    /// 按配置顺序保存待导入的工作表请求。
+    /// </summary>
     private readonly List<ExcelSheetImportRequest> _sheets = new List<ExcelSheetImportRequest>();
-    /// <summary>保存 Workbook 级关系绑定请求，构建完成时转换为只读快照。</summary>
+    /// <summary>
+    /// 保存 Workbook 级关系绑定请求，构建完成时转换为只读快照。
+    /// </summary>
     private readonly List<ExcelRelationRequest> _relations = new List<ExcelRelationRequest>();
-    /// <summary>按名称选择工作表时使用的比较策略，默认忽略大小写。</summary>
+    /// <summary>
+    /// 按名称选择工作表时使用的比较策略，默认忽略大小写。
+    /// </summary>
     private ExcelNameComparison _sheetNameComparison = ExcelNameComparison.OrdinalIgnoreCase;
-    /// <summary>导入过程的资源限制；未设置时沿用 Provider 默认值。</summary>
+    /// <summary>
+    /// 导入过程的资源限制；未设置时沿用 Provider 默认值。
+    /// </summary>
     private ExcelResourceLimits _resourceLimits;
-    /// <summary>失败工作簿输出选项；未设置时不生成失败输出。</summary>
+    /// <summary>
+    /// 失败工作簿输出选项；未设置时不生成失败输出。
+    /// </summary>
     private ExcelImportFailureOptions _failureOptions;
-    /// <summary>导入校验模式，默认执行已配置的校验规则。</summary>
+    /// <summary>
+    /// 导入校验模式，默认执行已配置的校验规则。
+    /// </summary>
     private ExcelImportValidationMode _validationMode = ExcelImportValidationMode.ConfiguredRules;
-    /// <summary>不支持功能的处理策略，默认遇到不支持功能时失败。</summary>
+    /// <summary>
+    /// 不支持功能的处理策略，默认遇到不支持功能时失败。
+    /// </summary>
     private ExcelUnsupportedFeaturePolicy _unsupportedFeaturePolicy = ExcelUnsupportedFeaturePolicy.Fail;
 
     /// <summary>
@@ -169,7 +183,9 @@ public sealed class ExcelWorkbookImportBuilder<TWorkbook> where TWorkbook : clas
         return this;
     }
 
-    /// <summary>构建并校验当前 Workbook 导入请求。</summary>
+    /// <summary>
+    /// 构建并校验当前 Workbook 导入请求。
+    /// </summary>
     /// <returns>不可变的 Workbook 导入请求。</returns>
     internal ExcelWorkbookImportRequest<TWorkbook> Build()
     {
@@ -206,49 +222,91 @@ public sealed class ExcelWorkbookImportBuilder<TWorkbook> where TWorkbook : clas
 /// <typeparam name="TItem">Sheet 明细模型类型。</typeparam>
 public sealed class ExcelSheetImportBuilder<TItem> where TItem : class, new()
 {
-    /// <summary>目标工作表名称或选择器显示名称。</summary>
+    /// <summary>
+    /// 目标工作表名称或选择器显示名称。
+    /// </summary>
     private readonly string _name;
-    /// <summary>用于构造导入实体的目标表达式。</summary>
+    /// <summary>
+    /// 用于构造导入实体的目标表达式。
+    /// </summary>
     private readonly Expression _target;
-    /// <summary>选择源工作表的规则。</summary>
+    /// <summary>
+    /// 选择源工作表的规则。
+    /// </summary>
     private readonly ExcelSheetSelector _selector;
-    /// <summary>表头所在的零基行索引。</summary>
+    /// <summary>
+    /// 表头所在的零基行索引。
+    /// </summary>
     private int _headerRowIndex;
-    /// <summary>数据起始行的零基索引，默认为 1。</summary>
+    /// <summary>
+    /// 数据起始行的零基索引，默认为 1。
+    /// </summary>
     private int _dataRowStartIndex = 1;
-    /// <summary>当前请求定义的动态列集合。</summary>
+    /// <summary>
+    /// 当前请求定义的动态列集合。
+    /// </summary>
     private IReadOnlyList<Exports.ExcelDynamicColumnDefinition> _dynamicColumns =
         Array.Empty<Exports.ExcelDynamicColumnDefinition>();
-    /// <summary>是否要求源工作表包含期望的表头，默认为 true。</summary>
+    /// <summary>
+    /// 是否要求源工作表包含期望的表头，默认为 true。
+    /// </summary>
     private bool _requireExpectedHeaders = true;
-    /// <summary>校验失败时的处理模式，默认为遇到首个失败即停止。</summary>
+    /// <summary>
+    /// 校验失败时的处理模式，默认为遇到首个失败即停止。
+    /// </summary>
     private ValidateMode _validateMode = ValidateMode.StopOnFirstFailure;
-    /// <summary>文本转换使用的区域性，默认为不变区域性。</summary>
+    /// <summary>
+    /// 文本转换使用的区域性，默认为不变区域性。
+    /// </summary>
     private System.Globalization.CultureInfo _culture = System.Globalization.CultureInfo.InvariantCulture;
-    /// <summary>请求级映射配置，未设置时使用默认映射。</summary>
+    /// <summary>
+    /// 请求级映射配置，未设置时使用默认映射。
+    /// </summary>
     private Configurations.ExcelMappingConfiguration _requestMappingConfiguration;
-    /// <summary>请求级规范化映射文档，未设置时不应用文档配置。</summary>
+    /// <summary>
+    /// 请求级规范化映射文档，未设置时不应用文档配置。
+    /// </summary>
     private Configurations.ExcelMappingDocument _mappingDocument;
-    /// <summary>动态列值读取表达式，未设置时不读取动态值。</summary>
+    /// <summary>
+    /// 动态列值读取表达式，未设置时不读取动态值。
+    /// </summary>
     private Expression<Func<TItem, IDictionary<string, object>>> _dynamicTarget;
-    /// <summary>单行允许读取的最大列数，默认为 100。</summary>
+    /// <summary>
+    /// 单行允许读取的最大列数，默认为 100。
+    /// </summary>
     private int _maxReadColumns = 100;
-    /// <summary>限制读取范围的列区间，未设置时读取默认范围。</summary>
+    /// <summary>
+    /// 限制读取范围的列区间，未设置时读取默认范围。
+    /// </summary>
     private ExcelReadColumnRange _readColumnRange;
-    /// <summary>表头名称比较策略，默认忽略大小写。</summary>
+    /// <summary>
+    /// 表头名称比较策略，默认忽略大小写。
+    /// </summary>
     private ExcelNameComparison _headerComparison = ExcelNameComparison.OrdinalIgnoreCase;
-    /// <summary>表头文本的空白处理策略，默认为 Trim。</summary>
+    /// <summary>
+    /// 表头文本的空白处理策略，默认为 Trim。
+    /// </summary>
     private ExcelWhitespacePolicy _headerWhitespace = ExcelWhitespacePolicy.Trim;
-    /// <summary>正文文本的空白处理策略，默认为 Trim。</summary>
+    /// <summary>
+    /// 正文文本的空白处理策略，默认为 Trim。
+    /// </summary>
     private ExcelWhitespacePolicy _bodyWhitespace = ExcelWhitespacePolicy.Trim;
-    /// <summary>是否遇到未知动态列时失败。</summary>
+    /// <summary>
+    /// 是否遇到未知动态列时失败。
+    /// </summary>
     private bool _failOnUnknownDynamicColumns;
-    /// <summary>是否将空行写入导入结果。</summary>
+    /// <summary>
+    /// 是否将空行写入导入结果。
+    /// </summary>
     private bool _reportEmptyRows;
-    /// <summary>是否在首个空行处停止读取。</summary>
+    /// <summary>
+    /// 是否在首个空行处停止读取。
+    /// </summary>
     private bool _stopAtFirstEmptyRow;
 
-    /// <summary>初始化一个 <see cref="ExcelSheetImportBuilder{TItem}" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="ExcelSheetImportBuilder{TItem}" /> 类型的实例。
+    /// </summary>
     /// <param name="selector">选择源工作表的选择器。</param>
     /// <param name="target">接收导入实体的目标集合表达式。</param>
     internal ExcelSheetImportBuilder(ExcelSheetSelector selector, Expression target)
@@ -444,7 +502,9 @@ public sealed class ExcelSheetImportBuilder<TItem> where TItem : class, new()
         return this;
     }
 
-    /// <summary>验证并生成不可变 Sheet 导入请求。</summary>
+    /// <summary>
+    /// 验证并生成不可变 Sheet 导入请求。
+    /// </summary>
     /// <returns>已完成校验的 Sheet 导入请求。</returns>
     internal ExcelSheetImportRequest Build()
     {

@@ -4,25 +4,39 @@ using Bing.Offices.Conversions;
 
 namespace Bing.Offices.Dates;
 
-/// <summary>无 offset 文本转换为 DateTimeOffset 时使用的策略。</summary>
+/// <summary>
+/// 无 offset 文本转换为 DateTimeOffset 时使用的策略。
+/// </summary>
 public enum ExcelDateOffsetPolicy
 {
-    /// <summary>必须由输入文本显式提供 offset。</summary>
+    /// <summary>
+    /// 必须由输入文本显式提供 offset。
+    /// </summary>
     RequireExplicitOffset,
-    /// <summary>使用配置的固定 offset。</summary>
+    /// <summary>
+    /// 使用配置的固定 offset。
+    /// </summary>
     UseFixedOffset
 }
 
-/// <summary>Excel 与 CSV 共用的确定性日期解析器。</summary>
+/// <summary>
+/// Excel 与 CSV 共用的确定性日期解析器。
+/// </summary>
 internal static class ExcelDateParser
 {
-    /// <summary>未指定格式时使用的默认日期格式（yyyy-MM-dd）。</summary>
+    /// <summary>
+    /// 未指定格式时使用的默认日期格式（yyyy-MM-dd）。
+    /// </summary>
     private const string DefaultDateFormat = "yyyy-MM-dd";
 
-    /// <summary>Excel 1900 日期系统的零点。</summary>
+    /// <summary>
+    /// Excel 1900 日期系统的零点。
+    /// </summary>
     private static readonly DateTime Excel1900Epoch = new DateTime(1899, 12, 31);
 
-    /// <summary>一天包含的毫秒数，用于跨目标框架保持 serial 精度。</summary>
+    /// <summary>
+    /// 一天包含的毫秒数（86,400,000），用于保持 serial 精度。
+    /// </summary>
     private const double MillisecondsPerDay = 86400000d;
 
     /// <summary>
@@ -198,7 +212,9 @@ internal static class ExcelDateParser
         return true;
     }
 
-    /// <summary>判断日期文本是否显式包含时区偏移或 UTC 标记。</summary>
+    /// <summary>
+    /// 判断日期文本是否显式包含时区偏移或 UTC 标记。
+    /// </summary>
     /// <param name="text">待检查的日期文本。</param>
     /// <returns>文本包含可识别的显式时区信息时为 true。</returns>
     private static bool HasExplicitOffset(string text)
@@ -212,7 +228,9 @@ internal static class ExcelDateParser
             && text[separator + 3] == ':';
     }
 
-    /// <summary>获取无显式 offset 日期使用的固定偏移。</summary>
+    /// <summary>
+    /// 获取无显式 offset 日期使用的固定偏移。
+    /// </summary>
     /// <param name="attribute">日期输入配置。</param>
     /// <param name="offset">配置的时间偏移。</param>
     /// <returns>配置为固定偏移且包含偏移分钟时为 true。</returns>
@@ -238,7 +256,9 @@ internal static class ExcelDateParser
         }
     }
 
-    /// <summary>将 Excel 序列日期转换为无时区日期时间。</summary>
+    /// <summary>
+    /// 将 Excel 序列日期转换为无时区日期时间。
+    /// </summary>
     /// <param name="serial">Excel 序列日期数值。</param>
     /// <param name="isDate1904">是否使用 1904 日期系统。</param>
     /// <returns>对应的无时区日期时间。</returns>
@@ -257,7 +277,9 @@ internal static class ExcelDateParser
         return DateTime.FromOADate(serial < 60d ? serial + 1d : serial);
     }
 
-    /// <summary>按 Excel serial 线性加日期并固定到毫秒精度。</summary>
+    /// <summary>
+    /// 按 Excel serial 线性加日期并固定到毫秒精度。
+    /// </summary>
     /// <param name="epoch">工作簿日期系统零点。</param>
     /// <param name="serial">待增加的 serial 天数。</param>
     /// <returns>线性转换后的日期时间。</returns>
@@ -271,7 +293,9 @@ internal static class ExcelDateParser
         return epoch.AddMilliseconds(Math.Round(milliseconds, MidpointRounding.AwayFromZero));
     }
 
-    /// <summary>尝试按 Excel 日期系统将序列值转换为日期或时间。</summary>
+    /// <summary>
+    /// 尝试按 Excel 日期系统将序列值转换为日期或时间。
+    /// </summary>
     /// <param name="serial">Excel 序列日期数值。</param>
     /// <param name="timeOnly">是否只保留序列值中的时间部分。</param>
     /// <param name="isDate1904">是否使用 1904 日期系统。</param>

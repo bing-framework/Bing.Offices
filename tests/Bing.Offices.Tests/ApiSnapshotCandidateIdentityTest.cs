@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Text;
 using Bing.Offices.ApiSnapshot;
@@ -6,8 +6,14 @@ using Xunit;
 
 namespace Bing.Offices.Tests;
 
+/// <summary>
+/// 验证候选程序集快照的文件身份校验行为。
+/// </summary>
 public sealed class ApiSnapshotCandidateIdentityTest
 {
+    /// <summary>
+    /// 验证候选程序集文件被篡改后其哈希发生变化。
+    /// </summary>
     [Fact]
     public void CandidateAssemblyHash_ChangesWhenTheCandidateFileIsTampered()
     {
@@ -30,6 +36,10 @@ public sealed class ApiSnapshotCandidateIdentityTest
         }
     }
 
+    /// <summary>
+    /// 验证格式错误的 SHA-256 哈希会被拒绝。
+    /// </summary>
+    /// <param name="value">待验证的 SHA-256 哈希字符串。</param>
     [Theory]
     [InlineData("")]
     [InlineData("not-a-sha256")]

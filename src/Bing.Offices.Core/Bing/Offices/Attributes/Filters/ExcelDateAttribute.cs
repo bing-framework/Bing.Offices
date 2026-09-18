@@ -8,11 +8,15 @@ namespace Bing.Offices.Attributes;
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
 public sealed class ExcelDateAttribute : FilterAttributeBase
 {
-    /// <summary>初始化一个 <see cref="ExcelDateAttribute" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="ExcelDateAttribute" /> 类型的实例。
+    /// </summary>
     /// <param name="format">日期格式。</param>
     public ExcelDateAttribute(string format) => Format = format;
 
-    /// <summary>初始化一个 <see cref="ExcelDateAttribute" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="ExcelDateAttribute" /> 类型的实例。
+    /// </summary>
     public ExcelDateAttribute()
     {
     }
@@ -27,10 +31,14 @@ public sealed class ExcelDateAttribute : FilterAttributeBase
     /// </summary>
     public string CultureName { get; set; }
 
-    /// <summary>获取或设置无 offset 文本的 DateTimeOffset 解析策略。</summary>
+    /// <summary>
+    /// 获取或设置无 offset 文本的 DateTimeOffset 解析策略。
+    /// </summary>
     public ExcelDateOffsetPolicy OffsetPolicy { get; set; } = ExcelDateOffsetPolicy.RequireExplicitOffset;
 
-    /// <summary>获取或设置固定 offset 分钟数；仅 UseFixedOffset 策略使用。</summary>
+    /// <summary>
+    /// 获取或设置固定 offset 分钟数；仅 UseFixedOffset 策略使用。
+    /// </summary>
     public int? OffsetMinutes { get; set; }
 
     /// <inheritdoc />

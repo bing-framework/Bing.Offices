@@ -2,10 +2,14 @@
 
 namespace Bing.Offices.Csv;
 
-/// <summary>将 CSV 表头或列位置绑定为固定和动态实体属性列。</summary>
+/// <summary>
+/// 将 CSV 表头或列位置绑定为固定和动态实体属性列。
+/// </summary>
 internal static class CsvHeaderBinder
 {
-    /// <summary>读取首条记录并按标题、别名或属性名创建 CSV 列绑定。</summary>
+    /// <summary>
+    /// 读取首条记录并按标题、别名或属性名创建 CSV 列绑定。
+    /// </summary>
     /// <param name="records">按顺序提供 CSV 记录的枚举器。</param>
     /// <param name="properties">可绑定的固定属性集合。</param>
     /// <param name="dynamicProperties">可绑定的动态字典属性集合。</param>
@@ -25,7 +29,9 @@ internal static class CsvHeaderBinder
         return Bind(records.Current, properties, dynamicProperties, dynamicColumns, requireExpectedHeaders, maxColumns);
     }
 
-    /// <summary>使用已读取的首条记录创建列绑定。</summary>
+    /// <summary>
+    /// 使用已读取的首条记录创建列绑定。
+    /// </summary>
     /// <param name="header">CSV 首条记录中的表头文本。</param>
     /// <param name="properties">可绑定的固定属性集合。</param>
     /// <param name="dynamicProperties">可绑定的动态字典属性集合。</param>
@@ -56,7 +62,7 @@ internal static class CsvHeaderBinder
                 || string.Equals(candidate.Name, headerValue, StringComparison.OrdinalIgnoreCase));
             IExcelDynamicMappingColumn dynamicColumn = null;
             if (property == null && dynamicProperties.Count == 1)
-                {
+            {
                 dynamicColumn = dynamicColumns?.FirstOrDefault(candidate =>
                     string.Equals(candidate.Title, headerValue, StringComparison.OrdinalIgnoreCase)
                     || candidate.Aliases.Any(alias => string.Equals(alias, headerValue,
@@ -80,7 +86,9 @@ internal static class CsvHeaderBinder
         return columns;
     }
 
-    /// <summary>在 CSV 不包含表头时按固定属性声明顺序创建列绑定。</summary>
+    /// <summary>
+    /// 在 CSV 不包含表头时按固定属性声明顺序创建列绑定。
+    /// </summary>
     /// <param name="properties">按目标 CSV 列顺序排列的固定属性集合。</param>
     /// <returns>按零基列索引排列的绑定列集合。</returns>
     public static IReadOnlyList<CsvColumn> BindByPosition(IReadOnlyList<CsvPropertyBinding> properties)
@@ -92,10 +100,14 @@ internal static class CsvHeaderBinder
     }
 }
 
-/// <summary>表示一个 CSV 源列及其固定或动态实体属性绑定。</summary>
+/// <summary>
+/// 表示一个 CSV 源列及其固定或动态实体属性绑定。
+/// </summary>
 internal sealed class CsvColumn
 {
-    /// <summary>初始化一个 <see cref="CsvColumn" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="CsvColumn" /> 类型的实例。
+    /// </summary>
     /// <param name="index">源 CSV 中的零基列索引。</param>
     /// <param name="property">固定或动态目标属性绑定。</param>
     /// <param name="headerName">源 CSV 表头名称。</param>
@@ -111,14 +123,24 @@ internal sealed class CsvColumn
         DynamicColumn = dynamicColumn;
     }
 
-    /// <summary>获取源 CSV 中的零基列索引。</summary>
+    /// <summary>
+    /// 获取源 CSV 中的零基列索引。
+    /// </summary>
     public int Index { get; }
-    /// <summary>获取目标实体属性绑定。</summary>
+    /// <summary>
+    /// 获取目标实体属性绑定。
+    /// </summary>
     public CsvPropertyBinding Property { get; }
-    /// <summary>获取源 CSV 表头名称。</summary>
+    /// <summary>
+    /// 获取源 CSV 表头名称。
+    /// </summary>
     public string HeaderName { get; }
-    /// <summary>获取是否将字段写入动态值字典。</summary>
+    /// <summary>
+    /// 获取是否将字段写入动态值字典。
+    /// </summary>
     public bool IsDynamic { get; }
-    /// <summary>获取与表头匹配的动态列计划；固定列时为 null。</summary>
+    /// <summary>
+    /// 获取与表头匹配的动态列计划；固定列时为 null。
+    /// </summary>
     public IExcelDynamicMappingColumn DynamicColumn { get; }
 }

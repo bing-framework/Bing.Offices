@@ -9,7 +9,9 @@ namespace Bing.Offices.Imports;
 /// </summary>
 internal static class NpoiRelationBinder
 {
-    /// <summary>执行一组已编译的 Excel 父子关系绑定。</summary>
+    /// <summary>
+    /// 执行一组已编译的 Excel 父子关系绑定。
+    /// </summary>
     /// <param name="root">接收关系绑定结果的工作簿根实体。</param>
     /// <param name="request">定义父项、子项及关联键选择器的关系请求。</param>
     /// <param name="errors">接收绑定错误的导入错误收集器。</param>
@@ -19,7 +21,9 @@ internal static class NpoiRelationBinder
         ExcelImportErrorCollector errors, IReadOnlyDictionary<object, SourceLocation> sourceLocations,
         CancellationToken cancellationToken);
 
-    /// <summary>按工作簿、父项、子项和关联键类型隔离关系绑定委托缓存。</summary>
+    /// <summary>
+    /// 按工作簿、父项、子项和关联键类型隔离关系绑定委托缓存。
+    /// </summary>
     private static readonly ConcurrentDictionary<(Type Workbook, Type Parent, Type Child, Type Key), BindInvoker>
         BindInvokers = new();
 
@@ -41,7 +45,9 @@ internal static class NpoiRelationBinder
         BindInvokers.GetOrAdd(key, CreateBindInvoker)(root, request, errors, sourceLocations, cancellationToken);
     }
 
-    /// <summary>检查指定关系类型组合是否已有缓存委托，仅供职责级测试验证缓存合同。</summary>
+    /// <summary>
+    /// 检查指定关系类型组合是否已有缓存委托，仅供职责级测试验证缓存合同。
+    /// </summary>
     /// <param name="workbookType">工作簿根实体类型。</param>
     /// <param name="parentType">父项实体类型。</param>
     /// <param name="childType">子项实体类型。</param>
@@ -79,7 +85,9 @@ internal static class NpoiRelationBinder
             BindCore<TWorkbook, TParent, TChild, TKey>((TWorkbook)root, request, errors,
                 sourceLocations, cancellationToken);
 
-    /// <summary>使用具体泛型类型执行父子键关联并写入导航集合。</summary>
+    /// <summary>
+    /// 使用具体泛型类型执行父子键关联并写入导航集合。
+    /// </summary>
     /// <typeparam name="TWorkbook">包含父子集合的工作簿根实体类型。</typeparam>
     /// <typeparam name="TParent">父项实体类型。</typeparam>
     /// <typeparam name="TChild">子项实体类型。</typeparam>
@@ -235,7 +243,9 @@ internal static class NpoiRelationBinder
         }
     }
 
-    /// <summary>使用源实体的导入位置创建关系绑定错误。</summary>
+    /// <summary>
+    /// 使用源实体的导入位置创建关系绑定错误。
+    /// </summary>
     /// <param name="message">描述关系绑定失败的消息。</param>
     /// <param name="sourceLocations">实体来源位置映射。</param>
     /// <param name="source">产生错误的父项或子项实体。</param>

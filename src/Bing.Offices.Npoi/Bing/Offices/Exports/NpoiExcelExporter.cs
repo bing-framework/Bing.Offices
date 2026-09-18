@@ -10,11 +10,16 @@ using Bing.Offices.Providers;
 namespace Bing.Offices.Exports;
 
 /// <summary>
-/// 基于 NPOI 的单工作簿 Excel 导出器；NPOI 工作簿在内存中构建后写入目标流。
+/// 基于 NPOI 的单工作簿 Excel 导出器。
 /// </summary>
+/// <remarks>
+/// NPOI 工作簿在内存中构建后写入目标流。
+/// </remarks>
 public sealed class NpoiExcelExporter : IExcelExporter
 {
-    /// <summary>调用指定实体类型的工作表写入逻辑。</summary>
+    /// <summary>
+    /// 调用指定实体类型的工作表写入逻辑。
+    /// </summary>
     /// <param name="target">执行工作表写入的导出器。</param>
     /// <param name="workbook">接收工作表内容的 NPOI 工作簿。</param>
     /// <param name="request">当前工作表导出请求。</param>
@@ -25,7 +30,9 @@ public sealed class NpoiExcelExporter : IExcelExporter
         ExcelSheetExportRequest request, bool isTemplate, CancellationToken cancellationToken,
         IExcelMappingPlan mapping);
 
-    /// <summary>按运行时实体类型缓存工作表写入委托，避免重复反射构造。</summary>
+    /// <summary>
+    /// 按运行时实体类型缓存工作表写入委托，避免重复反射构造。
+    /// </summary>
     private static readonly ConcurrentDictionary<Type, WriteSheetInvoker> WriteSheetInvokers = new();
     /// <summary>
     /// 当前导出器使用的值转换器。
@@ -39,14 +46,22 @@ public sealed class NpoiExcelExporter : IExcelExporter
     /// 根据列计划将实体数据写入 NPOI 工作表的写入器。
     /// </summary>
     private readonly NpoiExportSheetWriter _sheetWriter;
-    /// <summary>负责原子文件提交的可替换 SPI。</summary>
+    /// <summary>
+    /// 负责原子文件提交的可替换 SPI。
+    /// </summary>
     private readonly IFileExportCommitter _fileExportCommitter;
-    /// <summary>观察并记录公共 Excel 导出异常。</summary>
+    /// <summary>
+    /// 观察并记录公共 Excel 导出异常。
+    /// </summary>
     private readonly BingOfficesExceptionDispatcher _exceptionDispatcher;
-    /// <summary>负责外围异步输出的可替换 staging 策略。</summary>
+    /// <summary>
+    /// 负责外围异步输出的可替换 staging 策略。
+    /// </summary>
     private readonly INpoiAsyncStagingFactory _asyncStagingFactory;
 
-    /// <summary>初始化一个 <see cref="NpoiExcelExporter" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="NpoiExcelExporter" /> 类型的实例。
+    /// </summary>
     /// <param name="valueConverters">值转换器集合。</param>
     /// <param name="mappingPlanFactory">方向化映射计划工厂。</param>
     /// <param name="exceptionObservers">接收公共运行异常的观察器集合。</param>
@@ -60,7 +75,9 @@ public sealed class NpoiExcelExporter : IExcelExporter
     {
     }
 
-    /// <summary>初始化一个 <see cref="NpoiExcelExporter" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="NpoiExcelExporter" /> 类型的实例。
+    /// </summary>
     /// <param name="valueConverters">值转换器集合。</param>
     /// <param name="mappingPlanFactory">方向化映射计划工厂。</param>
     /// <param name="exceptionObservers">接收公共运行异常的观察器集合。</param>
@@ -80,7 +97,9 @@ public sealed class NpoiExcelExporter : IExcelExporter
         _asyncStagingFactory = asyncStagingFactory ?? throw new ArgumentNullException(nameof(asyncStagingFactory));
     }
 
-    /// <summary>初始化一个 <see cref="NpoiExcelExporter" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="NpoiExcelExporter" /> 类型的实例。
+    /// </summary>
     /// <param name="fileExportCommitter">可替换的原子文件提交器。</param>
     /// <param name="asyncStagingFactory">外围异步输出的 staging 工厂。</param>
     internal NpoiExcelExporter(IFileExportCommitter fileExportCommitter,
@@ -332,7 +351,9 @@ public sealed class NpoiExcelExporter : IExcelExporter
             throw new ArgumentException($"工作表名称包含非法字符: {name}", nameof(name));
     }
 
-    /// <summary>通过反射分派到对应实体类型的工作表写入方法。</summary>
+    /// <summary>
+    /// 通过反射分派到对应实体类型的工作表写入方法。
+    /// </summary>
     /// <param name="workbook">目标 NPOI 工作簿。</param>
     /// <param name="request">当前工作表导出请求。</param>
     /// <param name="isTemplate">是否基于模板工作簿导出。</param>

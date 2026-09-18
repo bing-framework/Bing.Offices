@@ -10,13 +10,16 @@ public sealed class ExcelColor
     /// </summary>
     public string Argb { get; init; }
 
-    /// <summary>初始化一个 <see cref="ExcelColor" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="ExcelColor" /> 类型的实例。
+    /// </summary>
     public ExcelColor()
     {
     }
 
-    /// <summary>初始化一个 <see cref="ExcelColor" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="ExcelColor" /> 类型的实例。
+    /// </summary>
     /// <param name="argb">ARGB 十六进制颜色文本。</param>
     public ExcelColor(string argb) => Argb = argb;
 }
-

@@ -1,4 +1,4 @@
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 
-[assembly: InternalsVisibleTo("Bing.Offices.Tests")]
-[assembly: InternalsVisibleTo("Bing.Offices.Tests.Integration")]
+[assembly: InternalsVisibleTo("Bing.Offices.MiniExcel.Tests")]
+[assembly: InternalsVisibleTo("Bing.Offices.MiniExcel.Tests.Integration")]

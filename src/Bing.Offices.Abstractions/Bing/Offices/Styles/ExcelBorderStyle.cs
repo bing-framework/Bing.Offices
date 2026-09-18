@@ -5,13 +5,21 @@
 /// </summary>
 public enum ExcelFillPattern
 {
-    /// <summary>无填充。</summary>
+    /// <summary>
+    /// 无填充。
+    /// </summary>
     None,
-    /// <summary>实心填充。</summary>
+    /// <summary>
+    /// 实心填充。
+    /// </summary>
     Solid,
-    /// <summary>浅灰填充。</summary>
+    /// <summary>
+    /// 浅灰填充。
+    /// </summary>
     LightGray,
-    /// <summary>深灰填充。</summary>
+    /// <summary>
+    /// 深灰填充。
+    /// </summary>
     DarkGray
 }
 
@@ -20,19 +28,33 @@ public enum ExcelFillPattern
 /// </summary>
 public enum ExcelBorderLineStyle
 {
-    /// <summary>无边框。</summary>
+    /// <summary>
+    /// 无边框。
+    /// </summary>
     None,
-    /// <summary>细线。</summary>
+    /// <summary>
+    /// 细线。
+    /// </summary>
     Thin,
-    /// <summary>中线。</summary>
+    /// <summary>
+    /// 中线。
+    /// </summary>
     Medium,
-    /// <summary>粗线。</summary>
+    /// <summary>
+    /// 粗线。
+    /// </summary>
     Thick,
-    /// <summary>虚线。</summary>
+    /// <summary>
+    /// 虚线。
+    /// </summary>
     Dashed,
-    /// <summary>点线。</summary>
+    /// <summary>
+    /// 点线。
+    /// </summary>
     Dotted,
-    /// <summary>双线。</summary>
+    /// <summary>
+    /// 双线。
+    /// </summary>
     Double
 }
 
@@ -41,17 +63,29 @@ public enum ExcelBorderLineStyle
 /// </summary>
 public enum ExcelHorizontalAlignment
 {
-    /// <summary>常规对齐。</summary>
+    /// <summary>
+    /// 常规对齐。
+    /// </summary>
     General,
-    /// <summary>左对齐。</summary>
+    /// <summary>
+    /// 左对齐。
+    /// </summary>
     Left,
-    /// <summary>居中。</summary>
+    /// <summary>
+    /// 居中。
+    /// </summary>
     Center,
-    /// <summary>右对齐。</summary>
+    /// <summary>
+    /// 右对齐。
+    /// </summary>
     Right,
-    /// <summary>填充。</summary>
+    /// <summary>
+    /// 填充。
+    /// </summary>
     Fill,
-    /// <summary>两端对齐。</summary>
+    /// <summary>
+    /// 两端对齐。
+    /// </summary>
     Justify
 }
 
@@ -60,13 +94,21 @@ public enum ExcelHorizontalAlignment
 /// </summary>
 public enum ExcelVerticalAlignment
 {
-    /// <summary>底部对齐。</summary>
+    /// <summary>
+    /// 底部对齐。
+    /// </summary>
     Bottom,
-    /// <summary>居中对齐。</summary>
+    /// <summary>
+    /// 居中对齐。
+    /// </summary>
     Center,
-    /// <summary>顶部对齐。</summary>
+    /// <summary>
+    /// 顶部对齐。
+    /// </summary>
     Top,
-    /// <summary>两端对齐。</summary>
+    /// <summary>
+    /// 两端对齐。
+    /// </summary>
     Justify
 }
 
@@ -85,4 +127,3 @@ public sealed class ExcelBorderStyle
     /// </summary>
     public ExcelColor Color { get; init; }
 }
-

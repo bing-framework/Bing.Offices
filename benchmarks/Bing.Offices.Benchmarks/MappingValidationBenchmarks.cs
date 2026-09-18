@@ -220,12 +220,12 @@ public class MappingValidationBenchmarks
 
     private static ExcelMappingDocument CreateCachePlanDocument(string tenantId,
         string title = "缓存编码") => new()
-    {
-        TenantId = tenantId,
-        ConfigurationVersion = "p6-02",
-        Import = new ExcelMappingConfiguration
         {
-            Columns =
+            TenantId = tenantId,
+            ConfigurationVersion = "p6-02",
+            Import = new ExcelMappingConfiguration
+            {
+                Columns =
             {
                 new ExcelColumnConfiguration
                 {
@@ -233,8 +233,8 @@ public class MappingValidationBenchmarks
                     Title = title
                 }
             }
-        }
-    };
+            }
+        };
 
     private sealed class BenchmarkProfile : IImportMappingProfile<BenchmarkRow>
     {

@@ -21,15 +21,18 @@ public static partial class SheetExtensions
     }
 
     /// <summary>
-    /// 获取工作表中全部合并区域的信息列表；工作表没有合并区域时返回空列表。
+    /// 获取工作表中的合并区域信息。
     /// </summary>
     /// <param name="sheet">NPOI工作表</param>
     /// <returns>按 NPOI 区域索引顺序排列的合并区域信息。</returns>
     public static List<MergedRegionInfo> GetMergedRegionInfos(this NPOI.SS.UserModel.ISheet sheet) => sheet.GetMergedRegionInfos(null, null, null, null);
 
     /// <summary>
-    /// 获取工作表中与指定区域相交或完全位于其中的合并区域信息；没有匹配项时返回空列表。
+    /// 获取工作表中的合并区域信息。
     /// </summary>
+    /// <remarks>
+    /// 根据指定行列范围筛选相交或完全位于范围内的区域。
+    /// </remarks>
     /// <param name="sheet">NPOI工作表</param>
     /// <param name="minRow">最小行索引</param>
     /// <param name="maxRow">最大行索引</param>
@@ -51,13 +54,13 @@ public static partial class SheetExtensions
     }
 
     /// <summary>
-    /// 移除工作表中所有的合并区域
+    /// 移除工作表中的合并区域。
     /// </summary>
     /// <param name="sheet">NPOI工作表</param>
     public static void RemoveMergedRegions(this NPOI.SS.UserModel.ISheet sheet) => sheet.RemoveMergedRegions(null, null, null, null);
 
     /// <summary>
-    /// 移除工作表中指定区域内的合并区域
+    /// 移除工作表中的合并区域。
     /// </summary>
     /// <param name="sheet">NPOI工作表</param>
     /// <param name="minRow">最小行索引</param>
@@ -73,7 +76,7 @@ public static partial class SheetExtensions
     }
 
     /// <summary>
-    /// 移动工作表中所有合并区域
+    /// 移动工作表中的合并区域。
     /// </summary>
     /// <param name="sheet">NPOI工作表</param>
     /// <param name="moveRowCount">移动行数</param>
@@ -82,8 +85,11 @@ public static partial class SheetExtensions
         int moveColCount = 0) => sheet.MoveMergedRegions(null, null, null, null, moveRowCount, moveColCount);
 
     /// <summary>
-    /// 移动工作表指定区域内的合并区域
+    /// 移动工作表中的合并区域。
     /// </summary>
+    /// <remarks>
+    /// 根据指定行列范围筛选需要移动的区域。
+    /// </remarks>
     /// <param name="sheet">NPOI工作表</param>
     /// <param name="minRow">最小行索引</param>
     /// <param name="maxRow">最大行索引</param>

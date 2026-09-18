@@ -57,7 +57,9 @@ internal static class NpoiWorkbookValidationPipeline
         return valid;
     }
 
-    /// <summary>按照单个原生数据校验约束验证已规范化的单元格值。</summary>
+    /// <summary>
+    /// 按照单个原生数据校验约束验证已规范化的单元格值。
+    /// </summary>
     /// <param name="validation">NPOI 提供的数据校验规则。</param>
     /// <param name="cellValue">保留原始类型信息的单元格值。</param>
     /// <param name="value">按正文空白策略规范化后的文本值。</param>
@@ -142,7 +144,9 @@ internal static class NpoiWorkbookValidationPipeline
         return Unsupported(out message);
     }
 
-    /// <summary>从显式列表、带引号列表或单元格区域公式解析允许值。</summary>
+    /// <summary>
+    /// 从显式列表、带引号列表或单元格区域公式解析允许值。
+    /// </summary>
     /// <param name="constraint">原生列表校验约束。</param>
     /// <param name="currentSheet">解析未限定区域时使用的工作表。</param>
     /// <param name="values">成功时返回允许值集合。</param>
@@ -181,7 +185,9 @@ internal static class NpoiWorkbookValidationPipeline
         return values.Length > 0;
     }
 
-    /// <summary>读取原生约束的第一个公式或 HSSF 数值后备值。</summary>
+    /// <summary>
+    /// 读取原生约束的第一个公式或 HSSF 数值后备值。
+    /// </summary>
     /// <param name="constraint">原生数据校验约束。</param>
     /// <returns>第一个公式文本；无可用值时为 null。</returns>
     private static string GetFormula1(IDataValidationConstraint constraint)
@@ -194,7 +200,9 @@ internal static class NpoiWorkbookValidationPipeline
             : hssfConstraint.Value1.ToString(CultureInfo.InvariantCulture);
     }
 
-    /// <summary>读取原生约束的第二个公式或 HSSF 数值后备值。</summary>
+    /// <summary>
+    /// 读取原生约束的第二个公式或 HSSF 数值后备值。
+    /// </summary>
     /// <param name="constraint">原生数据校验约束。</param>
     /// <returns>第二个公式文本；无可用值时为 null。</returns>
     private static string GetFormula2(IDataValidationConstraint constraint)
@@ -207,7 +215,9 @@ internal static class NpoiWorkbookValidationPipeline
             : hssfConstraint.Value2.ToString(CultureInfo.InvariantCulture);
     }
 
-    /// <summary>解析单工作表或带工作表限定的 A1 区域公式，并读取区域文本值。</summary>
+    /// <summary>
+    /// 解析单工作表或带工作表限定的 A1 区域公式，并读取区域文本值。
+    /// </summary>
     /// <param name="formula">列表校验中保存的区域公式。</param>
     /// <param name="currentSheet">解析未限定区域时使用的工作表。</param>
     /// <param name="values">成功时返回区域内单元格文本。</param>
@@ -251,14 +261,18 @@ internal static class NpoiWorkbookValidationPipeline
         }
     }
 
-    /// <summary>拆分逗号分隔的显式列表并移除外层引号和空白。</summary>
+    /// <summary>
+    /// 拆分逗号分隔的显式列表并移除外层引号和空白。
+    /// </summary>
     /// <param name="value">列表公式中的显式文本。</param>
     /// <returns>非空的列表项集合。</returns>
     private static string[] SplitExplicitList(string value) => value.Trim().Trim('\"')
         .Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
         .Select(item => item.Trim()).ToArray();
 
-    /// <summary>从 typed 单元格值或文本解析 Excel 日期/时间为比较刻度。</summary>
+    /// <summary>
+    /// 从 typed 单元格值或文本解析 Excel 日期/时间为比较刻度。
+    /// </summary>
     /// <param name="cellValue">保留原始数值或日期类型的单元格值。</param>
     /// <param name="text">单元格文本后备值。</param>
     /// <param name="timeOnly">是否仅比较时间部分。</param>
@@ -278,41 +292,75 @@ internal static class NpoiWorkbookValidationPipeline
         return true;
     }
 
-    /// <summary>表示两个边界之间的比较操作。</summary>
+    /// <summary>
+    /// 表示两个边界之间的比较操作。
+    /// </summary>
     private const int BetweenOperator = OperatorBetween;
-    /// <summary>表示两个边界之外的比较操作。</summary>
+    /// <summary>
+    /// 表示两个边界之外的比较操作。
+    /// </summary>
     private const int NotBetweenOperator = OperatorNotBetween;
-    /// <summary>表示相等比较操作。</summary>
+    /// <summary>
+    /// 表示相等比较操作。
+    /// </summary>
     private const int EqualOperator = OperatorEqual;
-    /// <summary>表示不相等比较操作。</summary>
+    /// <summary>
+    /// 表示不相等比较操作。
+    /// </summary>
     private const int NotEqualOperator = OperatorNotEqual;
-    /// <summary>表示大于比较操作。</summary>
+    /// <summary>
+    /// 表示大于比较操作。
+    /// </summary>
     private const int GreaterThanOperator = OperatorGreaterThan;
-    /// <summary>表示小于比较操作。</summary>
+    /// <summary>
+    /// 表示小于比较操作。
+    /// </summary>
     private const int LessThanOperator = OperatorLessThan;
-    /// <summary>表示大于或等于比较操作。</summary>
+    /// <summary>
+    /// 表示大于或等于比较操作。
+    /// </summary>
     private const int GreaterThanOrEqualOperator = OperatorGreaterThanOrEqual;
-    /// <summary>表示小于或等于比较操作。</summary>
+    /// <summary>
+    /// 表示小于或等于比较操作。
+    /// </summary>
     private const int LessThanOrEqualOperator = OperatorLessThanOrEqual;
 
-    /// <summary>NPOI 定义的两个边界之间操作码。</summary>
+    /// <summary>
+    /// NPOI 定义的两个边界之间操作码。
+    /// </summary>
     private const int OperatorBetween = OperatorType.BETWEEN;
-    /// <summary>NPOI 定义的两个边界之外操作码。</summary>
+    /// <summary>
+    /// NPOI 定义的两个边界之外操作码。
+    /// </summary>
     private const int OperatorNotBetween = OperatorType.NOT_BETWEEN;
-    /// <summary>NPOI 定义的相等操作码。</summary>
+    /// <summary>
+    /// NPOI 定义的相等操作码。
+    /// </summary>
     private const int OperatorEqual = OperatorType.EQUAL;
-    /// <summary>NPOI 定义的不相等操作码。</summary>
+    /// <summary>
+    /// NPOI 定义的不相等操作码。
+    /// </summary>
     private const int OperatorNotEqual = OperatorType.NOT_EQUAL;
-    /// <summary>NPOI 定义的大于操作码。</summary>
+    /// <summary>
+    /// NPOI 定义的大于操作码。
+    /// </summary>
     private const int OperatorGreaterThan = OperatorType.GREATER_THAN;
-    /// <summary>NPOI 定义的小于操作码。</summary>
+    /// <summary>
+    /// NPOI 定义的小于操作码。
+    /// </summary>
     private const int OperatorLessThan = OperatorType.LESS_THAN;
-    /// <summary>NPOI 定义的大于或等于操作码。</summary>
+    /// <summary>
+    /// NPOI 定义的大于或等于操作码。
+    /// </summary>
     private const int OperatorGreaterThanOrEqual = OperatorType.GREATER_OR_EQUAL;
-    /// <summary>NPOI 定义的小于或等于操作码。</summary>
+    /// <summary>
+    /// NPOI 定义的小于或等于操作码。
+    /// </summary>
     private const int OperatorLessThanOrEqual = OperatorType.LESS_OR_EQUAL;
 
-    /// <summary>使用原生操作码比较日期或时间刻度值。</summary>
+    /// <summary>
+    /// 使用原生操作码比较日期或时间刻度值。
+    /// </summary>
     /// <param name="value">待比较的刻度值。</param>
     /// <param name="first">第一个边界值。</param>
     /// <param name="second">第二个边界值。</param>
@@ -332,7 +380,9 @@ internal static class NpoiWorkbookValidationPipeline
         _ => false,
     };
 
-    /// <summary>使用原生操作码比较数值或文本长度。</summary>
+    /// <summary>
+    /// 使用原生操作码比较数值或文本长度。
+    /// </summary>
     /// <param name="value">待比较的值。</param>
     /// <param name="first">第一个边界值。</param>
     /// <param name="second">第二个边界值。</param>
@@ -352,7 +402,9 @@ internal static class NpoiWorkbookValidationPipeline
         _ => false
     };
 
-    /// <summary>返回统一的不支持原生校验规则错误。</summary>
+    /// <summary>
+    /// 返回统一的不支持原生校验规则错误。
+    /// </summary>
     /// <param name="message">返回给调用方的错误消息。</param>
     /// <returns>始终为 false。</returns>
     private static bool Unsupported(out string message)

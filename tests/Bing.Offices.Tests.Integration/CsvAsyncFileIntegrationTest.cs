@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 using Bing.Offices.Csv;
 using Bing.Offices.Exceptions;
 using Bing.Offices.Extensions;
-using Bing.Offices.Npoi.Extensions;
+using Bing.Offices.Mappings;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -22,6 +22,7 @@ public sealed class CsvAsyncFileIntegrationTest
     /// <summary>
     /// 测试 - 真实 UTF-8 CSV 文件应支持特殊字段往返，并原子替换已有目标。
     /// </summary>
+    /// <param name="newLine">写入 CSV 文件时使用的换行序列。</param>
     [Theory]
     [InlineData("\r\n")]
     [InlineData("\n")]
@@ -388,10 +389,21 @@ public sealed class CsvAsyncFileIntegrationTest
         }
     }
 
-    private static ServiceProvider BuildProvider() => new ServiceCollection()
-        .AddBingOfficesNpoi()
-        .BuildServiceProvider();
+    /// <summary>
+    /// 构建测试使用的服务提供程序。
+    /// </summary>
+    /// <returns>已注册默认映射计划工厂的服务提供程序。</returns>
+    private static ServiceProvider BuildProvider() =>
+        ExcelMappingPlanFactoryProvider.RegisterDefault(new ServiceCollection())
+            .BuildServiceProvider();
 
+    /// <summary>
+    /// 创建 CSV 导出选项。
+    /// </summary>
+    /// <param name="newLine">CSV 换行序列。</param>
+    /// <param name="encoding">文本编码。</param>
+    /// <param name="includeHeader">是否包含表头。</param>
+    /// <returns>使用指定换行、编码和表头设置的 CSV 导出选项。</returns>
     private static CsvExportOptions<CsvFileRow> CreateExportOptions(string newLine,
         Encoding encoding = null, bool includeHeader = true) =>
         new CsvExportOptions<CsvFileRow>
@@ -401,6 +413,12 @@ public sealed class CsvAsyncFileIntegrationTest
             NewLine = newLine
         };
 
+    /// <summary>
+    /// 创建首次移动到下一行即取消的数据序列。
+    /// </summary>
+    /// <param name="rows">数据行或行集合。</param>
+    /// <param name="cancellation">取消令牌。</param>
+    /// <returns>每次产出数据行前触发取消的延迟序列。</returns>
     private static IEnumerable<CsvFileRow> CancelOnFirstMoveNext(IEnumerable<CsvFileRow> rows,
         CancellationTokenSource cancellation)
     {
@@ -411,12 +429,25 @@ public sealed class CsvAsyncFileIntegrationTest
         }
     }
 
+    /// <summary>
+    /// 创建先产生数据再抛出异常的序列。
+    /// </summary>
+    /// <param name="row">数据行或行集合。</param>
+    /// <param name="exception">测试期间要传播的异常。</param>
+    /// <returns>先产出指定行、继续枚举时抛出指定异常的序列。</returns>
     private static IEnumerable<CsvFileRow> YieldThenThrow(CsvFileRow row, Exception exception)
     {
         yield return row;
         throw exception;
     }
 
+    /// <summary>
+    /// 创建先产生数据再取消的序列。
+    /// </summary>
+    /// <param name="first">第一个数据项。</param>
+    /// <param name="second">第二个数据项。</param>
+    /// <param name="cancellation">取消令牌。</param>
+    /// <returns>产出第一行后触发取消、再产出第二行的序列。</returns>
     private static IEnumerable<CsvFileRow> YieldThenCancel(CsvFileRow first, CsvFileRow second,
         CancellationTokenSource cancellation)
     {
@@ -425,6 +456,10 @@ public sealed class CsvAsyncFileIntegrationTest
         yield return second;
     }
 
+    /// <summary>
+    /// 创建临时目录。
+    /// </summary>
+    /// <returns>新创建的独立测试临时目录路径。</returns>
     private static string CreateTemporaryDirectory()
     {
         var directory = Path.Combine(Path.GetTempPath(), "Bing.Offices.Tests.Integration",
@@ -433,29 +468,58 @@ public sealed class CsvAsyncFileIntegrationTest
         return directory;
     }
 
+    /// <summary>
+    /// 获取原子提交临时文件。
+    /// </summary>
+    /// <param name="path">目标文件或目录路径。</param>
+    /// <returns>目标目录中匹配目标文件临时命名模式的路径数组。</returns>
     private static string[] GetAtomicTemporaryFiles(string path)
     {
         var directory = Path.GetDirectoryName(path);
         return Directory.GetFiles(directory, Path.GetFileName(path) + ".*.tmp");
     }
 
+    /// <summary>
+    /// 验证文件可以独占打开。
+    /// </summary>
+    /// <param name="path">目标文件或目录路径。</param>
     private static void AssertFileCanBeOpenedExclusively(string path)
     {
         using var stream = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
         Assert.True(stream.Length > 0);
     }
 
+    /// <summary>
+    /// 删除临时目录。
+    /// </summary>
+    /// <param name="directory">目标目录路径。</param>
     private static void DeleteTemporaryDirectory(string directory)
     {
         if (Directory.Exists(directory))
             Directory.Delete(directory, true);
     }
 
+    /// <summary>
+    /// 提供测试场景使用的流替身。
+    /// </summary>
     private sealed class AsyncOnlyWriteStream : MemoryStream
     {
+        /// <summary>
+        /// 用于在首次异步写入后取消操作的令牌源。
+        /// </summary>
         private readonly CancellationTokenSource _cancelAfterFirstAsyncWrite;
+
+        /// <summary>
+        /// 异步写入时应抛出的测试异常。
+        /// </summary>
         private readonly Exception _asyncWriteException;
 
+        /// <summary>
+        /// 初始化一个 <see cref="AsyncOnlyWriteStream" /> 类型的实例。
+        /// </summary>
+        /// <param name="cancelAfterFirstAsyncWrite">首次异步写入后触发的取消源；null 表示不取消。</param>
+        /// <param name="asyncWriteException">异步写入时抛出的异常；null 表示正常写入。</param>
+        /// <param name="initialBytes">预先写入流的字节；null 表示从空流开始。</param>
         public AsyncOnlyWriteStream(CancellationTokenSource cancelAfterFirstAsyncWrite = null,
             Exception asyncWriteException = null, byte[] initialBytes = null)
         {
@@ -465,20 +529,34 @@ public sealed class CsvAsyncFileIntegrationTest
                 base.Write(initialBytes, 0, initialBytes.Length);
         }
 
+        /// <summary>
+        /// 获取或设置同步写入次数。
+        /// </summary>
         public int SyncWriteCount { get; private set; }
 
+        /// <summary>
+        /// 获取或设置异步写入次数。
+        /// </summary>
         public int AsyncWriteCount { get; private set; }
 
+        /// <summary>
+        /// 获取或设置同步刷新次数。
+        /// </summary>
         public int SyncFlushCount { get; private set; }
 
+        /// <summary>
+        /// 获取或设置异步刷新次数。
+        /// </summary>
         public int AsyncFlushCount { get; private set; }
 
+        /// <inheritdoc />
         public override void Flush()
         {
             SyncFlushCount++;
             throw new InvalidOperationException("异步 CSV 不应调用同步 Flush。");
         }
 
+        /// <inheritdoc />
         public override Task FlushAsync(CancellationToken cancellationToken)
         {
             AsyncFlushCount++;
@@ -486,18 +564,21 @@ public sealed class CsvAsyncFileIntegrationTest
             return Task.CompletedTask;
         }
 
+        /// <inheritdoc />
         public override void Write(byte[] buffer, int offset, int count)
         {
             SyncWriteCount++;
             throw new InvalidOperationException("异步 CSV 不应调用同步 Write。");
         }
 
+        /// <inheritdoc />
         public override void Write(ReadOnlySpan<byte> buffer)
         {
             SyncWriteCount++;
             throw new InvalidOperationException("异步 CSV 不应调用同步 Write。");
         }
 
+        /// <inheritdoc />
         public override Task WriteAsync(byte[] buffer, int offset, int count,
             CancellationToken cancellationToken)
         {
@@ -512,6 +593,7 @@ public sealed class CsvAsyncFileIntegrationTest
             return Task.CompletedTask;
         }
 
+        /// <inheritdoc />
         public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer,
             CancellationToken cancellationToken = default)
         {
@@ -527,12 +609,24 @@ public sealed class CsvAsyncFileIntegrationTest
         }
     }
 
+    /// <summary>
+    /// 表示测试使用的一行数据模型。
+    /// </summary>
     private sealed class CsvFileRow
     {
+        /// <summary>
+        /// 获取或设置名称。
+        /// </summary>
         public string Name { get; set; }
 
+        /// <summary>
+        /// 获取或设置描述。
+        /// </summary>
         public string Description { get; set; }
 
+        /// <summary>
+        /// 获取或设置数量。
+        /// </summary>
         public int Count { get; set; }
     }
 }

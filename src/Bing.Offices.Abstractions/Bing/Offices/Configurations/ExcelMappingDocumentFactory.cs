@@ -50,7 +50,9 @@ public static class ExcelMappingDocumentFactory
         };
     }
 
-    /// <summary>复制可空映射配置。</summary>
+    /// <summary>
+    /// 复制可空映射配置。
+    /// </summary>
     /// <param name="configuration">待复制的映射配置；为 <see langword="null" /> 时返回 <see langword="null" />。</param>
     /// <returns>映射配置的独立副本；输入为 <see langword="null" /> 时返回 <see langword="null" />。</returns>
     private static ExcelMappingConfiguration CloneOrNull(ExcelMappingConfiguration configuration) =>

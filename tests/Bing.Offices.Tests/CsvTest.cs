@@ -18,6 +18,9 @@ using Xunit;
 
 namespace Bing.Offices.Tests;
 
+/// <summary>
+/// 验证 CSV 处理行为的测试类。
+/// </summary>
 public class CsvTest
 {
     /// <summary>
@@ -313,12 +316,12 @@ public class CsvTest
         }
     }
 
-        /// <summary>
-        /// 测试 - 同步字节数组入口应委托当前 CSV Stream-first 导出器。
-        /// </summary>
-        [Fact]
-        public void StreamExtensions_Bytes_ShouldDelegateToExporter()
-        {
+    /// <summary>
+    /// 测试 - 同步字节数组入口应委托当前 CSV Stream-first 导出器。
+    /// </summary>
+    [Fact]
+    public void StreamExtensions_Bytes_ShouldDelegateToExporter()
+    {
         // Arrange
         var exporter = new CsvEntityExporter();
 
@@ -328,7 +331,7 @@ public class CsvTest
         // Assert
         Assert.NotEmpty(content);
         Assert.Contains("兼容", Encoding.UTF8.GetString(content));
-        }
+    }
 
     /// <summary>
     /// 测试 - CSV 请求映射应按转换器名称使用已提供的双向转换器。
@@ -489,6 +492,7 @@ public class CsvTest
     /// <summary>
     /// 测试 - CSV 自定义校验器抛出取消或致命内存异常时，应直接向调用方传播。
     /// </summary>
+    /// <param name="outOfMemory">true 表示内存不足异常；false 表示取消异常。</param>
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -533,6 +537,7 @@ public class CsvTest
     /// <summary>
     /// 测试 - CSV 实体属性 setter 抛出取消或致命内存异常时，应保留原始异常。
     /// </summary>
+    /// <param name="outOfMemory">true 表示内存不足异常；false 表示取消异常。</param>
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -1024,28 +1029,38 @@ public class CsvTest
     private class CsvRow
     {
         /// <summary>
-        /// 名称。
+        /// 获取或设置名称。
         /// </summary>
         public string Name { get; set; }
 
         /// <summary>
-        /// 数量。
+        /// 获取或设置数量。
         /// </summary>
         public int Count { get; set; }
 
         /// <summary>
-        /// 描述。
+        /// 获取或设置描述。
         /// </summary>
         public string Description { get; set; }
     }
 
+    /// <summary>
+    /// 表示测试使用的一行数据模型。
+    /// </summary>
     private sealed class CsvOffsetRow
     {
+        /// <summary>
+        /// 获取或设置发生时间。
+        /// </summary>
         public DateTimeOffset OccurredAt { get; set; }
     }
 
+    /// <summary>
+    /// 提供会抛出异常的 CSV 导出器替身。
+    /// </summary>
     private sealed class ThrowingCsvExporter : ICsvExporter
     {
+        /// <inheritdoc />
         public void Export<T>(IEnumerable<T> data, Stream destination, CsvExportOptions<T> options = null,
             CancellationToken cancellationToken = default) where T : class, new()
         {
@@ -1053,23 +1068,30 @@ public class CsvTest
             throw new InvalidOperationException("测试导出失败");
         }
 
+        /// <inheritdoc />
         public void ExportToFile<T>(IEnumerable<T> data, string path, CsvExportOptions<T> options = null,
             CancellationToken cancellationToken = default) where T : class, new()
             => AtomicFileCommitter.Commit(path,
                 destination => Export(data, destination, options, cancellationToken),
                 cancellationToken, "CSV");
 
+        /// <inheritdoc />
         public Task ExportAsync<T>(IEnumerable<T> data, Stream destination, CsvExportOptions<T> options = null,
             CancellationToken cancellationToken = default) where T : class, new()
             => Task.FromException(new InvalidOperationException("测试导出失败"));
 
+        /// <inheritdoc />
         public Task ExportToFileAsync<T>(IEnumerable<T> data, string path, CsvExportOptions<T> options = null,
             CancellationToken cancellationToken = default) where T : class, new()
             => Task.FromException(new InvalidOperationException("测试导出失败"));
     }
 
+    /// <summary>
+    /// 提供会触发取消的 CSV 导出器替身。
+    /// </summary>
     private sealed class CancelingCsvExporter : ICsvExporter
     {
+        /// <inheritdoc />
         public void Export<T>(IEnumerable<T> data, Stream destination, CsvExportOptions<T> options = null,
             CancellationToken cancellationToken = default) where T : class, new()
         {
@@ -1077,16 +1099,19 @@ public class CsvTest
             throw new OperationCanceledException(cancellationToken);
         }
 
+        /// <inheritdoc />
         public void ExportToFile<T>(IEnumerable<T> data, string path, CsvExportOptions<T> options = null,
             CancellationToken cancellationToken = default) where T : class, new()
             => AtomicFileCommitter.Commit(path,
                 destination => Export(data, destination, options, cancellationToken),
                 cancellationToken, "CSV");
 
+        /// <inheritdoc />
         public Task ExportAsync<T>(IEnumerable<T> data, Stream destination, CsvExportOptions<T> options = null,
             CancellationToken cancellationToken = default) where T : class, new()
             => Task.FromException(new OperationCanceledException(cancellationToken));
 
+        /// <inheritdoc />
         public Task ExportToFileAsync<T>(IEnumerable<T> data, string path, CsvExportOptions<T> options = null,
             CancellationToken cancellationToken = default) where T : class, new()
             => Task.FromException(new OperationCanceledException(cancellationToken));
@@ -1098,7 +1123,7 @@ public class CsvTest
     private class CsvConvertedRow
     {
         /// <summary>
-        /// 领域编码。
+        /// 获取或设置领域编码。
         /// </summary>
         public CsvCode Code { get; set; }
     }
@@ -1108,10 +1133,16 @@ public class CsvTest
     /// </summary>
     private class CsvValidatedRow
     {
+        /// <summary>
+        /// 获取或设置编码。
+        /// </summary>
         [ExcelRequired]
         [ExcelUnique]
         public string Code { get; set; }
 
+        /// <summary>
+        /// 获取或设置数量。
+        /// </summary>
         [ExcelRange(1, 9)]
         public int Count { get; set; }
     }
@@ -1121,6 +1152,9 @@ public class CsvTest
     /// </summary>
     private class CsvBoundValidationRow
     {
+        /// <summary>
+        /// 获取或设置编码。
+        /// </summary>
         [CsvStartsWithOkAttribute]
         public string Code { get; set; }
     }
@@ -1130,8 +1164,14 @@ public class CsvTest
     /// </summary>
     private class CsvDynamicRow
     {
+        /// <summary>
+        /// 获取或设置名称。
+        /// </summary>
         public string Name { get; set; }
 
+        /// <summary>
+        /// 获取或设置值集合。
+        /// </summary>
         [DynamicColumn]
         public IDictionary<string, object> Values { get; set; }
     }
@@ -1141,6 +1181,9 @@ public class CsvTest
     /// </summary>
     private class CsvDecimalRow
     {
+        /// <summary>
+         /// 获取或设置十进制测试值。
+        /// </summary>
         public decimal Value { get; set; }
     }
 
@@ -1149,15 +1192,24 @@ public class CsvTest
     /// </summary>
     private class CsvV2ValidatedRow
     {
+        /// <summary>
+        /// 获取或设置编码。
+        /// </summary>
         [ExcelRequired]
         [ExcelRegex("^OK-")]
         [ExcelMaxLength(8)]
         [ExcelUnique]
         public string Code { get; set; }
 
+        /// <summary>
+        /// 获取或设置日期。
+        /// </summary>
         [ExcelDate(Format = "yyyy-MM-dd")]
         public DateTime Date { get; set; }
 
+        /// <summary>
+        /// 获取或设置金额。
+        /// </summary>
         [ExcelRange(1, 10)]
         [ExcelMaxValue(10)]
         public int Amount { get; set; }
@@ -1264,20 +1316,31 @@ public class CsvTest
     /// </summary>
     private sealed class PropagatingCsvConverter : INamedExcelValueConverter
     {
+        /// <summary>
+        /// 值转换时应传播的测试异常。
+        /// </summary>
         private readonly Exception _exception;
 
+        /// <summary>
+        /// 初始化一个 <see cref="PropagatingCsvConverter" /> 类型的实例。
+        /// </summary>
+        /// <param name="exception">值转换时原样抛出的异常。</param>
         public PropagatingCsvConverter(Exception exception) => _exception = exception;
 
+        /// <inheritdoc />
         public string Name => "propagating";
 
+        /// <inheritdoc />
         public bool CanConvert(Type propertyType) => propertyType == typeof(string);
 
+        /// <inheritdoc />
         public bool TryConvertFrom(ExcelConversionContext context, out object value)
         {
             value = null;
             throw _exception;
         }
 
+        /// <inheritdoc />
         public bool TryConvertTo(ExcelConversionContext context, out object value)
         {
             value = null;
@@ -1290,14 +1353,24 @@ public class CsvTest
     /// </summary>
     private sealed class PropagatingCsvValidationRule : INamedExcelValidationRule
     {
+        /// <summary>
+        /// 校验时应传播的测试异常。
+        /// </summary>
         private readonly Exception _exception;
 
+        /// <summary>
+        /// 初始化一个 <see cref="PropagatingCsvValidationRule" /> 类型的实例。
+        /// </summary>
+        /// <param name="exception">校验时原样抛出的异常。</param>
         public PropagatingCsvValidationRule(Exception exception) => _exception = exception;
 
+        /// <inheritdoc />
         public string Name => "propagating";
 
+        /// <inheritdoc />
         public string ErrorMessage => "不应返回结构化错误";
 
+        /// <inheritdoc />
         public bool Validate(ExcelValidationContext context) => throw _exception;
     }
 
@@ -1306,10 +1379,19 @@ public class CsvTest
     /// </summary>
     private sealed class CsvSetterRow
     {
+        /// <summary>
+        /// 用于触发属性设置异常的代码值。
+        /// </summary>
         private string _code;
 
+        /// <summary>
+        /// 获取或设置setter 要抛出的异常。
+        /// </summary>
         public static Exception SetterException { private get; set; }
 
+        /// <summary>
+        /// 获取或设置编码。
+        /// </summary>
         public string Code
         {
             get => _code;

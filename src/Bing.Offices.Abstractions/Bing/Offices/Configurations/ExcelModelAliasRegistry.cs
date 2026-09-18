@@ -7,12 +7,14 @@ namespace Bing.Offices.Configurations;
 /// </summary>
 public sealed class ExcelModelAliasRegistry
 {
-    /// <summary>按不区分大小写的业务别名保存已批准的模型和 Profile 身份。</summary>
+    /// <summary>
+    /// 按不区分大小写的业务别名保存已批准的模型和 Profile 身份。
+    /// </summary>
     private readonly ConcurrentDictionary<string, ExcelModelAliasRegistration> _aliases =
         new ConcurrentDictionary<string, ExcelModelAliasRegistration>(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// 注册一个业务模型别名。
+    /// 注册业务模型别名。
     /// </summary>
     /// <param name="alias">要注册的业务模型别名。</param>
     /// <returns>当前别名注册表实例。</returns>
@@ -24,8 +26,11 @@ public sealed class ExcelModelAliasRegistry
     }
 
     /// <summary>
-    /// 注册业务别名及其批准的模型/Profile 身份。
+    /// 注册业务模型别名。
     /// </summary>
+    /// <remarks>
+    /// 可同时限定允许使用该别名的模型类型和 Profile 名称。
+    /// </remarks>
     /// <param name="alias">要注册的业务模型别名。</param>
     /// <param name="modelType">允许使用该别名的模型类型。</param>
     /// <param name="profileName">允许使用该别名的 Profile 名称；为 <see langword="null" /> 时不限制 Profile。</param>
@@ -71,10 +76,14 @@ public sealed class ExcelModelAliasRegistry
         return true;
     }
 
-    /// <summary>保存单个业务别名关联的可选模型类型和 Profile 名称。</summary>
+    /// <summary>
+    /// 保存单个业务别名关联的可选模型类型和 Profile 名称。
+    /// </summary>
     private sealed class ExcelModelAliasRegistration
     {
-        /// <summary>初始化一个 <see cref="ExcelModelAliasRegistration" /> 类型的实例。</summary>
+        /// <summary>
+        /// 初始化一个 <see cref="ExcelModelAliasRegistration" /> 类型的实例。
+        /// </summary>
         /// <param name="modelType">批准的模型类型；仅注册名称时可为空。</param>
         /// <param name="profileName">批准的 Profile 名称；未限制时可为空。</param>
         internal ExcelModelAliasRegistration(Type modelType, string profileName)
@@ -83,13 +92,19 @@ public sealed class ExcelModelAliasRegistry
             ProfileName = profileName;
         }
 
-        /// <summary>获取批准的模型类型。</summary>
+        /// <summary>
+        /// 获取批准的模型类型。
+        /// </summary>
         internal Type ModelType { get; }
-        /// <summary>获取批准的 Profile 名称。</summary>
+        /// <summary>
+        /// 获取批准的 Profile 名称。
+        /// </summary>
         internal string ProfileName { get; }
     }
 
-    /// <summary>验证业务模型别名符合稳定别名格式。</summary>
+    /// <summary>
+    /// 验证业务模型别名符合稳定别名格式。
+    /// </summary>
     /// <param name="alias">待验证的业务模型别名。</param>
     private static void ValidateAlias(string alias)
     {

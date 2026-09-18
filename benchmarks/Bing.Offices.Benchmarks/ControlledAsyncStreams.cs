@@ -1,4 +1,4 @@
-namespace Bing.Offices.Benchmarks;
+﻿namespace Bing.Offices.Benchmarks;
 
 /// <summary>
 /// 为异步 IO 基准提供可观测的目标流；每次异步写入都会记录计数和字节数。

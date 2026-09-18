@@ -11,7 +11,9 @@ namespace Bing.Offices.Imports;
 /// </summary>
 internal sealed class NpoiResolvedSheet
 {
-    /// <summary>初始化一个 <see cref="NpoiResolvedSheet" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="NpoiResolvedSheet" /> 类型的实例。
+    /// </summary>
     /// <param name="request">原始工作表请求。</param>
     /// <param name="index">工作簿中的零基物理索引；未找到时为 -1。</param>
     /// <param name="name">工作簿中的物理工作表名称；未找到时为 null。</param>
@@ -22,16 +24,24 @@ internal sealed class NpoiResolvedSheet
         Name = name;
     }
 
-    /// <summary>获取原始工作表请求。</summary>
+    /// <summary>
+    /// 获取原始工作表请求。
+    /// </summary>
     public ExcelSheetImportRequest Request { get; }
 
-    /// <summary>获取工作簿中的零基物理索引。</summary>
+    /// <summary>
+    /// 获取工作簿中的零基物理索引。
+    /// </summary>
     public int Index { get; }
 
-    /// <summary>获取工作簿中的物理工作表名称。</summary>
+    /// <summary>
+    /// 获取工作簿中的物理工作表名称。
+    /// </summary>
     public string Name { get; }
 
-    /// <summary>获取selector 是否成功解析到物理工作表。</summary>
+    /// <summary>
+    /// 获取selector 是否成功解析到物理工作表。
+    /// </summary>
     public bool Exists => Index >= 0;
 }
 
@@ -40,7 +50,9 @@ internal sealed class NpoiResolvedSheet
 /// </summary>
 internal sealed class NpoiImportPlanBuilder
 {
-    /// <summary>调用指定实体类型的工作簿映射计划构建逻辑。</summary>
+    /// <summary>
+    /// 调用指定实体类型的工作簿映射计划构建逻辑。
+    /// </summary>
     /// <param name="target">执行计划构建的导入计划构建器。</param>
     /// <param name="request">当前工作表导入请求。</param>
     /// <param name="sheetNames">工作簿中的物理工作表名称集合。</param>
@@ -48,12 +60,18 @@ internal sealed class NpoiImportPlanBuilder
     private delegate IExcelMappingWorkbookPlan CreatePlanInvoker(NpoiImportPlanBuilder target,
         ExcelSheetImportRequest request, IReadOnlyList<string> sheetNames);
 
-    /// <summary>按工作表实体运行时类型缓存导入计划委托，避免重复反射构造。</summary>
+    /// <summary>
+    /// 按工作表实体运行时类型缓存导入计划委托，避免重复反射构造。
+    /// </summary>
     private static readonly ConcurrentDictionary<Type, CreatePlanInvoker> CreatePlanInvokers = new();
-    /// <summary>将请求映射文档编译为不可变工作簿映射计划的工厂。</summary>
+    /// <summary>
+    /// 将请求映射文档编译为不可变工作簿映射计划的工厂。
+    /// </summary>
     private readonly IExcelMappingPlanFactory _mappingPlanFactory;
 
-    /// <summary>初始化一个 <see cref="NpoiImportPlanBuilder" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="NpoiImportPlanBuilder" /> 类型的实例。
+    /// </summary>
     /// <param name="mappingPlanFactory">方向化映射计划工厂。</param>
     public NpoiImportPlanBuilder(IExcelMappingPlanFactory mappingPlanFactory)
     {
@@ -81,14 +99,18 @@ internal sealed class NpoiImportPlanBuilder
         return result;
     }
 
-    /// <summary>生成区分实体类型、映射来源和导入方向的工作簿计划分组键。</summary>
+    /// <summary>
+    /// 生成区分实体类型、映射来源和导入方向的工作簿计划分组键。
+    /// </summary>
     /// <param name="request">待分组的工作表导入请求。</param>
     /// <returns>可复用映射计划的稳定分组键。</returns>
     private static string GetWorkbookPlanKey(ExcelSheetImportRequest request)
         => NpoiWorkbookPlanKeyBuilder.Create(request.ItemType, request.MappingDocument,
             request.MappingConfiguration, MappingDirection.Import);
 
-    /// <summary>通过反射分派到工作表实体类型对应的泛型计划构建方法。</summary>
+    /// <summary>
+    /// 通过反射分派到工作表实体类型对应的泛型计划构建方法。
+    /// </summary>
     /// <param name="request">包含运行时实体类型的工作表导入请求。</param>
     /// <param name="sheetNames">使用同一映射计划的工作表名称。</param>
     /// <returns>包含各工作表视图的不可变映射计划。</returns>
@@ -110,7 +132,9 @@ internal sealed class NpoiImportPlanBuilder
         return (CreatePlanInvoker)method.CreateDelegate(typeof(CreatePlanInvoker));
     }
 
-    /// <summary>为具体实体类型创建导入方向的工作簿映射计划。</summary>
+    /// <summary>
+    /// 为具体实体类型创建导入方向的工作簿映射计划。
+    /// </summary>
     /// <typeparam name="T">工作表实体类型。</typeparam>
     /// <param name="request">工作表导入请求。</param>
     /// <param name="sheetNames">使用同一映射计划的工作表名称。</param>

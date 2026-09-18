@@ -4,7 +4,7 @@ using Bing.Offices.Attributes;
 namespace Bing.Offices.Npoi.Extensions;
 
 /// <summary>
-    /// Excel 导出和动态列处理使用的内部反射扩展。
+/// Excel 导出和动态列处理使用的内部反射扩展。
 /// </summary>
 internal static class InternalExtensions
 {

@@ -2,10 +2,14 @@
 
 namespace Bing.Offices.Imports;
 
-/// <summary>处理失败工作簿可选元数据降级与诊断接收器隔离。</summary>
+/// <summary>
+/// 处理失败工作簿可选元数据降级与诊断接收器隔离。
+/// </summary>
 internal static class NpoiFailureWorkbookDiagnostics
 {
-    /// <summary>复制 Provider 可选行元数据；不支持时生成结构化降级诊断。</summary>
+    /// <summary>
+    /// 复制 Provider 可选行元数据；不支持时生成结构化降级诊断。
+    /// </summary>
     /// <param name="copy">执行可选元数据复制的操作。</param>
     /// <param name="propertyName">待复制的元数据属性名称。</param>
     /// <param name="rowIndex">源行的零基索引。</param>

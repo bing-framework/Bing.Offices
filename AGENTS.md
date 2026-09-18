@@ -32,7 +32,7 @@
 from pathlib import Path
 
 text = Path("input.txt").read_text(encoding="utf-8")
-Path("output.txt").write_text(text, encoding="utf-8")
+Path("output.txt").write_text(text, encoding="utf-8", newline="\n")
 ```
 
 - 在 shell 命令中修改中文内容时，避免直接内联中文大段文本；优先使用 Python 组装字符串后以 UTF-8 写入。
@@ -72,7 +72,7 @@ Export-Csv -Path $path -Encoding utf8 -NoTypeInformation
 from pathlib import Path
 
 content = Path("input.txt").read_text(encoding="utf-8")
-Path("output.txt").write_text(content, encoding="utf-8")
+Path("output.txt").write_text(content, encoding="utf-8", newline="\n")
 ```
 
 禁止使用不带 `encoding` 的文件读写：
@@ -90,7 +90,7 @@ open("output.txt", "w").write("内容")
 using System.Text;
 
 var text = File.ReadAllText(path, Encoding.UTF8);
-File.WriteAllText(path, text, Encoding.UTF8);
+File.WriteAllText(path, text, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
 ```
 
 控制台程序如需输出中文，优先设置：
@@ -168,7 +168,7 @@ from pathlib import Path
 path = Path("target-file.md")
 text = path.read_text(encoding="utf-8")
 text = text.replace("旧内容", "新内容")
-path.write_text(text, encoding="utf-8")
+path.write_text(text, encoding="utf-8", newline="\n")
 ```
 
 当需要验证文件真实内容时，可以使用：
@@ -179,3 +179,44 @@ from pathlib import Path
 text = Path("target-file.md").read_text(encoding="utf-8")
 print(text.encode("unicode_escape").decode("ascii"))
 ```
+
+# Text Encoding and Line Ending Rules
+
+## 统一规则与现有例外
+
+- 文本源码和配置默认使用 **UTF-8 without BOM + LF**，文件末尾保留一个换行，不产生 Mixed Line Endings。
+- 保留现有 `.editorconfig` 契约：`.cs`、`.csx`、`.vb`、`.vbx` 使用 UTF-8 BOM；`.csproj`、`.sln`、`.ps1` 使用 CRLF。
+- `.bat`、`.cmd` 使用 UTF-8 + CRLF，供 Windows Command Processor 使用。其他源码和配置默认 LF。
+- UTF-8 文件类型还包括 `.jsx`、`.tsx`、`.kts`、`.html`、`.css`、`.scss`、`.less`、`.sh`、`.py`、`.toml`、`.ini`。二进制文件不得按文本处理。
+- 本节补充前文：所有写入示例须同时遵守目标文件的 BOM 和 EOL 例外；示例中的无 BOM / LF 是默认值，不覆盖例外。
+- 修改前依次读取 `.editorconfig`、`.gitattributes`，再检查目标文件真实字节、BOM 和行尾。规则冲突时先报告，不擅自变更已有契约。
+
+## 编辑器与 Git
+
+- Visual Studio、Rider 使用根级 `.editorconfig`；VS Code 须启用支持 EditorConfig 的扩展，保存时遵守文件匹配规则，不用用户级格式化设置覆盖仓库约定。
+- Git 使用 `.gitattributes` 控制文本行尾；Git 不负责把 GBK 转为 UTF-8，也不自动校验 BOM。显式 `eol` 规则优先于 `core.autocrlf`，无需修改用户全局 Git 配置。
+- 不运行全仓库格式化，不自动执行 `git add --renormalize .`，不自动 Commit、Push 或创建分支。
+- 存量编码或行尾偏差单独报告；全仓库转换须由用户批准下一阶段 `Repository Line Ending Normalization`。
+
+## 程序化读写
+
+- 所有程序化文本读写必须显式指定 UTF-8，禁止依赖 ANSI、GBK、系统 Code Page 或语言默认编码。
+- 优先精确 Patch，避免读取整文件后为了几行修改重写整文件。确需脚本转换时，仅处理明确批准的目标，并显式控制编码、BOM 和行尾。
+- Python 默认写入使用 `Path.write_text(text, encoding="utf-8", newline="\n")`（Python 3.10+）；使用 `open()` 时明确 `encoding="utf-8", newline="\n"`。BOM 例外使用 `utf-8-sig`；CRLF 例外对逻辑 LF 内容使用 `newline="\r\n"`，避免重复转换。
+- PowerShell 文本命令前设置本文件规定的三项 UTF-8 控制台编码。`-Encoding utf8` 在不同版本中 BOM 行为不同，且不会保证 LF；精确写入优先使用 Python，或显式 `.NET UTF8Encoding(false)` 与已确定行尾的内容。禁止默认重定向覆盖源码。
+- .NET 默认写入使用 `new UTF8Encoding(encoderShouldEmitUTF8Identifier: false)`；BOM 例外显式使用 `true`。跨平台源码生成默认使用 `"\n"`，不得依赖 `Environment.NewLine`，除非目标明确要求随系统变化。指定编码并不会自动统一内容行尾。
+- Node.js / TypeScript 读取和写入明确使用 `"utf8"`；生成源码内容默认使用 LF，无意转换 CRLF 或增删 BOM 均禁止。
+
+## 最小 Diff 与验证
+
+- 不为了局部修改改变整文件编码、BOM、行尾或无关空白；若目标存量格式不符，先报告或单独批准转换，不混入业务修改。
+- 每次修改后执行 `git diff --check`、`git diff --stat`；必要时执行 `git diff --ignore-space-at-eol`（Git 实际选项）和 `git ls-files --eol`。
+- 修改文件必须进行严格 UTF-8 字节检查，核对 BOM、LF/CRLF 例外、末尾换行和无 Mixed Line Endings；不能仅以编译成功为依据。
+- 若小改动显示为整文件变化，立即检查 Encoding、BOM、EOL、Formatter 和 Git autocrlf，修复自身引入的无关变化，不还原他人的既有改动。
+
+## 乱码排查顺序
+
+1. 检查实际文件字节、严格解码结果及 BOM；再检查 VS Code 当前编码、`.editorconfig`、`.gitattributes`、Git `core.autocrlf`。
+2. 检查 PowerShell 版本、Profile、`[Console]::InputEncoding`、`[Console]::OutputEncoding`、`$OutputEncoding`，必要时检查 `chcp`。
+3. 检查写入程序与 Python / Node.js / .NET 是否显式指定 UTF-8，再验证旧文件是否确实为 GBK / ANSI。
+4. 区分 Terminal Rendering、Console Encoding、File Encoding 与 Actual File Bytes。终端 `????` 不等于文件损坏；用前文 `unicode_escape` 示例或字节检查验证真实内容。

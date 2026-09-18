@@ -4,7 +4,6 @@ using System.Reflection;
 using System.Threading.Tasks;
 using Bing.Offices.Configurations;
 using Bing.Offices.Extensions;
-using Bing.Offices.Npoi.Extensions;
 using Bing.Offices.ProfileFixtures;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -106,7 +105,7 @@ public class MappingProfileRegistryTest
         // Arrange
         var services = new ServiceCollection();
         services.AddMappingProfile<ExplicitProfile>();
-        services.AddBingOfficesNpoi();
+        Bing.Offices.Mappings.ExcelMappingPlanFactoryProvider.RegisterDefault(services);
         using var provider = services.BuildServiceProvider();
         var document = new ExcelMappingDocument
         {
@@ -312,6 +311,11 @@ public class MappingProfileRegistryTest
         Assert.IsType<ReflectionTypeLoadException>(exception.InnerException);
     }
 
+    /// <summary>
+    /// 构建测试使用的服务提供程序。
+    /// </summary>
+    /// <param name="assemblies">程序集集合。</param>
+    /// <returns>已注册指定程序集内映射 Profile 的服务提供程序。</returns>
     private static ServiceProvider BuildProvider(params System.Reflection.Assembly[] assemblies)
     {
         var services = new ServiceCollection();
@@ -320,8 +324,12 @@ public class MappingProfileRegistryTest
         return services.BuildServiceProvider();
     }
 
+    /// <summary>
+    /// 提供测试场景使用的映射 Profile。
+    /// </summary>
     public sealed class ExplicitProfile : IMappingProfile<ImportModel, ExportModel>
     {
+        /// <inheritdoc />
         public void Configure(FluentSetting<ImportModel, ExportModel> setting)
         {
             setting.Import.Property(model => model.Name).HasHeader("导入");
@@ -329,50 +337,76 @@ public class MappingProfileRegistryTest
         }
     }
 
+    /// <summary>
+    /// 提供测试场景使用的映射 Profile。
+    /// </summary>
+    /// <typeparam name="T">用于构造冲突映射契约的导入模型类型。</typeparam>
     public sealed class ConflictingProfile<T> : IImportMappingProfile<T>,
         IMappingProfile<T, ExportModel> where T : class, new()
     {
+        /// <inheritdoc />
         public void Configure(ImportMappingBuilder<T> setting)
         {
         }
 
+        /// <inheritdoc />
         public void Configure(FluentSetting<T, ExportModel> setting)
         {
         }
     }
 
+    /// <summary>
+    /// 提供测试场景使用的映射 Profile。
+    /// </summary>
     public sealed class SecondExplicitProfile : IMappingProfile<ImportModel, ExportModel>
     {
+        /// <inheritdoc />
         public void Configure(FluentSetting<ImportModel, ExportModel> setting)
         {
         }
     }
 
+    /// <summary>
+    /// 提供测试场景使用的映射 Profile。
+    /// </summary>
     public sealed class ScannedProfile : IMappingProfile<ImportModel, ExportModel>
     {
+        /// <inheritdoc />
         public void Configure(FluentSetting<ImportModel, ExportModel> setting)
         {
         }
     }
 
+    /// <summary>
+    /// 提供测试场景使用的映射 Profile。
+    /// </summary>
     public sealed class ImportOnlyProfile : IImportMappingProfile<ImportModel>
     {
+        /// <inheritdoc />
         public void Configure(ImportMappingBuilder<ImportModel> setting)
         {
             setting.Property(model => model.Name).HasHeader("仅导入");
         }
     }
 
+    /// <summary>
+    /// 提供测试场景使用的映射 Profile。
+    /// </summary>
     public sealed class ExportOnlyProfile : IExportMappingProfile<ExportModel>
     {
+        /// <inheritdoc />
         public void Configure(ExportMappingBuilder<ExportModel> setting)
         {
             setting.Property(model => model.Label).HasHeader("仅导出");
         }
     }
 
+    /// <summary>
+    /// 提供测试场景使用的映射 Profile。
+    /// </summary>
     public sealed class SameModelProfile : IMappingProfile<ImportModel>
     {
+        /// <inheritdoc />
         public void Configure(FluentSetting<ImportModel, ImportModel> setting)
         {
             setting.Import.Property(model => model.Name).HasHeader("同模型导入");
@@ -380,41 +414,79 @@ public class MappingProfileRegistryTest
         }
     }
 
+    /// <summary>
+    /// 提供测试场景使用的映射 Profile。
+    /// </summary>
     public abstract class IgnoredAbstractProfile : IMappingProfile<ImportModel, ExportModel>
     {
+        /// <inheritdoc />
         public abstract void Configure(FluentSetting<ImportModel, ExportModel> setting);
     }
 
+    /// <summary>
+    /// 提供测试场景使用的映射 Profile。
+    /// </summary>
+    /// <typeparam name="T">使 Profile 保持开放泛型的占位类型参数。</typeparam>
     public sealed class IgnoredOpenGenericProfile<T> : IMappingProfile<ImportModel, ExportModel>
     {
+        /// <inheritdoc />
         public void Configure(FluentSetting<ImportModel, ExportModel> setting)
         {
         }
     }
 
+    /// <summary>
+    /// 表示映射测试使用的导入模型。
+    /// </summary>
     public sealed class ImportModel
     {
+        /// <summary>
+        /// 获取或设置名称。
+        /// </summary>
         public string Name { get; set; }
     }
 
+    /// <summary>
+    /// 表示映射测试使用的导出模型。
+    /// </summary>
     public sealed class ExportModel
     {
+        /// <summary>
+        /// 获取或设置标签。
+        /// </summary>
         public string Label { get; set; }
     }
 
+    /// <summary>
+    /// 提供会抛出类型加载异常的程序集替身。
+    /// </summary>
     private sealed class ThrowingAssembly : Assembly
     {
+        /// <summary>
+        /// 模拟程序集返回的类型集合。
+        /// </summary>
         private readonly Type[] _types;
+
+        /// <summary>
+        /// 模拟程序集加载失败时返回的异常集合。
+        /// </summary>
         private readonly Exception[] _loaderExceptions;
 
+        /// <summary>
+        /// 初始化一个 <see cref="ThrowingAssembly" /> 类型的实例。
+        /// </summary>
+        /// <param name="types">类型加载异常携带的类型数组。</param>
+        /// <param name="loaderExceptions">类型加载失败的异常数组。</param>
         public ThrowingAssembly(Type[] types, Exception[] loaderExceptions)
         {
             _types = types;
             _loaderExceptions = loaderExceptions;
         }
 
+        /// <inheritdoc />
         public override string FullName => "Bing.Offices.Tests.ThrowingAssembly";
 
+        /// <inheritdoc />
         public override Type[] GetTypes() => throw new ReflectionTypeLoadException(_types, _loaderExceptions);
     }
 }

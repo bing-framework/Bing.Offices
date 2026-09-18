@@ -9,7 +9,9 @@ namespace Bing.Offices.Mappings;
 /// </summary>
 internal static class ExcelValueConverterBindingResolver
 {
-    /// <summary>按转换器实例缓存其对属性类型的支持能力。</summary>
+    /// <summary>
+    /// 按转换器实例缓存其对属性类型的支持能力。
+    /// </summary>
     private static readonly ConditionalWeakTable<IExcelValueConverter,
         ConcurrentDictionary<Type, bool>> Capabilities = new();
 
@@ -37,7 +39,9 @@ internal static class ExcelValueConverterBindingResolver
         return named;
     }
 
-    /// <summary>判断并缓存转换器对指定属性类型的支持能力。</summary>
+    /// <summary>
+    /// 判断并缓存转换器对指定属性类型的支持能力。
+    /// </summary>
     /// <param name="converter">待检查的值转换器。</param>
     /// <param name="propertyType">目标属性类型。</param>
     /// <returns>转换器支持该属性类型时为 true。</returns>

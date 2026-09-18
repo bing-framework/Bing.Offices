@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Runtime;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -59,15 +59,15 @@ internal static class RealIoProbe
         }));
 
         foreach (var rowCount in RowCounts)
-        foreach (var scenario in Scenarios)
-        {
-            var child = RunChild(fullPath, scenario, rowCount, repetitionCount);
-            writer.WriteLine(child);
-            writer.Flush();
-            using var document = JsonDocument.Parse(child);
-            if (document.RootElement.GetProperty("exitCode").GetInt32() != 0)
-                failed = true;
-        }
+            foreach (var scenario in Scenarios)
+            {
+                var child = RunChild(fullPath, scenario, rowCount, repetitionCount);
+                writer.WriteLine(child);
+                writer.Flush();
+                using var document = JsonDocument.Parse(child);
+                if (document.RootElement.GetProperty("exitCode").GetInt32() != 0)
+                    failed = true;
+            }
 
         Console.WriteLine($"REAL_IO_PROBE artifact={fullPath} scenarios={RowCounts.Length * Scenarios.Length} "
             + $"repetitions={repetitionCount} status={(failed ? "failed" : "passed")}");
@@ -246,59 +246,59 @@ internal static class RealIoProbe
         switch (scenario)
         {
             case "csv-file-sync":
-            {
-                var path = Path.Combine(workDirectory, "sync.csv");
-                DeleteIfExists(path);
-                csvExporter.ExportToFile(rows, path);
-                return new OperationResult(new FileInfo(path).Length, 0, 0);
-            }
+                {
+                    var path = Path.Combine(workDirectory, "sync.csv");
+                    DeleteIfExists(path);
+                    csvExporter.ExportToFile(rows, path);
+                    return new OperationResult(new FileInfo(path).Length, 0, 0);
+                }
             case "csv-file-async":
-            {
-                var path = Path.Combine(workDirectory, "async.csv");
-                DeleteIfExists(path);
-                await csvExporter.ExportToFileAsync(rows, path).ConfigureAwait(false);
-                return new OperationResult(new FileInfo(path).Length, 0, 0);
-            }
+                {
+                    var path = Path.Combine(workDirectory, "async.csv");
+                    DeleteIfExists(path);
+                    await csvExporter.ExportToFileAsync(rows, path).ConfigureAwait(false);
+                    return new OperationResult(new FileInfo(path).Length, 0, 0);
+                }
             case "excel-file-sync":
-            {
-                var path = Path.Combine(workDirectory, "sync.xlsx");
-                DeleteIfExists(path);
-                excelExporter.ExportToFile(excelRequest, path);
-                return new OperationResult(new FileInfo(path).Length, 0, 0);
-            }
+                {
+                    var path = Path.Combine(workDirectory, "sync.xlsx");
+                    DeleteIfExists(path);
+                    excelExporter.ExportToFile(excelRequest, path);
+                    return new OperationResult(new FileInfo(path).Length, 0, 0);
+                }
             case "excel-file-async":
-            {
-                var path = Path.Combine(workDirectory, "async.xlsx");
-                DeleteIfExists(path);
-                await excelExporter.ExportToFileAsync(excelRequest, path).ConfigureAwait(false);
-                return new OperationResult(new FileInfo(path).Length, 0, 0);
-            }
+                {
+                    var path = Path.Combine(workDirectory, "async.xlsx");
+                    DeleteIfExists(path);
+                    await excelExporter.ExportToFileAsync(excelRequest, path).ConfigureAwait(false);
+                    return new OperationResult(new FileInfo(path).Length, 0, 0);
+                }
             case "csv-delayed-async":
-            {
-                using var destination = new DelayedAsyncWriteStream(TimeSpan.FromMilliseconds(1));
-                await csvExporter.ExportAsync(rows, destination).ConfigureAwait(false);
-                return Complete(destination);
-            }
+                {
+                    using var destination = new DelayedAsyncWriteStream(TimeSpan.FromMilliseconds(1));
+                    await csvExporter.ExportAsync(rows, destination).ConfigureAwait(false);
+                    return Complete(destination);
+                }
             case "csv-throttled-async":
-            {
-                using var destination = new ThrottledAsyncWriteStream(64 * 1024,
-                    TimeSpan.FromMilliseconds(1));
-                await csvExporter.ExportAsync(rows, destination).ConfigureAwait(false);
-                return Complete(destination);
-            }
+                {
+                    using var destination = new ThrottledAsyncWriteStream(64 * 1024,
+                        TimeSpan.FromMilliseconds(1));
+                    await csvExporter.ExportAsync(rows, destination).ConfigureAwait(false);
+                    return Complete(destination);
+                }
             case "excel-delayed-async":
-            {
-                using var destination = new DelayedAsyncWriteStream(TimeSpan.FromMilliseconds(1));
-                await excelExporter.ExportAsync(excelRequest, destination).ConfigureAwait(false);
-                return Complete(destination);
-            }
+                {
+                    using var destination = new DelayedAsyncWriteStream(TimeSpan.FromMilliseconds(1));
+                    await excelExporter.ExportAsync(excelRequest, destination).ConfigureAwait(false);
+                    return Complete(destination);
+                }
             case "excel-throttled-async":
-            {
-                using var destination = new ThrottledAsyncWriteStream(64 * 1024,
-                    TimeSpan.FromMilliseconds(1));
-                await excelExporter.ExportAsync(excelRequest, destination).ConfigureAwait(false);
-                return Complete(destination);
-            }
+                {
+                    using var destination = new ThrottledAsyncWriteStream(64 * 1024,
+                        TimeSpan.FromMilliseconds(1));
+                    await excelExporter.ExportAsync(excelRequest, destination).ConfigureAwait(false);
+                    return Complete(destination);
+                }
             default:
                 throw new ArgumentOutOfRangeException(nameof(scenario), scenario, null);
         }

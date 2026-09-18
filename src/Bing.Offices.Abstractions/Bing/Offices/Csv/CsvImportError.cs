@@ -1,17 +1,29 @@
 ﻿namespace Bing.Offices.Csv;
 
-/// <summary>CSV 导入错误分类。</summary>
+/// <summary>
+/// CSV 导入错误分类。
+/// </summary>
 public enum CsvImportErrorCode
 {
-    /// <summary>输入格式无效。</summary>
+    /// <summary>
+    /// 输入格式无效。
+    /// </summary>
     InvalidInput,
-    /// <summary>表头或列结构无效。</summary>
+    /// <summary>
+    /// 表头或列结构无效。
+    /// </summary>
     InvalidHeader,
-    /// <summary>值转换失败。</summary>
+    /// <summary>
+    /// 值转换失败。
+    /// </summary>
     ValueConversion,
-    /// <summary>业务校验失败。</summary>
+    /// <summary>
+    /// 业务校验失败。
+    /// </summary>
     Validation,
-    /// <summary>超过资源限制。</summary>
+    /// <summary>
+    /// 超过资源限制。
+    /// </summary>
     ResourceLimit
 }
 
@@ -20,7 +32,9 @@ public enum CsvImportErrorCode
 /// </summary>
 public sealed class CsvImportError
 {
-    /// <summary>初始化一个 <see cref="CsvImportError" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="CsvImportError" /> 类型的实例。
+    /// </summary>
     /// <param name="message">错误信息。</param>
     /// <param name="rowIndex">从一开始的行号。</param>
     /// <param name="columnIndex">从一开始的列号。</param>
@@ -63,6 +77,8 @@ public sealed class CsvImportError
     /// </summary>
     public int? FirstRowNumber { get; }
 
-    /// <summary>获取错误分类。</summary>
+    /// <summary>
+    /// 获取错误分类。
+    /// </summary>
     public CsvImportErrorCode Code { get; }
 }

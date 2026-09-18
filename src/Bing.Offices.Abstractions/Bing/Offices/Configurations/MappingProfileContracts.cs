@@ -10,7 +10,7 @@ public interface IImportMappingProfile<TImport>
     /// <summary>
     /// 配置导入方向映射。
     /// </summary>
-    /// <param name="setting">导入方向 Fluent 设置。</param>
+    /// <param name="setting">供 Profile 配置导入映射的 Fluent 设置。</param>
     void Configure(ImportMappingBuilder<TImport> setting);
 }
 
@@ -24,7 +24,7 @@ public interface IExportMappingProfile<TExport>
     /// <summary>
     /// 配置导出方向映射。
     /// </summary>
-    /// <param name="setting">导出方向 Fluent 设置。</param>
+    /// <param name="setting">供 Profile 配置导出映射的 Fluent 设置。</param>
     void Configure(ExportMappingBuilder<TExport> setting);
 }
 
@@ -40,7 +40,7 @@ public interface IMappingProfile<TImport, TExport>
     /// <summary>
     /// 配置导入和导出方向的映射。
     /// </summary>
-    /// <param name="setting">方向隔离的 Fluent 设置。</param>
+    /// <param name="setting">供 Profile 配置双向映射的 Fluent 设置。</param>
     void Configure(FluentSetting<TImport, TExport> setting);
 }
 
@@ -54,6 +54,6 @@ public interface IMappingProfile<T>
     /// <summary>
     /// 配置同一模型的导入和导出方向映射。
     /// </summary>
-    /// <param name="setting">方向隔离的 Fluent 设置。</param>
+    /// <param name="setting">供 Profile 配置同一模型双向映射的 Fluent 设置。</param>
     void Configure(FluentSetting<T, T> setting);
 }

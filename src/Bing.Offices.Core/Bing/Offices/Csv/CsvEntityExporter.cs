@@ -16,16 +16,26 @@ namespace Bing.Offices.Csv;
 /// </summary>
 internal sealed partial class CsvEntityExporter : ICsvExporter
 {
-    /// <summary>按优先级用于导出字段的值转换器集合。</summary>
+    /// <summary>
+    /// 按优先级用于导出字段的值转换器集合。
+    /// </summary>
     private readonly IReadOnlyList<IExcelValueConverter> _valueConverters;
-    /// <summary>将 CSV 请求编译为不可变列映射计划的工厂。</summary>
+    /// <summary>
+    /// 将 CSV 请求编译为不可变列映射计划的工厂。
+    /// </summary>
     private readonly IExcelMappingPlanFactory _mappingPlanFactory;
-    /// <summary>负责原子文件提交的可替换 SPI。</summary>
+    /// <summary>
+    /// 负责原子文件提交的可替换 SPI。
+    /// </summary>
     private readonly IFileExportCommitter _fileExportCommitter;
-    /// <summary>观察并记录公共 CSV 运行异常。</summary>
+    /// <summary>
+    /// 观察并记录公共 CSV 运行异常。
+    /// </summary>
     private readonly BingOfficesExceptionDispatcher _exceptionDispatcher;
 
-    /// <summary>初始化一个 <see cref="CsvEntityExporter" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="CsvEntityExporter" /> 类型的实例。
+    /// </summary>
     /// <param name="valueConverters">值转换器集合。</param>
     /// <param name="mappingPlanFactory">方向化映射计划工厂。</param>
     /// <param name="exceptionObservers">接收公共运行异常的观察器集合。</param>
@@ -156,7 +166,9 @@ internal sealed partial class CsvEntityExporter : ICsvExporter
         }
     }
 
-    /// <summary>同步执行 CSV 列计划创建、字段格式化和记录写入。</summary>
+    /// <summary>
+    /// 同步执行 CSV 列计划创建、字段格式化和记录写入。
+    /// </summary>
     /// <typeparam name="T">导出实体类型。</typeparam>
     /// <param name="data">待导出的实体集合。</param>
     /// <param name="destination">接收 CSV 内容的目标流；由调用方负责生命周期。</param>
@@ -216,7 +228,9 @@ internal sealed partial class CsvEntityExporter : ICsvExporter
         csv.Flush();
     }
 
-    /// <summary>异步执行 CSV 列计划创建、字段格式化和记录写入。</summary>
+    /// <summary>
+    /// 异步执行 CSV 列计划创建、字段格式化和记录写入。
+    /// </summary>
     /// <typeparam name="T">导出实体类型。</typeparam>
     /// <param name="data">待导出的实体集合。</param>
     /// <param name="destination">接收 CSV 内容的目标流；由调用方负责生命周期。</param>
@@ -280,7 +294,9 @@ internal sealed partial class CsvEntityExporter : ICsvExporter
         cancellationToken.ThrowIfCancellationRequested();
     }
 
-    /// <summary>验证 CSV 序列化使用的字符、编码、区域性和公式防护策略。</summary>
+    /// <summary>
+    /// 验证 CSV 序列化使用的字符、编码、区域性和公式防护策略。
+    /// </summary>
     /// <param name="delimiter">字段分隔符。</param>
     /// <param name="quote">字段引用字符。</param>
     /// <param name="newLine">记录换行符。</param>
@@ -304,7 +320,9 @@ internal sealed partial class CsvEntityExporter : ICsvExporter
             throw new ArgumentOutOfRangeException(nameof(formulaInjectionPolicy));
     }
 
-    /// <summary>将固定映射列的实体值格式化为 CSV 字段文本。</summary>
+    /// <summary>
+    /// 将固定映射列的实体值格式化为 CSV 字段文本。
+    /// </summary>
     /// <param name="column">固定列属性绑定。</param>
     /// <param name="value">待格式化的实体值。</param>
     /// <param name="rowIndex">目标记录的一基行号。</param>
@@ -340,7 +358,9 @@ internal sealed partial class CsvEntityExporter : ICsvExporter
         return FormatScalarValue(value, culture);
     }
 
-    /// <summary>将固定或动态导出列从实体中读取并格式化为 CSV 字段文本。</summary>
+    /// <summary>
+    /// 将固定或动态导出列从实体中读取并格式化为 CSV 字段文本。
+    /// </summary>
     /// <param name="column">包含映射和动态列定义的导出列。</param>
     /// <param name="item">当前导出实体。</param>
     /// <param name="rowIndex">目标记录的一基行号。</param>
@@ -387,7 +407,9 @@ internal sealed partial class CsvEntityExporter : ICsvExporter
         return FormatScalarValue(value, culture);
     }
 
-    /// <summary>DateTimeOffset 使用不依赖区域性的往返格式，其他值沿用请求 Culture。</summary>
+    /// <summary>
+    /// DateTimeOffset 使用不依赖区域性的往返格式，其他值沿用请求 Culture。
+    /// </summary>
     /// <param name="value">待格式化的标量值。</param>
     /// <param name="culture">其他标量值使用的区域性。</param>
     /// <returns>格式化后的文本；空值表示为空字符串。</returns>
@@ -396,7 +418,9 @@ internal sealed partial class CsvEntityExporter : ICsvExporter
             ? dateTimeOffset.ToString("O", CultureInfo.InvariantCulture)
             : Convert.ToString(value, culture) ?? string.Empty;
 
-    /// <summary>将不可变映射计划展开为固定和动态 CSV 导出列。</summary>
+    /// <summary>
+    /// 将不可变映射计划展开为固定和动态 CSV 导出列。
+    /// </summary>
     /// <typeparam name="T">导出实体类型。</typeparam>
     /// <param name="map">已编译的实体映射计划。</param>
     /// <param name="dynamicColumns">映射未声明动态列计划时使用的请求级标题。</param>
@@ -427,7 +451,9 @@ internal sealed partial class CsvEntityExporter : ICsvExporter
         return columns;
     }
 
-    /// <summary>比较配置映射值与实体值的文本表示。</summary>
+    /// <summary>
+    /// 比较配置映射值与实体值的文本表示。
+    /// </summary>
     /// <param name="mappedValue">映射配置中的文本值。</param>
     /// <param name="value">待比较的实体值。</param>
     /// <param name="culture">格式化实体值使用的区域性。</param>
@@ -439,10 +465,14 @@ internal sealed partial class CsvEntityExporter : ICsvExporter
         return string.Equals(mappedValue, Convert.ToString(value, culture), StringComparison.Ordinal);
     }
 
-    /// <summary>保存一个 CSV 输出列的绑定和动态列信息。</summary>
+    /// <summary>
+    /// 保存一个 CSV 输出列的绑定和动态列信息。
+    /// </summary>
     private sealed class CsvExportColumn
     {
-        /// <summary>初始化一个 <see cref="CsvExportColumn" /> 类型的实例。</summary>
+        /// <summary>
+        /// 初始化一个 <see cref="CsvExportColumn" /> 类型的实例。
+        /// </summary>
         /// <param name="property">实体属性绑定。</param>
         /// <param name="title">输出表头标题。</param>
         /// <param name="isDynamic">是否从实体动态字典中读取值。</param>
@@ -456,13 +486,21 @@ internal sealed partial class CsvEntityExporter : ICsvExporter
             DynamicColumn = dynamicColumn;
         }
 
-        /// <summary>获取实体属性绑定。</summary>
+        /// <summary>
+        /// 获取实体属性绑定。
+        /// </summary>
         public CsvPropertyBinding Property { get; }
-        /// <summary>获取输出表头标题。</summary>
+        /// <summary>
+        /// 获取输出表头标题。
+        /// </summary>
         public string Title { get; }
-        /// <summary>获取是否从实体动态字典中读取值。</summary>
+        /// <summary>
+        /// 获取是否从实体动态字典中读取值。
+        /// </summary>
         public bool IsDynamic { get; }
-        /// <summary>获取已绑定的动态列计划；固定列时为 null。</summary>
+        /// <summary>
+        /// 获取已绑定的动态列计划；固定列时为 null。
+        /// </summary>
         public IExcelDynamicMappingColumn DynamicColumn { get; }
     }
 }

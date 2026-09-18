@@ -16,7 +16,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\Bing.Offices.Core\Bing\Offices\IO\ExcelXlsxZipPreflight.cs"
+    <Compile Include="..\provider-shared\ExcelXlsxZipPreflight.cs"
              Link="Bing\Offices\Internals\ExcelXlsxZipPreflight.cs" />
   </ItemGroup>
 

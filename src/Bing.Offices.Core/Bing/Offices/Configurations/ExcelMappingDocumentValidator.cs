@@ -8,13 +8,21 @@ namespace Bing.Offices.Configurations;
 /// </summary>
 internal static class ExcelMappingDocumentValidator
 {
-    /// <summary>单个映射方向允许声明的最大固定或动态列数量。</summary>
+    /// <summary>
+    /// 单个映射方向允许声明的最大固定或动态列数量（1,000 列）。
+    /// </summary>
     private const int MaxColumns = 1000;
-    /// <summary>单个固定或动态列允许声明的最大标题别名数量。</summary>
+    /// <summary>
+    /// 单个固定或动态列允许声明的最大标题别名数量（100 个）。
+    /// </summary>
     private const int MaxAliasesPerColumn = 100;
-    /// <summary>单个固定列允许声明或移除的最大校验规则数量。</summary>
+    /// <summary>
+    /// 单个固定列允许声明或移除的最大校验规则数量（100 条）。
+    /// </summary>
     private const int MaxValidationsPerColumn = 100;
-    /// <summary>映射文档中单个文本字段允许的最大字符数。</summary>
+    /// <summary>
+    /// 映射文档中单个文本字段允许的最大字符数（4,096 个）。
+    /// </summary>
     private const int MaxStringLength = 4096;
 
     /// <summary>

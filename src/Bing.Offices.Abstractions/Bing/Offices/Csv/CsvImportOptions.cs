@@ -60,22 +60,34 @@ public sealed class CsvImportOptions<T> where T : class, new()
     /// </summary>
     public StringComparison UniqueComparison { get; set; } = StringComparison.OrdinalIgnoreCase;
 
-    /// <summary>获取或设置输入流最大字节数；为空表示不额外限制。</summary>
+    /// <summary>
+    /// 获取或设置输入流最大字节数；为空表示不额外限制。
+    /// </summary>
     public long? MaxInputBytes { get; set; }
 
-    /// <summary>获取或设置最大数据行数，不包含表头；为空表示不额外限制。</summary>
+    /// <summary>
+    /// 获取或设置最大数据行数，不包含表头；为空表示不额外限制。
+    /// </summary>
     public int? MaxRows { get; set; }
 
-    /// <summary>获取或设置最大错误数；为空表示不额外限制。</summary>
+    /// <summary>
+    /// 获取或设置最大错误数；为空表示不额外限制。
+    /// </summary>
     public int? MaxErrors { get; set; }
 
-    /// <summary>获取或设置单字段最大字符数；为空表示不额外限制。</summary>
+    /// <summary>
+    /// 获取或设置单字段最大字符数；为空表示不额外限制。
+    /// </summary>
     public int? MaxFieldLength { get; set; }
 
-    /// <summary>获取或设置单条记录最大列数；为空表示不额外限制。</summary>
+    /// <summary>
+    /// 获取或设置单条记录最大列数；为空表示不额外限制。
+    /// </summary>
     public int? MaxColumns { get; set; }
 
-    /// <summary>验证资源限制值。</summary>
+    /// <summary>
+    /// 验证 CSV 导入选项中的资源限制和唯一值比较配置。
+    /// </summary>
     public void Validate()
     {
         if (MaxInputBytes <= 0)

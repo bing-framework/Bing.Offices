@@ -15,7 +15,9 @@ namespace Bing.Offices.Imports;
 /// </summary>
 internal sealed class NpoiImportRowMaterializer
 {
-    /// <summary>初始化一个 <see cref="NpoiImportRowMaterializer" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="NpoiImportRowMaterializer" /> 类型的实例。
+    /// </summary>
     internal NpoiImportRowMaterializer()
     {
     }

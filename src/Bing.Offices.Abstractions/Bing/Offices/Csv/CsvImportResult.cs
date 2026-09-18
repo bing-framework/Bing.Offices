@@ -6,7 +6,9 @@
 /// <typeparam name="T">实体类型。</typeparam>
 public sealed class CsvImportResult<T>
 {
-    /// <summary>初始化一个 <see cref="CsvImportResult{T}" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="CsvImportResult{T}" /> 类型的实例。
+    /// </summary>
     /// <param name="items">成功导入的实体集合。</param>
     /// <param name="errors">导入错误集合。</param>
     /// <param name="isTruncated">是否因资源限制而提前截断。</param>
@@ -30,9 +32,13 @@ public sealed class CsvImportResult<T>
     /// </summary>
     public IReadOnlyList<CsvImportError> Errors { get; }
 
-    /// <summary>获取结果是否因资源限制而提前截断。</summary>
+    /// <summary>
+    /// 获取结果是否因资源限制而提前截断。
+    /// </summary>
     public bool IsTruncated { get; }
 
-    /// <summary>获取触发截断的最大错误数。</summary>
+    /// <summary>
+    /// 获取触发截断的最大错误数。
+    /// </summary>
     public int? MaxErrors { get; }
 }

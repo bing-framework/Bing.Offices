@@ -258,6 +258,11 @@ public sealed class ExcelDateParserTest
         Assert.Equal(DateTimeKind.Unspecified, serialValue.Kind);
     }
 
+    /// <summary>
+    /// 创建文本单元格值。
+    /// </summary>
+    /// <param name="value">待处理的值。</param>
+    /// <returns>原始值和文本值均为指定文本的单元格值。</returns>
     private static ExcelCellValue TextCell(string value) =>
         new(value, value, ExcelCellKind.Text);
 }

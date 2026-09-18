@@ -5,7 +5,9 @@
 /// </summary>
 public sealed class ExcelComment
 {
-    /// <summary>初始化一个 <see cref="ExcelComment" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="ExcelComment" /> 类型的实例。
+    /// </summary>
     /// <param name="text">批注文本。</param>
     /// <param name="author">批注作者；未指定时为空字符串。</param>
     /// <param name="visible">是否在工作表中显示批注。</param>
@@ -16,12 +18,18 @@ public sealed class ExcelComment
         Visible = visible;
     }
 
-    /// <summary>获取批注文本。</summary>
+    /// <summary>
+    /// 获取批注文本。
+    /// </summary>
     public string Text { get; }
 
-    /// <summary>获取批注作者。</summary>
+    /// <summary>
+    /// 获取批注作者。
+    /// </summary>
     public string Author { get; }
 
-    /// <summary>获取批注是否可见。</summary>
+    /// <summary>
+    /// 获取批注是否可见。
+    /// </summary>
     public bool Visible { get; }
 }

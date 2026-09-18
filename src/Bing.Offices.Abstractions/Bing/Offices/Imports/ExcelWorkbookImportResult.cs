@@ -8,7 +8,9 @@ namespace Bing.Offices.Imports;
 /// <typeparam name="TWorkbook">承载各工作表实体的工作簿模型类型。</typeparam>
 public sealed class ExcelWorkbookImportResult<TWorkbook> where TWorkbook : class, new()
 {
-    /// <summary>初始化一个 <see cref="ExcelWorkbookImportResult{TWorkbook}" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="ExcelWorkbookImportResult{TWorkbook}" /> 类型的实例。
+    /// </summary>
     /// <param name="workbook">导入得到的根 Workbook 模型。</param>
     /// <param name="sheets">各工作表导入结果。</param>
     /// <param name="errors">关系和结构化导入错误。</param>
@@ -61,7 +63,9 @@ public sealed class ExcelWorkbookImportResult<TWorkbook> where TWorkbook : class
 /// </summary>
 public sealed class ExcelSheetImportResult
 {
-    /// <summary>初始化一个 <see cref="ExcelSheetImportResult" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="ExcelSheetImportResult" /> 类型的实例。
+    /// </summary>
     /// <param name="name">工作表名称。</param>
     /// <param name="itemType">工作表实体类型。</param>
     /// <param name="sourceRows">每个导入实体对应的源行索引。</param>

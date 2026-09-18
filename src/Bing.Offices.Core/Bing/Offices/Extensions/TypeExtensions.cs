@@ -43,7 +43,7 @@ internal static class TypeExtensions
         var items = type.GetEnumDefinitionList();
         var dict = new Dictionary<string, int>();
         // 枚举名 值 显示名称 描述
-        foreach (var item in items) 
+        foreach (var item in items)
             dict.Add(item.Description ?? item.DisplayName ?? item.Name, item.Value);
         return dict;
     }
@@ -106,5 +106,5 @@ internal static class TypeExtensions
         return list;
     }
 
-        
+
 }

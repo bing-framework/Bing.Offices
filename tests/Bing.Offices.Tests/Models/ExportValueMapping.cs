@@ -8,10 +8,13 @@ namespace Bing.Offices.Tests.Models;
 public class ExportValueMapping
 {
     /// <summary>
-    /// 索引
+    /// 获取或设置索引。
     /// </summary>
     public int Index { get; set; }
 
+    /// <summary>
+    /// 获取或设置待映射的代码。
+    /// </summary>
     [ValueMapping("A 系统", "100")]
     [ValueMapping("B 系统", "200")]
     [ValueMapping("C 系统", "300")]

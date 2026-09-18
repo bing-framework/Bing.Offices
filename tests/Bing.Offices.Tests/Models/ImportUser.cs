@@ -10,12 +10,12 @@ namespace Bing.Offices.Tests.Models;
 public class ImportUser
 {
     /// <summary>
-    /// 标识
+    /// 获取或设置用户标识。
     /// </summary>
     public string Id { get; set; }
 
     /// <summary>
-    /// 车牌号
+    /// 获取或设置车牌号。
     /// </summary>
     [ColumnName("车牌号")]
     [ExcelRequired]
@@ -24,42 +24,42 @@ public class ImportUser
     public string CarCode { get; set; }
 
     /// <summary>
-    /// 姓名
+    /// 获取或设置姓名。
     /// </summary>
     [ColumnName("姓名")]
     [ExcelMaxLength(10)]
     public string Name { get; set; }
 
     /// <summary>
-    /// 身份证
+    /// 获取或设置身份证号。
     /// </summary>
     [ColumnName("身份证")]
     [ExcelRegex(@"^(^\d{15}$|^\d{18}$|^\d{17}(\d|X|x))$")]
     public string IdCard { get; set; }
 
     /// <summary>
-    /// 手机号
+    /// 获取或设置手机号。
     /// </summary>
     [ColumnName("手机号")]
     [ExcelRegex("0?(13|14|15|17|18|19)[0-9]{9}")]
     public string Phone { get; set; }
 
     /// <summary>
-    /// 年龄
+    /// 获取或设置年龄。
     /// </summary>
     [ColumnName("年龄")]
-    [ExcelRange(0,100)]
+    [ExcelRange(0, 100)]
     public int? Age { get; set; }
 
     /// <summary>
-    /// 性别
+    /// 获取或设置性别。
     /// </summary>
     [ColumnName("性别")]
     [ExcelRegex("^先生$|^女士$")]
     public Gender Gender { get; set; }
 
     /// <summary>
-    /// 注册日期
+    /// 获取或设置注册日期。
     /// </summary>
     [ColumnName("注册日期")]
     [ExcelDate]

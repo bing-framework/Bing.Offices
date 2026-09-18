@@ -6,7 +6,9 @@
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
 public sealed class ExcelMaxLengthAttribute : FilterAttributeBase
 {
-    /// <summary>初始化一个 <see cref="ExcelMaxLengthAttribute" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="ExcelMaxLengthAttribute" /> 类型的实例。
+    /// </summary>
     /// <param name="maxLength">允许的最大字符数。</param>
     public ExcelMaxLengthAttribute(int maxLength)
     {
@@ -15,7 +17,9 @@ public sealed class ExcelMaxLengthAttribute : FilterAttributeBase
         MaxLength = maxLength;
     }
 
-    /// <summary>获取最大字符数。</summary>
+    /// <summary>
+    /// 获取最大字符数。
+    /// </summary>
     public int MaxLength { get; }
 
     /// <inheritdoc />

@@ -11,7 +11,7 @@ namespace Bing.Offices.Npoi.Extensions;
 public static partial class CellExtensions
 {
     /// <summary>
-    /// IEEE 754 双精度可精确表示的最大整数。
+    /// IEEE 754 双精度可精确表示的最大整数（9,007,199,254,740,991）。
     /// </summary>
     private const long MaxSafeInteger = 9007199254740991;
 
@@ -305,15 +305,18 @@ public static partial class CellExtensions
     }
 
     /// <summary>
-    /// 将值写入单元格，并使用默认格式处理日期、数字和特殊类型。
+    /// 将值写入单元格。
     /// </summary>
     /// <param name="cell">单元格</param>
     /// <param name="value">值</param>
     public static void SetCellValue(this ICell cell, object value) => cell.SetValue(value);
 
     /// <summary>
-    /// 将值写入单元格，并在需要时使用指定格式创建派生样式。
+    /// 将值写入单元格。
     /// </summary>
+    /// <remarks>
+    /// 提供格式字符串时，为日期和数值创建派生样式。
+    /// </remarks>
     /// <param name="cell">单元格</param>
     /// <param name="value">值</param>
     /// <param name="formatter">格式化字符串</param>

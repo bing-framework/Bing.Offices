@@ -7,11 +7,17 @@ namespace Bing.Offices.Exports;
 /// </summary>
 public enum ExcelChartType
 {
-    /// <summary>柱状图。</summary>
+    /// <summary>
+    /// 柱状图。
+    /// </summary>
     Column,
-    /// <summary>折线图。</summary>
+    /// <summary>
+    /// 折线图。
+    /// </summary>
     Line,
-    /// <summary>饼图。</summary>
+    /// <summary>
+    /// 饼图。
+    /// </summary>
     Pie
 }
 
@@ -40,7 +46,9 @@ public sealed class ExcelChartAnchor
     /// </summary>
     public int EndColumn { get; init; }
 
-    /// <summary>验证图表定位区域的行列边界。</summary>
+    /// <summary>
+    /// 验证图表定位区域的行列边界。
+    /// </summary>
     internal void Validate()
     {
         if (StartRow < 0 || StartColumn < 0 || EndRow <= StartRow || EndColumn <= StartColumn)
@@ -68,7 +76,9 @@ public sealed class ExcelChartRange
     /// </summary>
     public int? EndRow { get; init; }
 
-    /// <summary>验证图表数据范围的列键和行边界。</summary>
+    /// <summary>
+    /// 验证图表数据范围的列键和行边界。
+    /// </summary>
     /// <param name="parameterName">发生验证错误时使用的参数名称。</param>
     internal void Validate(string parameterName)
     {
@@ -98,7 +108,9 @@ public sealed class ExcelChartSeries
     /// </summary>
     public ExcelChartRange Values { get; init; }
 
-    /// <summary>验证图表系列名称和数值范围。</summary>
+    /// <summary>
+    /// 验证图表系列名称和数值范围。
+    /// </summary>
     /// <param name="parameterName">发生验证错误时使用的参数名称。</param>
     internal void Validate(string parameterName)
     {
@@ -140,7 +152,9 @@ public sealed class ExcelChartDefinition
     /// </summary>
     public ExcelChartAnchor Anchor { get; init; }
 
-    /// <summary>验证图表定义的范围和系列约束。</summary>
+    /// <summary>
+    /// 验证图表定义的范围和系列约束。
+    /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public void Validate()
     {

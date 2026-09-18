@@ -148,51 +148,51 @@ internal sealed class NpoiExportSheetWriter
             switch (definition.Type)
             {
                 case ExcelChartType.Column:
-                {
-                    var data = chart.ChartDataFactory.CreateColumnChartData<string, double>();
-                    foreach (var seriesDefinition in definition.Series)
                     {
-                        var valueColumn = ResolveChartColumn(columns, seriesDefinition.Values.ColumnKey);
-                        var values = DataSources.FromNumericCellRange(sheet,
-                            CreateChartRange(sheet, seriesDefinition.Values, firstColumnIndex + valueColumn,
-                                dataStartRow, dataEndRow));
-                        data.AddSeries(categories, values).SetTitle(seriesDefinition.Name);
+                        var data = chart.ChartDataFactory.CreateColumnChartData<string, double>();
+                        foreach (var seriesDefinition in definition.Series)
+                        {
+                            var valueColumn = ResolveChartColumn(columns, seriesDefinition.Values.ColumnKey);
+                            var values = DataSources.FromNumericCellRange(sheet,
+                                CreateChartRange(sheet, seriesDefinition.Values, firstColumnIndex + valueColumn,
+                                    dataStartRow, dataEndRow));
+                            data.AddSeries(categories, values).SetTitle(seriesDefinition.Name);
+                        }
+                        var categoryAxis = chart.ChartAxisFactory.CreateCategoryAxis(AxisPosition.Bottom);
+                        var valueAxis = chart.ChartAxisFactory.CreateValueAxis(AxisPosition.Left);
+                        valueAxis.Crosses = AxisCrosses.AutoZero;
+                        chart.Plot(data, categoryAxis, valueAxis);
+                        break;
                     }
-                    var categoryAxis = chart.ChartAxisFactory.CreateCategoryAxis(AxisPosition.Bottom);
-                    var valueAxis = chart.ChartAxisFactory.CreateValueAxis(AxisPosition.Left);
-                    valueAxis.Crosses = AxisCrosses.AutoZero;
-                    chart.Plot(data, categoryAxis, valueAxis);
-                    break;
-                }
                 case ExcelChartType.Line:
-                {
-                    var data = chart.ChartDataFactory.CreateLineChartData<string, double>();
-                    foreach (var seriesDefinition in definition.Series)
                     {
+                        var data = chart.ChartDataFactory.CreateLineChartData<string, double>();
+                        foreach (var seriesDefinition in definition.Series)
+                        {
+                            var valueColumn = ResolveChartColumn(columns, seriesDefinition.Values.ColumnKey);
+                            var values = DataSources.FromNumericCellRange(sheet,
+                                CreateChartRange(sheet, seriesDefinition.Values, firstColumnIndex + valueColumn,
+                                    dataStartRow, dataEndRow));
+                            data.AddSeries(categories, values).SetTitle(seriesDefinition.Name);
+                        }
+                        var categoryAxis = chart.ChartAxisFactory.CreateCategoryAxis(AxisPosition.Bottom);
+                        var valueAxis = chart.ChartAxisFactory.CreateValueAxis(AxisPosition.Left);
+                        valueAxis.Crosses = AxisCrosses.AutoZero;
+                        chart.Plot(data, categoryAxis, valueAxis);
+                        break;
+                    }
+                case ExcelChartType.Pie:
+                    {
+                        var data = chart.ChartDataFactory.CreatePieChartData<string, double>();
+                        var seriesDefinition = definition.Series[0];
                         var valueColumn = ResolveChartColumn(columns, seriesDefinition.Values.ColumnKey);
                         var values = DataSources.FromNumericCellRange(sheet,
                             CreateChartRange(sheet, seriesDefinition.Values, firstColumnIndex + valueColumn,
                                 dataStartRow, dataEndRow));
                         data.AddSeries(categories, values).SetTitle(seriesDefinition.Name);
+                        chart.Plot(data);
+                        break;
                     }
-                    var categoryAxis = chart.ChartAxisFactory.CreateCategoryAxis(AxisPosition.Bottom);
-                    var valueAxis = chart.ChartAxisFactory.CreateValueAxis(AxisPosition.Left);
-                    valueAxis.Crosses = AxisCrosses.AutoZero;
-                    chart.Plot(data, categoryAxis, valueAxis);
-                    break;
-                }
-                case ExcelChartType.Pie:
-                {
-                    var data = chart.ChartDataFactory.CreatePieChartData<string, double>();
-                    var seriesDefinition = definition.Series[0];
-                    var valueColumn = ResolveChartColumn(columns, seriesDefinition.Values.ColumnKey);
-                    var values = DataSources.FromNumericCellRange(sheet,
-                        CreateChartRange(sheet, seriesDefinition.Values, firstColumnIndex + valueColumn,
-                            dataStartRow, dataEndRow));
-                    data.AddSeries(categories, values).SetTitle(seriesDefinition.Name);
-                    chart.Plot(data);
-                    break;
-                }
                 default:
                     throw new NotSupportedException($"不支持的图表类型: {definition.Type}");
             }

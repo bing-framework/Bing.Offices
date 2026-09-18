@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Reflection;
@@ -17,17 +17,37 @@ using MiniExcelApi = MiniExcelLibs.MiniExcel;
 namespace Bing.Offices.Exports;
 
 /// <summary>
-/// 基于 MiniExcel 的 XLSX 导出器。行数据以延迟字典序列交给 MiniExcel，避免先构建完整 DOM。
+/// 基于 MiniExcel 的 XLSX 导出器。
 /// </summary>
+/// <remarks>
+/// 将行数据以延迟字典序列交给 MiniExcel，避免预先构建完整 DOM。
+/// </remarks>
 public sealed class MiniExcelExcelExporter : IExcelExporter
 {
+    /// <summary>
+    /// 用于创建默认映射计划的值转换器集合。
+    /// </summary>
     private readonly IReadOnlyList<IExcelValueConverter> _valueConverters;
+    /// <summary>
+    /// 创建导入和导出映射计划的工厂。
+    /// </summary>
     private readonly IExcelMappingPlanFactory _mappingPlanFactory;
+    /// <summary>
+    /// 将导出流原子提交到文件的提交器。
+    /// </summary>
     private readonly IFileExportCommitter _fileExportCommitter;
+    /// <summary>
+    /// 向异常观察器分发导出异常的分发器。
+    /// </summary>
     private readonly BingOfficesExceptionDispatcher _exceptionDispatcher;
+    /// <summary>
+    /// 按运行时行类型创建 MiniExcel 映射计划的构建器。
+    /// </summary>
     private readonly MiniExcelMappingPlanBuilder _planBuilder;
 
-    /// <summary>初始化 MiniExcel 导出器。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="MiniExcelExcelExporter" /> 类型的实例。
+    /// </summary>
     /// <param name="valueConverters">值转换器集合。</param>
     /// <param name="mappingPlanFactory">映射计划工厂。</param>
     /// <param name="exceptionObservers">异常观察器集合。</param>
@@ -178,6 +198,12 @@ public sealed class MiniExcelExcelExporter : IExcelExporter
         }
     }
 
+    /// <summary>
+    /// 创建按工作表名称组织的延迟行序列。
+    /// </summary>
+    /// <param name="request">包含工作表和映射配置的工作簿导出请求。</param>
+    /// <param name="cancellationToken">用于取消行序列创建的令牌。</param>
+    /// <returns>以工作表名称为键、以行序列为值的工作簿数据。</returns>
     private Dictionary<string, object> CreateWorkbookRows(ExcelWorkbookExportRequest request,
         CancellationToken cancellationToken)
     {
@@ -200,6 +226,13 @@ public sealed class MiniExcelExcelExporter : IExcelExporter
         return workbook;
     }
 
+    /// <summary>
+    /// 按映射计划枚举一个工作表的导出行。
+    /// </summary>
+    /// <param name="request">当前工作表导出请求。</param>
+    /// <param name="plan">当前实体类型的导出映射计划。</param>
+    /// <param name="cancellationToken">用于取消行枚举的令牌。</param>
+    /// <returns>按工作表顺序生成的行字典序列。</returns>
     private IEnumerable<IDictionary<string, object>> EnumerateRows(ExcelSheetExportRequest request,
         IExcelMappingPlan plan, CancellationToken cancellationToken)
     {
@@ -262,6 +295,11 @@ public sealed class MiniExcelExcelExporter : IExcelExporter
         }
     }
 
+    /// <summary>
+    /// 根据工作簿请求创建 MiniExcel Open XML 配置。
+    /// </summary>
+    /// <param name="request">用于读取区域性设置的工作簿导出请求。</param>
+    /// <returns>启用空值单元格和共享字符串缓存的 Open XML 配置。</returns>
     private static OpenXmlConfiguration CreateConfiguration(ExcelWorkbookExportRequest request)
     {
         var culture = request.Sheets.FirstOrDefault()?.Culture;
@@ -273,12 +311,24 @@ public sealed class MiniExcelExcelExporter : IExcelExporter
         };
     }
 
+    /// <summary>
+    /// 判断属性是否为动态列容器。
+    /// </summary>
+    /// <param name="itemType">行实体类型。</param>
+    /// <param name="propertyName">待检查的属性名称。</param>
+    /// <returns>属性存在且可赋值为字符串对象字典时返回 true，否则返回 false。</returns>
     private static bool IsDynamicContainerColumn(Type itemType, string propertyName)
     {
         var property = itemType.GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public);
         return property != null && typeof(IDictionary<string, object>).IsAssignableFrom(property.PropertyType);
     }
 
+    /// <summary>
+    /// 校验导出请求、目标流和取消状态。
+    /// </summary>
+    /// <param name="request">待导出的工作簿请求。</param>
+    /// <param name="destination">接收导出内容的目标流。</param>
+    /// <param name="cancellationToken">用于取消导出的令牌。</param>
     private static void ValidateArguments(ExcelWorkbookExportRequest request, Stream destination,
         CancellationToken cancellationToken)
     {
@@ -291,6 +341,10 @@ public sealed class MiniExcelExcelExporter : IExcelExporter
         cancellationToken.ThrowIfCancellationRequested();
     }
 
+    /// <summary>
+    /// 校验 MiniExcel 导出请求是否使用受支持的功能。
+    /// </summary>
+    /// <param name="request">待校验的工作簿导出请求。</param>
     private static void ValidateRequest(ExcelWorkbookExportRequest request)
     {
         if (request.Format != ExcelFormat.Xlsx)
@@ -337,6 +391,11 @@ public sealed class MiniExcelExcelExporter : IExcelExporter
         }
     }
 
+    /// <summary>
+    /// 校验映射计划是否超出 MiniExcel 的导出能力。
+    /// </summary>
+    /// <param name="plan">待校验的工作表映射计划。</param>
+    /// <param name="sheetName">用于错误消息的工作表名称。</param>
     private static void ValidatePlanCapabilities(IExcelMappingPlan plan, string sheetName)
     {
         if (plan?.Style != null && (!string.IsNullOrWhiteSpace(plan.Style.HeaderStyleKey)
@@ -363,6 +422,10 @@ public sealed class MiniExcelExcelExporter : IExcelExporter
                 stage: BingOfficesStage.Preflight);
     }
 
+    /// <summary>
+    /// 校验工作表名称符合 XLSX 名称限制。
+    /// </summary>
+    /// <param name="name">待校验的工作表名称。</param>
     private static void ValidateSheetName(string name)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -371,6 +434,10 @@ public sealed class MiniExcelExcelExporter : IExcelExporter
             throw new ArgumentException($"工作表名称无效: {name}", nameof(name));
     }
 
+    /// <summary>
+    /// 根据请求设置释放导出模板资源。
+    /// </summary>
+    /// <param name="request">可能包含模板流的工作簿导出请求。</param>
     private static void DisposeTemplate(ExcelWorkbookExportRequest request)
     {
         if (request?.Template != null && !request.LeaveTemplateOpen)

@@ -9,9 +9,13 @@ public sealed class FluentSetting<TImport, TExport>
     where TImport : class, new()
     where TExport : class, new()
 {
-    /// <summary>保存导入方向的 Fluent 配置器实例。</summary>
+    /// <summary>
+    /// 保存导入方向的 Fluent 配置器实例。
+    /// </summary>
     private readonly ImportMappingBuilder<TImport> _import = new();
-    /// <summary>保存导出方向的 Fluent 配置器实例。</summary>
+    /// <summary>
+    /// 保存导出方向的 Fluent 配置器实例。
+    /// </summary>
     private readonly ExportMappingBuilder<TExport> _export = new();
 
     /// <summary>

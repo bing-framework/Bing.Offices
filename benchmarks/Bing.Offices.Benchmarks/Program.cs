@@ -57,8 +57,30 @@ public static class Program
             var phase = args.Length >= 5
                 ? args[4]
                 : Environment.GetEnvironmentVariable("BING_OFFICES_BENCHMARK_PHASE") ?? "after";
-            ProviderComparisonProbe.RunAsync(args[1], int.Parse(args[2]), int.Parse(args[3]), phase)
+            string? provider = args.Length >= 6 ? args[5] : null;
+            ProviderComparisonProbe.RunAsync(args[1], int.Parse(args[2]), int.Parse(args[3]), phase, provider)
                 .GetAwaiter().GetResult();
+            return;
+        }
+        if (args.Length >= 6 && string.Equals(args[0], "--provider-comparison-worker",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            ProviderComparisonProbe.RunWorkerAsync(args[1], int.Parse(args[2]), int.Parse(args[3]),
+                    args[4], args[5])
+                .GetAwaiter().GetResult();
+            return;
+        }
+        if (args.Length >= 4 && string.Equals(args[0], "--hotspot-probe",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            HotspotProbe.RunAsync(args[1], args[2], int.Parse(args[3]))
+                .GetAwaiter().GetResult();
+            return;
+        }
+        if (args.Length >= 6 && string.Equals(args[0], "--hotspot-worker",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            HotspotProbe.RunWorker(args[1], args[2], args[3], int.Parse(args[4]), int.Parse(args[5]));
             return;
         }
         var benchmarkArtifacts = Path.Combine(FindRepositoryRoot(), "artifacts", "benchmarks");
@@ -118,17 +140,17 @@ public static class Program
                 lohSampling = "lohSampledPeakBytes is the maximum GenerationInfo[3].SizeBeforeBytes sampled after each workload phase; lohRetainedBytes includes the live payload after forced GC."
             }));
             foreach (var planBuildCount in new[] { 100, 500 })
-            foreach (var tenantCount in new[] { 100, 1000 })
-            foreach (var uniqueColumnCount in new[] { 1, 5 })
-            foreach (var uniqueRowCount in new[] { 10000, 100000 })
-            {
-                var result = RunChild(fullPath, planBuildCount, tenantCount, uniqueColumnCount, uniqueRowCount);
-                writer.WriteLine(result);
-                writer.Flush();
-                using var parsed = JsonDocument.Parse(result);
-                if (parsed.RootElement.GetProperty("exitCode").GetInt32() != 0)
-                    throw new InvalidOperationException($"资源场景执行失败: {result}");
-            }
+                foreach (var tenantCount in new[] { 100, 1000 })
+                    foreach (var uniqueColumnCount in new[] { 1, 5 })
+                        foreach (var uniqueRowCount in new[] { 10000, 100000 })
+                        {
+                            var result = RunChild(fullPath, planBuildCount, tenantCount, uniqueColumnCount, uniqueRowCount);
+                            writer.WriteLine(result);
+                            writer.Flush();
+                            using var parsed = JsonDocument.Parse(result);
+                            if (parsed.RootElement.GetProperty("exitCode").GetInt32() != 0)
+                                throw new InvalidOperationException($"资源场景执行失败: {result}");
+                        }
             Console.WriteLine($"RESOURCE_PROBE artifact={fullPath} scenarios=16 status=passed");
         }
 

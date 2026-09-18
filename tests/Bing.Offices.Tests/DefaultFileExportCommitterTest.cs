@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Text;
 using System.Threading;
@@ -105,6 +105,9 @@ public sealed class DefaultFileExportCommitterTest
         }
     }
 
+    /// <summary>
+    /// 验证异步提交新目标时会写入临时文件并移动为目标文件。
+    /// </summary>
     [Fact]
     public async Task CommitAsync_NewTarget_ShouldWriteAndMove()
     {
@@ -126,6 +129,9 @@ public sealed class DefaultFileExportCommitterTest
         }
     }
 
+    /// <summary>
+    /// 验证异步提交已有目标时会在成功写入后替换旧文件。
+    /// </summary>
     [Fact]
     public async Task CommitAsync_ExistingTarget_ShouldReplaceAfterSuccessfulWrite()
     {
@@ -148,6 +154,9 @@ public sealed class DefaultFileExportCommitterTest
         }
     }
 
+    /// <summary>
+    /// 验证异步提交写入失败时会保留异常和已有目标。
+    /// </summary>
     [Fact]
     public async Task CommitAsync_WriteFailure_ShouldPreserveExceptionAndTarget()
     {
@@ -170,6 +179,9 @@ public sealed class DefaultFileExportCommitterTest
         }
     }
 
+    /// <summary>
+    /// 验证异步提交预先取消时不会创建文件。
+    /// </summary>
     [Fact]
     public async Task CommitAsync_PreCanceled_ShouldNotCreateFiles()
     {
@@ -191,6 +203,9 @@ public sealed class DefaultFileExportCommitterTest
         }
     }
 
+    /// <summary>
+    /// 验证异步提交写入期间取消时会清理临时文件。
+    /// </summary>
     [Fact]
     public async Task CommitAsync_CanceledAfterWrite_ShouldCleanTemporaryFile()
     {
@@ -215,18 +230,36 @@ public sealed class DefaultFileExportCommitterTest
         }
     }
 
+    /// <summary>
+    /// 创建测试路径。
+    /// </summary>
+    /// <returns>系统临时目录内的唯一测试文件路径。</returns>
     private static string CreatePath()
         => Path.Combine(Path.GetTempPath(), $"Bing.Offices.DefaultCommitter.{Guid.NewGuid():N}.tmp");
 
+    /// <summary>
+    /// 获取临时文件。
+    /// </summary>
+    /// <param name="path">目标文件或目录路径。</param>
+    /// <returns>与目标文件对应的原子提交临时文件路径数组。</returns>
     private static string[] GetTemporaryFiles(string path)
         => Directory.GetFiles(Path.GetDirectoryName(path), Path.GetFileName(path) + ".*.tmp");
 
+    /// <summary>
+    /// 写入文本。
+    /// </summary>
+    /// <param name="stream">参与操作的流。</param>
+    /// <param name="value">待处理的值。</param>
     private static void WriteText(Stream stream, string value)
     {
         var bytes = Encoding.UTF8.GetBytes(value);
         stream.Write(bytes, 0, bytes.Length);
     }
 
+    /// <summary>
+    /// 删除文件。
+    /// </summary>
+    /// <param name="path">目标文件或目录路径。</param>
     private static void DeleteFile(string path)
     {
         if (File.Exists(path))

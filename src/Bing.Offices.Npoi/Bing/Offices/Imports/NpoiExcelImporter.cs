@@ -13,11 +13,16 @@ using NPOI.SS.UserModel;
 namespace Bing.Offices.Imports;
 
 /// <summary>
-/// 基于 NPOI 的 Excel 导入器；输入会先复制并由 NPOI 建立内存中的 Workbook DOM。
+/// 基于 NPOI 的 Excel 导入器。
 /// </summary>
+/// <remarks>
+/// 输入会先复制，并由 NPOI 建立内存中的 Workbook DOM。
+/// </remarks>
 public sealed class NpoiExcelImporter : IExcelImporter
 {
-    /// <summary>调用指定工作簿根类型的泛型工作表导入逻辑。</summary>
+    /// <summary>
+    /// 调用指定工作簿根类型的泛型工作表导入逻辑。
+    /// </summary>
     /// <typeparam name="TWorkbook">工作簿根实体类型。</typeparam>
     /// <param name="target">执行工作表导入的导入器。</param>
     /// <param name="sheet">待读取的 NPOI 工作表。</param>
@@ -40,11 +45,15 @@ public sealed class NpoiExcelImporter : IExcelImporter
         IDictionary<object, SourceLocation> sourceLocations, ExcelImportRuntime runtime, bool isDate1904,
         CancellationToken cancellationToken, IExcelMappingPlan mappingPlan) where TWorkbook : class, new();
 
-    /// <summary>缓存指定工作簿根类型的工作表导入委托。</summary>
+    /// <summary>
+    /// 缓存指定工作簿根类型的工作表导入委托。
+    /// </summary>
     /// <typeparam name="TWorkbook">工作簿根实体类型。</typeparam>
     private static class ImportSheetInvokerCache<TWorkbook> where TWorkbook : class, new()
     {
-        /// <summary>按工作表实体运行时类型缓存当前工作簿根类型的导入委托。</summary>
+        /// <summary>
+        /// 按工作表实体运行时类型缓存当前工作簿根类型的导入委托。
+        /// </summary>
         internal static readonly ConcurrentDictionary<Type, ImportSheetInvoker<TWorkbook>> Invokers = new();
     }
     /// <summary>
@@ -74,14 +83,22 @@ public sealed class NpoiExcelImporter : IExcelImporter
     /// 按行校验并物化导入实体的执行器。
     /// </summary>
     private readonly NpoiImportRowMaterializer _rowMaterializer;
-    /// <summary>执行单个工作表的表头、资源、校验和逐行导入。</summary>
+    /// <summary>
+    /// 执行单个工作表的表头、资源、校验和逐行导入。
+    /// </summary>
     private readonly NpoiImportSheetExecutor _sheetExecutor;
-    /// <summary>观察并记录公共 Excel 导入异常。</summary>
+    /// <summary>
+    /// 观察并记录公共 Excel 导入异常。
+    /// </summary>
     private readonly BingOfficesExceptionDispatcher _exceptionDispatcher;
-    /// <summary>负责失败工作簿外围异步输出的可替换 staging 策略。</summary>
+    /// <summary>
+    /// 保存负责失败工作簿外围异步输出的可替换 staging 策略。
+    /// </summary>
     private readonly INpoiAsyncStagingFactory _asyncStagingFactory;
 
-    /// <summary>初始化一个 <see cref="NpoiExcelImporter" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="NpoiExcelImporter" /> 类型的实例。
+    /// </summary>
     /// <param name="validationRules">校验规则集合。</param>
     /// <param name="valueConverters">值转换器集合。</param>
     /// <param name="namedValidationRules">命名配置校验规则集合。</param>
@@ -97,7 +114,9 @@ public sealed class NpoiExcelImporter : IExcelImporter
     {
     }
 
-    /// <summary>初始化一个 <see cref="NpoiExcelImporter" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="NpoiExcelImporter" /> 类型的实例。
+    /// </summary>
     /// <param name="validationRules">校验规则集合。</param>
     /// <param name="valueConverters">值转换器集合。</param>
     /// <param name="namedValidationRules">命名配置校验规则集合。</param>
@@ -123,7 +142,9 @@ public sealed class NpoiExcelImporter : IExcelImporter
         _asyncStagingFactory = asyncStagingFactory ?? throw new ArgumentNullException(nameof(asyncStagingFactory));
     }
 
-    /// <summary>初始化一个 <see cref="NpoiExcelImporter" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="NpoiExcelImporter" /> 类型的实例。
+    /// </summary>
     /// <param name="asyncStagingFactory">失败工作簿外围异步输出的 staging 工厂。</param>
     internal NpoiExcelImporter(INpoiAsyncStagingFactory asyncStagingFactory)
         : this(null, null, null, null, null, asyncStagingFactory)
@@ -443,7 +464,9 @@ public sealed class NpoiExcelImporter : IExcelImporter
             errors.IsTruncated, errors.MaxErrors);
     }
 
-    /// <summary>根据选择器查找工作表的零基物理索引。</summary>
+    /// <summary>
+    /// 根据选择器查找工作表的零基物理索引。
+    /// </summary>
     /// <param name="workbook">待查找的工作簿。</param>
     /// <param name="selector">按名称或索引定位工作表的选择器。</param>
     /// <param name="comparison">工作表名称比较规则。</param>
@@ -464,7 +487,9 @@ public sealed class NpoiExcelImporter : IExcelImporter
         return -1;
     }
 
-    /// <summary>解析一个工作表请求并保存物理名称，供后续所有导入阶段复用。</summary>
+    /// <summary>
+    /// 解析一个工作表请求并保存物理名称，供后续所有导入阶段复用。
+    /// </summary>
     /// <param name="workbook">待查找的工作簿。</param>
     /// <param name="request">待解析的工作表请求。</param>
     /// <param name="comparison">工作表名称比较规则。</param>
@@ -476,7 +501,9 @@ public sealed class NpoiExcelImporter : IExcelImporter
         return new NpoiResolvedSheet(request, index, index < 0 ? null : workbook.GetSheetName(index));
     }
 
-    /// <summary>生成用于错误消息的工作表选择器描述。</summary>
+    /// <summary>
+    /// 生成用于错误消息的工作表选择器描述。
+    /// </summary>
     /// <param name="selector">待描述的工作表选择器。</param>
     /// <returns>索引选择器的井号形式或名称选择器的名称。</returns>
     private static string GetSelectorDescription(ExcelSheetSelector selector) =>
@@ -634,7 +661,9 @@ public sealed class NpoiExcelImporter : IExcelImporter
         sheetResults.Add(result);
     }
 
-    /// <summary>读取单元格的原始文本值，并优先读取公式的缓存结果。</summary>
+    /// <summary>
+    /// 读取单元格的原始文本值，并优先读取公式的缓存结果。
+    /// </summary>
     /// <param name="cell">待读取的单元格。</param>
     /// <returns>单元格文本；单元格为空时为空字符串。</returns>
     internal static string GetRawStringValue(ICell cell)
@@ -645,7 +674,9 @@ public sealed class NpoiExcelImporter : IExcelImporter
         return cellType == CellType.String ? cell.StringCellValue ?? string.Empty : cell.GetStringValue();
     }
 
-    /// <summary>按照指定空白策略规范化单元格文本。</summary>
+    /// <summary>
+    /// 按照指定空白策略规范化单元格文本。
+    /// </summary>
     /// <param name="value">待规范化的文本；为 null 时按空字符串处理。</param>
     /// <param name="policy">空白字符处理策略。</param>
     /// <returns>规范化后的文本。</returns>
@@ -661,7 +692,9 @@ public sealed class NpoiExcelImporter : IExcelImporter
         };
     }
 
-    /// <summary>移除文本中的所有 Unicode 空白字符。</summary>
+    /// <summary>
+    /// 移除文本中的所有 Unicode 空白字符。
+    /// </summary>
     /// <param name="value">待处理的文本。</param>
     /// <returns>移除空白后的文本；原文本无空白时直接返回原引用。</returns>
     private static string RemoveWhitespace(string value)
@@ -725,7 +758,9 @@ public sealed class NpoiExcelImporter : IExcelImporter
         _ => ExcelCellKind.Text
     };
 
-    /// <summary>创建与指定字符串比较规则等效的字符串比较器。</summary>
+    /// <summary>
+    /// 创建与指定字符串比较规则等效的字符串比较器。
+    /// </summary>
     /// <param name="comparison">要支持的字符串比较规则。</param>
     /// <returns>对应的字符串比较器。</returns>
     private static StringComparer CreateStringComparer(StringComparison comparison) => comparison switch

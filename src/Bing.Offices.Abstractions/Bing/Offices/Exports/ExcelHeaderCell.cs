@@ -5,7 +5,9 @@
 /// </summary>
 public sealed class ExcelHeaderCell
 {
-    /// <summary>初始化一个 <see cref="ExcelHeaderCell" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="ExcelHeaderCell" /> 类型的实例。
+    /// </summary>
     /// <param name="columnIndex">从零开始的列索引。</param>
     /// <param name="value">单元格值。</param>
     /// <param name="columnSpan">列跨度。</param>

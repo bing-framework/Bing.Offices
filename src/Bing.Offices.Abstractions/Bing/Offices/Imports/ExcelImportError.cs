@@ -5,7 +5,9 @@
 /// </summary>
 public sealed class ExcelImportError
 {
-    /// <summary>初始化一个 <see cref="ExcelImportError" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="ExcelImportError" /> 类型的实例。
+    /// </summary>
     /// <param name="code">错误代码。</param>
     /// <param name="message">错误消息。</param>
     /// <param name="sheetName">工作表名称。</param>

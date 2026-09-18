@@ -47,13 +47,21 @@ internal sealed class RequiredExcelValidationRule : IExcelValidationRule
 /// </summary>
 internal sealed class RegexExcelValidationRule : IExcelValidationRule
 {
-    /// <summary>进程级正则缓存允许保留的最大模式数量。</summary>
+    /// <summary>
+    /// 进程级正则缓存允许保留的最大模式数量（256 个）。
+    /// </summary>
     internal const int RegexCacheCapacity = 256;
-    /// <summary>保护正则缓存和淘汰队列的一致性锁。</summary>
+    /// <summary>
+    /// 保护正则缓存和淘汰队列的一致性锁。
+    /// </summary>
     private static readonly object RegexCacheLock = new object();
-    /// <summary>按模式文本缓存的已编译正则表达式。</summary>
+    /// <summary>
+    /// 按模式文本缓存的已编译正则表达式。
+    /// </summary>
     private static readonly Dictionary<string, Regex> RegexCache = new Dictionary<string, Regex>(StringComparer.Ordinal);
-    /// <summary>按插入顺序记录缓存模式，用于有界先进先出淘汰。</summary>
+    /// <summary>
+    /// 按插入顺序记录缓存模式，用于有界先进先出淘汰。
+    /// </summary>
     private static readonly Queue<string> RegexCacheOrder = new Queue<string>();
 
     /// <inheritdoc />
@@ -99,7 +107,7 @@ internal sealed class RangeExcelValidationRule : IExcelValidationRule
     /// <inheritdoc />
     public bool Validate(FilterAttributeBase attribute, ExcelValidationContext context)
     {
-         var range = (ExcelRangeAttribute)attribute;
+        var range = (ExcelRangeAttribute)attribute;
         var valueText = Convert.ToString(context.ConvertedValue ?? context.Value, context.Culture);
         return decimal.TryParse(valueText, NumberStyles.Number, context.Culture, out var value)
              && value >= Convert.ToDecimal(range.Min, CultureInfo.InvariantCulture)
@@ -158,25 +166,29 @@ public sealed class DateTimeExcelValidationRule : IExcelValidationRule
             context.Culture, attributeValue, out _);
     }
 
-    /// <summary>按统一日期转换合同返回日期值，供 Provider 转换边界复用。</summary>
+    /// <summary>
+    /// 尝试按统一日期转换合同解析日期值，供 Provider 转换边界复用。
+    /// </summary>
     /// <param name="cell">原始单元格值。</param>
     /// <param name="text">规范化文本。</param>
     /// <param name="targetType">目标日期类型。</param>
     /// <param name="culture">请求区域性。</param>
     /// <param name="attribute">日期输入配置。</param>
     /// <param name="value">解析后的日期值。</param>
-    /// <returns>能够转换时为 true。</returns>
+    /// <returns>解析成功时为 true，并通过 <paramref name="value" /> 返回日期值；失败时为 false。</returns>
     public bool TryParseValue(ExcelCellValue cell, string text, Type targetType, CultureInfo culture,
         ExcelDateAttribute attribute, out object value) =>
         ExcelDateParser.TryParse(cell, text, targetType, culture, attribute, out value);
 
-    /// <summary>按 Workbook Data Validation 语义解析日期或时间值，供 Provider 校验边界复用。</summary>
+    /// <summary>
+    /// 按工作簿数据校验语义解析日期或时间值，供 Provider 校验边界复用。
+    /// </summary>
     /// <param name="cell">原始单元格值。</param>
     /// <param name="text">单元格或约束的文本值。</param>
     /// <param name="timeOnly">是否只解析时间部分。</param>
     /// <param name="isDate1904">当前工作簿是否使用 1904 日期系统。</param>
     /// <param name="value">解析后的无时区日期时间。</param>
-    /// <returns>解析成功时为 true。</returns>
+    /// <returns>解析成功时为 true，失败时为 false。</returns>
     public bool TryParseWorkbookDate(ExcelCellValue cell, string text, bool timeOnly, bool isDate1904,
         out DateTime value) =>
         ExcelDateParser.TryParseValidation(cell, text, timeOnly, isDate1904, out value);

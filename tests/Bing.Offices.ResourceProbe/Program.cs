@@ -178,8 +178,23 @@ static XmlReader CreateXmlReader(Stream stream) => XmlReader.Create(stream, new 
     MaxCharactersFromEntities = 0
 });
 
+/// <summary>
+/// 记录测试场景的资源或性能指标。
+/// </summary>
 internal sealed class PreflightMetrics
 {
+    /// <summary>
+    /// 初始化一个 <see cref="PreflightMetrics" /> 类型的实例。
+    /// </summary>
+    /// <param name="inputBytes">输入文件字节数。</param>
+    /// <param name="sheets">工作表数量。</param>
+    /// <param name="rows">统计到的数据行数。</param>
+    /// <param name="columns">统计到的列数。</param>
+    /// <param name="cells">统计到的单元格数。</param>
+    /// <param name="sharedStrings">共享字符串数量。</param>
+    /// <param name="styles">样式数量。</param>
+    /// <param name="pictures">图片数量。</param>
+    /// <param name="isZipMetadata">是否由 ZIP 元数据预检得到统计；false 表示通过工作簿对象模型统计。</param>
     public PreflightMetrics(long inputBytes, int sheets, int rows, int columns, int cells, int sharedStrings,
         int styles, int pictures, bool isZipMetadata)
     {
@@ -194,19 +209,55 @@ internal sealed class PreflightMetrics
         IsZipMetadata = isZipMetadata;
     }
 
+    /// <summary>
+    /// 获取输入数据字节数。
+    /// </summary>
     public long InputBytes { get; }
+    /// <summary>
+    /// 获取工作表集合。
+    /// </summary>
     public int Sheets { get; }
+    /// <summary>
+    /// 获取数据行集合。
+    /// </summary>
     public int Rows { get; }
+    /// <summary>
+    /// 获取列集合。
+    /// </summary>
     public int Columns { get; }
+    /// <summary>
+    /// 获取单元格集合。
+    /// </summary>
     public int Cells { get; }
+    /// <summary>
+    /// 获取共享字符串集合。
+    /// </summary>
     public int SharedStrings { get; }
+    /// <summary>
+    /// 获取样式集合。
+    /// </summary>
     public int Styles { get; }
+    /// <summary>
+    /// 获取图片集合。
+    /// </summary>
     public int Pictures { get; }
+    /// <summary>
+    /// 获取是否为 ZIP 元数据。
+    /// </summary>
     public bool IsZipMetadata { get; }
 }
 
+/// <summary>
+/// 记录测试场景的资源或性能指标。
+/// </summary>
 internal sealed class WorksheetMetrics
 {
+    /// <summary>
+    /// 初始化一个 <see cref="WorksheetMetrics" /> 类型的实例。
+    /// </summary>
+    /// <param name="rows">工作表行数。</param>
+    /// <param name="columns">工作表列数。</param>
+    /// <param name="cells">工作表单元格数。</param>
     public WorksheetMetrics(int rows, int columns, int cells)
     {
         Rows = rows;
@@ -214,17 +265,38 @@ internal sealed class WorksheetMetrics
         Cells = cells;
     }
 
+    /// <summary>
+    /// 获取数据行集合。
+    /// </summary>
     public int Rows { get; }
+    /// <summary>
+    /// 获取列集合。
+    /// </summary>
     public int Columns { get; }
+    /// <summary>
+    /// 获取单元格集合。
+    /// </summary>
     public int Cells { get; }
 }
 
+/// <summary>
+/// 表示 Excel 测试使用的工作簿数据模型。
+/// </summary>
 public sealed class ProbeWorkbook
 {
+    /// <summary>
+    /// 获取或设置数据行集合。
+    /// </summary>
     public List<ProbeRow> Rows { get; set; } = new List<ProbeRow>();
 }
 
+/// <summary>
+/// 表示测试使用的一行数据模型。
+/// </summary>
 public sealed class ProbeRow
 {
+    /// <summary>
+    /// 获取或设置名称。
+    /// </summary>
     public string Name { get; set; }
 }

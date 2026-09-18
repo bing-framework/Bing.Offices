@@ -2,13 +2,19 @@
 
 namespace Bing.Offices.IO;
 
-/// <summary>通过同目录临时文件和替换操作提交导出文件的工具。</summary>
+/// <summary>
+/// 通过同目录临时文件和替换操作提交导出文件的工具。
+/// </summary>
 internal static class AtomicFileCommitter
 {
-    /// <summary>生产环境使用的文件系统适配器；内部重载可替换以进行确定性测试。</summary>
+    /// <summary>
+    /// 生产环境使用的文件系统适配器；内部重载可替换以进行确定性测试。
+    /// </summary>
     private static readonly IAtomicFileSystem DefaultFileSystem = new SystemAtomicFileSystem();
 
-    /// <summary>将写入结果原子提交到目标路径。</summary>
+    /// <summary>
+    /// 将写入结果原子提交到目标路径。
+    /// </summary>
     /// <param name="path">最终输出文件路径。</param>
     /// <param name="write">向临时输出流写入内容的操作。</param>
     /// <param name="cancellationToken">提交过程检查的取消令牌。</param>
@@ -17,7 +23,9 @@ internal static class AtomicFileCommitter
         string format)
         => Commit(path, write, cancellationToken, format, DefaultFileSystem);
 
-    /// <summary>将异步写入结果原子提交到目标路径。</summary>
+    /// <summary>
+    /// 将异步写入结果原子提交到目标路径。
+    /// </summary>
     /// <param name="path">最终输出文件路径。</param>
     /// <param name="writeAsync">向临时输出流异步写入内容的操作。</param>
     /// <param name="cancellationToken">提交过程检查的取消令牌。</param>
@@ -26,7 +34,9 @@ internal static class AtomicFileCommitter
         CancellationToken cancellationToken, string format)
         => CommitAsync(path, writeAsync, cancellationToken, format, DefaultFileSystem);
 
-    /// <summary>使用指定文件系统适配器异步写入并提交文件。</summary>
+    /// <summary>
+    /// 将异步写入结果原子提交到目标路径。
+    /// </summary>
     /// <param name="path">最终输出文件路径。</param>
     /// <param name="writeAsync">向临时输出流异步写入内容的操作。</param>
     /// <param name="cancellationToken">提交过程检查的取消令牌。</param>
@@ -84,7 +94,9 @@ internal static class AtomicFileCommitter
         }
     }
 
-    /// <summary>使用指定文件系统适配器将写入结果原子提交到目标路径。</summary>
+    /// <summary>
+    /// 将写入结果原子提交到目标路径。
+    /// </summary>
     /// <param name="path">最终输出文件路径。</param>
     /// <param name="write">向临时输出流写入内容的操作。</param>
     /// <param name="cancellationToken">提交过程检查的取消令牌。</param>
@@ -140,7 +152,9 @@ internal static class AtomicFileCommitter
         }
     }
 
-    /// <summary>尝试清理失败提交遗留的临时文件，并保留原始异常作为主失败原因。</summary>
+    /// <summary>
+    /// 尝试清理失败提交遗留的临时文件，并保留原始异常作为主失败原因。
+    /// </summary>
     /// <param name="temporaryPath">待删除的临时文件路径。</param>
     /// <param name="format">输出格式名称。</param>
     /// <param name="primaryException">导致提交失败的原始异常。</param>
@@ -167,38 +181,56 @@ internal static class AtomicFileCommitter
     }
 }
 
-/// <summary>为原子文件提交抽象的最小文件系统操作集合。</summary>
+/// <summary>
+/// 为原子文件提交抽象的最小文件系统操作集合。
+/// </summary>
 internal interface IAtomicFileSystem
 {
-    /// <summary>以独占创建方式打开临时输出文件。</summary>
+    /// <summary>
+    /// 以独占创建方式打开临时输出文件。
+    /// </summary>
     /// <param name="path">要创建的临时文件路径。</param>
     /// <returns>以写入方式打开的临时文件流。</returns>
     Stream CreateFile(string path);
-    /// <summary>将已写入流的内容持久化到存储介质。</summary>
+    /// <summary>
+    /// 将已写入流的内容持久化到存储介质。
+    /// </summary>
     /// <param name="stream">需要持久化的输出流。</param>
     void Flush(Stream stream);
-    /// <summary>异步写入并完成与同步提交一致的持久化边界。</summary>
+    /// <summary>
+    /// 异步写入并完成与同步提交一致的持久化边界。
+    /// </summary>
     /// <param name="stream">需要持久化的输出流。</param>
     /// <param name="cancellationToken">刷新过程中检查的取消令牌。</param>
     Task FlushAsync(Stream stream, CancellationToken cancellationToken);
-    /// <summary>确定目标文件是否存在。</summary>
+    /// <summary>
+    /// 确定目标文件是否存在。
+    /// </summary>
     /// <param name="path">要检查的文件路径。</param>
     /// <returns>文件存在时为 <see langword="true" />，否则为 <see langword="false" />。</returns>
     bool Exists(string path);
-    /// <summary>以临时文件替换已存在的目标文件。</summary>
+    /// <summary>
+    /// 以临时文件替换已存在的目标文件。
+    /// </summary>
     /// <param name="sourcePath">临时源文件路径。</param>
     /// <param name="destinationPath">要替换的目标文件路径。</param>
     void Replace(string sourcePath, string destinationPath);
-    /// <summary>将临时文件移动为此前不存在的目标文件。</summary>
+    /// <summary>
+    /// 将临时文件移动为此前不存在的目标文件。
+    /// </summary>
     /// <param name="sourcePath">临时源文件路径。</param>
     /// <param name="destinationPath">要创建的目标文件路径。</param>
     void Move(string sourcePath, string destinationPath);
-    /// <summary>删除提交失败遗留的临时文件。</summary>
+    /// <summary>
+    /// 删除提交失败遗留的临时文件。
+    /// </summary>
     /// <param name="path">要删除的临时文件路径。</param>
     void Delete(string path);
 }
 
-/// <summary>基于 <see cref="File"/> 的生产文件系统适配器。</summary>
+/// <summary>
+/// 基于 <see cref="File"/> 的生产文件系统适配器。
+/// </summary>
 internal sealed class SystemAtomicFileSystem : IAtomicFileSystem
 {
     /// <inheritdoc />

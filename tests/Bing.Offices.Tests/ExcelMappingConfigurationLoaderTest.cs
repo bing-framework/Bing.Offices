@@ -4,16 +4,19 @@ using System.Reflection;
 using Bing.Offices.Configurations;
 using Bing.Offices.Exceptions;
 using Bing.Offices.Extensions;
-using Bing.Offices.Npoi.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Bing.Offices.Tests;
 
-/// <summary>映射配置加载器静态与 DI 边界合同测试。</summary>
+/// <summary>
+/// 映射配置加载器静态与 DI 边界合同测试。
+/// </summary>
 public sealed class ExcelMappingConfigurationLoaderTest
 {
-    /// <summary>空诊断 API 已删除，Loader 仅保留 v2 文档入口。</summary>
+    /// <summary>
+    /// 验证已删除的诊断 API 不再公开。
+    /// </summary>
     [Fact]
     public void RemovedDiagnosticsSurface_ShouldNotBePublished()
     {
@@ -25,7 +28,9 @@ public sealed class ExcelMappingConfigurationLoaderTest
             "Bing.Offices.Configurations.ExcelMappingDiagnostic"));
     }
 
-    /// <summary>静态 Loader 是纯解析入口，不参与 Observer。</summary>
+    /// <summary>
+    /// 验证静态配置解析失败时不通知异常观察器。
+    /// </summary>
     [Fact]
     public void StaticLoader_InvalidDocument_ShouldThrowWithoutObservation()
     {
@@ -42,7 +47,9 @@ public sealed class ExcelMappingConfigurationLoaderTest
         Assert.Equal(BingOfficesOperation.Configuration, exception.Operation);
     }
 
-    /// <summary>默认实现必须向 Observer 发送最终抛出的同一异常实例，重复经过 dispatcher 也只通知一次。</summary>
+    /// <summary>
+    /// 验证默认加载器仅通知一次最终抛出的异常实例。
+    /// </summary>
     [Fact]
     public void DefaultLoader_InvalidDocument_ShouldObserveSameInstanceOnce()
     {
@@ -60,30 +67,17 @@ public sealed class ExcelMappingConfigurationLoaderTest
         Assert.Equal(BingOfficesStage.Plan, exception.Stage);
     }
 
-    /// <summary>正式 DI 注册应把用户 Observer 注入默认 Loader。</summary>
-    [Fact]
-    public void DependencyInjection_DefaultLoader_ShouldUseRegisteredObserver()
-    {
-        // Arrange
-        var services = new ServiceCollection();
-        var observer = new RecordingObserver();
-        services.AddSingleton<IBingOfficesExceptionObserver>(observer);
-        services.AddBingOfficesNpoi();
-        using var provider = services.BuildServiceProvider();
-
-        // Act
-        var loader = provider.GetRequiredService<IExcelMappingConfigurationLoader>();
-        var exception = Assert.Throws<BingOfficesConfigurationException>(() =>
-            loader.FromXmlDocument("<ExcelMappingDocument>"));
-
-        // Assert
-        Assert.Same(exception, Assert.Single(observer.Exceptions));
-    }
-
+    /// <summary>
+    /// 记录测试场景中的通知事件。
+    /// </summary>
     private sealed class RecordingObserver : IBingOfficesExceptionObserver
     {
+        /// <summary>
+        /// 获取异常集合。
+        /// </summary>
         public List<BingOfficesException> Exceptions { get; } = new();
 
+        /// <inheritdoc />
         public void Observe(BingOfficesException exception) => Exceptions.Add(exception);
     }
 }

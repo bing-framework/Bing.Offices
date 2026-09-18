@@ -139,7 +139,9 @@ internal static class ExcelTypeMapFactory
         return new ExcelTypeMap<T>(new ReadOnlyCollection<ExcelPropertyMap>(mappedProperties));
     }
 
-    /// <summary>将配置应用到已创建的基础类型映射。</summary>
+    /// <summary>
+    /// 将配置应用到已创建的基础类型映射。
+    /// </summary>
     /// <typeparam name="T">实体类型。</typeparam>
     /// <param name="configuration">待应用的列配置。</param>
     /// <param name="source">基础类型映射。</param>
@@ -295,7 +297,9 @@ internal static class ExcelTypeMapFactory
         return new ReadOnlyDictionary<string, object>(values);
     }
 
-    /// <summary>根据列配置创建标题别名，并在配置自定义别名时移除重复值。</summary>
+    /// <summary>
+    /// 根据列配置创建标题别名，并在配置自定义别名时移除重复值。
+    /// </summary>
     /// <param name="configuration">当前列配置。</param>
     /// <param name="defaults">基础映射提供的默认别名。</param>
     /// <returns>配置要求使用的标题别名集合。</returns>

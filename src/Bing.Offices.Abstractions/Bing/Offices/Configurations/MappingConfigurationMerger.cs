@@ -2,7 +2,9 @@
 
 namespace Bing.Offices.Configurations;
 
-/// <summary>执行方向化映射配置的优先级合并。</summary>
+/// <summary>
+/// 执行方向化映射配置的优先级合并。
+/// </summary>
 [EditorBrowsable(EditorBrowsableState.Never)]
 public static class MappingConfigurationMerger
 {
@@ -79,7 +81,9 @@ public static class MappingConfigurationMerger
         return result;
     }
 
-    /// <summary>合并两级映射样式配置。</summary>
+    /// <summary>
+    /// 合并两级映射样式配置。
+    /// </summary>
     /// <param name="lower">低优先级样式配置。</param>
     /// <param name="higher">高优先级样式配置。</param>
     /// <returns>合并后的样式配置；合并后为空时返回 <see langword="null" />。</returns>
@@ -98,7 +102,9 @@ public static class MappingConfigurationMerger
             : result;
     }
 
-    /// <summary>合并两级映射布局配置。</summary>
+    /// <summary>
+    /// 合并两级映射布局配置。
+    /// </summary>
     /// <param name="lower">低优先级布局配置。</param>
     /// <param name="higher">高优先级布局配置。</param>
     /// <returns>合并后的布局配置；合并后为空时返回 <see langword="null" />。</returns>
@@ -113,7 +119,9 @@ public static class MappingConfigurationMerger
         return !result.ColumnIndex.HasValue && result.PlacementKey == null ? null : result;
     }
 
-    /// <summary>将高优先级列配置合并到目标列配置。</summary>
+    /// <summary>
+    /// 将高优先级列配置合并到目标列配置。
+    /// </summary>
     /// <param name="target">接收合并结果的列配置。</param>
     /// <param name="source">提供覆盖值和清除标记的高优先级列配置。</param>
     private static void MergeColumn(ExcelColumnConfiguration target, ExcelColumnConfiguration source)
@@ -228,12 +236,12 @@ public static class MappingConfigurationMerger
                 target.ValidationRuleNames.RemoveAll(item => string.Equals(item, rule,
                     StringComparison.OrdinalIgnoreCase));
         }
-            if (source.ValidationRuleMergeMode == ExcelValidationRuleMergeMode.Replace)
-            {
-                target.ValidationRuleNames.Clear();
-                target.ClearValidationRules = true;
-            }
-            if (source.ValidationRuleNames != null && source.ValidationRuleNames.Count > 0)
+        if (source.ValidationRuleMergeMode == ExcelValidationRuleMergeMode.Replace)
+        {
+            target.ValidationRuleNames.Clear();
+            target.ClearValidationRules = true;
+        }
+        if (source.ValidationRuleNames != null && source.ValidationRuleNames.Count > 0)
         {
             foreach (var rule in source.ValidationRuleNames)
             {
@@ -241,26 +249,26 @@ public static class MappingConfigurationMerger
                     target.ValidationRuleNames.Add(rule);
             }
         }
-            if (source.ValidationRuleMergeMode.HasValue)
-                target.ValidationRuleMergeMode = source.ValidationRuleMergeMode;
+        if (source.ValidationRuleMergeMode.HasValue)
+            target.ValidationRuleMergeMode = source.ValidationRuleMergeMode;
 
         if (source.ClearValueMappings)
-            {
-            target.ValueMappings.Clear();
-                target.ClearValueMappings = true;
-            }
-            if (source.ValueMappingMergeMode == ExcelValueMappingMergeMode.Replace)
-            {
-                target.ValueMappings.Clear();
-                target.ClearValueMappings = true;
-            }
-            if (source.ValueMappings != null && source.ValueMappings.Count > 0)
         {
-                if (source.ValueMappingMergeMode != ExcelValueMappingMergeMode.Append)
-                {
+            target.ValueMappings.Clear();
+            target.ClearValueMappings = true;
+        }
+        if (source.ValueMappingMergeMode == ExcelValueMappingMergeMode.Replace)
+        {
+            target.ValueMappings.Clear();
+            target.ClearValueMappings = true;
+        }
+        if (source.ValueMappings != null && source.ValueMappings.Count > 0)
+        {
+            if (source.ValueMappingMergeMode != ExcelValueMappingMergeMode.Append)
+            {
                 target.ValueMappings.Clear();
-                    target.ClearValueMappings = true;
-                }
+                target.ClearValueMappings = true;
+            }
             foreach (var mapping in source.ValueMappings)
             {
                 target.ValueMappings.RemoveAll(item => string.Equals(item?.Text, mapping?.Text,

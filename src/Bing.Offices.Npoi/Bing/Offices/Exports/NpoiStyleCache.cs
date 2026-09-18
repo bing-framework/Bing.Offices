@@ -11,7 +11,12 @@ namespace Bing.Offices.Exports;
 /// </summary>
 internal static class NpoiStyleCache
 {
-    /// <summary>按工作簿弱引用隔离的样式缓存，避免缓存延长工作簿生命周期。</summary>
+    /// <summary>
+    /// 按工作簿弱引用隔离规范化样式缓存。
+    /// </summary>
+    /// <remarks>
+    /// 工作簿回收后缓存可随弱引用表项一并释放，避免延长工作簿生命周期。
+    /// </remarks>
     private static readonly ConditionalWeakTable<IWorkbook, Cache> Caches = new ConditionalWeakTable<IWorkbook, Cache>();
 
     /// <summary>
@@ -55,19 +60,31 @@ internal static class NpoiStyleCache
             .ApplyHeaderAttribute(workbook, baseStyle, attribute);
     }
 
-    /// <summary>按工作簿保存样式、组合样式和字体缓存。</summary>
+    /// <summary>
+    /// 按工作簿保存样式、组合样式和字体缓存。
+    /// </summary>
     private sealed class Cache
     {
-        /// <summary>按完整样式定义缓存的工作簿原生样式。</summary>
+        /// <summary>
+        /// 按完整样式定义缓存工作簿原生样式。
+        /// </summary>
         private readonly Dictionary<string, ICellStyle> _styles = new Dictionary<string, ICellStyle>(StringComparer.Ordinal);
-        /// <summary>按基础样式和覆盖定义缓存的组合样式。</summary>
+        /// <summary>
+        /// 按基础样式索引和覆盖定义缓存组合样式。
+        /// </summary>
         private readonly Dictionary<string, ICellStyle> _composedStyles = new Dictionary<string, ICellStyle>(StringComparer.Ordinal);
-        /// <summary>按字体定义缓存的工作簿原生字体。</summary>
+        /// <summary>
+        /// 按字体定义缓存工作簿原生字体。
+        /// </summary>
         private readonly Dictionary<string, IFont> _fonts = new Dictionary<string, IFont>(StringComparer.Ordinal);
-        /// <summary>按基础样式和表头字体缓存的派生表头样式。</summary>
+        /// <summary>
+        /// 按基础样式和表头字体缓存派生表头样式。
+        /// </summary>
         private readonly Dictionary<string, ICellStyle> _headerStyles = new Dictionary<string, ICellStyle>(StringComparer.Ordinal);
 
-        /// <summary>从完整样式定义获取或创建工作簿样式。</summary>
+        /// <summary>
+        /// 从完整样式定义获取或创建工作簿样式。
+        /// </summary>
         /// <param name="workbook">目标工作簿。</param>
         /// <param name="definition">完整样式定义。</param>
         /// <returns>缓存中的工作簿样式。</returns>
@@ -85,7 +102,9 @@ internal static class NpoiStyleCache
             }
         }
 
-        /// <summary>从基础样式派生并缓存应用覆盖定义后的样式。</summary>
+        /// <summary>
+        /// 从基础样式派生并缓存应用覆盖定义后的样式。
+        /// </summary>
         /// <param name="workbook">目标工作簿。</param>
         /// <param name="baseStyle">模板或已有的基础样式。</param>
         /// <param name="definition">需要叠加的样式定义。</param>
@@ -105,7 +124,9 @@ internal static class NpoiStyleCache
             }
         }
 
-        /// <summary>从基础样式派生并缓存应用表头特性的样式。</summary>
+        /// <summary>
+        /// 从基础样式派生并缓存应用表头特性的样式。
+        /// </summary>
         /// <param name="workbook">目标工作簿。</param>
         /// <param name="baseStyle">基础单元格样式。</param>
         /// <param name="attribute">实体表头特性。</param>
@@ -143,7 +164,9 @@ internal static class NpoiStyleCache
             }
         }
 
-        /// <summary>使用非覆盖模式应用完整样式定义。</summary>
+        /// <summary>
+        /// 使用非覆盖模式应用完整样式定义。
+        /// </summary>
         /// <param name="workbook">目标工作簿。</param>
         /// <param name="style">待修改的样式。</param>
         /// <param name="definition">样式定义。</param>
@@ -152,7 +175,9 @@ internal static class NpoiStyleCache
             ApplyStyle(workbook, style, definition, false);
         }
 
-        /// <summary>按覆盖模式将定义应用到样式，并按 Reset 规则清除属性。</summary>
+        /// <summary>
+        /// 按覆盖模式将定义应用到样式，并按 Reset 规则清除属性。
+        /// </summary>
         /// <param name="workbook">目标工作簿。</param>
         /// <param name="style">待修改的样式。</param>
         /// <param name="definition">样式定义。</param>
@@ -256,7 +281,9 @@ internal static class NpoiStyleCache
                 style.DataFormat = workbook.CreateDataFormat().GetFormat(definition.NumberFormat);
         }
 
-        /// <summary>按工作簿格式设置字体颜色。</summary>
+        /// <summary>
+        /// 按工作簿格式设置字体颜色。
+        /// </summary>
         /// <param name="workbook">目标工作簿。</param>
         /// <param name="font">待修改的字体。</param>
         /// <param name="color">Provider-neutral 颜色。</param>
@@ -272,7 +299,9 @@ internal static class NpoiStyleCache
             font.Color = ResolveHssfColor(color.Argb);
         }
 
-        /// <summary>按工作簿格式设置填充前景色或背景色。</summary>
+        /// <summary>
+        /// 按工作簿格式设置填充前景色或背景色。
+        /// </summary>
         /// <param name="workbook">目标工作簿。</param>
         /// <param name="style">待修改的样式。</param>
         /// <param name="color">Provider-neutral 颜色；为空时清除对应颜色。</param>
@@ -298,7 +327,9 @@ internal static class NpoiStyleCache
                 style.FillBackgroundColor = indexedColor;
         }
 
-        /// <summary>将 ARGB 或 RGB 文本解析为 XSSF 使用的 RGB 字节。</summary>
+        /// <summary>
+        /// 将 ARGB 或 RGB 文本解析为 XSSF 使用的 RGB 字节。
+        /// </summary>
         /// <param name="value">六位或八位十六进制颜色文本。</param>
         /// <returns>不含 Alpha 通道的 RGB 字节。</returns>
         private static byte[] ParseRgb(string value)
@@ -307,7 +338,9 @@ internal static class NpoiStyleCache
             return new[] { argb[1], argb[2], argb[3] };
         }
 
-        /// <summary>将边框线型和颜色应用到指定方向。</summary>
+        /// <summary>
+        /// 将边框线型和颜色应用到指定方向。
+        /// </summary>
         /// <param name="workbook">目标工作簿。</param>
         /// <param name="style">待修改的样式。</param>
         /// <param name="side">边框方向。</param>
@@ -387,7 +420,9 @@ internal static class NpoiStyleCache
             }
         }
 
-        /// <summary>将颜色文本解析为 ARGB 四字节。</summary>
+        /// <summary>
+        /// 将颜色文本解析为 ARGB 四字节。
+        /// </summary>
         /// <param name="value">六位或八位十六进制颜色文本。</param>
         /// <returns>ARGB 顺序的四个颜色字节。</returns>
         private static byte[] ParseArgb(string value)
@@ -405,7 +440,9 @@ internal static class NpoiStyleCache
             return bytes;
         }
 
-        /// <summary>将受支持的颜色文本解析为 HSSF 索引色板值。</summary>
+        /// <summary>
+        /// 将受支持的颜色文本解析为 HSSF 索引色板值。
+        /// </summary>
         /// <param name="value">六位或八位十六进制颜色文本。</param>
         /// <returns>HSSF 索引颜色。</returns>
         private static short ResolveHssfColor(string value)
@@ -427,7 +464,9 @@ internal static class NpoiStyleCache
             }
         }
 
-        /// <summary>转换 Provider-neutral 填充模式为 NPOI 填充模式。</summary>
+        /// <summary>
+        /// 转换 Provider-neutral 填充模式为 NPOI 填充模式。
+        /// </summary>
         /// <param name="pattern">Provider-neutral 填充模式。</param>
         /// <returns>NPOI 填充模式。</returns>
         private static FillPattern ToFillPattern(ExcelFillPattern pattern) => pattern switch
@@ -438,7 +477,9 @@ internal static class NpoiStyleCache
             _ => FillPattern.NoFill
         };
 
-        /// <summary>转换 Provider-neutral 边框线型为 NPOI 线型。</summary>
+        /// <summary>
+        /// 转换 Provider-neutral 边框线型为 NPOI 线型。
+        /// </summary>
         /// <param name="style">Provider-neutral 边框线型。</param>
         /// <returns>NPOI 边框线型。</returns>
         private static BorderStyle ToBorderStyle(ExcelBorderLineStyle style) => style switch
@@ -452,7 +493,9 @@ internal static class NpoiStyleCache
             _ => BorderStyle.None
         };
 
-        /// <summary>转换 Provider-neutral 水平对齐方式。</summary>
+        /// <summary>
+        /// 转换 Provider-neutral 水平对齐方式。
+        /// </summary>
         /// <param name="alignment">Provider-neutral 水平对齐方式。</param>
         /// <returns>NPOI 水平对齐方式。</returns>
         private static HorizontalAlignment ToHorizontalAlignment(ExcelHorizontalAlignment alignment) => alignment switch
@@ -465,7 +508,9 @@ internal static class NpoiStyleCache
             _ => HorizontalAlignment.General
         };
 
-        /// <summary>转换 Provider-neutral 垂直对齐方式。</summary>
+        /// <summary>
+        /// 转换 Provider-neutral 垂直对齐方式。
+        /// </summary>
         /// <param name="alignment">Provider-neutral 垂直对齐方式。</param>
         /// <returns>NPOI 垂直对齐方式。</returns>
         private static VerticalAlignment ToVerticalAlignment(ExcelVerticalAlignment alignment) => alignment switch
@@ -476,7 +521,9 @@ internal static class NpoiStyleCache
             _ => VerticalAlignment.Bottom
         };
 
-        /// <summary>将完整样式定义序列化为确定性的缓存键。</summary>
+        /// <summary>
+        /// 将完整样式定义序列化为确定性的缓存键。
+        /// </summary>
         /// <param name="style">样式定义。</param>
         /// <returns>包含所有影响样式属性的缓存键。</returns>
         private static string CreateKey(ExcelCellStyle style) => string.Join(";", style.FontName, style.FontSize,
@@ -493,16 +540,26 @@ internal static class NpoiStyleCache
             style.Reset?.Indent, style.Reset?.NumberFormat);
     }
 
-    /// <summary>可配置的四个单元格边框方向。</summary>
+    /// <summary>
+    /// 可配置的四个单元格边框方向。
+    /// </summary>
     private enum BorderSide
     {
-        /// <summary>上边框。</summary>
+        /// <summary>
+        /// 上边框。
+        /// </summary>
         Top,
-        /// <summary>下边框。</summary>
+        /// <summary>
+        /// 下边框。
+        /// </summary>
         Bottom,
-        /// <summary>左边框。</summary>
+        /// <summary>
+        /// 左边框。
+        /// </summary>
         Left,
-        /// <summary>右边框。</summary>
+        /// <summary>
+        /// 右边框。
+        /// </summary>
         Right
     }
 }

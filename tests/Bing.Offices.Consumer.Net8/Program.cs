@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Bing.Offices;
 using Bing.Offices.Csv;
 using Bing.Offices.Exports;
@@ -110,13 +110,29 @@ static void Ensure(bool condition, string message)
         throw new InvalidOperationException(message);
 }
 
+/// <summary>
+/// 表示消费者程序用于往返验证的单行数据。
+/// </summary>
 public sealed class ConsumerRow
 {
+    /// <summary>
+    /// 获取或设置行的编码。
+    /// </summary>
     public string Code { get; set; }
+
+    /// <summary>
+    /// 获取或设置行中的数量。
+    /// </summary>
     public int Count { get; set; }
 }
 
+/// <summary>
+/// 表示消费者程序用于 Excel 往返验证的工作簿。
+/// </summary>
 public sealed class ConsumerWorkbook
 {
+    /// <summary>
+    /// 获取工作簿中的数据行集合。
+    /// </summary>
     public List<ConsumerRow> Rows { get; } = new();
 }

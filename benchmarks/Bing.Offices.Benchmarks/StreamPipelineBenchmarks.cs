@@ -398,9 +398,18 @@ public class HeaderStyleBenchmarks
         _rows = Enumerable.Range(0, RowCount)
             .Select(index => new HeaderStyleRow
             {
-                A = $"A-{index}", B = $"B-{index}", C = $"C-{index}", D = $"D-{index}",
-                E = $"E-{index}", F = $"F-{index}", G = $"G-{index}", H = $"H-{index}",
-                I = $"I-{index}", J = $"J-{index}", K = $"K-{index}", L = $"L-{index}"
+                A = $"A-{index}",
+                B = $"B-{index}",
+                C = $"C-{index}",
+                D = $"D-{index}",
+                E = $"E-{index}",
+                F = $"F-{index}",
+                G = $"G-{index}",
+                H = $"H-{index}",
+                I = $"I-{index}",
+                J = $"J-{index}",
+                K = $"K-{index}",
+                L = $"L-{index}"
             })
             .ToArray();
         _request = ExcelExport.Workbook(workbook => workbook.AddSheet("Sheet1", _rows,

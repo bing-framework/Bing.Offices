@@ -17,7 +17,9 @@ namespace Bing.Offices.Mappings;
 [EditorBrowsable(EditorBrowsableState.Never)]
 public static class ExcelMappingPlanFactoryProvider
 {
-    /// <summary>创建默认的 Plan 工厂。</summary>
+    /// <summary>
+    /// 创建默认的 Plan 工厂。
+    /// </summary>
     /// <param name="valueConverters">值转换器集合。</param>
     /// <param name="validationRules">校验规则集合。</param>
     /// <param name="namedValidationRules">命名校验规则集合。</param>

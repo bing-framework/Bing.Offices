@@ -1,7 +1,61 @@
 ###############################################################################
 # Set default behavior to automatically normalize line endings.
 ###############################################################################
-* text=auto
+* text=auto eol=lf
+
+# Explicit text rules; preserve the existing EditorConfig CRLF exceptions.
+*.cs          text eol=lf
+*.csx         text eol=lf
+*.vb          text eol=lf
+*.vbx         text eol=lf
+*.csproj      text eol=crlf
+*.sln         text eol=crlf
+*.props       text eol=lf
+*.targets     text eol=lf
+*.json        text eol=lf
+*.xml         text eol=lf
+*.md          text eol=lf
+*.yaml        text eol=lf
+*.yml         text eol=lf
+*.sql         text eol=lf
+*.ps1         text eol=crlf
+*.sh          text eol=lf
+*.py          text eol=lf
+*.js          text eol=lf
+*.jsx         text eol=lf
+*.ts          text eol=lf
+*.tsx         text eol=lf
+*.vue         text eol=lf
+*.java        text eol=lf
+*.kt          text eol=lf
+*.kts         text eol=lf
+*.gradle      text eol=lf
+*.properties  text eol=lf
+*.html        text eol=lf
+*.css         text eol=lf
+*.scss        text eol=lf
+*.less        text eol=lf
+*.toml        text eol=lf
+*.ini         text eol=lf
+*.bat         text eol=crlf
+*.cmd         text eol=crlf
+
+# Binary assets must never undergo text/EOL conversion.
+*.png  binary -eol
+*.jpg  binary -eol
+*.jpeg binary -eol
+*.gif  binary -eol
+*.ico  binary -eol
+*.pdf  binary -eol
+*.zip  binary -eol
+*.dll  binary -eol
+*.exe  binary -eol
+*.xls  binary -eol
+*.xlsx binary -eol
+*.doc  binary -eol
+*.docx binary -eol
+*.ppt  binary -eol
+*.pptx binary -eol
 
 ###############################################################################
 # Set default behavior for command prompt diff.

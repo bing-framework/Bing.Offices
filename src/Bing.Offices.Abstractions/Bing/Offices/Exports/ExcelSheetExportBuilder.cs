@@ -8,49 +8,91 @@ namespace Bing.Offices.Exports;
 /// <typeparam name="T">当前 Sheet 的数据项类型。</typeparam>
 public sealed class ExcelSheetExportBuilder<T> where T : class, new()
 {
-    /// <summary>目标工作表名称。</summary>
+    /// <summary>
+    /// 目标工作表名称。
+    /// </summary>
     private readonly string _name;
-    /// <summary>待写入工作表的数据集合。</summary>
+    /// <summary>
+    /// 待写入工作表的数据集合。
+    /// </summary>
     private readonly IEnumerable<T> _data;
-    /// <summary>表头所在的零基行索引，默认为 0。</summary>
+    /// <summary>
+    /// 表头所在的零基行索引，默认为 0。
+    /// </summary>
     private int _headerRowIndex;
-    /// <summary>正文起始行的零基索引，默认为 1。</summary>
+    /// <summary>
+    /// 正文起始行的零基索引，默认为 1。
+    /// </summary>
     private int _dataRowStartIndex = 1;
-    /// <summary>当前请求定义的动态列集合。</summary>
+    /// <summary>
+    /// 当前请求定义的动态列集合。
+    /// </summary>
     private IReadOnlyList<ExcelDynamicColumnDefinition> _dynamicColumns = Array.Empty<ExcelDynamicColumnDefinition>();
-    /// <summary>是否遇到实体未提供的动态值时失败。</summary>
+    /// <summary>
+    /// 是否遇到实体未提供的动态值时失败。
+    /// </summary>
     private bool _failOnUnknownDynamicValues;
-    /// <summary>从实体读取动态列值的委托；未设置时不读取动态值。</summary>
+    /// <summary>
+    /// 从实体读取动态列值的委托；未设置时不读取动态值。
+    /// </summary>
     private Func<object, IDictionary<string, object>> _dynamicGetter;
-    /// <summary>工作表级样式配置。</summary>
+    /// <summary>
+    /// 工作表级样式配置。
+    /// </summary>
     private Styles.ExcelCellStyle _sheetStyle;
-    /// <summary>表头样式配置。</summary>
+    /// <summary>
+    /// 表头样式配置。
+    /// </summary>
     private Styles.ExcelCellStyle _headerStyle;
-    /// <summary>正文样式配置。</summary>
+    /// <summary>
+    /// 正文样式配置。
+    /// </summary>
     private Styles.ExcelCellStyle _bodyStyle;
-    /// <summary>模板中用于定位工作表区域的名称；未设置时使用默认区域。</summary>
+    /// <summary>
+    /// 模板中用于定位工作表区域的名称；未设置时使用默认区域。
+    /// </summary>
     private string _templateRegion;
-    /// <summary>导出后是否将工作表标记为隐藏。</summary>
+    /// <summary>
+    /// 导出后是否将工作表标记为隐藏。
+    /// </summary>
     private bool _hidden;
-    /// <summary>按配置顺序保存待创建的图表定义。</summary>
+    /// <summary>
+    /// 按配置顺序保存待创建的图表定义。
+    /// </summary>
     private readonly List<ExcelChartDefinition> _charts = new List<ExcelChartDefinition>();
-    /// <summary>多行表头定义；未设置时使用单行表头。</summary>
+    /// <summary>
+    /// 多行表头定义；未设置时使用单行表头。
+    /// </summary>
     private IReadOnlyList<ExcelHeaderRow> _headerRows = Array.Empty<ExcelHeaderRow>();
-    /// <summary>当前工作表的请求级映射配置。</summary>
+    /// <summary>
+    /// 当前工作表的请求级映射配置。
+    /// </summary>
     private Configurations.ExcelMappingConfiguration _requestMappingConfiguration;
-    /// <summary>当前工作表使用的规范化映射文档。</summary>
+    /// <summary>
+    /// 当前工作表使用的规范化映射文档。
+    /// </summary>
     private Configurations.ExcelMappingDocument _mappingDocument;
-    /// <summary>文本格式化使用的区域性，默认为不变区域性。</summary>
+    /// <summary>
+    /// 文本格式化使用的区域性，默认为不变区域性。
+    /// </summary>
     private System.Globalization.CultureInfo _culture = System.Globalization.CultureInfo.InvariantCulture;
-    /// <summary>列宽计算和应用选项。</summary>
+    /// <summary>
+    /// 列宽计算和应用选项。
+    /// </summary>
     private ExcelColumnWidthOptions _columnWidth;
-    /// <summary>单元格批注冲突处理策略，默认为保留模板批注。</summary>
+    /// <summary>
+    /// 单元格批注冲突处理策略，默认为保留模板批注。
+    /// </summary>
     private ExcelCommentConflictPolicy _commentConflictPolicy = ExcelCommentConflictPolicy.Preserve;
-    /// <summary>模板单元格被导出值覆盖时的处理策略，默认为保留模板值。</summary>
+    /// <summary>
+    /// 模板单元格被导出值覆盖时的处理策略，默认为保留模板值。
+    /// </summary>
     private ExcelTemplateCellOverwritePolicy _templateCellOverwritePolicy =
         ExcelTemplateCellOverwritePolicy.PreserveTemplate;
 
-    /// <summary>初始化一个 <see cref="ExcelSheetExportBuilder{T}" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="ExcelSheetExportBuilder{T}" /> 类型的实例。
+    /// </summary>
     /// <param name="name">目标工作表名称。</param>
     /// <param name="data">待写入工作表的数据集合。</param>
     internal ExcelSheetExportBuilder(string name, IEnumerable<T> data)
@@ -263,7 +305,9 @@ public sealed class ExcelSheetExportBuilder<T> where T : class, new()
         return this;
     }
 
-    /// <summary>验证并生成不可变 Sheet 导出请求。</summary>
+    /// <summary>
+    /// 验证并生成不可变 Sheet 导出请求。
+    /// </summary>
     /// <returns>已完成校验的 Sheet 导出请求。</returns>
     internal ExcelSheetExportRequest Build()
     {
@@ -297,7 +341,9 @@ public sealed class ExcelSheetExportBuilder<T> where T : class, new()
             _culture, _columnWidth, _commentConflictPolicy, _templateCellOverwritePolicy);
     }
 
-    /// <summary>复制 Sheet 请求中的动态列定义。</summary>
+    /// <summary>
+    /// 复制 Sheet 请求中的动态列定义。
+    /// </summary>
     /// <param name="columns">待复制的动态列定义集合。</param>
     /// <returns>动态列定义的独立数组。</returns>
     private static IReadOnlyList<ExcelDynamicColumnDefinition> CloneDynamicColumns(
@@ -320,7 +366,9 @@ public sealed class ExcelSheetExportBuilder<T> where T : class, new()
             ImageMultiplicity = column.ImageMultiplicity
         }).ToArray();
 
-    /// <summary>验证自定义多行表头的范围和单元格重叠。</summary>
+    /// <summary>
+    /// 验证自定义多行表头的范围和单元格重叠。
+    /// </summary>
     private void ValidateHeaderRows()
     {
         var occupiedCells = new HashSet<(int Row, int Column)>();
@@ -336,19 +384,23 @@ public sealed class ExcelSheetExportBuilder<T> where T : class, new()
                 if (lastRowIndex >= _headerRowIndex)
                     throw new ArgumentException("自定义表头不能覆盖属性表头或数据区域。", nameof(_headerRows));
                 for (var rowIndex = headerRow.RowIndex; rowIndex <= lastRowIndex; rowIndex++)
-                for (var columnIndex = headerCell.ColumnIndex;
-                     columnIndex < headerCell.ColumnIndex + headerCell.ColumnSpan; columnIndex++)
-                if (!occupiedCells.Add((rowIndex, columnIndex)))
-                    throw new ArgumentException("自定义表头包含重叠单元格。", nameof(_headerRows));
+                    for (var columnIndex = headerCell.ColumnIndex;
+                         columnIndex < headerCell.ColumnIndex + headerCell.ColumnSpan; columnIndex++)
+                        if (!occupiedCells.Add((rowIndex, columnIndex)))
+                            throw new ArgumentException("自定义表头包含重叠单元格。", nameof(_headerRows));
             }
         }
     }
 }
 
-/// <summary>将泛型动态值读取器转换为对象字典读取器的扩展类。</summary>
+/// <summary>
+/// 将泛型动态值读取器转换为对象字典读取器的扩展类。
+/// </summary>
 internal static class ExcelDynamicGetterExtensions
 {
-    /// <summary>将泛型动态值读取器适配为对象读取器。</summary>
+    /// <summary>
+    /// 将泛型动态值读取器适配为对象读取器。
+    /// </summary>
     /// <typeparam name="T">动态值所属的实体类型。</typeparam>
     /// <param name="getter">读取实体动态值的泛型委托。</param>
     /// <returns>接受对象并调用泛型读取器的委托。</returns>

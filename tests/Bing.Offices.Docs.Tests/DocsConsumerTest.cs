@@ -67,6 +67,7 @@ public sealed class DocsConsumerTest
     /// <summary>
     /// 测试 - 外部消费者通过 NPOI 注册导出后重新打开 XLS/XLSX，六个 metadata 字段均应保持一致。
     /// </summary>
+    /// <param name="format">用于验证元数据往返的 Excel 文件格式。</param>
     [Theory]
     [InlineData(ExcelFormat.Xlsx)]
     [InlineData(ExcelFormat.Xls)]
@@ -290,6 +291,11 @@ public sealed class DocsConsumerTest
         }
     }
 
+    /// <summary>
+    /// 提取 Markdown 中的 C# 代码围栏。
+    /// </summary>
+    /// <param name="fileName">文档或文件名称。</param>
+    /// <returns>按文件顺序枚举的 C# 代码块，序号从 1 开始。</returns>
     private static IEnumerable<MarkdownFence> ExtractFences(string fileName)
     {
         var path = Path.Combine(AppContext.BaseDirectory, "Docs", fileName);
@@ -300,6 +306,10 @@ public sealed class DocsConsumerTest
             yield return new MarkdownFence(fileName, index + 1, matches[index].Groups["code"].Value);
     }
 
+    /// <summary>
+    /// 获取编译代码围栏所需的程序集引用。
+    /// </summary>
+    /// <returns>去重后的平台和已加载程序集元数据引用。</returns>
     private static IEnumerable<MetadataReference> GetCompilationReferences()
     {
         var paths = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") ?? string.Empty)
@@ -311,6 +321,13 @@ public sealed class DocsConsumerTest
         return System.Linq.Enumerable.Select(paths, path => MetadataReference.CreateFromFile(path));
     }
 
+    /// <summary>
+    /// 构建单个文档代码围栏的可编译源码。
+    /// </summary>
+    /// <param name="fileName">文档或文件名称。</param>
+    /// <param name="index">代码围栏或集合中的索引。</param>
+    /// <param name="code">待编译的代码文本。</param>
+    /// <returns>包含支持类型和可执行入口的完整 C# 源码。</returns>
     private static string BuildFenceSource(string fileName, int index, string code)
     {
         var declarations = string.Empty;
@@ -393,6 +410,11 @@ public static class FenceEntry
 }}";
     }
 
+    /// <summary>
+    /// 构建文档示例所需的支持类型源码。
+    /// </summary>
+    /// <param name="code">待编译的代码文本。</param>
+    /// <returns>代码块尚未定义的示例支持类型源码。</returns>
     private static string BuildSupportTypes(string code)
     {
         var orderRow = code.Contains("public sealed class OrderRow", StringComparison.Ordinal)
@@ -410,8 +432,19 @@ public sealed class UploadWorkbook {{ public List<OrderRow> Rows {{ get; }} = ne
 {profile}";
     }
 
+    /// <summary>
+    /// 表示文档代码块测试使用的代码片段。
+    /// </summary>
+    /// <param name="FileName">代码块所在的 Markdown 文件名。</param>
+    /// <param name="Index">代码块在文件中的序号。</param>
+    /// <param name="Code">代码块中的 C# 源码。</param>
     private sealed record MarkdownFence(string FileName, int Index, string Code);
 
+    /// <summary>
+    /// 创建配置好请求服务和响应流的 HTTP 上下文。
+    /// </summary>
+    /// <param name="services">服务提供程序。</param>
+    /// <returns>绑定指定服务提供程序并使用内存响应流的 HTTP 上下文。</returns>
     private static DefaultHttpContext CreateHttpContext(IServiceProvider services)
     {
         var context = new DefaultHttpContext { RequestServices = services };
@@ -419,8 +452,12 @@ public sealed class UploadWorkbook {{ public List<OrderRow> Rows {{ get; }} = ne
         return context;
     }
 
+    /// <summary>
+    /// 提供测试场景使用的映射 Profile。
+    /// </summary>
     public sealed class DocsProfile : IMappingProfile<DocsImportRow, DocsExportRow>
     {
+        /// <inheritdoc />
         public void Configure(FluentSetting<DocsImportRow, DocsExportRow> setting)
         {
             setting.Import.Property(row => row.Name).HasHeader("导入名称");
@@ -428,37 +465,76 @@ public sealed class UploadWorkbook {{ public List<OrderRow> Rows {{ get; }} = ne
         }
     }
 
+    /// <summary>
+    /// 表示 Excel 测试使用的工作簿数据模型。
+    /// </summary>
     public sealed class DocsWorkbook
     {
+        /// <summary>
+        /// 获取数据行集合。
+        /// </summary>
         public List<DocsRow> Rows { get; } = new();
     }
 
+    /// <summary>
+    /// 表示测试使用的一行数据模型。
+    /// </summary>
     public sealed class DocsRow
     {
+        /// <summary>
+        /// 获取或设置名称。
+        /// </summary>
         public string Name { get; set; }
     }
 
+    /// <summary>
+    /// 表示测试使用的一行数据模型。
+    /// </summary>
     public sealed class DocsImportRow
     {
+        /// <summary>
+        /// 获取或设置名称。
+        /// </summary>
         public string Name { get; set; }
     }
 
+    /// <summary>
+    /// 表示测试使用的一行数据模型。
+    /// </summary>
     public sealed class DocsExportRow
     {
+        /// <summary>
+        /// 获取或设置标签。
+        /// </summary>
         public string Label { get; set; }
     }
 
+    /// <summary>
+    /// 表示文档消费者校验场景使用的行模型。
+    /// </summary>
     public sealed class DocsValidatedRow
     {
+        /// <summary>
+        /// 获取或设置编码。
+        /// </summary>
         [ExcelRequired]
         [ExcelRegex("^OK-")]
         public string Code { get; set; }
     }
 
+    /// <summary>
+    /// 表示测试使用的一行数据模型。
+    /// </summary>
     public sealed class DocsDynamicRow
     {
+        /// <summary>
+        /// 获取或设置名称。
+        /// </summary>
         public string Name { get; set; }
 
+        /// <summary>
+        /// 获取或设置值集合。
+        /// </summary>
         [DynamicColumn]
         public IDictionary<string, object> Values { get; set; }
     }

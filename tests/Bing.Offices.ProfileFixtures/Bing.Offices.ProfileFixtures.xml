@@ -5,22 +5,35 @@
     </assembly>
     <members>
         <member name="T:Bing.Offices.ProfileFixtures.ExternalMappingProfile">
-            <summary>供外部程序集 Profile 扫描测试使用的双向映射 Profile。</summary>
+            <summary>
+            提供外部程序集 Profile 扫描测试使用的双向映射配置。
+            </summary>
         </member>
         <member name="M:Bing.Offices.ProfileFixtures.ExternalMappingProfile.Configure(Bing.Offices.Configurations.FluentSetting{Bing.Offices.ProfileFixtures.ExternalImportModel,Bing.Offices.ProfileFixtures.ExternalExportModel})">
-            <summary>配置外部输入和输出字段标题。</summary>
+            <inheritdoc />
+            <remarks>
+            将输入模型的 <see cref="P:Bing.Offices.ProfileFixtures.ExternalImportModel.Code" /> 映射到“外部输入”标题，并将输出模型的 <see cref="P:Bing.Offices.ProfileFixtures.ExternalExportModel.Label" /> 映射到“外部输出”标题。
+            </remarks>
         </member>
         <member name="T:Bing.Offices.ProfileFixtures.ExternalImportModel">
-            <summary>外部导入模型。</summary>
+            <summary>
+            表示外部程序集扫描测试使用的导入模型。
+            </summary>
         </member>
         <member name="P:Bing.Offices.ProfileFixtures.ExternalImportModel.Code">
-            <summary>外部输入编码。</summary>
+            <summary>
+            获取或设置外部输入编码。
+            </summary>
         </member>
         <member name="T:Bing.Offices.ProfileFixtures.ExternalExportModel">
-            <summary>外部导出模型。</summary>
+            <summary>
+            表示外部程序集扫描测试使用的导出模型。
+            </summary>
         </member>
         <member name="P:Bing.Offices.ProfileFixtures.ExternalExportModel.Label">
-            <summary>外部输出标签。</summary>
+            <summary>
+            获取或设置外部输出标签。
+            </summary>
         </member>
     </members>
 </doc>

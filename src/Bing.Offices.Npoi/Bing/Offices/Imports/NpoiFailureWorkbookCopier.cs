@@ -7,10 +7,14 @@ using NPOI.XSSF.UserModel;
 
 namespace Bing.Offices.Imports;
 
-/// <summary>Failure Workbook 错误行、样式、验证和图片复制职责。</summary>
+/// <summary>
+/// Failure Workbook 错误行、样式、验证和图片复制职责。
+/// </summary>
 internal static class NpoiFailureWorkbookCopier
 {
-    /// <summary>创建只包含错误数据行及相关元数据的独立工作簿。</summary>
+    /// <summary>
+    /// 创建只包含错误数据行及相关元数据的独立工作簿。
+    /// </summary>
     /// <param name="source">原始导入工作簿。</param>
     /// <param name="errors">用于筛选错误行的导入错误集合。</param>
     /// <param name="resolvedSheetRequests">实际工作表到请求的映射。</param>
@@ -61,7 +65,9 @@ internal static class NpoiFailureWorkbookCopier
         return destination;
     }
 
-    /// <summary>复制行高、隐藏状态、单元格值、样式、超链接和批注。</summary>
+    /// <summary>
+    /// 复制行高、隐藏状态、单元格值、样式、超链接和批注。
+    /// </summary>
     /// <param name="source">源工作簿。</param>
     /// <param name="sourceRow">源数据行。</param>
     /// <param name="destinationRow">目标数据行。</param>
@@ -112,7 +118,9 @@ internal static class NpoiFailureWorkbookCopier
         }
     }
 
-    /// <summary>复制富文本内容及其格式运行到目标工作簿。</summary>
+    /// <summary>
+    /// 复制富文本内容及其格式运行到目标工作簿。
+    /// </summary>
     /// <param name="source">源富文本。</param>
     /// <param name="sourceWorkbook">源工作簿，用于 HSSF 字体解析。</param>
     /// <param name="destination">目标工作簿。</param>
@@ -151,7 +159,9 @@ internal static class NpoiFailureWorkbookCopier
         return copied;
     }
 
-    /// <summary>将源样式复制到目标工作簿并按样式索引复用。</summary>
+    /// <summary>
+    /// 将源样式复制到目标工作簿并按样式索引复用。
+    /// </summary>
     /// <param name="sourceStyle">源工作簿样式。</param>
     /// <param name="destination">目标工作簿。</param>
     /// <param name="styleCache">按源样式索引缓存目标样式的字典。</param>
@@ -168,7 +178,9 @@ internal static class NpoiFailureWorkbookCopier
         return style;
     }
 
-    /// <summary>复制单元格超链接并重新绑定目标单元格坐标。</summary>
+    /// <summary>
+    /// 复制单元格超链接并重新绑定目标单元格坐标。
+    /// </summary>
     /// <param name="sourceCell">源单元格。</param>
     /// <param name="destinationCell">目标单元格。</param>
     /// <param name="destination">目标工作簿。</param>
@@ -187,7 +199,9 @@ internal static class NpoiFailureWorkbookCopier
         destinationCell.Hyperlink = hyperlink;
     }
 
-    /// <summary>复制单元格批注文本、作者、可见性和相对锚点。</summary>
+    /// <summary>
+    /// 复制单元格批注文本、作者、可见性和相对锚点。
+    /// </summary>
     /// <param name="sourceCell">源单元格。</param>
     /// <param name="destinationCell">目标单元格。</param>
     /// <param name="destination">目标工作簿。</param>
@@ -209,7 +223,9 @@ internal static class NpoiFailureWorkbookCopier
         destinationCell.CellComment = comment;
     }
 
-    /// <summary>复制工作表显示属性、列宽、列隐藏状态和冻结窗格。</summary>
+    /// <summary>
+    /// 复制工作表显示属性、列宽、列隐藏状态和冻结窗格。
+    /// </summary>
     /// <param name="source">源工作表。</param>
     /// <param name="destination">目标工作表。</param>
     /// <param name="sourceRows">已复制到目标工作表的源行集合。</param>
@@ -245,7 +261,9 @@ internal static class NpoiFailureWorkbookCopier
         }
     }
 
-    /// <summary>在错误行工作表末尾添加来源位置和错误摘要列。</summary>
+    /// <summary>
+    /// 在错误行工作表末尾添加来源位置和错误摘要列。
+    /// </summary>
     /// <param name="sheet">目标错误行工作表。</param>
     /// <param name="errors">当前工作表的错误集合。</param>
     /// <param name="rowMap">源零基行号到目标零基行号的映射。</param>
@@ -272,7 +290,9 @@ internal static class NpoiFailureWorkbookCopier
         }
     }
 
-    /// <summary>复制完全落在错误行集合中的合并区域。</summary>
+    /// <summary>
+    /// 复制完全落在错误行集合中的合并区域。
+    /// </summary>
     /// <param name="source">源工作表。</param>
     /// <param name="destination">目标工作表。</param>
     /// <param name="rowMap">源零基行号到目标零基行号的映射。</param>
@@ -293,7 +313,9 @@ internal static class NpoiFailureWorkbookCopier
         }
     }
 
-    /// <summary>复制完全落在错误行集合中的工作簿原生数据校验。</summary>
+    /// <summary>
+    /// 复制完全落在错误行集合中的工作簿原生数据校验。
+    /// </summary>
     /// <param name="source">源工作表。</param>
     /// <param name="destination">目标工作表。</param>
     /// <param name="rowMap">源零基行号到目标零基行号的映射。</param>
@@ -332,7 +354,9 @@ internal static class NpoiFailureWorkbookCopier
         }
     }
 
-    /// <summary>复制锚点行完全存在于错误行集合中的图片资源。</summary>
+    /// <summary>
+    /// 复制锚点行完全存在于错误行集合中的图片资源。
+    /// </summary>
     /// <param name="source">源工作表。</param>
     /// <param name="destination">目标工作表。</param>
     /// <param name="rowMap">源零基行号到目标零基行号的映射。</param>
@@ -357,4 +381,3 @@ internal static class NpoiFailureWorkbookCopier
         }
     }
 }
-

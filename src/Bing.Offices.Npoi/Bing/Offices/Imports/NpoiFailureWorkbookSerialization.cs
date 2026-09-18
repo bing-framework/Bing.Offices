@@ -2,10 +2,14 @@
 
 namespace Bing.Offices.Imports;
 
-/// <summary>Failure Workbook 的序列化、受限输出和取消复制职责。</summary>
+/// <summary>
+/// Failure Workbook 的序列化、受限输出和取消复制职责。
+/// </summary>
 internal static class NpoiFailureWorkbookSerialization
 {
-    /// <summary>将临时工作簿流复制到调用方目标流，并在块边界检查取消。</summary>
+    /// <summary>
+    /// 将临时工作簿流复制到调用方目标流，并在块边界检查取消。
+    /// </summary>
     /// <param name="destination">调用方提供的可写目标流。</param>
     /// <param name="source">临时工作簿源流。</param>
     /// <param name="cancellationToken">复制过程中检查的取消令牌。</param>
@@ -45,7 +49,9 @@ internal static class NpoiFailureWorkbookSerialization
         return null;
     }
 
-    /// <summary>查找被 NPOI 包装的取消或致命异常。</summary>
+    /// <summary>
+    /// 查找被 NPOI 包装的取消或致命异常。
+    /// </summary>
     /// <param name="exception">序列化阶段捕获的异常。</param>
     /// <returns>内部取消或致命异常；不存在时返回 null。</returns>
     internal static Exception FindFatalException(Exception exception)
@@ -65,12 +71,18 @@ internal static class NpoiFailureWorkbookSerialization
     /// </summary>
     internal sealed class LimitedWriteStream : Stream
     {
-        /// <summary>由调用方拥有且仅由包装器刷新、不负责释放的底层输出流。</summary>
+        /// <summary>
+        /// 由调用方拥有且仅由包装器刷新、不负责释放的底层输出流。
+        /// </summary>
         private readonly Stream _inner;
-        /// <summary>失败工作簿序列化允许写入的最大字节数。</summary>
+        /// <summary>
+        /// 失败工作簿序列化允许写入的最大字节数。
+        /// </summary>
         private readonly long? _maxBytes;
 
-        /// <summary>初始化一个 <see cref="LimitedWriteStream" /> 类型的实例。</summary>
+        /// <summary>
+        /// 初始化一个 <see cref="LimitedWriteStream" /> 类型的实例。
+        /// </summary>
         /// <param name="inner">实际写入流。</param>
         /// <param name="maxBytes">最大允许字节数。</param>
         internal LimitedWriteStream(Stream inner, long? maxBytes)

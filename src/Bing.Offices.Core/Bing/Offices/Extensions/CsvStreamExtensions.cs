@@ -104,7 +104,9 @@ public static class CsvStreamExtensions
         return ImportFromBytesAsyncCore(importer, content, options, cancellationToken);
     }
 
-    /// <summary>通过内存流执行 CSV 字节数组的异步导入。</summary>
+    /// <summary>
+    /// 通过内存流执行 CSV 字节数组的异步导入。
+    /// </summary>
     /// <typeparam name="T">导入实体类型。</typeparam>
     /// <param name="importer">执行导入的 CSV 导入器。</param>
     /// <param name="content">CSV 文件内容。</param>

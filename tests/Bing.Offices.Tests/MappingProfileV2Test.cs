@@ -149,13 +149,25 @@ public class MappingProfileV2Test
         Assert.Contains("是", appendMap.Properties.Single(item => item.Name == nameof(ImportModel.Name)).ValueMap.Keys);
     }
 
+    /// <summary>
+    /// 表示映射测试使用的导入模型。
+    /// </summary>
     private sealed class ImportModel
     {
+        /// <summary>
+        /// 获取或设置名称。
+        /// </summary>
         public string Name { get; set; }
     }
 
+    /// <summary>
+    /// 表示映射测试使用的导出模型。
+    /// </summary>
     private sealed class ExportModel
     {
+        /// <summary>
+        /// 获取或设置标签。
+        /// </summary>
         public string Label { get; set; }
     }
 }

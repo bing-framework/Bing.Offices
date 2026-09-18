@@ -1,4 +1,4 @@
-using Bing.Offices.Conversions;
+﻿using Bing.Offices.Conversions;
 using Bing.Offices.Exceptions;
 using Bing.Offices.Exports;
 using Bing.Offices.Imports;

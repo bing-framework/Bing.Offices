@@ -3,18 +3,27 @@
 namespace Bing.Offices.Imports;
 
 /// <summary>
-/// 按行区间保存 Workbook Data Validation，查询时只访问可能覆盖目标行的区间节点。
+/// 提供按行列坐标查询工作簿数据校验规则的索引。
 /// </summary>
+/// <remarks>
+/// 索引仅保留与目标行列范围相交的校验区间。
+/// </remarks>
 internal sealed class ValidationRangeIndex
 {
-    /// <summary>按行区间组织的根节点。</summary>
+    /// <summary>
+    /// 保存按行区间组织的根节点。
+    /// </summary>
     private readonly ValidationRangeNode _root;
 
-    /// <summary>初始化一个 <see cref="ValidationRangeIndex" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="ValidationRangeIndex" /> 类型的实例。
+    /// </summary>
     /// <param name="root">已构建的行区间根节点。</param>
     private ValidationRangeIndex(ValidationRangeNode root) => _root = root;
 
-    /// <summary>将工作簿校验区域裁剪到目标行列范围并构建索引。</summary>
+    /// <summary>
+    /// 将工作簿校验区域裁剪到目标行列范围并构建索引。
+    /// </summary>
     /// <param name="validations">NPOI 提供的工作簿校验规则。</param>
     /// <param name="firstRow">允许索引的最小零基行号。</param>
     /// <param name="lastRow">允许索引的最大零基行号。</param>
@@ -40,7 +49,9 @@ internal sealed class ValidationRangeIndex
         return new ValidationRangeIndex(ValidationRangeNode.Build(entries));
     }
 
-    /// <summary>获取覆盖指定单元格的工作簿校验规则。</summary>
+    /// <summary>
+    /// 获取覆盖指定单元格的工作簿校验规则。
+    /// </summary>
     /// <param name="row">目标单元格的零基行号。</param>
     /// <param name="column">目标单元格的零基列号。</param>
     /// <returns>按索引命中的校验规则集合。</returns>
@@ -49,7 +60,9 @@ internal sealed class ValidationRangeIndex
         return Get(row, column, out _);
     }
 
-    /// <summary>获取覆盖指定单元格的校验规则并返回候选节点检查数量。</summary>
+    /// <summary>
+    /// 获取覆盖指定单元格的校验规则并返回候选节点检查数量。
+    /// </summary>
     /// <param name="row">目标单元格的零基行号。</param>
     /// <param name="column">目标单元格的零基列号。</param>
     /// <param name="candidateChecks">返回实际检查的区间候选数量。</param>
@@ -65,10 +78,14 @@ internal sealed class ValidationRangeIndex
         return result.Count == 0 ? System.Array.Empty<IDataValidation>() : result;
     }
 
-    /// <summary>按行区间组织校验范围索引的内部节点。</summary>
+    /// <summary>
+    /// 按行区间组织校验范围索引的内部节点。
+    /// </summary>
     private sealed class ValidationRangeNode
     {
-        /// <summary>初始化一个 <see cref="ValidationRangeNode" /> 类型的实例。</summary>
+        /// <summary>
+        /// 初始化一个 <see cref="ValidationRangeNode" /> 类型的实例。
+        /// </summary>
         /// <param name="center">当前节点的中心行号。</param>
         /// <param name="overlaps">覆盖中心行的区间集合。</param>
         /// <param name="left">中心行左侧的子树。</param>
@@ -82,16 +99,26 @@ internal sealed class ValidationRangeIndex
             Right = right;
         }
 
-        /// <summary>获取当前节点的中心行号。</summary>
+        /// <summary>
+        /// 获取当前节点的中心行号。
+        /// </summary>
         private int Center { get; }
-        /// <summary>获取按列索引的中心行重叠区间。</summary>
+        /// <summary>
+        /// 获取按列索引的中心行重叠区间。
+        /// </summary>
         private ValidationRangeColumnNode Overlaps { get; }
-        /// <summary>获取中心行左侧子树。</summary>
+        /// <summary>
+        /// 获取中心行左侧子树。
+        /// </summary>
         private ValidationRangeNode Left { get; }
-        /// <summary>获取中心行右侧子树。</summary>
+        /// <summary>
+        /// 获取中心行右侧子树。
+        /// </summary>
         private ValidationRangeNode Right { get; }
 
-        /// <summary>递归构建行区间树。</summary>
+        /// <summary>
+        /// 递归构建行区间树。
+        /// </summary>
         /// <param name="entries">待索引的校验区间。</param>
         /// <returns>构建后的节点；没有区间时为 null。</returns>
         internal static ValidationRangeNode Build(IReadOnlyList<ValidationRangeEntry> entries)
@@ -116,7 +143,9 @@ internal sealed class ValidationRangeIndex
             return new ValidationRangeNode(center, overlaps, Build(left), Build(right));
         }
 
-        /// <summary>收集覆盖指定单元格的校验规则。</summary>
+        /// <summary>
+        /// 收集覆盖指定单元格的校验规则。
+        /// </summary>
         /// <param name="row">目标单元格的零基行号。</param>
         /// <param name="column">目标单元格的零基列号。</param>
         /// <param name="result">接收命中规则的集合。</param>
@@ -143,10 +172,14 @@ internal sealed class ValidationRangeIndex
         }
     }
 
-    /// <summary>按列区间组织校验范围索引的内部节点。</summary>
+    /// <summary>
+    /// 按列区间组织校验范围索引的内部节点。
+    /// </summary>
     private sealed class ValidationRangeColumnNode
     {
-        /// <summary>初始化一个 <see cref="ValidationRangeColumnNode" /> 类型的实例。</summary>
+        /// <summary>
+        /// 初始化一个 <see cref="ValidationRangeColumnNode" /> 类型的实例。
+        /// </summary>
         /// <param name="center">当前节点的中心列号。</param>
         /// <param name="overlaps">覆盖中心列的区间集合。</param>
         /// <param name="left">中心列左侧的子树。</param>
@@ -161,18 +194,30 @@ internal sealed class ValidationRangeIndex
             Right = right;
         }
 
-        /// <summary>获取当前节点的中心列号。</summary>
+        /// <summary>
+        /// 获取当前节点的中心列号。
+        /// </summary>
         private int Center { get; }
-        /// <summary>获取按起始列升序排列的重叠区间。</summary>
+        /// <summary>
+        /// 获取按起始列升序排列的重叠区间。
+        /// </summary>
         private IReadOnlyList<ValidationRangeEntry> OverlapsByStart { get; }
-        /// <summary>获取按结束列降序排列的重叠区间。</summary>
+        /// <summary>
+        /// 获取按结束列降序排列的重叠区间。
+        /// </summary>
         private IReadOnlyList<ValidationRangeEntry> OverlapsByEnd { get; }
-        /// <summary>获取中心列左侧子树。</summary>
+        /// <summary>
+        /// 获取中心列左侧子树。
+        /// </summary>
         private ValidationRangeColumnNode Left { get; }
-        /// <summary>获取中心列右侧子树。</summary>
+        /// <summary>
+        /// 获取中心列右侧子树。
+        /// </summary>
         private ValidationRangeColumnNode Right { get; }
 
-        /// <summary>递归构建列区间树。</summary>
+        /// <summary>
+        /// 递归构建列区间树。
+        /// </summary>
         /// <param name="entries">待索引的校验区间。</param>
         /// <returns>构建后的节点；没有区间时为 null。</returns>
         internal static ValidationRangeColumnNode Build(IReadOnlyList<ValidationRangeEntry> entries)
@@ -197,7 +242,9 @@ internal sealed class ValidationRangeIndex
             return new ValidationRangeColumnNode(center, overlaps, Build(left), Build(right));
         }
 
-        /// <summary>收集覆盖指定行列坐标的校验规则。</summary>
+        /// <summary>
+        /// 收集覆盖指定行列坐标的校验规则。
+        /// </summary>
         /// <param name="column">目标单元格的零基列号。</param>
         /// <param name="row">目标单元格的零基行号。</param>
         /// <param name="result">接收命中规则的集合。</param>
@@ -234,7 +281,9 @@ internal sealed class ValidationRangeIndex
                 AddIfMatching(entry, row, column, result, seen, ref candidateChecks);
         }
 
-        /// <summary>检查区间是否覆盖目标坐标，并在首次命中时加入结果。</summary>
+        /// <summary>
+        /// 检查区间是否覆盖目标坐标，并在首次命中时加入结果。
+        /// </summary>
         /// <param name="entry">待检查的校验区间。</param>
         /// <param name="row">目标零基行号。</param>
         /// <param name="column">目标零基列号。</param>
@@ -250,10 +299,14 @@ internal sealed class ValidationRangeIndex
         }
     }
 
-    /// <summary>记录一个裁剪后的校验行列区间。</summary>
+    /// <summary>
+    /// 记录一个裁剪后的校验行列区间。
+    /// </summary>
     private sealed class ValidationRangeEntry
     {
-        /// <summary>初始化一个 <see cref="ValidationRangeEntry" /> 类型的实例。</summary>
+        /// <summary>
+        /// 初始化一个 <see cref="ValidationRangeEntry" /> 类型的实例。
+        /// </summary>
         /// <param name="firstRow">最小零基行号。</param>
         /// <param name="lastRow">最大零基行号。</param>
         /// <param name="firstColumn">最小零基列号。</param>
@@ -269,18 +322,30 @@ internal sealed class ValidationRangeIndex
             Validation = validation;
         }
 
-        /// <summary>获取最小零基行号。</summary>
+        /// <summary>
+        /// 获取最小零基行号。
+        /// </summary>
         internal int FirstRow { get; }
-        /// <summary>获取最大零基行号。</summary>
+        /// <summary>
+        /// 获取最大零基行号。
+        /// </summary>
         internal int LastRow { get; }
-        /// <summary>获取最小零基列号。</summary>
+        /// <summary>
+        /// 获取最小零基列号。
+        /// </summary>
         internal int FirstColumn { get; }
-        /// <summary>获取最大零基列号。</summary>
+        /// <summary>
+        /// 获取最大零基列号。
+        /// </summary>
         internal int LastColumn { get; }
-        /// <summary>获取区间对应的工作簿校验规则。</summary>
+        /// <summary>
+        /// 获取区间对应的工作簿校验规则。
+        /// </summary>
         internal IDataValidation Validation { get; }
 
-        /// <summary>判断区间是否覆盖指定行列坐标。</summary>
+        /// <summary>
+        /// 判断区间是否覆盖指定行列坐标。
+        /// </summary>
         /// <param name="row">目标零基行号。</param>
         /// <param name="column">目标零基列号。</param>
         /// <returns>坐标在闭合区间内时为 true。</returns>

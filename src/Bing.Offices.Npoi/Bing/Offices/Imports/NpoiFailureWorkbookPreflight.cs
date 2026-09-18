@@ -122,10 +122,14 @@ internal static class NpoiFailureWorkbookPreflight
         return new PictureBudgetEstimate(count, bytes);
     }
 
-    /// <summary>保存失败工作簿图片预检得到的数量和字节数。</summary>
+    /// <summary>
+    /// 保存失败工作簿图片预检得到的数量和字节数。
+    /// </summary>
     private readonly struct PictureBudgetEstimate
     {
-        /// <summary>初始化一个 <see cref="PictureBudgetEstimate" /> 类型的实例。</summary>
+        /// <summary>
+        /// 初始化一个 <see cref="PictureBudgetEstimate" /> 类型的实例。
+        /// </summary>
         /// <param name="count">预计处理的图片数量。</param>
         /// <param name="bytes">预计处理的图片数据大小（字节）。</param>
         internal PictureBudgetEstimate(int count, long bytes)
@@ -134,9 +138,13 @@ internal static class NpoiFailureWorkbookPreflight
             Bytes = bytes;
         }
 
-        /// <summary>获取预计处理的图片数量。</summary>
+        /// <summary>
+        /// 获取预计处理的图片数量。
+        /// </summary>
         internal int Count { get; }
-        /// <summary>获取预计处理的图片数据大小（字节）。</summary>
+        /// <summary>
+        /// 获取预计处理的图片数据大小（字节）。
+        /// </summary>
         internal long Bytes { get; }
     }
 }

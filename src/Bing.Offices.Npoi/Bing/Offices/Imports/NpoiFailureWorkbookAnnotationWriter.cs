@@ -4,7 +4,9 @@ using NPOI.SS.UserModel;
 
 namespace Bing.Offices.Imports;
 
-/// <summary>Failure Workbook 的汇总工作表和错误批注职责。</summary>
+/// <summary>
+/// Failure Workbook 的汇总工作表和错误批注职责。
+/// </summary>
 internal static class NpoiFailureWorkbookAnnotationWriter
 {
     /// <summary>

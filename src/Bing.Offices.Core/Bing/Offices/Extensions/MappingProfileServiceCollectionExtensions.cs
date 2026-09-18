@@ -89,7 +89,9 @@ public static class MappingProfileServiceCollectionExtensions
         }
     }
 
-    /// <summary>校验 Profile 注册名称和方向键后写入 DI 服务集合。</summary>
+    /// <summary>
+    /// 校验 Profile 注册名称和方向键后写入 DI 服务集合。
+    /// </summary>
     /// <param name="services">DI 服务集合。</param>
     /// <param name="profileTypes">待注册的 Profile 类型及可选名称。</param>
     private static void AddMappingProfilesCore(IServiceCollection services,
@@ -124,7 +126,9 @@ public static class MappingProfileServiceCollectionExtensions
         AddRegistry(services);
     }
 
-    /// <summary>向 DI 容器注册 Profile 描述符仓储和解析器。</summary>
+    /// <summary>
+    /// 向 DI 容器注册 Profile 描述符仓储和解析器。
+    /// </summary>
     /// <param name="services">DI 服务集合。</param>
     private static void AddRegistry(IServiceCollection services)
     {
@@ -144,7 +148,9 @@ public static class MappingProfileServiceCollectionExtensions
             provider.GetRequiredService<MappingProfileRegistry>());
     }
 
-    /// <summary>验证 Profile 类型是可实例化且没有未绑定泛型参数的具体类型。</summary>
+    /// <summary>
+    /// 验证 Profile 类型是可实例化且没有未绑定泛型参数的具体类型。
+    /// </summary>
     /// <param name="profileType">待验证的 Profile 类型。</param>
     private static void ValidateProfileType(Type profileType)
     {
@@ -152,13 +158,19 @@ public static class MappingProfileServiceCollectionExtensions
             throw new ArgumentException($"Profile 类型必须是封闭的具体类型: {profileType.FullName}", nameof(profileType));
     }
 
-    /// <summary>保存一个 Profile 类型、稳定名称及其方向描述符键。</summary>
+    /// <summary>
+    /// 保存一个 Profile 类型、稳定名称及其方向描述符键。
+    /// </summary>
     private sealed class MappingProfileRegistration
     {
-        /// <summary>已注册 Profile 的运行时类型。</summary>
+        /// <summary>
+        /// 已注册 Profile 的运行时类型。
+        /// </summary>
         private readonly Type _profileType;
 
-        /// <summary>初始化一个 <see cref="MappingProfileRegistration" /> 类型的实例。</summary>
+        /// <summary>
+        /// 初始化一个 <see cref="MappingProfileRegistration" /> 类型的实例。
+        /// </summary>
         /// <param name="profileType">Profile 实现类型。</param>
         /// <param name="profileName">稳定 Profile 名称；为空时使用类型全名。</param>
         public MappingProfileRegistration(Type profileType, string profileName)
@@ -168,14 +180,22 @@ public static class MappingProfileServiceCollectionExtensions
             Keys = ProfileDescriptorFactory.GetKeys(profileType, ProfileName);
         }
 
-        /// <summary>获取已注册 Profile 的运行时类型。</summary>
+        /// <summary>
+        /// 获取已注册 Profile 的运行时类型。
+        /// </summary>
         public Type ProfileType => _profileType;
-        /// <summary>获取Profile 的稳定注册名称。</summary>
+        /// <summary>
+        /// 获取Profile 的稳定注册名称。
+        /// </summary>
         public string ProfileName { get; }
-        /// <summary>获取Profile 产生的方向和模型描述符键。</summary>
+        /// <summary>
+        /// 获取Profile 产生的方向和模型描述符键。
+        /// </summary>
         public IReadOnlyList<string> Keys { get; }
 
-        /// <summary>从 DI 容器解析 Profile 实例并创建方向描述符。</summary>
+        /// <summary>
+        /// 从 DI 容器解析 Profile 实例并创建方向描述符。
+        /// </summary>
         /// <param name="provider">DI 服务提供程序。</param>
         /// <returns>该 Profile 产生的方向描述符集合。</returns>
         public IReadOnlyList<ProfileDescriptor> Create(IServiceProvider provider) =>
@@ -183,10 +203,14 @@ public static class MappingProfileServiceCollectionExtensions
                 ProfileName);
     }
 
-    /// <summary>保存程序集扫描阶段发现的 Profile 类型及可选名称。</summary>
+    /// <summary>
+    /// 保存程序集扫描阶段发现的 Profile 类型及可选名称。
+    /// </summary>
     private sealed class ProfileRegistrationType
     {
-        /// <summary>初始化一个 <see cref="ProfileRegistrationType" /> 类型的实例。</summary>
+        /// <summary>
+        /// 初始化一个 <see cref="ProfileRegistrationType" /> 类型的实例。
+        /// </summary>
         /// <param name="profileType">Profile 实现类型。</param>
         /// <param name="profileName">可选的稳定 Profile 名称。</param>
         public ProfileRegistrationType(Type profileType, string profileName)
@@ -195,9 +219,13 @@ public static class MappingProfileServiceCollectionExtensions
             ProfileName = profileName;
         }
 
-        /// <summary>获取待注册的 Profile 类型。</summary>
+        /// <summary>
+        /// 获取待注册的 Profile 类型。
+        /// </summary>
         public Type ProfileType { get; }
-        /// <summary>获取可选的稳定 Profile 名称。</summary>
+        /// <summary>
+        /// 获取可选的稳定 Profile 名称。
+        /// </summary>
         public string ProfileName { get; }
     }
 }

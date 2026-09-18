@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
@@ -19,40 +19,107 @@ using MiniExcelApi = MiniExcelLibs.MiniExcel;
 namespace Bing.Offices.Imports;
 
 /// <summary>
-/// 基于 MiniExcel 的 XLSX 导入器。MiniExcel 负责逐行读取，Core 映射计划负责转换和校验。
+/// 基于 MiniExcel 的 XLSX 导入器。
 /// </summary>
+/// <remarks>
+/// 由 MiniExcel 逐行读取，并由 Core 映射计划负责转换和校验。
+/// </remarks>
 public sealed class MiniExcelExcelImporter : IExcelImporter
 {
+    /// <summary>
+    /// 表示按实体类型异步导入工作表的反射委托。
+    /// </summary>
+    /// <typeparam name="TWorkbook">导入结果的工作簿根实体类型。</typeparam>
+    /// <param name="target">执行导入的 MiniExcel 导入器。</param>
+    /// <param name="source">可定位的工作簿流。</param>
+    /// <param name="physicalName">工作表实际名称。</param>
+    /// <param name="request">工作表导入配置。</param>
+    /// <param name="root">接收导入数据的工作簿根实体。</param>
+    /// <param name="sheetResults">接收工作表结果的集合。</param>
+    /// <param name="errors">接收工作簿级错误的集合。</param>
+    /// <param name="workbookRequest">当前工作簿导入请求。</param>
+    /// <param name="cancellationToken">用于取消导入的令牌。</param>
+    /// <param name="mappingPlan">当前工作表的映射计划。</param>
+    /// <param name="isDate1904">当前工作簿是否使用 1904 日期系统。</param>
     private delegate Task ImportSheetInvoker<TWorkbook>(MiniExcelExcelImporter target, Stream source,
         string physicalName, ExcelSheetImportRequest request, TWorkbook root,
         ICollection<ExcelSheetImportResult> sheetResults, ICollection<ExcelImportError> errors,
         ExcelWorkbookImportRequest<TWorkbook> workbookRequest, CancellationToken cancellationToken,
         IExcelMappingPlan mappingPlan, bool isDate1904) where TWorkbook : class, new();
 
+    /// <summary>
+    /// 表示按实体类型同步导入工作表的反射委托。
+    /// </summary>
+    /// <typeparam name="TWorkbook">导入结果的工作簿根实体类型。</typeparam>
+    /// <param name="target">执行导入的 MiniExcel 导入器。</param>
+    /// <param name="source">可定位的工作簿流。</param>
+    /// <param name="physicalName">工作表实际名称。</param>
+    /// <param name="request">工作表导入配置。</param>
+    /// <param name="root">接收导入数据的工作簿根实体。</param>
+    /// <param name="sheetResults">接收工作表结果的集合。</param>
+    /// <param name="errors">接收工作簿级错误的集合。</param>
+    /// <param name="workbookRequest">当前工作簿导入请求。</param>
+    /// <param name="cancellationToken">用于取消导入的令牌。</param>
+    /// <param name="mappingPlan">当前工作表的映射计划。</param>
+    /// <param name="isDate1904">当前工作簿是否使用 1904 日期系统。</param>
     private delegate void ImportSheetSyncInvoker<TWorkbook>(MiniExcelExcelImporter target, Stream source,
         string physicalName, ExcelSheetImportRequest request, TWorkbook root,
         ICollection<ExcelSheetImportResult> sheetResults, ICollection<ExcelImportError> errors,
         ExcelWorkbookImportRequest<TWorkbook> workbookRequest, CancellationToken cancellationToken,
         IExcelMappingPlan mappingPlan, bool isDate1904) where TWorkbook : class, new();
 
+    /// <summary>
+    /// 按工作簿根实体类型缓存异步工作表导入委托。
+    /// </summary>
+    /// <typeparam name="TWorkbook">导入结果的工作簿根实体类型。</typeparam>
     private static class InvokerCache<TWorkbook> where TWorkbook : class, new()
     {
+        /// <summary>
+        /// 按行实体运行时类型缓存当前工作簿根类型的异步导入委托。
+        /// </summary>
         internal static readonly ConcurrentDictionary<Type, ImportSheetInvoker<TWorkbook>> Values = new();
     }
 
+    /// <summary>
+    /// 按工作簿根实体类型缓存同步工作表导入委托。
+    /// </summary>
+    /// <typeparam name="TWorkbook">导入结果的工作簿根实体类型。</typeparam>
     private static class SyncInvokerCache<TWorkbook> where TWorkbook : class, new()
     {
+        /// <summary>
+        /// 按行实体运行时类型缓存当前工作簿根类型的同步导入委托。
+        /// </summary>
         internal static readonly ConcurrentDictionary<Type, ImportSheetSyncInvoker<TWorkbook>> Values = new();
     }
 
+    /// <summary>
+    /// 导入时执行的校验规则集合。
+    /// </summary>
     private readonly IReadOnlyList<IExcelValidationRule> _validationRules;
+    /// <summary>
+    /// 导入时使用的值转换器集合。
+    /// </summary>
     private readonly IReadOnlyList<IExcelValueConverter> _valueConverters;
+    /// <summary>
+    /// 按名称解析的导入校验规则集合。
+    /// </summary>
     private readonly IReadOnlyList<INamedExcelValidationRule> _namedValidationRules;
+    /// <summary>
+    /// 创建导入映射计划的工厂。
+    /// </summary>
     private readonly IExcelMappingPlanFactory _mappingPlanFactory;
+    /// <summary>
+    /// 按运行时行类型创建 MiniExcel 导入映射计划的构建器。
+    /// </summary>
     private readonly MiniExcelMappingPlanBuilder _planBuilder;
+    /// <summary>
+    /// 向异常观察器分发导入异常的分发器。
+    /// </summary>
     private readonly BingOfficesExceptionDispatcher _exceptionDispatcher;
 
-    /// <summary>初始化 MiniExcel 导入器。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="MiniExcelExcelImporter" /> 类型的实例。
+    /// </summary>
     /// <param name="validationRules">校验规则集合。</param>
     /// <param name="valueConverters">值转换器集合。</param>
     /// <param name="namedValidationRules">命名校验规则集合。</param>
@@ -142,6 +209,14 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
         }
     }
 
+    /// <summary>
+    /// 从已缓冲的工作簿流同步导入请求的数据。
+    /// </summary>
+    /// <typeparam name="TWorkbook">导入结果的工作簿根实体类型。</typeparam>
+    /// <param name="source">已缓冲且可定位的工作簿流。</param>
+    /// <param name="request">工作簿导入请求。</param>
+    /// <param name="cancellationToken">用于取消导入的令牌。</param>
+    /// <returns>包含根实体、工作表结果和错误的导入结果。</returns>
     private ExcelWorkbookImportResult<TWorkbook> ImportBuffered<TWorkbook>(MemoryStream source,
         ExcelWorkbookImportRequest<TWorkbook> request, CancellationToken cancellationToken)
         where TWorkbook : class, new()
@@ -189,6 +264,14 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
             IsErrorLimitReached(errors, request), request.ResourceLimits?.MaxErrors);
     }
 
+    /// <summary>
+    /// 从已缓冲的工作簿流异步导入请求的数据。
+    /// </summary>
+    /// <typeparam name="TWorkbook">导入结果的工作簿根实体类型。</typeparam>
+    /// <param name="source">已缓冲且可定位的工作簿流。</param>
+    /// <param name="request">工作簿导入请求。</param>
+    /// <param name="cancellationToken">用于取消导入的令牌。</param>
+    /// <returns>包含根实体、工作表结果和错误的异步导入任务。</returns>
     private async Task<ExcelWorkbookImportResult<TWorkbook>> ImportBufferedAsync<TWorkbook>(
         MemoryStream source, ExcelWorkbookImportRequest<TWorkbook> request,
         CancellationToken cancellationToken) where TWorkbook : class, new()
@@ -236,6 +319,20 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
             IsErrorLimitReached(errors, request), request.ResourceLimits?.MaxErrors);
     }
 
+    /// <summary>
+    /// 按运行时行类型同步处理一个工作表。
+    /// </summary>
+    /// <typeparam name="TWorkbook">导入结果的工作簿根实体类型。</typeparam>
+    /// <param name="source">可定位的工作簿流。</param>
+    /// <param name="physicalName">工作表实际名称。</param>
+    /// <param name="request">工作表导入配置。</param>
+    /// <param name="root">接收导入数据的工作簿根实体。</param>
+    /// <param name="results">接收工作表结果的集合。</param>
+    /// <param name="errors">接收工作簿级错误的集合。</param>
+    /// <param name="workbookRequest">当前工作簿导入请求。</param>
+    /// <param name="cancellationToken">用于取消导入的令牌。</param>
+    /// <param name="plan">当前工作表的映射计划。</param>
+    /// <param name="isDate1904">当前工作簿是否使用 1904 日期系统。</param>
     private void ImportSheetSync<TWorkbook>(Stream source, string physicalName,
         ExcelSheetImportRequest request, TWorkbook root, ICollection<ExcelSheetImportResult> results,
         ICollection<ExcelImportError> errors, ExcelWorkbookImportRequest<TWorkbook> workbookRequest,
@@ -246,6 +343,20 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
             isDate1904);
     }
 
+    /// <summary>
+    /// 按运行时行类型异步处理一个工作表。
+    /// </summary>
+    /// <typeparam name="TWorkbook">导入结果的工作簿根实体类型。</typeparam>
+    /// <param name="source">可定位的工作簿流。</param>
+    /// <param name="physicalName">工作表实际名称。</param>
+    /// <param name="request">工作表导入配置。</param>
+    /// <param name="root">接收导入数据的工作簿根实体。</param>
+    /// <param name="results">接收工作表结果的集合。</param>
+    /// <param name="errors">接收工作簿级错误的集合。</param>
+    /// <param name="workbookRequest">当前工作簿导入请求。</param>
+    /// <param name="cancellationToken">用于取消导入的令牌。</param>
+    /// <param name="plan">当前工作表的映射计划。</param>
+    /// <param name="isDate1904">当前工作簿是否使用 1904 日期系统。</param>
     private Task ImportSheetAsync<TWorkbook>(Stream source, string physicalName,
         ExcelSheetImportRequest request, TWorkbook root, ICollection<ExcelSheetImportResult> results,
         ICollection<ExcelImportError> errors, ExcelWorkbookImportRequest<TWorkbook> workbookRequest,
@@ -255,6 +366,12 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
             physicalName, request, root, results, errors, workbookRequest, cancellationToken, plan, isDate1904);
     }
 
+    /// <summary>
+    /// 为指定行实体类型创建异步导入反射委托。
+    /// </summary>
+    /// <typeparam name="TWorkbook">导入结果的工作簿根实体类型。</typeparam>
+    /// <param name="itemType">工作表行实体的运行时类型。</param>
+    /// <returns>绑定到指定行实体类型的异步导入委托。</returns>
     private static ImportSheetInvoker<TWorkbook> CreateInvoker<TWorkbook>(Type itemType)
         where TWorkbook : class, new()
     {
@@ -263,6 +380,12 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
         return (ImportSheetInvoker<TWorkbook>)method.CreateDelegate(typeof(ImportSheetInvoker<TWorkbook>));
     }
 
+    /// <summary>
+    /// 为指定行实体类型创建同步导入反射委托。
+    /// </summary>
+    /// <typeparam name="TWorkbook">导入结果的工作簿根实体类型。</typeparam>
+    /// <param name="itemType">工作表行实体的运行时类型。</param>
+    /// <returns>绑定到指定行实体类型的同步导入委托。</returns>
     private static ImportSheetSyncInvoker<TWorkbook> CreateSyncInvoker<TWorkbook>(Type itemType)
         where TWorkbook : class, new()
     {
@@ -271,6 +394,21 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
         return (ImportSheetSyncInvoker<TWorkbook>)method.CreateDelegate(typeof(ImportSheetSyncInvoker<TWorkbook>));
     }
 
+    /// <summary>
+    /// 读取指定工作表并按具体行实体类型异步物化数据。
+    /// </summary>
+    /// <typeparam name="TWorkbook">导入结果的工作簿根实体类型。</typeparam>
+    /// <typeparam name="TItem">当前工作表的行实体类型。</typeparam>
+    /// <param name="source">可定位的工作簿流。</param>
+    /// <param name="physicalName">工作表实际名称。</param>
+    /// <param name="request">工作表导入配置。</param>
+    /// <param name="root">接收导入数据的工作簿根实体。</param>
+    /// <param name="results">接收工作表结果的集合。</param>
+    /// <param name="errors">接收工作簿级错误的集合。</param>
+    /// <param name="workbookRequest">当前工作簿导入请求。</param>
+    /// <param name="cancellationToken">用于取消读取和物化的令牌。</param>
+    /// <param name="plan">当前行类型的映射计划。</param>
+    /// <param name="isDate1904">当前工作簿是否使用 1904 日期系统。</param>
     private async Task ImportTypedSheet<TWorkbook, TItem>(Stream source, string physicalName,
         ExcelSheetImportRequest request, TWorkbook root, ICollection<ExcelSheetImportResult> results,
         ICollection<ExcelImportError> errors, ExcelWorkbookImportRequest<TWorkbook> workbookRequest,
@@ -287,6 +425,21 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
             workbookRequest, cancellationToken, plan, isDate1904, rawDateSerials);
     }
 
+    /// <summary>
+    /// 读取指定工作表并按具体行实体类型同步物化数据。
+    /// </summary>
+    /// <typeparam name="TWorkbook">导入结果的工作簿根实体类型。</typeparam>
+    /// <typeparam name="TItem">当前工作表的行实体类型。</typeparam>
+    /// <param name="source">可定位的工作簿流。</param>
+    /// <param name="physicalName">工作表实际名称。</param>
+    /// <param name="request">工作表导入配置。</param>
+    /// <param name="root">接收导入数据的工作簿根实体。</param>
+    /// <param name="results">接收工作表结果的集合。</param>
+    /// <param name="errors">接收工作簿级错误的集合。</param>
+    /// <param name="workbookRequest">当前工作簿导入请求。</param>
+    /// <param name="cancellationToken">用于取消读取和物化的令牌。</param>
+    /// <param name="plan">当前行类型的映射计划。</param>
+    /// <param name="isDate1904">当前工作簿是否使用 1904 日期系统。</param>
     private void ImportTypedSheetSync<TWorkbook, TItem>(Stream source, string physicalName,
         ExcelSheetImportRequest request, TWorkbook root, ICollection<ExcelSheetImportResult> results,
         ICollection<ExcelImportError> errors, ExcelWorkbookImportRequest<TWorkbook> workbookRequest,
@@ -305,8 +458,10 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
 
     /// <summary>
     /// 按 MiniExcel 行枚举物化数据，并将当前项映射到真实的一基物理行。
-    /// 枚举从表头后的首条数据开始，因此跳过正文时仍按表头位置推进行号。
     /// </summary>
+    /// <remarks>
+    /// 枚举从表头后的首条数据开始，因此跳过正文时仍按表头位置推进行号。
+    /// </remarks>
     /// <typeparam name="TWorkbook">导入结果的工作簿根实体类型。</typeparam>
     /// <typeparam name="TItem">当前工作表的行实体类型。</typeparam>
     /// <param name="rowObjects">包含表头和正文对象的 MiniExcel 行枚举。</param>
@@ -373,6 +528,26 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
         results.Add(new ExcelSheetImportResult(physicalName, typeof(TItem), rows, sheetErrors));
     }
 
+    /// <summary>
+    /// 将一行原始值转换为实体，执行校验并收集行级错误。
+    /// </summary>
+    /// <typeparam name="TWorkbook">导入结果的工作簿根实体类型。</typeparam>
+    /// <param name="row">当前行的表头和值。</param>
+    /// <param name="headers">工作表表头顺序。</param>
+    /// <param name="sheetName">工作表实际名称。</param>
+    /// <param name="request">当前工作表导入配置。</param>
+    /// <param name="plan">当前行类型的映射计划。</param>
+    /// <param name="bindings">已解析的列绑定。</param>
+    /// <param name="rowNumber">当前行的一基物理行号。</param>
+    /// <param name="items">接收成功实体的集合。</param>
+    /// <param name="rows">接收成功行索引的集合。</param>
+    /// <param name="sheetErrors">接收当前工作表错误的集合。</param>
+    /// <param name="unique">当前工作表的唯一性跟踪器。</param>
+    /// <param name="workbookRequest">当前工作簿导入请求。</param>
+    /// <param name="cancellationToken">用于取消行处理的令牌。</param>
+    /// <param name="itemType">行实体的运行时类型。</param>
+    /// <param name="isDate1904">当前工作簿是否使用 1904 日期系统。</param>
+    /// <param name="rawDateSerials">按物理行列索引的原始日期 serial 集合。</param>
     private void MaterializeRow<TWorkbook>(IDictionary<string, object> row, IReadOnlyList<string> headers,
         string sheetName,
         ExcelSheetImportRequest request, IExcelMappingPlan plan, IReadOnlyList<ColumnBinding> bindings,
@@ -482,6 +657,16 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
             unique.RollbackRow();
     }
 
+    /// <summary>
+    /// 为日期属性恢复原始 Excel 数值单元格。
+    /// </summary>
+    /// <param name="rawDateSerials">按物理行列索引保存的日期 serial 集合。</param>
+    /// <param name="rowNumber">当前行的一基物理行号。</param>
+    /// <param name="columnNumber">当前列的一基物理列号。</param>
+    /// <param name="text">当前单元格的文本值。</param>
+    /// <param name="isDate1904">当前工作簿是否使用 1904 日期系统。</param>
+    /// <param name="propertyType">目标属性类型。</param>
+    /// <returns>匹配到日期 serial 时返回数值单元格，否则返回 null。</returns>
     private static ExcelCellValue CreateRawDateCell(IReadOnlyDictionary<long, double> rawDateSerials,
         int rowNumber, int columnNumber, string text, bool isDate1904, Type propertyType)
     {
@@ -495,6 +680,13 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
         return null;
     }
 
+    /// <summary>
+    /// 查找表头对应的一基物理列号。
+    /// </summary>
+    /// <param name="headers">工作表表头顺序。</param>
+    /// <param name="header">待查找的表头文本。</param>
+    /// <param name="startIndex">读取区域的零基起始列索引。</param>
+    /// <returns>表头对应的一基物理列号。</returns>
     private static int FindPhysicalColumnIndex(IReadOnlyList<string> headers, string header, int startIndex)
     {
         for (var index = 0; index < headers.Count; index++)
@@ -506,6 +698,26 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
         throw new MiniExcelSheetException($"动态列表头无法定位物理列: {header}");
     }
 
+    /// <summary>
+    /// 按原始值或转换值执行列校验和唯一性校验。
+    /// </summary>
+    /// <param name="bindings">当前列的校验绑定集合。</param>
+    /// <param name="text">规范化后的文本值。</param>
+    /// <param name="converted">转换后的值。</param>
+    /// <param name="sheetName">工作表实际名称。</param>
+    /// <param name="rowNumber">当前行的一基物理行号。</param>
+    /// <param name="columnNumber">当前列的一基物理列号。</param>
+    /// <param name="propertyName">映射属性或动态列名称。</param>
+    /// <param name="raw">原始单元格值。</param>
+    /// <param name="culture">用于校验的区域性设置。</param>
+    /// <param name="propertyType">目标属性或动态列类型。</param>
+    /// <param name="unique">当前工作表的唯一性跟踪器。</param>
+    /// <param name="isUnique">是否启用唯一性校验。</param>
+    /// <param name="ignoreEmpty">是否忽略空值的唯一性校验。</param>
+    /// <param name="errors">接收校验错误的集合。</param>
+    /// <param name="rawOnly">是否仅执行原始值校验。</param>
+    /// <param name="isDate1904">当前工作簿是否使用 1904 日期系统。</param>
+    /// <param name="cell">可复用的 Excel 单元格值。</param>
     private static void ValidateBindings(IReadOnlyList<IExcelValidationBinding> bindings, string text,
         object converted, string sheetName, int rowNumber, int columnNumber, string propertyName,
         object raw, CultureInfo culture, Type propertyType, UniqueTracker unique,
@@ -540,6 +752,14 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
         }
     }
 
+    /// <summary>
+    /// 根据映射计划和表头创建可写入的列绑定。
+    /// </summary>
+    /// <typeparam name="TItem">工作表行实体类型。</typeparam>
+    /// <param name="plan">当前工作表的映射计划。</param>
+    /// <param name="headers">工作表表头。</param>
+    /// <param name="request">当前工作表导入配置。</param>
+    /// <returns>已匹配并可写入实体属性的列绑定。</returns>
     private static List<ColumnBinding> BuildBindings<TItem>(IExcelMappingPlan plan, string[] headers,
         ExcelSheetImportRequest request) where TItem : class, new()
     {
@@ -567,10 +787,22 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
         return bindings;
     }
 
+    /// <summary>
+    /// 判断属性是否为关系集合或动态字典容器。
+    /// </summary>
+    /// <param name="propertyType">待检查的属性类型。</param>
+    /// <returns>属性为动态字典或非字符串可枚举类型时返回 true，否则返回 false。</returns>
     private static bool IsNavigationOrDynamicContainer(Type propertyType) =>
         typeof(IDictionary<string, object>).IsAssignableFrom(propertyType)
         || (propertyType != typeof(string) && typeof(IEnumerable).IsAssignableFrom(propertyType));
 
+    /// <summary>
+    /// 校验表头中是否存在未声明的动态列。
+    /// </summary>
+    /// <param name="headers">工作表表头。</param>
+    /// <param name="bindings">已解析的固定列绑定。</param>
+    /// <param name="plan">当前工作表的映射计划。</param>
+    /// <param name="request">当前工作表导入配置。</param>
     private static void ValidateUnknownHeaders(string[] headers, IReadOnlyList<ColumnBinding> bindings,
         IExcelMappingPlan plan, ExcelSheetImportRequest request)
     {
@@ -593,6 +825,12 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
             throw new MiniExcelSheetException($"Sheet {request.Name} 包含未声明动态列: {unknown}");
     }
 
+    /// <summary>
+    /// 为工作簿中的所有工作表构建导入映射计划。
+    /// </summary>
+    /// <typeparam name="TWorkbook">导入结果的工作簿根实体类型。</typeparam>
+    /// <param name="request">包含工作表请求的工作簿导入请求。</param>
+    /// <returns>按工作表请求索引的映射计划。</returns>
     private Dictionary<ExcelSheetImportRequest, IExcelMappingPlan> BuildPlans<TWorkbook>(
         ExcelWorkbookImportRequest<TWorkbook> request) where TWorkbook : class, new()
     {
@@ -608,6 +846,11 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
         return plans;
     }
 
+    /// <summary>
+    /// 将 MiniExcel 行对象转换为不区分大小写的字典。
+    /// </summary>
+    /// <param name="value">字典或普通行对象。</param>
+    /// <returns>包含行字段和值的字典。</returns>
     private static Dictionary<string, object> ToDictionary(object value)
     {
         if (value is IDictionary<string, object> dictionary)
@@ -618,6 +861,12 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
         return result;
     }
 
+    /// <summary>
+    /// 读取工作簿中的物理工作表名称并恢复流位置。
+    /// </summary>
+    /// <param name="source">可定位的工作簿流。</param>
+    /// <param name="cancellationToken">用于取消读取的令牌。</param>
+    /// <returns>按工作簿顺序排列的工作表名称。</returns>
     private static List<string> GetSheetNames(Stream source, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -627,6 +876,11 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
         return names;
     }
 
+    /// <summary>
+    /// 根据工作表请求创建 MiniExcel Open XML 配置。
+    /// </summary>
+    /// <param name="request">用于读取区域性设置的工作表请求。</param>
+    /// <returns>保留表头空白并包含空行的 Open XML 配置。</returns>
     private static OpenXmlConfiguration CreateConfiguration(ExcelSheetImportRequest request) =>
         new OpenXmlConfiguration
         {
@@ -635,6 +889,11 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
             IgnoreEmptyRows = false
         };
 
+    /// <summary>
+    /// 校验 MiniExcel 导入请求未启用不受支持的功能。
+    /// </summary>
+    /// <typeparam name="TWorkbook">导入结果的工作簿根实体类型。</typeparam>
+    /// <param name="request">待校验的工作簿导入请求。</param>
     private static void ValidateUnsupportedRequest<TWorkbook>(ExcelWorkbookImportRequest<TWorkbook> request)
         where TWorkbook : class, new()
     {
@@ -650,6 +909,13 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
                 operation: BingOfficesOperation.Import, stage: BingOfficesStage.Preflight);
     }
 
+    /// <summary>
+    /// 按选择器和名称比较规则解析物理工作表名称。
+    /// </summary>
+    /// <param name="selector">工作表选择器。</param>
+    /// <param name="names">工作簿中的物理工作表名称。</param>
+    /// <param name="comparison">工作表名称比较规则。</param>
+    /// <returns>匹配的物理名称；未匹配时返回 null。</returns>
     private static string ResolveSheetName(ExcelSheetSelector selector, IReadOnlyList<string> names,
         ExcelNameComparison comparison)
     {
@@ -660,6 +926,15 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
         return names.FirstOrDefault(name => string.Equals(name, selector.Name, comparisonType));
     }
 
+    /// <summary>
+    /// 按标题、别名和空白规则查找匹配表头。
+    /// </summary>
+    /// <param name="headers">待查找的表头集合。</param>
+    /// <param name="title">主标题。</param>
+    /// <param name="aliases">可接受的标题别名。</param>
+    /// <param name="comparison">标题比较规则。</param>
+    /// <param name="whitespace">标题空白处理规则。</param>
+    /// <returns>匹配到的原始表头；未匹配时返回 null。</returns>
     private static string FindHeader(IEnumerable<string> headers, string title, IReadOnlyList<string> aliases,
         ExcelNameComparison comparison, ExcelWhitespacePolicy whitespace)
     {
@@ -678,6 +953,12 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
         return null;
     }
 
+    /// <summary>
+    /// 按指定规则规范化文本空白。
+    /// </summary>
+    /// <param name="value">待规范化的文本。</param>
+    /// <param name="policy">空白处理规则。</param>
+    /// <returns>规范化后的文本。</returns>
     private static string Normalize(string value, ExcelWhitespacePolicy policy)
     {
         value ??= string.Empty;
@@ -690,6 +971,11 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
         };
     }
 
+    /// <summary>
+    /// 根据读取区域计算 MiniExcel 查询起始单元格。
+    /// </summary>
+    /// <param name="request">当前工作表导入配置。</param>
+    /// <returns>Excel A1 格式的起始单元格地址。</returns>
     private static string CreateStartCell(ExcelSheetImportRequest request)
     {
         if (request.HeaderRowIndex == 0 && request.ReadColumnRange == null)
@@ -704,6 +990,12 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
         return letters + (request.HeaderRowIndex + 1).ToString(CultureInfo.InvariantCulture);
     }
 
+    /// <summary>
+    /// 校验表头列数不超过工作表读取限制。
+    /// </summary>
+    /// <param name="count">实际表头列数。</param>
+    /// <param name="request">当前工作表导入配置。</param>
+    /// <param name="workbookRequest">当前工作簿导入请求。</param>
     private static void ValidateHeaderCount(int count, ExcelSheetImportRequest request,
         object workbookRequest)
     {
@@ -711,6 +1003,12 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
             throw new MiniExcelSheetException($"Sheet {request.Name} 的表头列数超过限制: {request.MaxReadColumns}");
     }
 
+    /// <summary>
+    /// 将动态列值写入实体的动态目标成员。
+    /// </summary>
+    /// <param name="item">待写入的行实体。</param>
+    /// <param name="request">当前工作表导入配置。</param>
+    /// <param name="values">待写入的动态列值。</param>
     private static void SetDynamicValues(object item, ExcelSheetImportRequest request,
         IDictionary<string, object> values)
     {
@@ -735,6 +1033,15 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
                 target[pair.Key] = pair.Value;
     }
 
+    /// <summary>
+    /// 按请求将导入的父子实体绑定到导航集合。
+    /// </summary>
+    /// <typeparam name="TWorkbook">导入结果的工作簿根实体类型。</typeparam>
+    /// <param name="root">已导入的工作簿根实体。</param>
+    /// <param name="relations">待执行的关系绑定请求。</param>
+    /// <param name="errors">接收关系绑定错误的集合。</param>
+    /// <param name="request">当前工作簿导入请求。</param>
+    /// <param name="cancellationToken">用于取消关系绑定的令牌。</param>
     private static void BindRelations<TWorkbook>(TWorkbook root, IReadOnlyList<ExcelRelationRequest> relations,
         ICollection<ExcelImportError> errors, ExcelWorkbookImportRequest<TWorkbook> request,
         CancellationToken cancellationToken) where TWorkbook : class, new()
@@ -751,6 +1058,8 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
                 foreach (var child in children)
                 {
                     var key = relation.ChildKey.DynamicInvoke(child);
+                    // 保持公开委托的逐子项调用、首匹配和异常边界；委托可能有副作用，
+                    // 因此不能跨子项缓存 ParentKey 或跳过后续调用。
                     var parent = parents.FirstOrDefault(candidate => RelationKeysEqual(
                         relation.ParentKey.DynamicInvoke(candidate), key, relation.Comparer));
                     if (parent == null)
@@ -772,6 +1081,13 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
         }
     }
 
+    /// <summary>
+    /// 按指定比较器比较父子关系键。
+    /// </summary>
+    /// <param name="left">左侧关系键。</param>
+    /// <param name="right">右侧关系键。</param>
+    /// <param name="comparer">非泛型、泛型或反射比较器。</param>
+    /// <returns>关系键相等时返回 true，否则返回 false。</returns>
     private static bool RelationKeysEqual(object left, object right, object comparer)
     {
         if (comparer is System.Collections.IEqualityComparer nonGeneric)
@@ -793,6 +1109,13 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
         return Equals(left, right);
     }
 
+    /// <summary>
+    /// 将错误集合追加到工作簿错误集合，直到达到资源上限。
+    /// </summary>
+    /// <typeparam name="TWorkbook">导入结果的工作簿根实体类型。</typeparam>
+    /// <param name="target">接收错误的目标集合。</param>
+    /// <param name="source">待追加的错误集合。</param>
+    /// <param name="request">当前工作簿导入请求。</param>
     private static void AddErrors<TWorkbook>(ICollection<ExcelImportError> target,
         IEnumerable<ExcelImportError> source, ExcelWorkbookImportRequest<TWorkbook> request)
         where TWorkbook : class, new()
@@ -804,6 +1127,14 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
         }
     }
 
+    /// <summary>
+    /// 在未达到错误上限时追加一个导入错误。
+    /// </summary>
+    /// <typeparam name="TWorkbook">导入结果的工作簿根实体类型。</typeparam>
+    /// <param name="errors">接收错误的集合。</param>
+    /// <param name="request">当前工作簿导入请求。</param>
+    /// <param name="error">待追加的错误。</param>
+    /// <returns>成功追加时返回 true；达到错误上限时返回 false。</returns>
     private static bool AddError<TWorkbook>(ICollection<ExcelImportError> errors,
         ExcelWorkbookImportRequest<TWorkbook> request, ExcelImportError error)
         where TWorkbook : class, new()
@@ -814,6 +1145,13 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
         return true;
     }
 
+    /// <summary>
+    /// 将工作表错误追加到受资源限制控制的集合。
+    /// </summary>
+    /// <typeparam name="TWorkbook">导入结果的工作簿根实体类型。</typeparam>
+    /// <param name="errors">接收错误的集合。</param>
+    /// <param name="request">当前工作簿导入请求。</param>
+    /// <param name="error">待追加的工作表错误。</param>
     private static void AddSheetError<TWorkbook>(ICollection<ExcelImportError> errors,
         ExcelWorkbookImportRequest<TWorkbook> request, ExcelImportError error)
         where TWorkbook : class, new()
@@ -821,17 +1159,40 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
         AddError(errors, request, error);
     }
 
+    /// <summary>
+    /// 判断工作簿错误集合是否已达到配置的上限。
+    /// </summary>
+    /// <typeparam name="TWorkbook">导入结果的工作簿根实体类型。</typeparam>
+    /// <param name="errors">当前错误集合。</param>
+    /// <param name="request">当前工作簿导入请求。</param>
+    /// <returns>达到配置上限时返回 true，否则返回 false。</returns>
     private static bool IsErrorLimitReached<TWorkbook>(ICollection<ExcelImportError> errors,
         ExcelWorkbookImportRequest<TWorkbook> request) where TWorkbook : class, new() =>
         request.ResourceLimits?.MaxErrors is int maximum && errors.Count >= maximum;
 
+    /// <summary>
+    /// 保持非泛型错误限制调用的兼容结果。
+    /// </summary>
+    /// <param name="errors">当前错误集合。</param>
+    /// <param name="request">预留的请求对象。</param>
+    /// <returns>当前非泛型路径始终返回 false。</returns>
     private static bool IsErrorLimitReached(ICollection<ExcelImportError> errors,
         object request) => false;
 
+    /// <summary>
+    /// 判断是否启用配置的校验规则。
+    /// </summary>
+    /// <param name="mode">当前导入校验模式。</param>
+    /// <returns>模式包含配置规则时返回 true，否则返回 false。</returns>
     private static bool IsConfiguredValidationEnabled(ExcelImportValidationMode mode) =>
         mode == ExcelImportValidationMode.ConfiguredRules
         || mode == ExcelImportValidationMode.ConfiguredAndWorkbook;
 
+    /// <summary>
+    /// 根据字符串比较选项创建对应的字符串比较器。
+    /// </summary>
+    /// <param name="comparison">字符串比较选项。</param>
+    /// <returns>与选项对应的字符串比较器。</returns>
     private static IEqualityComparer<string> CreateComparer(StringComparison comparison) => comparison switch
     {
         StringComparison.Ordinal => StringComparer.Ordinal,
@@ -843,6 +1204,13 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
         _ => StringComparer.OrdinalIgnoreCase
     };
 
+    /// <summary>
+    /// 将输入流同步复制到内存并应用输入大小限制。
+    /// </summary>
+    /// <param name="source">待读取的输入流。</param>
+    /// <param name="limits">输入资源限制。</param>
+    /// <param name="cancellationToken">用于取消复制的令牌。</param>
+    /// <returns>位置重置到开头的内存流。</returns>
     private static MemoryStream CopyToMemory(Stream source, ExcelResourceLimits limits,
         CancellationToken cancellationToken)
     {
@@ -868,6 +1236,13 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
         return destination;
     }
 
+    /// <summary>
+    /// 将输入流异步复制到内存并应用输入大小限制。
+    /// </summary>
+    /// <param name="source">待读取的输入流。</param>
+    /// <param name="limits">输入资源限制。</param>
+    /// <param name="cancellationToken">用于取消复制的令牌。</param>
+    /// <returns>位置重置到开头的内存流异步任务。</returns>
     private static async Task<MemoryStream> CopyToMemoryAsync(Stream source, ExcelResourceLimits limits,
         CancellationToken cancellationToken)
     {
@@ -893,6 +1268,13 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
         return destination;
     }
 
+    /// <summary>
+    /// 校验导入输入流、请求和取消状态。
+    /// </summary>
+    /// <typeparam name="TWorkbook">导入结果的工作簿根实体类型。</typeparam>
+    /// <param name="source">待读取的输入流。</param>
+    /// <param name="request">工作簿导入请求。</param>
+    /// <param name="cancellationToken">用于取消导入的令牌。</param>
     private static void ValidateArguments<TWorkbook>(Stream source,
         ExcelWorkbookImportRequest<TWorkbook> request, CancellationToken cancellationToken)
         where TWorkbook : class, new()
@@ -906,11 +1288,25 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
         cancellationToken.ThrowIfCancellationRequested();
     }
 
+    /// <summary>
+    /// 将工作表选择器转换为错误消息中的文本。
+    /// </summary>
+    /// <param name="selector">待描述的工作表选择器。</param>
+    /// <returns>按索引或名称生成的选择器文本。</returns>
     private static string DescribeSelector(ExcelSheetSelector selector) =>
         selector.Kind == ExcelSheetSelectorKind.ByIndex ? $"#{selector.Index.Value}" : selector.Name;
 
+    /// <summary>
+    /// 记录 Excel 列与目标属性之间的绑定关系。
+    /// </summary>
     private sealed class ColumnBinding
     {
+        /// <summary>
+        /// 初始化一个 <see cref="ColumnBinding" /> 类型的实例。
+        /// </summary>
+        /// <param name="column">绑定的 Excel 列映射。</param>
+        /// <param name="property">绑定的目标属性。</param>
+        /// <param name="header">匹配到的表头文本。</param>
         public ColumnBinding(IExcelMappingColumn column, PropertyInfo property, string header)
         {
             Column = column;
@@ -918,19 +1314,48 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
             Header = header;
         }
 
+        /// <summary>
+        /// 获取绑定的 Excel 列映射。
+        /// </summary>
         public IExcelMappingColumn Column { get; }
+
+        /// <summary>
+        /// 获取绑定的目标属性。
+        /// </summary>
         public PropertyInfo Property { get; }
+
+        /// <summary>
+        /// 获取匹配到的表头文本。
+        /// </summary>
         public string Header { get; }
     }
 
+    /// <summary>
+    /// 表示工作表级导入处理失败。
+    /// </summary>
     private sealed class MiniExcelSheetException : Exception
     {
+        /// <summary>
+        /// 初始化一个 <see cref="MiniExcelSheetException" /> 类型的实例。
+        /// </summary>
+        /// <param name="message">异常消息。</param>
         public MiniExcelSheetException(string message) : base(message) { }
     }
 
+    /// <summary>
+    /// 表示单行导入处理失败并携带结构化错误。
+    /// </summary>
     private sealed class MiniExcelRowException : Exception
     {
+        /// <summary>
+        /// 初始化一个 <see cref="MiniExcelRowException" /> 类型的实例。
+        /// </summary>
+        /// <param name="error">结构化导入错误。</param>
         public MiniExcelRowException(ExcelImportError error) : base(error.Message) => Error = error;
+
+        /// <summary>
+        /// 获取导致当前行失败的结构化导入错误。
+        /// </summary>
         public ExcelImportError Error { get; }
     }
 

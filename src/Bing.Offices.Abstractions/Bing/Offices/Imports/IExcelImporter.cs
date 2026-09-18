@@ -18,7 +18,7 @@ public interface IExcelImporter
         where TWorkbook : class, new();
 
     /// <summary>
-    /// 从一个 Workbook 异步读取文件/流 IO，并按各 Sheet 独立计划导入根模型。
+    /// 从一个 Workbook 中按各 Sheet 独立计划导入根模型。
     /// </summary>
     /// <remarks>具体 Provider 的工作簿解析阶段可能仍为同步阶段；异步契约覆盖外围流读取。</remarks>
     /// <typeparam name="TWorkbook">根 Workbook 类型。</typeparam>

@@ -10,10 +10,14 @@ using Bing.Offices.Providers;
 
 namespace Bing.Offices.Mappings;
 
-/// <summary>固定属性列映射的不可变运行时实现。</summary>
+/// <summary>
+/// 固定属性列映射的不可变运行时实现。
+/// </summary>
 internal sealed class ExcelMappingColumn : IExcelMappingColumn, IExcelCompiledMappingColumn
 {
-    /// <summary>初始化一个 <see cref="ExcelMappingColumn" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="ExcelMappingColumn" /> 类型的实例。
+    /// </summary>
     /// <param name="property">已解析的实体属性映射。</param>
     /// <param name="valueConverters">已绑定的值转换器。</param>
     /// <param name="validationBindings">已绑定的校验规则。</param>

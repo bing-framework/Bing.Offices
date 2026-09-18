@@ -9,7 +9,9 @@ namespace Bing.Offices.Configurations;
 /// <typeparam name="T">导入模型类型。</typeparam>
 public sealed class ImportMappingBuilder<T> where T : class, new()
 {
-    /// <summary>保存当前导入方向尚未构建的可变列配置。</summary>
+    /// <summary>
+    /// 保存当前导入方向尚未构建的可变列配置。
+    /// </summary>
     private readonly ExcelMappingConfiguration _configuration = new();
 
     /// <summary>
@@ -39,7 +41,9 @@ public sealed class ImportMappingBuilder<T> where T : class, new()
     public ExcelMappingConfiguration Build(MappingSourceKind sourceKind = MappingSourceKind.Profile) =>
         MappingConfigurationCloner.Clone(_configuration, sourceKind);
 
-    /// <summary>从表达式解析导入模型的直接属性。</summary>
+    /// <summary>
+    /// 从表达式解析导入模型的直接属性。
+    /// </summary>
     /// <typeparam name="TProperty">属性值类型。</typeparam>
     /// <param name="expression">指向导入模型直接属性的表达式。</param>
     /// <returns>表达式指向的属性信息。</returns>
@@ -62,12 +66,18 @@ public sealed class ImportMappingBuilder<T> where T : class, new()
 /// <typeparam name="TProperty">当前属性的类型。</typeparam>
 public sealed class ImportColumnMappingBuilder<T, TProperty> where T : class, new()
 {
-    /// <summary>返回当前属性配置器所属的导入构建器。</summary>
+    /// <summary>
+    /// 保存当前属性配置器所属的导入构建器。
+    /// </summary>
     private readonly ImportMappingBuilder<T> _owner;
-    /// <summary>当前属性对应的可变列配置。</summary>
+    /// <summary>
+    /// 当前属性对应的可变列配置。
+    /// </summary>
     private readonly ExcelColumnConfiguration _configuration;
 
-    /// <summary>初始化一个 <see cref="ImportColumnMappingBuilder{T,TProperty}" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="ImportColumnMappingBuilder{T,TProperty}" /> 类型的实例。
+    /// </summary>
     /// <param name="owner">当前属性配置器所属的导入构建器。</param>
     /// <param name="configuration">当前属性对应的可变列配置。</param>
     internal ImportColumnMappingBuilder(ImportMappingBuilder<T> owner, ExcelColumnConfiguration configuration)

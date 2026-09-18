@@ -12,17 +12,23 @@ namespace Bing.Offices.Imports;
 /// </summary>
 internal sealed class NpoiImportSheetExecutor
 {
-    /// <summary>负责将工作表行转换为实体并收集字段错误的物化器。</summary>
+    /// <summary>
+    /// 负责将工作表行转换为实体并收集字段错误的物化器。
+    /// </summary>
     private readonly NpoiImportRowMaterializer _rowMaterializer;
 
-    /// <summary>初始化一个 <see cref="NpoiImportSheetExecutor" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="NpoiImportSheetExecutor" /> 类型的实例。
+    /// </summary>
     /// <param name="rowMaterializer">负责将工作表行物化为实体的执行器。</param>
     internal NpoiImportSheetExecutor(NpoiImportRowMaterializer rowMaterializer)
     {
         _rowMaterializer = rowMaterializer ?? throw new ArgumentNullException(nameof(rowMaterializer));
     }
 
-    /// <summary>执行单个泛型工作表的行导入，并通过输出集合记录成功行索引。</summary>
+    /// <summary>
+    /// 执行单个泛型工作表的行导入，并通过输出集合记录成功行索引。
+    /// </summary>
     /// <typeparam name="T">当前工作表的实体类型。</typeparam>
     /// <param name="sheet">待导入的 NPOI 工作表。</param>
     /// <param name="options">当前实体类型的导入执行选项。</param>
@@ -301,11 +307,20 @@ internal sealed class NpoiImportSheetExecutor
     /// <returns>解析出的 CLR 类型。</returns>
     private static Type ResolveDynamicType(string name) => (name ?? "string").ToLowerInvariant() switch
     {
-        "object" => typeof(object), "string" => typeof(string), "boolean" or "bool" => typeof(bool),
-        "byte" => typeof(byte), "int16" => typeof(short), "int32" or "int" => typeof(int),
-        "int64" or "long" => typeof(long), "single" or "float" => typeof(float), "double" => typeof(double),
-        "decimal" => typeof(decimal), "datetime" => typeof(DateTime), "datetimeoffset" => typeof(DateTimeOffset),
-        "guid" => typeof(Guid), "bytes" => typeof(byte[]),
+        "object" => typeof(object),
+        "string" => typeof(string),
+        "boolean" or "bool" => typeof(bool),
+        "byte" => typeof(byte),
+        "int16" => typeof(short),
+        "int32" or "int" => typeof(int),
+        "int64" or "long" => typeof(long),
+        "single" or "float" => typeof(float),
+        "double" => typeof(double),
+        "decimal" => typeof(decimal),
+        "datetime" => typeof(DateTime),
+        "datetimeoffset" => typeof(DateTimeOffset),
+        "guid" => typeof(Guid),
+        "bytes" => typeof(byte[]),
         _ => throw new NpoiSheetStructureException($"动态列数据类型不在允许列表中: {name}")
     };
 
@@ -351,10 +366,14 @@ internal sealed class NpoiImportSheetExecutor
 
 }
 
-/// <summary>表示导入工作表结构不符合请求的异常。</summary>
+/// <summary>
+/// 表示导入工作表结构不符合请求的异常。
+/// </summary>
 internal sealed class NpoiSheetStructureException : InvalidOperationException
 {
-    /// <summary>初始化一个 <see cref="NpoiSheetStructureException" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="NpoiSheetStructureException" /> 类型的实例。
+    /// </summary>
     /// <param name="message">描述工作表结构错误的消息。</param>
     internal NpoiSheetStructureException(string message) : base(message) { }
 }

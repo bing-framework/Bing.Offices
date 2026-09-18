@@ -13,7 +13,7 @@ public class HeaderAttribute : DecoratorAttributeBase
     /// 获取或设置颜色
     /// </summary>
     public Color Color { get; set; } = Color.Black;
-        
+
     /// <summary>
     /// 获取或设置字体名称
     /// </summary>

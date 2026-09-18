@@ -10,7 +10,9 @@ namespace Bing.Offices.Mappings;
 /// </summary>
 internal sealed class ExcelPropertyMap
 {
-    /// <summary>初始化一个 <see cref="ExcelPropertyMap" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="ExcelPropertyMap" /> 类型的实例。
+    /// </summary>
     /// <param name="property">属性元数据。</param>
     /// <param name="title">默认列标题。</param>
     /// <param name="formatter">默认格式化字符串。</param>

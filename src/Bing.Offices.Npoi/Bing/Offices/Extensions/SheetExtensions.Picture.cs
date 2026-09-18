@@ -41,15 +41,18 @@ public static partial class SheetExtensions
     }
 
     /// <summary>
-    /// 获取工作表中所有图片的锚点、数据和样式信息。
+    /// 获取工作表中的图片信息。
     /// </summary>
     /// <param name="sheet">NPOI工作表</param>
     /// <returns>工作表中的图片信息；没有图片时返回空列表。</returns>
     public static List<PictureInfo> GetAllPictureInfos(this NPOI.SS.UserModel.ISheet sheet) => sheet.GetAllPictureInfos(null, null, null, null);
 
     /// <summary>
-    /// 获取工作表指定区域内或与其相交的图片信息。
+    /// 获取工作表中的图片信息。
     /// </summary>
+    /// <remarks>
+    /// 根据指定行列范围筛选相交或完全位于范围内的图片。
+    /// </remarks>
     /// <param name="sheet">NPOI工作表</param>
     /// <param name="minRow">最小行索引</param>
     /// <param name="maxRow">最大行索引</param>
@@ -157,14 +160,17 @@ public static partial class SheetExtensions
     }
 
     /// <summary>
-    /// 移除工作表中的所有图片。
+    /// 移除工作表中的图片。
     /// </summary>
     /// <param name="sheet">NPOI工作表</param>
     public static void RemovePictures(this NPOI.SS.UserModel.ISheet sheet) => sheet.RemovePictures(null, null, null, null);
 
     /// <summary>
-    /// 移除工作表指定区域内或与其相交的图片。
+    /// 移除工作表中的图片。
     /// </summary>
+    /// <remarks>
+    /// 根据指定行列范围筛选相交或完全位于范围内的图片。
+    /// </remarks>
     /// <param name="sheet">NPOI工作表</param>
     /// <param name="minRow">最小行索引</param>
     /// <param name="maxRow">最大行索引</param>
@@ -232,7 +238,7 @@ public static partial class SheetExtensions
     }
 
     /// <summary>
-    /// 移动工作表中的所有图片锚点。
+    /// 移动工作表中的图片锚点。
     /// </summary>
     /// <param name="sheet">NPOI工作表</param>
     /// <param name="moveRowCount">移动行数</param>
@@ -242,8 +248,11 @@ public static partial class SheetExtensions
         sheet.MovePictures(null, null, null, null, true, moveRowCount, moveColCount);
 
     /// <summary>
-    /// 按行列偏移移动指定区域内的图片锚点。
+    /// 移动工作表中的图片锚点。
     /// </summary>
+    /// <remarks>
+    /// 根据指定行列范围筛选需要移动的图片。
+    /// </remarks>
     /// <param name="sheet">NPOI工作表</param>
     /// <param name="minRow">最小行索引</param>
     /// <param name="maxRow">最大行索引</param>
@@ -408,7 +417,7 @@ public static partial class SheetExtensions
     }
 
     /// <summary>
-    /// 将图片字节添加到工作表并自动调整图片大小；仅在工作簿变更前拒绝时返回 false。
+    /// 将图片添加到工作表并自动调整图片大小。
     /// </summary>
     /// <param name="sheet">工作表</param>
     /// <param name="row">行索引</param>
@@ -487,39 +496,53 @@ public static partial class SheetExtensions
     }
 }
 
-/// <summary>图片写入阶段适配器；测试可替换以确定性验证失败原子性合同。</summary>
+/// <summary>
+/// 图片写入阶段适配器；测试可替换以确定性验证失败原子性合同。
+/// </summary>
 internal interface IPictureMutationAdapter
 {
-    /// <summary>将图片数据注册到工作簿并返回图片索引。</summary>
+    /// <summary>
+    /// 将图片数据注册到工作簿并返回图片索引。
+    /// </summary>
     /// <param name="sheet">用于访问目标工作簿的工作表。</param>
     /// <param name="pictureBytes">图片二进制内容。</param>
     /// <param name="pictureType">图片格式。</param>
     /// <returns>工作簿中新增图片的索引。</returns>
     int AddPicture(ISheet sheet, byte[] pictureBytes, PictureType pictureType);
 
-    /// <summary>创建工作簿图片使用的客户端锚点。</summary>
+    /// <summary>
+    /// 创建工作簿图片使用的客户端锚点。
+    /// </summary>
     /// <param name="sheet">用于访问目标工作簿的工作表。</param>
     /// <returns>新建的客户端锚点。</returns>
     IClientAnchor CreateClientAnchor(ISheet sheet);
 
-    /// <summary>获取工作表现有的绘图容器，必要时创建新的容器。</summary>
+    /// <summary>
+    /// 获取工作表现有的绘图容器，必要时创建新的容器。
+    /// </summary>
     /// <param name="sheet">目标工作表。</param>
     /// <returns>工作表的绘图容器。</returns>
     IDrawing GetOrCreateDrawing(ISheet sheet);
 
-    /// <summary>根据锚点和图片索引创建图片形状。</summary>
+    /// <summary>
+    /// 根据锚点和图片索引创建图片形状。
+    /// </summary>
     /// <param name="drawing">目标绘图容器。</param>
     /// <param name="anchor">图片位置锚点。</param>
     /// <param name="pictureIndex">工作簿中的图片索引。</param>
     /// <returns>新建的图片形状。</returns>
     IPicture CreatePicture(IDrawing drawing, IClientAnchor anchor, int pictureIndex);
 
-    /// <summary>按图片原始尺寸调整图片形状大小。</summary>
+    /// <summary>
+    /// 按图片原始尺寸调整图片形状大小。
+    /// </summary>
     /// <param name="picture">待调整的图片形状。</param>
     void Resize(IPicture picture);
 }
 
-/// <summary>使用 NPOI API 执行图片写入和尺寸调整。</summary>
+/// <summary>
+/// 使用 NPOI API 执行图片写入和尺寸调整。
+/// </summary>
 internal sealed class DefaultPictureMutationAdapter : IPictureMutationAdapter
 {
     /// <inheritdoc />

@@ -1,9 +1,13 @@
 ﻿namespace Bing.Offices.Configurations;
 
-/// <summary>复制映射配置及其嵌套定义的内部辅助类。</summary>
+/// <summary>
+/// 复制映射配置及其嵌套定义的内部辅助类。
+/// </summary>
 internal static class MappingConfigurationCloner
 {
-    /// <summary>复制映射配置及其嵌套定义。</summary>
+    /// <summary>
+    /// 复制映射配置及其嵌套定义。
+    /// </summary>
     /// <param name="configuration">待复制的映射配置。</param>
     /// <param name="sourceKind">副本的来源类型。</param>
     /// <returns>映射配置的独立副本。</returns>
@@ -30,7 +34,9 @@ internal static class MappingConfigurationCloner
         };
     }
 
-    /// <summary>复制单个列映射配置。</summary>
+    /// <summary>
+    /// 复制单个列映射配置。
+    /// </summary>
     /// <param name="column">待复制的列映射配置。</param>
     /// <returns>列映射配置的独立副本；输入为 <see langword="null" /> 时返回 <see langword="null" />。</returns>
     public static ExcelColumnConfiguration Clone(ExcelColumnConfiguration column)
@@ -70,7 +76,9 @@ internal static class MappingConfigurationCloner
         };
     }
 
-    /// <summary>复制动态列映射配置。</summary>
+    /// <summary>
+    /// 复制动态列映射配置。
+    /// </summary>
     /// <param name="column">待复制的动态列映射配置。</param>
     /// <returns>动态列映射配置的独立副本；输入为 <see langword="null" /> 时返回 <see langword="null" />。</returns>
     internal static ExcelMappingDynamicColumnConfiguration Clone(ExcelMappingDynamicColumnConfiguration column) =>
@@ -103,7 +111,9 @@ internal static class MappingConfigurationCloner
             ImageMultiplicity = column.ImageMultiplicity
         };
 
-    /// <summary>复制映射样式配置。</summary>
+    /// <summary>
+    /// 复制映射样式配置。
+    /// </summary>
     /// <param name="style">待复制的样式配置。</param>
     /// <returns>样式配置的独立副本；输入为 <see langword="null" /> 时返回 <see langword="null" />。</returns>
     internal static ExcelMappingStyleConfiguration Clone(ExcelMappingStyleConfiguration style) =>
@@ -117,7 +127,9 @@ internal static class MappingConfigurationCloner
             ClearNumberFormat = style.ClearNumberFormat
         };
 
-    /// <summary>复制映射布局配置。</summary>
+    /// <summary>
+    /// 复制映射布局配置。
+    /// </summary>
     /// <param name="layout">待复制的布局配置。</param>
     /// <returns>布局配置的独立副本；输入为 <see langword="null" /> 时返回 <see langword="null" />。</returns>
     internal static ExcelMappingLayoutConfiguration Clone(ExcelMappingLayoutConfiguration layout) =>

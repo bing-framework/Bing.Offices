@@ -5,7 +5,9 @@
 /// </summary>
 public sealed class ExcelColumnPlacement
 {
-    /// <summary>初始化一个 <see cref="ExcelColumnPlacement" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="ExcelColumnPlacement" /> 类型的实例。
+    /// </summary>
     /// <param name="beforeKey">要插入到其前方的固定列键。</param>
     /// <param name="afterKey">要插入到其后方的固定列键。</param>
     /// <param name="physicalColumnIndex">显式物理列索引；未指定时为 <see langword="null" />。</param>
@@ -52,7 +54,9 @@ public sealed class ExcelColumnPlacement
     /// <returns>位于指定物理列索引的列位置。</returns>
     public static ExcelColumnPlacement At(int columnIndex) => Create(null, null, columnIndex);
 
-    /// <summary>根据相对键或物理索引创建列位置。</summary>
+    /// <summary>
+    /// 根据相对键或物理索引创建列位置。
+    /// </summary>
     /// <param name="beforeKey">要插入到其前方的固定列键。</param>
     /// <param name="afterKey">要插入到其后方的固定列键。</param>
     /// <param name="physicalColumnIndex">显式物理列索引。</param>

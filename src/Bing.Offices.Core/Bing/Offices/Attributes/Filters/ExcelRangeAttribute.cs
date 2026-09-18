@@ -6,7 +6,9 @@
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
 public sealed class ExcelRangeAttribute : FilterAttributeBase
 {
-    /// <summary>初始化一个 <see cref="ExcelRangeAttribute" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="ExcelRangeAttribute" /> 类型的实例。
+    /// </summary>
     /// <param name="min">最小值。</param>
     /// <param name="max">最大值。</param>
     public ExcelRangeAttribute(double min, double max)
@@ -18,10 +20,14 @@ public sealed class ExcelRangeAttribute : FilterAttributeBase
         ErrorMsg = $"超限，仅允许为{Min}-{Max}";
     }
 
-    /// <summary>获取最小值。</summary>
+    /// <summary>
+    /// 获取最小值。
+    /// </summary>
     public double Min { get; }
 
-    /// <summary>获取最大值。</summary>
+    /// <summary>
+    /// 获取最大值。
+    /// </summary>
     public double Max { get; }
 
     /// <inheritdoc />

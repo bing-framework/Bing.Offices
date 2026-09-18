@@ -12,17 +12,29 @@ namespace Bing.Offices.Configurations;
 /// </summary>
 public static class ExcelMappingConfigurationLoader
 {
-    /// <summary>JSON 或 XML 映射文档在 UTF-8 编码下允许的最大字节数。</summary>
+    /// <summary>
+    /// JSON 或 XML 映射文档允许的最大 UTF-8 字节数（1 MiB）。
+    /// </summary>
     private const int MaxDocumentBytes = ExcelMappingTextReader.MaxDocumentBytes;
-    /// <summary>JSON 解析器和序列化器允许的最大嵌套深度。</summary>
+    /// <summary>
+    /// JSON 解析器和序列化器允许的最大嵌套深度（32 层）。
+    /// </summary>
     private const int MaxDepth = 32;
-    /// <summary>单个映射方向允许声明的最大列数。</summary>
+    /// <summary>
+    /// 单个映射方向允许声明的最大列数（1,000 列）。
+    /// </summary>
     private const int MaxColumns = 1000;
-    /// <summary>单列允许声明的最大标题别名数量。</summary>
+    /// <summary>
+    /// 单列允许声明的最大标题别名数量（100 个）。
+    /// </summary>
     private const int MaxAliasesPerColumn = 100;
-    /// <summary>单列允许声明的最大校验规则数量。</summary>
+    /// <summary>
+    /// 单列允许声明的最大校验规则数量（100 条）。
+    /// </summary>
     private const int MaxValidationsPerColumn = 100;
-    /// <summary>映射配置中单个字符串字段允许的最大字符数。</summary>
+    /// <summary>
+    /// 映射配置中单个字符串字段允许的最大字符数（4,096 个）。
+    /// </summary>
     private const int MaxStringLength = 4096;
 
     /// <summary>
@@ -34,15 +46,20 @@ public static class ExcelMappingConfigurationLoader
         => ExecuteConfiguration(() => LoadJsonDocument(json, null));
 
     /// <summary>
-    /// 从 JSON 文本加载文档，并按已注册的业务模型别名进行校验。
+    /// 从 JSON 文本加载规范化映射文档。
     /// </summary>
+    /// <remarks>
+    /// 提供别名注册表时校验模型别名。
+    /// </remarks>
     /// <param name="json">待加载的 JSON 文本。</param>
     /// <param name="modelAliases">用于校验模型别名的注册表。</param>
     /// <returns>已通过结构和业务规则验证的映射文档。</returns>
     public static ExcelMappingDocument FromJsonDocument(string json, ExcelModelAliasRegistry modelAliases)
         => ExecuteConfiguration(() => LoadJsonDocument(json, modelAliases));
 
-    /// <summary>解析、验证并反序列化 v2 JSON 映射文档。</summary>
+    /// <summary>
+    /// 解析、验证并反序列化 v2 JSON 映射文档。
+    /// </summary>
     /// <param name="json">待加载的 JSON 文本。</param>
     /// <param name="modelAliases">用于校验模型别名的可选注册表。</param>
     /// <returns>已通过结构和业务规则验证的映射文档。</returns>
@@ -87,16 +104,22 @@ public static class ExcelMappingConfigurationLoader
     }
 
     /// <summary>
-    /// 从 JSON 流加载规范化映射文档，且不关闭调用方流。
+    /// 从 JSON 流加载规范化映射文档。
     /// </summary>
+    /// <remarks>
+    /// 读取完成后不关闭调用方提供的流。
+    /// </remarks>
     /// <param name="source">待读取的 JSON 流。</param>
     /// <returns>已通过结构和业务规则验证的映射文档。</returns>
     public static ExcelMappingDocument FromJsonDocument(Stream source)
         => FromJsonDocument(source, null);
 
     /// <summary>
-    /// 从 JSON 流加载文档，并按已注册的业务模型别名进行校验。
+    /// 从 JSON 流加载规范化映射文档。
     /// </summary>
+    /// <remarks>
+    /// 读取完成后不关闭调用方提供的流；提供别名注册表时校验模型别名。
+    /// </remarks>
     /// <param name="source">待读取的 JSON 流。</param>
     /// <param name="modelAliases">用于校验模型别名的注册表。</param>
     /// <returns>已通过结构和业务规则验证的映射文档。</returns>
@@ -119,15 +142,20 @@ public static class ExcelMappingConfigurationLoader
         => ExecuteConfiguration(() => LoadXmlDocument(xml, null));
 
     /// <summary>
-    /// 从 XML 文本加载文档，并按已注册的业务模型别名进行校验。
+    /// 从 XML 文本加载规范化映射文档。
     /// </summary>
+    /// <remarks>
+    /// 提供别名注册表时校验模型别名。
+    /// </remarks>
     /// <param name="xml">待加载的 XML 文本。</param>
     /// <param name="modelAliases">用于校验模型别名的注册表。</param>
     /// <returns>已通过结构和业务规则验证的映射文档。</returns>
     public static ExcelMappingDocument FromXmlDocument(string xml, ExcelModelAliasRegistry modelAliases)
         => ExecuteConfiguration(() => LoadXmlDocument(xml, modelAliases));
 
-    /// <summary>在禁止 DTD 和外部解析器的设置下解析并验证 v2 XML 映射文档。</summary>
+    /// <summary>
+    /// 在禁止 DTD 和外部解析器的设置下解析并验证 v2 XML 映射文档。
+    /// </summary>
     /// <param name="xml">待加载的 XML 文本。</param>
     /// <param name="modelAliases">用于校验模型别名的可选注册表。</param>
     /// <returns>已通过结构和业务规则验证的映射文档。</returns>
@@ -152,16 +180,22 @@ public static class ExcelMappingConfigurationLoader
     }
 
     /// <summary>
-    /// 从 XML 流加载规范化映射文档，且不关闭调用方流。
+    /// 从 XML 流加载规范化映射文档。
     /// </summary>
+    /// <remarks>
+    /// 读取完成后不关闭调用方提供的流。
+    /// </remarks>
     /// <param name="source">待读取的 XML 流。</param>
     /// <returns>已通过结构和业务规则验证的映射文档。</returns>
     public static ExcelMappingDocument FromXmlDocument(Stream source)
         => FromXmlDocument(source, null);
 
     /// <summary>
-    /// 从 XML 流加载文档，并按已注册的业务模型别名进行校验。
+    /// 从 XML 流加载规范化映射文档。
     /// </summary>
+    /// <remarks>
+    /// 读取完成后不关闭调用方提供的流；提供别名注册表时校验模型别名。
+    /// </remarks>
     /// <param name="source">待读取的 XML 流。</param>
     /// <param name="modelAliases">用于校验模型别名的注册表。</param>
     /// <returns>已通过结构和业务规则验证的映射文档。</returns>
@@ -207,7 +241,9 @@ public static class ExcelMappingConfigurationLoader
             return writer.ToString();
         });
 
-    /// <summary>执行配置加载或序列化操作，并统一包装未分类的配置异常。</summary>
+    /// <summary>
+    /// 执行配置加载或序列化操作，并统一包装未分类的配置异常。
+    /// </summary>
     /// <typeparam name="T">操作的返回类型。</typeparam>
     /// <param name="action">待执行的配置操作。</param>
     /// <returns>配置操作产生的结果。</returns>
@@ -236,7 +272,9 @@ public static class ExcelMappingConfigurationLoader
         }
     }
 
-    /// <summary>创建禁用 DTD、外部实体且限制文档规模的 XML 读取设置。</summary>
+    /// <summary>
+    /// 创建禁用 DTD、外部实体且限制文档规模的 XML 读取设置。
+    /// </summary>
     /// <returns>用于不可信映射 XML 的安全读取设置。</returns>
     private static XmlReaderSettings CreateXmlReaderSettings() => new()
     {
@@ -246,7 +284,9 @@ public static class ExcelMappingConfigurationLoader
         MaxCharactersFromEntities = 0
     };
 
-    /// <summary>检查 XML 根元素是否为 v2 映射文档根节点。</summary>
+    /// <summary>
+    /// 检查 XML 根元素是否为 v2 映射文档根节点。
+    /// </summary>
     /// <param name="xml">待检查的 XML 文本。</param>
     /// <returns>根元素为 <see cref="ExcelMappingDocument"/> 时为 true。</returns>
     private static bool IsXmlDocumentRoot(string xml)
@@ -256,7 +296,9 @@ public static class ExcelMappingConfigurationLoader
         return string.Equals(reader.LocalName, nameof(ExcelMappingDocument), StringComparison.Ordinal);
     }
 
-    /// <summary>反序列化 v2 XML 文档，并将序列化验证错误转换为调用方可读错误。</summary>
+    /// <summary>
+    /// 反序列化 v2 XML 文档，并将序列化验证错误转换为调用方可读错误。
+    /// </summary>
     /// <param name="reader">已定位到 XML 内容的安全读取器。</param>
     /// <returns>反序列化后的映射文档。</returns>
     private static ExcelMappingDocument DeserializeXml(XmlReader reader)
@@ -280,7 +322,9 @@ public static class ExcelMappingConfigurationLoader
         }
     }
 
-    /// <summary>从异常链中查找指定类型的首个异常。</summary>
+    /// <summary>
+    /// 从异常链中查找指定类型的首个异常。
+    /// </summary>
     /// <typeparam name="TException">要查找的异常类型。</typeparam>
     /// <param name="exception">异常链起点。</param>
     /// <returns>匹配的内部异常；未找到时为 null。</returns>
@@ -296,7 +340,9 @@ public static class ExcelMappingConfigurationLoader
         return null;
     }
 
-    /// <summary>为 XML 序列化器注册未知节点和属性的拒绝处理器。</summary>
+    /// <summary>
+    /// 为 XML 序列化器注册未知节点和属性的拒绝处理器。
+    /// </summary>
     /// <param name="serializer">要配置的 XML 序列化器。</param>
     private static void AttachXmlValidationHandlers(XmlSerializer serializer)
     {
@@ -306,17 +352,23 @@ public static class ExcelMappingConfigurationLoader
         throw new XmlMappingValidationException($"未知 XML 属性: /ExcelMappingDocument/@{eventArgs.Attr?.Name ?? eventArgs.Attr?.LocalName}");
     }
 
-    /// <summary>表示映射 XML 包含未支持节点或属性的异常。</summary>
+    /// <summary>
+    /// 表示映射 XML 包含未支持节点或属性的异常。
+    /// </summary>
     private sealed class XmlMappingValidationException : InvalidOperationException
     {
-        /// <summary>初始化一个 <see cref="XmlMappingValidationException" /> 类型的实例。</summary>
+        /// <summary>
+        /// 初始化一个 <see cref="XmlMappingValidationException" /> 类型的实例。
+        /// </summary>
         /// <param name="message">描述未知或无效 XML 成员的消息。</param>
         public XmlMappingValidationException(string message) : base(message)
         {
         }
     }
 
-    /// <summary>以 UTF-8 声明编码的字符串写入器。</summary>
+    /// <summary>
+    /// 以 UTF-8 声明编码的字符串写入器。
+    /// </summary>
     private sealed class Utf8StringWriter : StringWriter
     {
         /// <inheritdoc />
@@ -330,10 +382,14 @@ public static class ExcelMappingConfigurationLoader
 /// </summary>
 internal sealed class DefaultExcelMappingConfigurationLoader : IExcelMappingConfigurationLoader
 {
-    /// <summary>向注册的观察器转发配置加载异常。</summary>
+    /// <summary>
+    /// 向注册的观察器转发配置加载异常。
+    /// </summary>
     private readonly BingOfficesExceptionDispatcher _exceptionDispatcher;
 
-    /// <summary>初始化一个 <see cref="DefaultExcelMappingConfigurationLoader" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="DefaultExcelMappingConfigurationLoader" /> 类型的实例。
+    /// </summary>
     /// <param name="exceptionObservers">接收配置加载异常的可选观察器集合。</param>
     public DefaultExcelMappingConfigurationLoader(IEnumerable<IBingOfficesExceptionObserver> exceptionObservers = null)
     {
@@ -356,7 +412,9 @@ internal sealed class DefaultExcelMappingConfigurationLoader : IExcelMappingConf
     public ExcelMappingDocument FromXmlDocument(Stream source) =>
         Execute(() => ExcelMappingConfigurationLoader.FromXmlDocument(source));
 
-    /// <summary>执行默认加载操作，并将配置异常通知观察器。</summary>
+    /// <summary>
+    /// 执行默认加载操作，并将配置异常通知观察器。
+    /// </summary>
     /// <param name="load">待执行的映射文档加载操作。</param>
     /// <returns>加载后的映射文档。</returns>
     private ExcelMappingDocument Execute(Func<ExcelMappingDocument> load)

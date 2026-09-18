@@ -114,7 +114,9 @@ public static class ExcelStreamExtensions
         return ImportFromBytesAsyncCore(importer, content, request, cancellationToken);
     }
 
-    /// <summary>通过内存流执行 Excel 字节数组的异步 Workbook 导入。</summary>
+    /// <summary>
+    /// 通过内存流执行 Excel 字节数组的异步 Workbook 导入。
+    /// </summary>
     /// <typeparam name="TWorkbook">Workbook 根实体类型。</typeparam>
     /// <param name="importer">执行导入的 Excel 导入器。</param>
     /// <param name="content">Excel 文件内容。</param>

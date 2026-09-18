@@ -1,9 +1,13 @@
 ﻿namespace Bing.Offices.Exceptions;
 
-/// <summary>映射、Profile 或请求配置无效异常。</summary>
+/// <summary>
+/// 映射、Profile 或请求配置无效异常。
+/// </summary>
 public sealed class BingOfficesConfigurationException : BingOfficesException
 {
-    /// <summary>初始化一个 <see cref="BingOfficesConfigurationException" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="BingOfficesConfigurationException" /> 类型的实例。
+    /// </summary>
     /// <param name="message">描述配置错误的消息。</param>
     /// <param name="innerException">导致当前异常的内部异常。</param>
     /// <param name="stage">发生配置错误的处理阶段。</param>
@@ -15,10 +19,14 @@ public sealed class BingOfficesConfigurationException : BingOfficesException
     }
 }
 
-/// <summary>导入公共边界不可恢复失败异常。</summary>
+/// <summary>
+/// 导入公共边界不可恢复失败异常。
+/// </summary>
 public sealed class BingOfficesImportException : BingOfficesException
 {
-    /// <summary>初始化一个 <see cref="BingOfficesImportException" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="BingOfficesImportException" /> 类型的实例。
+    /// </summary>
     /// <param name="message">描述导入失败的消息。</param>
     /// <param name="innerException">导致当前异常的内部异常。</param>
     /// <param name="provider">报告异常的提供程序名称。</param>
@@ -38,10 +46,14 @@ public sealed class BingOfficesImportException : BingOfficesException
     }
 }
 
-/// <summary>导出公共边界不可恢复失败异常。</summary>
+/// <summary>
+/// 导出公共边界不可恢复失败异常。
+/// </summary>
 public sealed class BingOfficesExportException : BingOfficesException
 {
-    /// <summary>初始化一个 <see cref="BingOfficesExportException" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="BingOfficesExportException" /> 类型的实例。
+    /// </summary>
     /// <param name="message">描述导出失败的消息。</param>
     /// <param name="innerException">导致当前异常的内部异常。</param>
     /// <param name="provider">报告异常的提供程序名称。</param>
@@ -61,10 +73,14 @@ public sealed class BingOfficesExportException : BingOfficesException
     }
 }
 
-/// <summary>输入或输出资源预算超出异常。</summary>
+/// <summary>
+/// 输入或输出资源预算超出异常。
+/// </summary>
 public sealed class BingOfficesResourceLimitException : BingOfficesException
 {
-    /// <summary>初始化一个 <see cref="BingOfficesResourceLimitException" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="BingOfficesResourceLimitException" /> 类型的实例。
+    /// </summary>
     /// <param name="message">描述资源限制失败的消息。</param>
     /// <param name="innerException">导致当前异常的内部异常。</param>
     /// <param name="provider">报告异常的提供程序名称。</param>
@@ -79,10 +95,14 @@ public sealed class BingOfficesResourceLimitException : BingOfficesException
     }
 }
 
-/// <summary>原子文件提交异常。</summary>
+/// <summary>
+/// 原子文件提交异常。
+/// </summary>
 public sealed class BingOfficesFileCommitException : BingOfficesException
 {
-    /// <summary>初始化一个 <see cref="BingOfficesFileCommitException" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="BingOfficesFileCommitException" /> 类型的实例。
+    /// </summary>
     /// <param name="message">描述文件提交失败的消息。</param>
     /// <param name="innerException">导致当前异常的内部异常。</param>
     /// <param name="provider">报告异常的提供程序名称。</param>
@@ -95,10 +115,14 @@ public sealed class BingOfficesFileCommitException : BingOfficesException
     }
 }
 
-/// <summary>当前提供程序不支持请求功能异常。</summary>
+/// <summary>
+/// 当前提供程序不支持请求功能异常。
+/// </summary>
 public sealed class BingOfficesUnsupportedFeatureException : BingOfficesException
 {
-    /// <summary>初始化一个 <see cref="BingOfficesUnsupportedFeatureException" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="BingOfficesUnsupportedFeatureException" /> 类型的实例。
+    /// </summary>
     /// <param name="message">描述不支持功能的消息。</param>
     /// <param name="innerException">导致当前异常的内部异常。</param>
     /// <param name="provider">报告异常的提供程序名称。</param>
@@ -112,4 +136,3 @@ public sealed class BingOfficesUnsupportedFeatureException : BingOfficesExceptio
     {
     }
 }
-

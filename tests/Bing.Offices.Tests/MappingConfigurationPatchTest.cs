@@ -409,13 +409,25 @@ public sealed class MappingConfigurationPatchTest
         Assert.Equal(BingOfficesErrorCode.ConfigurationInvalid, valueMappingException.Code);
     }
 
+    /// <summary>
+    /// 表示测试使用的一行数据模型。
+    /// </summary>
     private sealed class PatchRow
     {
+        /// <summary>
+        /// 获取或设置名称。
+        /// </summary>
         public string Name { get; set; }
     }
 
+    /// <summary>
+    /// 表示测试使用的一行数据模型。
+    /// </summary>
     private sealed class AttributePatchRow
     {
+        /// <summary>
+        /// 获取或设置名称。
+        /// </summary>
         [ColumnName("属性名称")]
         [DataFormat("@")]
         [ExcelIgnore]

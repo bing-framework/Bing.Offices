@@ -8,126 +8,126 @@ namespace Bing.Offices.Tests.Models;
 public class ExportScale
 {
     /// <summary>
-    /// 系统标识
+    /// 获取或设置系统标识。
     /// </summary>
     public string Id { get; set; }
 
     /// <summary>
-    /// byte
+    /// 获取或设置 byte 值。
     /// </summary>
     [DecimalScale(1)]
     public byte Byte { get; set; }
 
     /// <summary>
-    /// byte?
+    /// 获取或设置可空 byte 值。
     /// </summary>
     [DecimalScale(1)]
     public byte? NullableByte { get; set; }
 
     /// <summary>
-    /// short
+    /// 获取或设置 short 值。
     /// </summary>
     [DecimalScale(2)]
     public short Short { get; set; }
 
     /// <summary>
-    /// short
+    /// 获取或设置可空 short 值。
     /// </summary>
     [DecimalScale(2)]
     public short? NullableShort { get; set; }
 
     /// <summary>
-    /// ushort
+    /// 获取或设置 ushort 值。
     /// </summary>
     [DecimalScale(2)]
     public ushort UShort { get; set; }
 
     /// <summary>
-    /// ushort?
+    /// 获取或设置可空 ushort 值。
     /// </summary>
     [DecimalScale(2)]
     public ushort? NullableUShort { get; set; }
 
     /// <summary>
-    /// int
+    /// 获取或设置 int 值。
     /// </summary>
     [DecimalScale(3)]
     public int Int { get; set; }
 
     /// <summary>
-    /// int?
+    /// 获取或设置可空 int 值。
     /// </summary>
     [DecimalScale(3)]
     public int? NullableInt { get; set; }
 
     /// <summary>
-    /// uint
+    /// 获取或设置 uint 值。
     /// </summary>
     [DecimalScale(3)]
     public uint UInt { get; set; }
 
     /// <summary>
-    /// uint?
+    /// 获取或设置可空 uint 值。
     /// </summary>
-    [DecimalScale(3)] 
+    [DecimalScale(3)]
     public uint? NullableUInt { get; set; }
 
     /// <summary>
-    /// long
+    /// 获取或设置 long 值。
     /// </summary>
-    [DecimalScale(4)] 
+    [DecimalScale(4)]
     public long Long { get; set; }
 
     /// <summary>
-    /// long?
+    /// 获取或设置可空 long 值。
     /// </summary>
-    [DecimalScale(4)] 
+    [DecimalScale(4)]
     public long? NullableLong { get; set; }
 
     /// <summary>
-    /// ulong
+    /// 获取或设置 ulong 值。
     /// </summary>
-    [DecimalScale(4)] 
+    [DecimalScale(4)]
     public ulong ULong { get; set; }
 
     /// <summary>
-    /// ulong?
+    /// 获取或设置可空 ulong 值。
     /// </summary>
-    [DecimalScale(4)] 
+    [DecimalScale(4)]
     public ulong? NullableULong { get; set; }
 
     /// <summary>
-    /// float
+    /// 获取或设置 float 值。
     /// </summary>
-    [DecimalScale(1)] 
+    [DecimalScale(1)]
     public float Float { get; set; }
 
     /// <summary>
-    /// float?
+    /// 获取或设置可空 float 值。
     /// </summary>
     [DecimalScale(2)]
     public float? NullableFloat { get; set; }
 
     /// <summary>
-    /// double
+    /// 获取或设置 double 值。
     /// </summary>
     [DecimalScale(3)]
     public double Double { get; set; }
 
     /// <summary>
-    /// double?
+    /// 获取或设置可空 double 值。
     /// </summary>
     [DecimalScale(4)]
     public double? NullableDouble { get; set; }
 
     /// <summary>
-    /// decimal
+    /// 获取或设置 decimal 值。
     /// </summary>
     [DecimalScale(5)]
     public decimal Decimal { get; set; }
 
     /// <summary>
-    /// decimal?
+    /// 获取或设置可空 decimal 值。
     /// </summary>
     [DecimalScale(7)]
     public decimal? NullableDecimal { get; set; }

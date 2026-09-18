@@ -15,24 +15,42 @@ namespace Bing.Offices.Mappings;
 /// </summary>
 internal sealed class ExcelMappingPlanFactory : IExcelMappingPlanFactory
 {
-    /// <summary>按名称解析映射 Profile 的注册表。</summary>
+    /// <summary>
+    /// 按名称解析映射 Profile 的注册表。
+    /// </summary>
     private readonly Configurations.IMappingProfileResolver _profileRegistry;
-    /// <summary>验证模型别名及其目标类型的注册表。</summary>
+    /// <summary>
+    /// 验证模型别名及其目标类型的注册表。
+    /// </summary>
     private readonly Configurations.ExcelModelAliasRegistry _modelAliases;
-    /// <summary>可用于列绑定的值转换器集合。</summary>
+    /// <summary>
+    /// 可用于列绑定的值转换器集合。
+    /// </summary>
     private readonly IReadOnlyList<IExcelValueConverter> _valueConverters;
-    /// <summary>可用于特性校验绑定的规则集合。</summary>
+    /// <summary>
+    /// 可用于特性校验绑定的规则集合。
+    /// </summary>
     private readonly IReadOnlyList<IExcelValidationRule> _validationRules;
-    /// <summary>可通过名称绑定的校验规则集合。</summary>
+    /// <summary>
+    /// 可通过名称绑定的校验规则集合。
+    /// </summary>
     private readonly IReadOnlyList<INamedExcelValidationRule> _namedValidationRules;
-    /// <summary>映射计划缓存允许保留的最大条目数。</summary>
+    /// <summary>
+    /// 映射计划缓存允许保留的最大条目数。
+    /// </summary>
     private readonly int _cacheCapacity;
-    /// <summary>按租户、模型、方向和规范化配置键缓存延迟创建的映射计划。</summary>
+    /// <summary>
+    /// 按租户、模型、方向和规范化配置键缓存延迟创建的映射计划。
+    /// </summary>
     private readonly ConcurrentDictionary<string, Lazy<IExcelMappingPlan>> _planCache = new();
-    /// <summary>按创建顺序记录缓存键，用于近似先进先出淘汰。</summary>
+    /// <summary>
+    /// 按创建顺序记录缓存键，用于近似先进先出淘汰。
+    /// </summary>
     private readonly ConcurrentQueue<string> _cacheOrder = new();
 
-    /// <summary>初始化一个 <see cref="ExcelMappingPlanFactory" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="ExcelMappingPlanFactory" /> 类型的实例。
+    /// </summary>
     /// <param name="valueConverters">可绑定到映射列的值转换器。</param>
     /// <param name="validationRules">可绑定到校验特性的规则。</param>
     /// <param name="namedValidationRules">可按名称绑定的校验规则。</param>
@@ -108,7 +126,9 @@ internal sealed class ExcelMappingPlanFactory : IExcelMappingPlanFactory
         return cached.Value;
     }
 
-    /// <summary>按方向合并文档、Profile 和请求级配置，并解析模型别名约束。</summary>
+    /// <summary>
+    /// 按方向合并文档、Profile 和请求级配置，并解析模型别名约束。
+    /// </summary>
     /// <typeparam name="T">目标实体类型。</typeparam>
     /// <param name="document">规范化映射文档。</param>
     /// <param name="requestConfiguration">可选的请求级覆盖配置。</param>
@@ -159,7 +179,9 @@ internal sealed class ExcelMappingPlanFactory : IExcelMappingPlanFactory
         return new ResolvedMapping(configuration, profileName, modelAlias, profileDescriptor == null);
     }
 
-    /// <summary>将已合并配置编译为不可变的 Provider-neutral 映射计划。</summary>
+    /// <summary>
+    /// 将已合并配置编译为不可变的 Provider-neutral 映射计划。
+    /// </summary>
     /// <typeparam name="T">目标实体类型。</typeparam>
     /// <param name="configuration">已合并的方向配置。</param>
     /// <param name="profileName">来源 Profile 名称。</param>
@@ -179,7 +201,9 @@ internal sealed class ExcelMappingPlanFactory : IExcelMappingPlanFactory
             new ExcelMappingLayout(configuration?.Layout), profileName, modelAlias);
     }
 
-    /// <summary>从实体属性映射创建列计划并绑定转换器和校验规则。</summary>
+    /// <summary>
+    /// 从实体属性映射创建列计划并绑定转换器和校验规则。
+    /// </summary>
     /// <param name="property">已解析的实体属性映射。</param>
     /// <param name="allowImplicitNamedConverters">是否允许隐式绑定命名转换器。</param>
     /// <returns>编译后的列计划。</returns>
@@ -187,7 +211,9 @@ internal sealed class ExcelMappingPlanFactory : IExcelMappingPlanFactory
         new ExcelMappingColumn(property, BindValueConverters(property, allowImplicitNamedConverters),
             BindValidationRules(property));
 
-    /// <summary>解析列声明的值转换器，并按配置过滤隐式命名转换器。</summary>
+    /// <summary>
+    /// 解析列声明的值转换器，并按配置过滤隐式命名转换器。
+    /// </summary>
     /// <param name="property">实体属性映射。</param>
     /// <param name="allowImplicitNamedConverters">是否允许未显式命名的命名转换器。</param>
     /// <returns>适用于该属性的转换器集合。</returns>
@@ -203,13 +229,17 @@ internal sealed class ExcelMappingPlanFactory : IExcelMappingPlanFactory
             : converters;
     }
 
-    /// <summary>判断属性是否为承载动态列值的字典容器。</summary>
+    /// <summary>
+    /// 判断属性是否为承载动态列值的字典容器。
+    /// </summary>
     /// <param name="propertyType">属性类型。</param>
     /// <returns>可赋值为字符串到对象字典时为 true。</returns>
     private static bool IsDynamicValueContainer(Type propertyType) =>
         typeof(IDictionary<string, object>).IsAssignableFrom(propertyType);
 
-    /// <summary>绑定属性特性校验规则和配置声明的命名校验规则。</summary>
+    /// <summary>
+    /// 绑定属性特性校验规则和配置声明的命名校验规则。
+    /// </summary>
     /// <param name="property">实体属性映射。</param>
     /// <returns>按执行顺序排列的校验绑定集合。</returns>
     private IReadOnlyList<IExcelValidationBinding> BindValidationRules(ExcelPropertyMap property)
@@ -231,7 +261,9 @@ internal sealed class ExcelMappingPlanFactory : IExcelMappingPlanFactory
         return bindings;
     }
 
-    /// <summary>将动态列配置解析为包含转换器和校验绑定的列计划。</summary>
+    /// <summary>
+    /// 将动态列配置解析为包含转换器和校验绑定的列计划。
+    /// </summary>
     /// <param name="column">规范化动态列配置。</param>
     /// <returns>编译后的动态列计划。</returns>
     private IExcelDynamicMappingColumn CreateDynamicColumn(ExcelMappingDynamicColumnConfiguration column)
@@ -265,7 +297,9 @@ internal sealed class ExcelMappingPlanFactory : IExcelMappingPlanFactory
         return new ExcelDynamicMappingColumn(column, converters, validations);
     }
 
-    /// <summary>解析动态列允许使用的 CLR 类型名称。</summary>
+    /// <summary>
+    /// 解析动态列允许使用的 CLR 类型名称。
+    /// </summary>
     /// <param name="dataTypeName">配置中的类型名称；为空时使用 string。</param>
     /// <returns>对应的 CLR 类型。</returns>
     private static Type ResolveDynamicType(string dataTypeName)
@@ -290,7 +324,9 @@ internal sealed class ExcelMappingPlanFactory : IExcelMappingPlanFactory
         }
     }
 
-    /// <summary>根据动态列规则配置创建内置校验特性。</summary>
+    /// <summary>
+    /// 根据动态列规则配置创建内置校验特性。
+    /// </summary>
     /// <param name="validation">动态校验规则配置。</param>
     /// <param name="columnKey">所属动态列键，用于错误信息。</param>
     /// <returns>对应的校验特性实例。</returns>
@@ -332,7 +368,9 @@ internal sealed class ExcelMappingPlanFactory : IExcelMappingPlanFactory
         }
     }
 
-    /// <summary>验证动态列键、标题及标题别名在同一映射中的唯一性。</summary>
+    /// <summary>
+    /// 验证动态列键、标题及标题别名在同一映射中的唯一性。
+    /// </summary>
     /// <param name="columns">待验证的动态列计划。</param>
     private static void ValidateDynamicColumns(IReadOnlyList<IExcelDynamicMappingColumn> columns)
     {
@@ -352,7 +390,9 @@ internal sealed class ExcelMappingPlanFactory : IExcelMappingPlanFactory
         }
     }
 
-    /// <summary>根据绑定特性或规则能力解析唯一的校验规则实现。</summary>
+    /// <summary>
+    /// 根据绑定特性或规则能力解析唯一的校验规则实现。
+    /// </summary>
     /// <param name="attribute">待绑定的校验特性。</param>
     /// <returns>可处理该特性的校验规则。</returns>
     private IExcelValidationRule ResolveValidationRule(FilterAttributeBase attribute)
@@ -369,10 +409,14 @@ internal sealed class ExcelMappingPlanFactory : IExcelMappingPlanFactory
         return rule ?? throw new InvalidOperationException($"未找到特性对应的校验规则: {attribute.GetType().FullName}");
     }
 
-    /// <summary>解析后的映射配置及来源信息快照。</summary>
+    /// <summary>
+    /// 解析后的映射配置及来源信息快照。
+    /// </summary>
     private sealed class ResolvedMapping
     {
-        /// <summary>初始化一个 <see cref="ResolvedMapping" /> 类型的实例。</summary>
+        /// <summary>
+        /// 初始化一个 <see cref="ResolvedMapping" /> 类型的实例。
+        /// </summary>
         /// <param name="configuration">合并后的方向配置。</param>
         /// <param name="profileName">来源 Profile 名称。</param>
         /// <param name="modelAlias">来源模型别名。</param>
@@ -386,17 +430,27 @@ internal sealed class ExcelMappingPlanFactory : IExcelMappingPlanFactory
             AllowImplicitNamedConverters = allowImplicitNamedConverters;
         }
 
-        /// <summary>获取合并后的方向配置。</summary>
+        /// <summary>
+        /// 获取合并后的方向配置。
+        /// </summary>
         public ExcelMappingConfiguration Configuration { get; }
-        /// <summary>获取来源 Profile 名称。</summary>
+        /// <summary>
+        /// 获取来源 Profile 名称。
+        /// </summary>
         public string ProfileName { get; }
-        /// <summary>获取来源模型别名。</summary>
+        /// <summary>
+        /// 获取来源模型别名。
+        /// </summary>
         public string ModelAlias { get; }
-        /// <summary>获取是否允许隐式绑定命名转换器。</summary>
+        /// <summary>
+        /// 获取是否允许隐式绑定命名转换器。
+        /// </summary>
         public bool AllowImplicitNamedConverters { get; }
     }
 
-    /// <summary>按近似先进先出策略移除超出容量的计划缓存条目。</summary>
+    /// <summary>
+    /// 按近似先进先出策略移除超出容量的计划缓存条目。
+    /// </summary>
     private void TrimCache()
     {
         while (_planCache.Count > _cacheCapacity && _cacheOrder.TryDequeue(out var oldest))

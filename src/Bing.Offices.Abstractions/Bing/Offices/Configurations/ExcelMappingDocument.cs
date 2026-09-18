@@ -1,8 +1,11 @@
 ﻿namespace Bing.Offices.Configurations;
 
 /// <summary>
-/// v2 规范化映射文档；Import 和 Export 配置相互独立。
+/// v2 规范化映射文档。
 /// </summary>
+/// <remarks>
+/// Import 和 Export 配置相互独立；文档实例只描述当前配置文档，不承担跨请求共享状态。
+/// </remarks>
 public sealed class ExcelMappingDocument
 {
     /// <summary>

@@ -1,14 +1,22 @@
 ﻿namespace Bing.Offices.Exports;
 
-/// <summary>不拥有调用方目标流、但在写入边界检查取消的输出流包装器。</summary>
+/// <summary>
+/// 不拥有调用方目标流、但在写入边界检查取消的输出流包装器。
+/// </summary>
 internal sealed class NpoiNonDisposingStream : Stream
 {
-    /// <summary>由调用方拥有且不会被此包装器释放的底层流。</summary>
+    /// <summary>
+    /// 由调用方拥有且不会被此包装器释放的底层流。
+    /// </summary>
     private readonly Stream _inner;
-    /// <summary>在写入或刷新边界检查的取消令牌。</summary>
+    /// <summary>
+    /// 在写入或刷新边界检查的取消令牌。
+    /// </summary>
     private readonly CancellationToken _cancellationToken;
 
-    /// <summary>初始化一个 <see cref="NpoiNonDisposingStream" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="NpoiNonDisposingStream" /> 类型的实例。
+    /// </summary>
     /// <param name="inner">由调用方负责释放的底层流。</param>
     /// <param name="cancellationToken">写入和刷新期间检查的取消令牌。</param>
     public NpoiNonDisposingStream(Stream inner, CancellationToken cancellationToken = default)

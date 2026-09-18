@@ -2,10 +2,14 @@
 
 namespace Bing.Offices.Internals;
 
-/// <summary>构建区分类型、配置和方向的稳定工作簿计划缓存键。</summary>
+/// <summary>
+/// 构建区分类型、配置和方向的稳定工作簿计划缓存键。
+/// </summary>
 internal static class NpoiWorkbookPlanKeyBuilder
 {
-    /// <summary>根据实体类型、映射文档、请求配置和方向生成稳定计划键。</summary>
+    /// <summary>
+    /// 根据实体类型、映射文档、请求配置和方向生成稳定计划键。
+    /// </summary>
     /// <param name="itemType">工作表数据项类型。</param>
     /// <param name="document">规范化映射文档；为空时使用约定回退文档。</param>
     /// <param name="requestConfiguration">请求级方向配置。</param>

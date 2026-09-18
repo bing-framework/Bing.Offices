@@ -18,18 +18,30 @@ namespace Bing.Offices.Csv;
 /// </summary>
 internal sealed partial class CsvEntityImporter : ICsvImporter
 {
-    /// <summary>按优先级用于导入字段的值转换器集合。</summary>
+    /// <summary>
+    /// 按优先级用于导入字段的值转换器集合。
+    /// </summary>
     private readonly IReadOnlyList<IExcelValueConverter> _valueConverters;
-    /// <summary>用于属性特性校验的规则集合。</summary>
+    /// <summary>
+    /// 用于属性特性校验的规则集合。
+    /// </summary>
     private readonly IReadOnlyList<IExcelValidationRule> _validationRules;
-    /// <summary>可按配置名称绑定的校验规则集合。</summary>
+    /// <summary>
+    /// 可按配置名称绑定的校验规则集合。
+    /// </summary>
     private readonly IReadOnlyList<INamedExcelValidationRule> _namedValidationRules;
-    /// <summary>将 CSV 请求编译为不可变列映射计划的工厂。</summary>
+    /// <summary>
+    /// 将 CSV 请求编译为不可变列映射计划的工厂。
+    /// </summary>
     private readonly IExcelMappingPlanFactory _mappingPlanFactory;
-    /// <summary>观察并记录公共 CSV 运行异常。</summary>
+    /// <summary>
+    /// 观察并记录公共 CSV 运行异常。
+    /// </summary>
     private readonly BingOfficesExceptionDispatcher _exceptionDispatcher;
 
-    /// <summary>初始化一个 <see cref="CsvEntityImporter" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="CsvEntityImporter" /> 类型的实例。
+    /// </summary>
     /// <param name="valueConverters">值转换器集合。</param>
     /// <param name="validationRules">属性校验规则集合。</param>
     /// <param name="namedValidationRules">命名配置校验规则集合。</param>
@@ -123,7 +135,9 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
         }
     }
 
-    /// <summary>异步执行 CSV 解析、转换、校验和实体构造。</summary>
+    /// <summary>
+    /// 异步执行 CSV 解析、转换、校验和实体构造。
+    /// </summary>
     /// <typeparam name="T">导入实体类型。</typeparam>
     /// <param name="source">提供 CSV 内容的源流；由调用方负责生命周期。</param>
     /// <param name="options">当前导入选项。</param>
@@ -340,12 +354,16 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
         return new CsvImportResult<T>(items, errors, isTruncated, options.MaxErrors);
     }
 
-    /// <summary>表示已按导入策略停止继续读取 CSV 的内部控制异常。</summary>
+    /// <summary>
+    /// 表示已按导入策略停止继续读取 CSV 的内部控制异常。
+    /// </summary>
     private sealed class CsvImportStopException : Exception
     {
     }
 
-    /// <summary>同步执行 CSV 解析、转换、校验和实体构造。</summary>
+    /// <summary>
+    /// 同步执行 CSV 解析、转换、校验和实体构造。
+    /// </summary>
     /// <typeparam name="T">导入实体类型。</typeparam>
     /// <param name="source">提供 CSV 内容的源流；由调用方负责生命周期。</param>
     /// <param name="options">当前导入选项。</param>
@@ -545,7 +563,9 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
         return new CsvImportResult<T>(items, errors, isTruncated, options.MaxErrors);
     }
 
-    /// <summary>创建表示输入资源限制已触发的截断导入结果。</summary>
+    /// <summary>
+    /// 创建表示输入资源限制已触发的截断导入结果。
+    /// </summary>
     /// <typeparam name="T">导入实体类型。</typeparam>
     /// <param name="message">描述超出资源限制的错误消息。</param>
     /// <param name="options">提供最大错误数的当前导入选项。</param>
@@ -556,7 +576,9 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
             new CsvImportError(message, 0, 0, null, code: CsvImportErrorCode.ResourceLimit)
         }, true, options.MaxErrors);
 
-    /// <summary>将转换和校验异常映射为公开的 CSV 错误代码。</summary>
+    /// <summary>
+    /// 将转换和校验异常映射为公开的 CSV 错误代码。
+    /// </summary>
     /// <param name="exception">处理字段时捕获的异常。</param>
     /// <returns>用于导入结果的错误代码。</returns>
     private static CsvImportErrorCode ClassifyError(Exception exception)
@@ -569,7 +591,9 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
         return CsvImportErrorCode.InvalidInput;
     }
 
-    /// <summary>将固定列文本转换为实体属性的目标类型。</summary>
+    /// <summary>
+    /// 将固定列文本转换为实体属性的目标类型。
+    /// </summary>
     /// <param name="value">规范化后的 CSV 字段文本。</param>
     /// <param name="property">固定列属性绑定。</param>
     /// <param name="rowIndex">字段所在的一基行号。</param>
@@ -621,7 +645,9 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
         return Convert.ChangeType(value, targetType, culture);
     }
 
-    /// <summary>将动态列文本转换为其配置的逻辑类型。</summary>
+    /// <summary>
+    /// 将动态列文本转换为其配置的逻辑类型。
+    /// </summary>
     /// <param name="value">规范化后的 CSV 字段文本。</param>
     /// <param name="column">动态列的表头和映射绑定。</param>
     /// <param name="rowIndex">字段所在的一基行号。</param>
@@ -667,7 +693,9 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
         return Convert.ChangeType(value, targetType, culture);
     }
 
-    /// <summary>执行需要原始字段文本的校验规则。</summary>
+    /// <summary>
+    /// 执行需要原始字段文本的校验规则。
+    /// </summary>
     /// <param name="value">规范化后的 CSV 字段文本。</param>
     /// <param name="column">当前列绑定。</param>
     /// <param name="rowIndex">字段所在的一基行号。</param>
@@ -705,7 +733,9 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
         }
     }
 
-    /// <summary>执行转换后校验规则并为唯一性规则预留当前值。</summary>
+    /// <summary>
+    /// 执行转换后校验规则并为唯一性规则预留当前值。
+    /// </summary>
     /// <param name="value">规范化后的原始字段文本。</param>
     /// <param name="convertedValue">转换后的字段值。</param>
     /// <param name="column">当前列绑定。</param>
@@ -751,7 +781,9 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
             throw new InvalidOperationException("重复数据");
     }
 
-    /// <summary>创建供 CSV 字段校验规则使用的提供程序无关上下文。</summary>
+    /// <summary>
+    /// 创建供 CSV 字段校验规则使用的提供程序无关上下文。
+    /// </summary>
     /// <param name="value">原始字段文本。</param>
     /// <param name="convertedValue">转换后的字段值。</param>
     /// <param name="column">当前列绑定。</param>
@@ -766,23 +798,31 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
             : CsvDynamicTypeResolver.Resolve(column.DynamicColumn.DataTypeName),
         new ExcelCellValue(value, value, ExcelCellKind.Text), culture);
 
-    /// <summary>获取固定列或动态列已经绑定的校验规则。</summary>
+    /// <summary>
+    /// 获取固定列或动态列已经绑定的校验规则。
+    /// </summary>
     /// <param name="column">当前 CSV 列绑定。</param>
     /// <returns>按执行顺序排列的校验规则集合。</returns>
     private static IReadOnlyList<IExcelValidationBinding> GetValidationBindings(CsvColumn column) =>
         column.DynamicColumn?.ValidationBindings ?? column.Property.ValidationBindings;
 
-    /// <summary>表示当前 CSV 值未通过配置校验的内部控制异常。</summary>
+    /// <summary>
+    /// 表示当前 CSV 值未通过配置校验的内部控制异常。
+    /// </summary>
     private sealed class ValidationFailedException : Exception
     {
-        /// <summary>初始化一个 <see cref="ValidationFailedException" /> 类型的实例。</summary>
+        /// <summary>
+        /// 初始化一个 <see cref="ValidationFailedException" /> 类型的实例。
+        /// </summary>
         /// <param name="message">校验失败消息。</param>
         public ValidationFailedException(string message) : base(message)
         {
         }
     }
 
-    /// <summary>将配置的显示值映射文本转换为目标属性类型。</summary>
+    /// <summary>
+    /// 将配置的显示值映射文本转换为目标属性类型。
+    /// </summary>
     /// <param name="value">映射配置中的文本值。</param>
     /// <param name="type">目标属性类型。</param>
     /// <param name="culture">文本转换使用的区域性。</param>
@@ -810,7 +850,9 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
         return Convert.ChangeType(value, targetType, culture);
     }
 
-    /// <summary>按照列配置的空白策略规范化 CSV 字段文本。</summary>
+    /// <summary>
+    /// 按照列配置的空白策略规范化 CSV 字段文本。
+    /// </summary>
     /// <param name="value">待规范化的文本；为 null 时按空字符串处理。</param>
     /// <param name="policy">空白处理策略；为 null 时保留原始文本。</param>
     /// <returns>规范化后的字段文本。</returns>
@@ -826,7 +868,9 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
         };
     }
 
-    /// <summary>创建与导入选项中字符串比较规则等效的比较器。</summary>
+    /// <summary>
+    /// 创建与导入选项中字符串比较规则等效的比较器。
+    /// </summary>
     /// <param name="comparison">要支持的字符串比较规则。</param>
     /// <returns>对应的字符串比较器。</returns>
     private static StringComparer CreateStringComparer(StringComparison comparison) => comparison switch

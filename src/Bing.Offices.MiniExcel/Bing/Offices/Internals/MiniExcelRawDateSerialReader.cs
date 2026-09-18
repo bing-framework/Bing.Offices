@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.IO.Compression;
 using System.Xml;
 using System.Xml.Linq;
@@ -6,12 +6,24 @@ using System.Xml.Linq;
 namespace Bing.Offices.MiniExcel.Internals;
 
 /// <summary>
-/// 从 MiniExcel 读取前的 XLSX worksheet XML 保留原始 numeric serial。
+/// 从 MiniExcel 读取前的 XLSX 工作表 XML 中保留原始日期 serial。
 /// </summary>
+/// <remarks>
+/// 读取结果按一基物理行列坐标索引，仅用于恢复日期单元格的原始数值。
+/// </remarks>
 internal static class MiniExcelRawDateSerialReader
 {
+    /// <summary>
+    /// XLSX 工作表主 XML 命名空间。
+    /// </summary>
     private const string MainNamespace = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    /// <summary>
+    /// XLSX 工作簿关系引用使用的 XML 命名空间。
+    /// </summary>
     private const string RelationshipsNamespace = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+    /// <summary>
+    /// XLSX 包关系文件使用的 XML 命名空间。
+    /// </summary>
     private const string PackageRelationshipsNamespace = "http://schemas.openxmlformats.org/package/2006/relationships";
 
     /// <summary>
@@ -71,6 +83,12 @@ internal static class MiniExcelRawDateSerialReader
         }
     }
 
+    /// <summary>
+    /// 读取当前单元格的值元素文本。
+    /// </summary>
+    /// <param name="reader">定位在单元格元素上的 XML 读取器。</param>
+    /// <param name="cancellationToken">用于取消读取的令牌。</param>
+    /// <returns>值元素文本；不存在时返回 null。</returns>
     private static string ReadValueElement(XmlReader reader, CancellationToken cancellationToken)
     {
         using var cellReader = reader.ReadSubtree();
@@ -83,6 +101,13 @@ internal static class MiniExcelRawDateSerialReader
         return null;
     }
 
+    /// <summary>
+    /// 根据工作表名称解析对应的 ZIP 条目路径。
+    /// </summary>
+    /// <param name="archive">已打开的 XLSX ZIP 包。</param>
+    /// <param name="sheetName">工作表物理名称。</param>
+    /// <param name="cancellationToken">用于取消解析的令牌。</param>
+    /// <returns>工作表 XML 的规范化 ZIP 路径。</returns>
     private static string ResolveWorksheetPath(ZipArchive archive, string sheetName,
         CancellationToken cancellationToken)
     {
@@ -122,6 +147,11 @@ internal static class MiniExcelRawDateSerialReader
         return NormalizeTarget(target);
     }
 
+    /// <summary>
+    /// 规范化关系目标并限制其位于 xl 目录下。
+    /// </summary>
+    /// <param name="target">关系文件中的目标路径。</param>
+    /// <returns>规范化后的 ZIP 条目路径。</returns>
     private static string NormalizeTarget(string target)
     {
         var segments = new List<string>();
@@ -144,6 +174,13 @@ internal static class MiniExcelRawDateSerialReader
         return normalized;
     }
 
+    /// <summary>
+    /// 将 Excel 单元格引用解析为一基行列号。
+    /// </summary>
+    /// <param name="reference">Excel A1 单元格引用。</param>
+    /// <param name="row">解析得到的一基行号。</param>
+    /// <param name="column">解析得到的一基列号。</param>
+    /// <returns>引用格式有效且行列均为正数时返回 true，否则返回 false。</returns>
     private static bool TryParseReference(string reference, out int row, out int column)
     {
         row = 0;
@@ -167,8 +204,18 @@ internal static class MiniExcelRawDateSerialReader
         return true;
     }
 
+    /// <summary>
+    /// 将一基物理行列号编码为日期 serial 索引键。
+    /// </summary>
+    /// <param name="row">一基物理行号。</param>
+    /// <param name="column">一基物理列号。</param>
+    /// <returns>由行列坐标组成的索引键。</returns>
     internal static long CreateKey(int row, int column) => ((long)row << 32) | (uint)column;
 
+    /// <summary>
+    /// 创建禁止 DTD 和外部实体的 XML 读取设置。
+    /// </summary>
+    /// <returns>用于读取 XLSX XML 的安全设置。</returns>
     private static XmlReaderSettings CreateReaderSettings() => new XmlReaderSettings
     {
         DtdProcessing = DtdProcessing.Prohibit,

@@ -25,15 +25,25 @@ public static class ExcelExport
 /// </summary>
 public sealed class ExcelWorkbookExportBuilder
 {
-    /// <summary>按配置顺序保存待导出的工作表请求。</summary>
+    /// <summary>
+    /// 按配置顺序保存待导出的工作表请求。
+    /// </summary>
     private readonly List<ExcelSheetExportRequest> _sheets = new List<ExcelSheetExportRequest>();
-    /// <summary>导出时使用的模板流；未设置时从空 Workbook 创建。</summary>
+    /// <summary>
+    /// 导出时使用的模板流；未设置时从空 Workbook 创建。
+    /// </summary>
     private Stream _template;
-    /// <summary>导出完成后是否保持模板流打开。</summary>
+    /// <summary>
+    /// 导出完成后是否保持模板流打开。
+    /// </summary>
     private bool _leaveTemplateOpen;
-    /// <summary>目标 Excel 文件格式，默认为 Xlsx。</summary>
+    /// <summary>
+    /// 目标 Excel 文件格式，默认为 Xlsx。
+    /// </summary>
     private ExcelFormat _format = ExcelFormat.Xlsx;
-    /// <summary>待写入 Workbook 的元数据；未设置时不覆盖元数据。</summary>
+    /// <summary>
+    /// 待写入 Workbook 的元数据；未设置时不覆盖元数据。
+    /// </summary>
     private ExcelWorkbookMetadataOptions _metadata;
 
     /// <summary>
@@ -119,7 +129,9 @@ public sealed class ExcelWorkbookExportBuilder
         return AddSheet(name, data, configure);
     }
 
-    /// <summary>验证并生成不可变 Workbook 导出请求。</summary>
+    /// <summary>
+    /// 验证并生成不可变 Workbook 导出请求。
+    /// </summary>
     /// <returns>已完成校验的 Workbook 导出请求。</returns>
     internal ExcelWorkbookExportRequest Build()
     {

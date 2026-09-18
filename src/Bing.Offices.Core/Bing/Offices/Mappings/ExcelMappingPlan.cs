@@ -5,10 +5,14 @@ using Bing.Offices.Providers;
 
 namespace Bing.Offices.Mappings;
 
-/// <summary>固定列和动态列的不可变映射计划。</summary>
+/// <summary>
+/// 固定列和动态列的不可变映射计划。
+/// </summary>
 internal sealed class ExcelMappingPlan : IExcelMappingPlan
 {
-    /// <summary>初始化一个 <see cref="ExcelMappingPlan" /> 类型的实例。</summary>
+    /// <summary>
+    /// 初始化一个 <see cref="ExcelMappingPlan" /> 类型的实例。
+    /// </summary>
     /// <param name="columns">固定列映射。</param>
     /// <param name="dynamicColumns">动态列映射。</param>
     /// <param name="style">样式配置。</param>

@@ -2,6 +2,9 @@
 
 namespace Bing.Offices.Tests.Models.Bugs;
 
+/// <summary>
+/// 表示 Issue2 场景使用的 Excel 测试模型。
+/// </summary>
 public class Issue2
 {
     ///// <summary>
@@ -11,14 +14,14 @@ public class Issue2
     //public System.Collections.Generic.IDictionary<string, object> Extend { set; get; }
 
     /// <summary>
-    /// 商品条码
+    /// 获取或设置商品条码。
     /// </summary>
     [ColumnName("商品条码")]
     [ExcelRequired(ErrorMsg = "商品条码为必填项")]
     public string Barcode { get; set; }
 
     /// <summary>
-    /// 调拨数量
+    /// 获取或设置调拨数量。
     /// </summary>
     [ColumnName("调拨数量")]
     [ExcelRequired(ErrorMsg = "调拨数量为必填项")]
@@ -26,13 +29,13 @@ public class Issue2
     public int? Qty { get; set; }
 
     /// <summary>
-    /// 商品编号
+    /// 获取或设置商品编号。
     /// </summary>
     [ColumnName("商品编号")]
     public string Code { get; set; }
 
     /// <summary>
-    /// 商品名称
+    /// 获取或设置商品名称。
     /// </summary>
     [ColumnName("商品名称")]
     public string Name { get; set; }
