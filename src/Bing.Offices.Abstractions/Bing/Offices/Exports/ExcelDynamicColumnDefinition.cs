@@ -23,8 +23,11 @@ public sealed class ExcelDynamicColumnDefinition
     public IReadOnlyList<string> Aliases { get; init; } = Array.Empty<string>();
 
     /// <summary>
-    /// 获取或初始化动态列的数据类型；未指定时默认为 <see cref="string"/>，支持的类型包括对象、字符串、布尔值、数值、日期、Guid 和字节数组。
+    /// 获取或初始化动态列的数据类型。
     /// </summary>
+    /// <remarks>
+    /// 未指定时默认为 <see cref="string"/>，支持对象、字符串、布尔值、数值、日期、Guid 和字节数组。
+    /// </remarks>
     public Type DataType { get; init; } = typeof(string);
 
     /// <summary>

@@ -1,5 +1,6 @@
 ﻿using System.Text;
 using Bing.Offices;
+using Bing.Offices.ClosedXml.Extensions;
 using Bing.Offices.Csv;
 using Bing.Offices.Exports;
 using Bing.Offices.Extensions;
@@ -76,6 +77,15 @@ try
     var miniBytes = await ExcelStreamExtensions.ExportToBytesAsync(miniExporter, workbookRequest);
     var miniResult = await ExcelStreamExtensions.ImportFromBytesAsync(miniImporter, miniBytes, importRequest);
 
+    using var closedXmlProvider = new ServiceCollection()
+        .AddBingOfficesClosedXml()
+        .BuildServiceProvider();
+    var closedXmlExporter = closedXmlProvider.GetRequiredService<IExcelExporter>();
+    var closedXmlImporter = closedXmlProvider.GetRequiredService<IExcelImporter>();
+    var closedXmlBytes = await ExcelStreamExtensions.ExportToBytesAsync(closedXmlExporter, workbookRequest);
+    var closedXmlResult = await ExcelStreamExtensions.ImportFromBytesAsync(
+        closedXmlImporter, closedXmlBytes, importRequest);
+
     using var extensionWorkbook = new XSSFWorkbook();
     var extensionSheet = extensionWorkbook.CreateSheet("Extensions");
     extensionSheet.CreateRow(0).Value(0, "extension");
@@ -92,11 +102,13 @@ try
         "Direct NPOI provider verification failed.");
     Ensure(miniResult.Workbook.Rows.Count == 1 && miniBytes.Length > 0,
         "MiniExcel provider verification failed.");
+    Ensure(closedXmlResult.Workbook.Rows.Count == 1 && closedXmlBytes.Length > 0,
+        "ClosedXML provider verification failed.");
     Ensure(extensionWorkbook.GetExcelFormat() == ExcelFormat.Xlsx
         && extensionSheet.GetRow(0).GetCell(0).GetStringValue() == "extension",
         "NPOI extension verification failed.");
 
-    Console.WriteLine($"package-consumer-ok tfm={System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription} packages=Bing.Offices.Npoi+Bing.Offices.MiniExcel/{packageVersion} csvBytes={csvAsyncBytes.Length} excelBytes={excelAsyncBytes.Length} miniExcelBytes={miniBytes.Length} npoiExtensions=ok");
+    Console.WriteLine($"package-consumer-ok tfm={System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription} packages=Bing.Offices.Npoi+Bing.Offices.MiniExcel+Bing.Offices.ClosedXml/{packageVersion} csvBytes={csvAsyncBytes.Length} excelBytes={excelAsyncBytes.Length} miniExcelBytes={miniBytes.Length} closedXmlBytes={closedXmlBytes.Length} npoiExtensions=ok");
 }
 finally
 {

@@ -8,5 +8,7 @@
     <NpoiPackageVersion>[2.7.4]</NpoiPackageVersion>
     <!-- MiniExcel packages -->
     <MiniExcelPackageVersion>[1.46.0]</MiniExcelPackageVersion>
+    <!-- ClosedXML packages -->
+    <ClosedXmlPackageVersion>[0.105.1]</ClosedXmlPackageVersion>
   </PropertyGroup>
 </Project>

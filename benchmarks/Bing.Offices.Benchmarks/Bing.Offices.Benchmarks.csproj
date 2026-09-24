@@ -10,10 +10,13 @@
   <ItemGroup>
     <PackageReference Include="BenchmarkDotNet" Version="0.14.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
+    <!-- ProjectReference 不会把 ClosedXML 的运行时传递依赖复制到此独立 Probe 输出目录。 -->
+    <PackageReference Include="ClosedXML" Version="[0.105.1]" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Bing.Offices.Npoi\Bing.Offices.Npoi.csproj" />
     <ProjectReference Include="..\..\src\Bing.Offices.MiniExcel\Bing.Offices.MiniExcel.csproj" />
+    <ProjectReference Include="..\..\src\Bing.Offices.ClosedXml\Bing.Offices.ClosedXml.csproj" />
   </ItemGroup>
 </Project>

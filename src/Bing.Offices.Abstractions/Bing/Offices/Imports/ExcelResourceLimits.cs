@@ -16,6 +16,21 @@ public sealed class ExcelResourceLimits
     public int? MaxRows { get; init; }
 
     /// <summary>
+    /// 获取或初始化工作簿允许包含的最大工作表数量；null 表示不额外限制。
+    /// </summary>
+    public int? MaxSheets { get; init; }
+
+    /// <summary>
+    /// 获取或初始化单个工作表允许使用的最大列数；null 表示不额外限制。
+    /// </summary>
+    public int? MaxColumnsPerSheet { get; init; }
+
+    /// <summary>
+    /// 获取或初始化工作簿允许包含的最大物理单元格数量；null 表示不额外限制。
+    /// </summary>
+    public long? MaxCells { get; init; }
+
+    /// <summary>
     /// 获取或初始化最大错误数；null 表示不额外限制。
     /// </summary>
     public int? MaxErrors { get; init; }
@@ -104,6 +119,12 @@ public sealed class ExcelResourceLimits
             throw new ArgumentOutOfRangeException(nameof(MaxInputBytes));
         if (MaxRows <= 0)
             throw new ArgumentOutOfRangeException(nameof(MaxRows));
+        if (MaxSheets <= 0)
+            throw new ArgumentOutOfRangeException(nameof(MaxSheets));
+        if (MaxColumnsPerSheet <= 0)
+            throw new ArgumentOutOfRangeException(nameof(MaxColumnsPerSheet));
+        if (MaxCells <= 0)
+            throw new ArgumentOutOfRangeException(nameof(MaxCells));
         if (MaxErrors <= 0)
             throw new ArgumentOutOfRangeException(nameof(MaxErrors));
         if (MaxPictures <= 0)

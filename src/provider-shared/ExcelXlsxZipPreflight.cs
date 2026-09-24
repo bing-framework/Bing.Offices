@@ -48,7 +48,8 @@ internal static class ExcelXlsxZipPreflight
             while (reader.Read())
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (!reader.IsStartElement("workbookPr"))
+                if (reader.NodeType != XmlNodeType.Element
+                    || !string.Equals(reader.LocalName, "workbookPr", StringComparison.Ordinal))
                     continue;
                 var value = reader.GetAttribute("date1904");
                 return string.Equals(value, "1", StringComparison.Ordinal)
@@ -71,11 +72,12 @@ internal static class ExcelXlsxZipPreflight
     /// <param name="provider">用于异常上下文的提供程序名称。</param>
     /// <param name="requireZip">是否要求输入具有 XLSX ZIP 文件头；为 false 时非 ZIP 流直接跳过 ZIP 检查。</param>
     /// <param name="cancellationToken">用于取消预检的令牌。</param>
+    /// <param name="includePictures">是否扫描并应用图片数量与大小限制；仅由支持图片资源 admission 的 Provider 开启。</param>
     /// <remarks>
     /// 检查 ZIP 条目数量、路径、重复项、解压大小、压缩比、指定 XML 部件大小以及 XML 字符数和嵌套深度；进入检查后可定位流会在结束时置于文件头。
     /// </remarks>
     internal static void Validate(Stream source, ExcelResourceLimits limits, string provider,
-        bool requireZip, CancellationToken cancellationToken = default)
+        bool requireZip, CancellationToken cancellationToken = default, bool includePictures = false)
     {
         if (source == null)
             throw new ArgumentNullException(nameof(source));
@@ -88,7 +90,7 @@ internal static class ExcelXlsxZipPreflight
             if (!IsZip(source))
             {
                 if (requireZip)
-                    throw new BingOfficesImportException("MiniExcel 仅支持 XLSX ZIP 工作簿。", null,
+                    throw new BingOfficesImportException($"{provider} 仅支持 XLSX ZIP 工作簿。", null,
                         provider, BingOfficesStage.Preflight);
                 return;
             }
@@ -102,6 +104,11 @@ internal static class ExcelXlsxZipPreflight
 
             long totalUncompressed = 0;
             long totalWorksheetBytes = 0;
+            long totalPhysicalCells = 0;
+            var logicalSheetCount = 0;
+            var maximumColumnsPerSheet = 0;
+            var pictureCount = 0;
+            long totalPictureBytes = 0;
             var entryNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var entry in archive.Entries)
             {
@@ -127,6 +134,12 @@ internal static class ExcelXlsxZipPreflight
                     ValidateSize(uncompressed, limits.MaxSharedStringsBytes, "sharedStrings.xml", provider);
                 else if (string.Equals(entry.FullName, "xl/styles.xml", StringComparison.OrdinalIgnoreCase))
                     ValidateSize(uncompressed, limits.MaxStylesBytes, "styles.xml", provider);
+                else if (string.Equals(entry.FullName, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase))
+                {
+                    logicalSheetCount = CountWorkbookSheets(entry, cancellationToken, provider);
+                    if (limits.MaxSheets.HasValue && logicalSheetCount > limits.MaxSheets.Value)
+                        Resource($"XLSX Sheet 数量超过限制: {limits.MaxSheets.Value}", provider);
+                }
                 else if (IsWorksheet(entry.FullName))
                 {
                     ValidateSize(uncompressed, limits.MaxWorksheetBytes, entry.FullName, provider);
@@ -134,6 +147,26 @@ internal static class ExcelXlsxZipPreflight
                         && uncompressed > limits.MaxTotalWorksheetBytes.Value - totalWorksheetBytes)
                         Resource($"XLSX worksheet XML 总大小超过限制: {limits.MaxTotalWorksheetBytes.Value}", provider);
                     totalWorksheetBytes += uncompressed;
+                    if (limits.MaxColumnsPerSheet.HasValue || limits.MaxCells.HasValue)
+                    {
+                        var structure = ScanWorksheetStructure(entry, cancellationToken, provider,
+                            limits.MaxColumnsPerSheet, limits.MaxCells, totalPhysicalCells);
+                        totalPhysicalCells = structure.TotalCells;
+                        maximumColumnsPerSheet = Math.Max(maximumColumnsPerSheet, structure.MaximumColumn);
+                    }
+                }
+                else if (includePictures && IsPicture(entry.FullName))
+                {
+                    pictureCount++;
+                    if (limits.MaxPictures.HasValue && pictureCount > limits.MaxPictures.Value)
+                        Resource($"XLSX 图片数量超过限制: {limits.MaxPictures.Value}", provider);
+                    if (limits.MaxPictureBytes.HasValue
+                        && uncompressed > limits.MaxPictureBytes.Value)
+                        Resource($"XLSX 图片部件超过限制: {entry.FullName}", provider);
+                    if (limits.MaxTotalPictureBytes.HasValue
+                        && uncompressed > limits.MaxTotalPictureBytes.Value - totalPictureBytes)
+                        Resource($"XLSX 图片总大小超过限制: {limits.MaxTotalPictureBytes.Value}", provider);
+                    totalPictureBytes += uncompressed;
                 }
                 if (entry.Length > 0)
                     ValidateXmlSafety(entry, cancellationToken, limits.MaxXmlCharacters,
@@ -188,6 +221,136 @@ internal static class ExcelXlsxZipPreflight
         StringComparison.OrdinalIgnoreCase) && name.EndsWith(".xml", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
+    /// 判断 ZIP 条目是否为工作簿图片部件。
+    /// </summary>
+    /// <param name="name">待判断的 ZIP 条目名称。</param>
+    /// <returns>名称位于 xl/media/ 下时返回 true。</returns>
+    private static bool IsPicture(string name) => name.StartsWith("xl/media/",
+        StringComparison.OrdinalIgnoreCase) && !name.EndsWith("/", StringComparison.Ordinal);
+
+    /// <summary>
+    /// 统计工作簿 XML 中声明的逻辑工作表数量。
+    /// </summary>
+    /// <param name="entry">工作簿 XML 的 ZIP 条目。</param>
+    /// <param name="cancellationToken">用于取消 XML 扫描的令牌。</param>
+    /// <param name="provider">用于异常上下文的提供程序名称。</param>
+    /// <returns>工作簿中声明的工作表数量。</returns>
+    private static int CountWorkbookSheets(ZipArchiveEntry entry, CancellationToken cancellationToken,
+        string provider)
+    {
+        using var stream = entry.Open();
+        using var reader = CreateReader(stream);
+        var count = 0;
+        while (reader.Read())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (reader.NodeType == XmlNodeType.Element
+                && string.Equals(reader.LocalName, "sheet", StringComparison.Ordinal))
+                count++;
+        }
+        return count;
+    }
+
+    /// <summary>
+    /// 扫描工作表 XML 中的物理单元格和最大使用列。
+    /// </summary>
+    /// <param name="entry">工作表 XML 的 ZIP 条目。</param>
+    /// <param name="cancellationToken">用于取消 XML 扫描的令牌。</param>
+    /// <param name="provider">用于资源限制异常上下文的提供程序名称。</param>
+    /// <param name="maximumColumns">允许的最大使用列；为 null 时不限制列数。</param>
+    /// <param name="maximumCells">允许的累计物理单元格数；为 null 时不限制单元格数。</param>
+    /// <param name="existingCells">扫描当前工作表前已统计的单元格数。</param>
+    /// <returns>当前扫描后的累计单元格数和最大列号。</returns>
+    private static WorksheetStructure ScanWorksheetStructure(ZipArchiveEntry entry,
+        CancellationToken cancellationToken, string provider, int? maximumColumns,
+        long? maximumCells, long existingCells)
+    {
+        using var stream = entry.Open();
+        using var reader = CreateReader(stream);
+        long totalCells = existingCells;
+        var maximumColumn = 0;
+        while (reader.Read())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (reader.NodeType != XmlNodeType.Element
+                || !string.Equals(reader.LocalName, "c", StringComparison.Ordinal))
+                continue;
+            totalCells++;
+            if (maximumCells.HasValue && totalCells > maximumCells.Value)
+                Resource($"XLSX 物理 Cell 数量超过限制: {maximumCells.Value}", provider);
+            var reference = reader.GetAttribute("r");
+            var column = ParseColumnIndex(reference);
+            if (column > maximumColumn)
+                maximumColumn = column;
+            if (maximumColumns.HasValue && column > maximumColumns.Value)
+                Resource($"XLSX Sheet 最大使用列超过限制: {maximumColumns.Value}", provider);
+        }
+        return new WorksheetStructure(totalCells, maximumColumn);
+    }
+
+    /// <summary>
+    /// 从 A1 单元格引用中解析一基列号。
+    /// </summary>
+    /// <param name="reference">包含列字母的单元格引用。</param>
+    /// <returns>解析出的列号；引用为空或不含列字母时返回 0。</returns>
+    private static int ParseColumnIndex(string reference)
+    {
+        if (string.IsNullOrWhiteSpace(reference))
+            return 0;
+        var column = 0;
+        for (var index = 0; index < reference.Length; index++)
+        {
+            var character = reference[index];
+            if (character < 'A' || character > 'Z')
+                break;
+            column = checked(column * 26 + character - 'A' + 1);
+        }
+        return column;
+    }
+
+    /// <summary>
+    /// 创建启用安全 XML 设置的读取器。
+    /// </summary>
+    /// <param name="stream">待读取的 XML 流。</param>
+    /// <returns>使用受限解析设置创建的 XML 读取器。</returns>
+    private static XmlReader CreateReader(Stream stream) => XmlReader.Create(stream, new XmlReaderSettings
+    {
+        DtdProcessing = DtdProcessing.Prohibit,
+        XmlResolver = null,
+        IgnoreComments = true,
+        IgnoreWhitespace = true,
+        MaxCharactersFromEntities = 0,
+        MaxCharactersInDocument = 0
+    });
+
+    /// <summary>
+    /// 保存工作表结构扫描结果。
+    /// </summary>
+    private readonly struct WorksheetStructure
+    {
+        /// <summary>
+        /// 初始化一个 <see cref="WorksheetStructure" /> 类型的实例。
+        /// </summary>
+        /// <param name="totalCells">扫描后的累计物理单元格数。</param>
+        /// <param name="maximumColumn">扫描到的最大列号。</param>
+        internal WorksheetStructure(long totalCells, int maximumColumn)
+        {
+            TotalCells = totalCells;
+            MaximumColumn = maximumColumn;
+        }
+
+        /// <summary>
+        /// 获取累计物理单元格数。
+        /// </summary>
+        internal long TotalCells { get; }
+
+        /// <summary>
+        /// 获取扫描到的最大列号。
+        /// </summary>
+        internal int MaximumColumn { get; }
+    }
+
+    /// <summary>
     /// 校验 ZIP 条目路径不包含不受支持的路径形式。
     /// </summary>
     /// <param name="name">待校验的 ZIP 条目名称。</param>
@@ -195,8 +358,8 @@ internal static class ExcelXlsxZipPreflight
     private static void ValidateEntryPath(string name, string provider)
     {
         if (string.IsNullOrWhiteSpace(name) || name.StartsWith("/", StringComparison.Ordinal)
-            || name.Contains("\\", StringComparison.Ordinal) || name.Contains("../", StringComparison.Ordinal)
-            || name.Contains("..\\", StringComparison.Ordinal))
+            || name.IndexOf('\\') >= 0 || name.IndexOf("../", StringComparison.Ordinal) >= 0
+            || name.IndexOf("..\\", StringComparison.Ordinal) >= 0)
             Resource($"XLSX ZIP entry 路径无效: {name}", provider);
     }
 

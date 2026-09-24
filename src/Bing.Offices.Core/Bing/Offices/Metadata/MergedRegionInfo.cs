@@ -33,7 +33,7 @@ public class MergedRegionInfo
     /// <summary>
     /// 初始化一个 <see cref="MergedRegionInfo" /> 类型的实例。
     /// </summary>
-    /// <param name="index">索引</param>
+    /// <param name="index">合并区域在工作表登记集合中的索引；未登记时为 -1。</param>
     /// <param name="firstRow">左上角的零基行号。</param>
     /// <param name="lastRow">右下角的零基行号。</param>
     /// <param name="firstCol">左上角的零基列号。</param>

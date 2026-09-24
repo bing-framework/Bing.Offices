@@ -12,7 +12,9 @@ Workbook 元数据使用请求级 `ExcelWorkbookMetadataOptions` 配置，不依
 
 NPOI 导入会先把输入复制到受 `MaxInputBytes` 约束的内存流，再建立 Workbook DOM；`ImportAsync` 的输入复制使用 `ReadAsync`，之后的 NPOI DOM 解析仍为同步阶段；`MaxInputBytes` 不等于解压后 DOM 峰值保护。失败工作簿的 `MaxSerializedBytes` 只限制序列化输出，不限制原始 Workbook、解压内容、业务实体或失败工作簿 DOM 的峰值。部署不受信任文件时还应设置进程内存/CPU 限额，并使用 `ExcelResourceLimits` 限制行、错误、图片和唯一值；未映射图片不会被图片限制器扫描。
 
-MiniExcel 是与 NPOI 并列的独立 XLSX Provider。它复用同一套 Workbook Request、Mapping Plan、Converter、Validation、错误结果和文件提交契约，不引入第二套 `MiniExcel*Request`、Mapping Profile 或业务 Attribute。通过 `services.AddBingOfficesMiniExcel()` 注册后，业务代码仍只依赖 `IExcelImporter` 与 `IExcelExporter`。应用启动时应选择一个 Provider；两个注册扩展都使用 `TryAdd`，同时注册时先注册的实现会保留，不能把这种顺序行为当作按请求动态切换 Provider 的 API。
+MiniExcel 与 ClosedXML 都是与 NPOI 并列的独立 XLSX Provider。它们复用同一套 Workbook Request、Mapping Plan、Converter、Validation、错误结果和文件提交契约，不引入第二套 Provider-specific Request、Mapping Profile 或业务 Attribute。通过 `services.AddBingOfficesMiniExcel()` 或 `services.AddBingOfficesClosedXml()` 注册后，业务代码仍只依赖 `IExcelImporter` 与 `IExcelExporter`。应用启动时应选择一个 Provider；注册扩展都使用 `TryAdd`，同时注册时先注册的实现会保留，不能把这种顺序行为当作按请求动态切换 Provider 的 API。
+
+ClosedXML 适合富 XLSX 报表、模板样式、合并、公式保存和 Entity Layout（固定 Cell、多个 List Region、Merge、Relations）。它支持显式行高和 Sheet/Column/Cell 资源限制；Entity List Region 动态列仍显式不支持。第一版明确不支持 XLS、Chart、PivotTable、XLSM 宏保留和完整 Excel Formula Engine，详见 [Provider 能力矩阵](09-providers.md)。
 
 下方完整 Workbook 能力列表以 NPOI Provider 为基准；MiniExcel 只承诺 [Provider 能力矩阵](09-providers.md) 中已验证的常规 XLSX、映射、转换、校验、动态列和关系能力，其余请求必须按结构化 `UnsupportedFeature` fail-fast。
 

@@ -16,6 +16,7 @@ var baselinePath = Path.GetFullPath(arguments.GetValueOrDefault("baseline") ?? "
 var output = arguments.GetValueOrDefault("output");
 var dependencies = arguments.GetValueOrDefault("dependencies");
 var packages = arguments.GetValueOrDefault("packages");
+var approval = arguments.GetValueOrDefault("approval");
 var repository = Path.GetFullPath(arguments.GetValueOrDefault("repository") ?? Directory.GetCurrentDirectory());
 var captureOnly = string.Equals(arguments.GetValueOrDefault("capture"), "true", StringComparison.OrdinalIgnoreCase);
 var targetFrameworks = new[] { "net6.0", "net8.0" };
@@ -51,7 +52,8 @@ var candidateAssemblyPaths = GetCandidateAssemblyPaths(root);
 
 if (!captureOnly)
 {
-    CandidateIdentityVerifier.Validate(baseline!, candidateAssemblyPaths, packages, repository, failures);
+    CandidateIdentityVerifier.Validate(
+        baseline!, candidateAssemblyPaths, packages, repository, failures, approval);
 }
 
 foreach (var tfm in targetFrameworks)
@@ -61,7 +63,8 @@ foreach (var tfm in targetFrameworks)
         Path.Combine(root, "netstandard2.0", "Bing.Offices.Abstractions.dll"),
         Path.Combine(root, "netstandard2.0", "Bing.Offices.Core.dll"),
         Path.Combine(root, tfm, "Bing.Offices.Npoi.dll"),
-        Path.Combine(root, tfm, "Bing.Offices.MiniExcel.dll")
+        Path.Combine(root, tfm, "Bing.Offices.MiniExcel.dll"),
+        Path.Combine(root, tfm, "Bing.Offices.ClosedXml.dll")
     };
     if (paths.Any(path => !File.Exists(path)))
     {
@@ -128,7 +131,7 @@ foreach (var tfm in targetFrameworks)
 
 if (captureOnly)
     candidate.CandidateIdentity = CandidateIdentityVerifier.Capture(
-        candidateAssemblyPaths, packages, repository, candidate.BaselineCommit, failures);
+        candidateAssemblyPaths, packages, repository, candidate.BaselineCommit, failures, approval);
 
 if (output is not null)
 {
@@ -182,59 +185,151 @@ static Dictionary<string, string> GetCandidateAssemblyPaths(string root) =>
         ["net6.0/Bing.Offices.MiniExcel.dll"] =
             Path.Combine(root, "net6.0", "Bing.Offices.MiniExcel.dll"),
         ["net8.0/Bing.Offices.MiniExcel.dll"] =
-            Path.Combine(root, "net8.0", "Bing.Offices.MiniExcel.dll")
+            Path.Combine(root, "net8.0", "Bing.Offices.MiniExcel.dll"),
+        ["net6.0/Bing.Offices.ClosedXml.dll"] =
+            Path.Combine(root, "net6.0", "Bing.Offices.ClosedXml.dll"),
+        ["net8.0/Bing.Offices.ClosedXml.dll"] =
+            Path.Combine(root, "net8.0", "Bing.Offices.ClosedXml.dll")
     };
 
+/// <summary>
+/// 公共 API 快照基线文档模型。
+/// </summary>
 public sealed class ApiBaselineDocument
 {
+    /// <summary>
+    /// 获取或设置基线文档格式标识。
+    /// </summary>
     public string Schema { get; set; } = "";
+    /// <summary>
+    /// 获取或设置生成快照的工具版本。
+    /// </summary>
     public string GeneratorVersion { get; set; } = "";
+    /// <summary>
+    /// 获取或设置基线对应的仓库提交标识。
+    /// </summary>
     public string BaselineCommit { get; set; } = "";
+    /// <summary>
+    /// 获取或设置批准基线的人员标识。
+    /// </summary>
     public string ApprovedBy { get; set; } = "";
+    /// <summary>
+    /// 获取或设置批准基线的时间文本。
+    /// </summary>
     public string ApprovedAt { get; set; } = "";
+    /// <summary>
+    /// 获取或设置候选程序集、包和源清单身份。
+    /// </summary>
     public ApiCandidateIdentity? CandidateIdentity { get; set; }
+    /// <summary>
+    /// 获取或设置按目标框架和程序集组织的 API 快照。
+    /// </summary>
     public Dictionary<string, Dictionary<string, ApiSnapshotRecord>> Assemblies { get; set; } = new(StringComparer.Ordinal);
 }
 
+/// <summary>
+/// 候选构建产物的身份记录模型。
+/// </summary>
 public sealed class ApiCandidateIdentity
 {
+    /// <summary>
+    /// 获取或设置候选身份算法格式。
+    /// </summary>
     public string ArtifactIdentityFormat { get; set; } = "";
+    /// <summary>
+    /// 获取或设置候选身份使用的基线提交标识。
+    /// </summary>
     public string BaseCommit { get; set; } = "";
+    /// <summary>
+    /// 获取或设置采集身份时的工作区状态。
+    /// </summary>
     public string WorktreeState { get; set; } = "";
+    /// <summary>
+    /// 获取或设置候选源文件清单的 SHA-256 哈希。
+    /// </summary>
     public string CandidateSourceManifestSha256 { get; set; } = "";
+    /// <summary>
+    /// 获取或设置 Breaking Change 审批文件的相对路径。
+    /// </summary>
     public string BreakingApprovalArtifact { get; set; } = "";
+    /// <summary>
+    /// 获取或设置 Breaking Change 审批文件的 SHA-256 哈希。
+    /// </summary>
     public string BreakingApprovalSha256 { get; set; } = "";
+    /// <summary>
+    /// 获取或设置候选程序集相对路径到身份哈希的映射。
+    /// </summary>
     public Dictionary<string, string> AssemblyFiles { get; set; } = new(StringComparer.Ordinal);
+    /// <summary>
+    /// 获取或设置候选 NuGet 包相对路径到身份哈希的映射。
+    /// </summary>
     public Dictionary<string, string> NupkgFiles { get; set; } = new(StringComparer.Ordinal);
 }
 
+/// <summary>
+/// 单个程序集的 API 快照记录模型。
+/// </summary>
 public sealed class ApiSnapshotRecord
 {
+    /// <summary>
+    /// 获取或设置快照中的成员数量。
+    /// </summary>
     public int MemberCount { get; set; }
+    /// <summary>
+    /// 获取或设置快照成员清单的哈希。
+    /// </summary>
     public string Hash { get; set; } = "";
+    /// <summary>
+    /// 获取或设置按稳定顺序保存的成员签名清单。
+    /// </summary>
     public List<string> Lines { get; set; } = new();
 }
 
+/// <summary>
+/// API 快照之间的成员差异模型。
+/// </summary>
 public sealed class ApiMemberDiff
 {
+    /// <summary>
+    /// 获取或设置实际快照新增的成员签名。
+    /// </summary>
     public List<string> Added { get; set; } = new();
+    /// <summary>
+    /// 获取或设置实际快照移除的成员签名。
+    /// </summary>
     public List<string> Removed { get; set; } = new();
 }
 
+/// <summary>
+/// 采集并校验候选构建身份的内部服务。
+/// </summary>
 internal static class CandidateIdentityVerifier
 {
+    /// <summary>
+    /// 候选产物身份记录使用的逻辑格式标识。
+    /// </summary>
     private const string ArtifactIdentityFormat = "logical-v3";
+    /// <summary>
+    /// 默认 Breaking Change 审批文件的仓库相对路径。
+    /// </summary>
     internal const string BreakingApprovalPath =
         "ai_docs/tasks/BO-RC-20260908-002/api-breaking-approval.md";
 
+    /// <summary>
+    /// 候选身份必须覆盖的生产 NuGet 包标识。
+    /// </summary>
     private static readonly string[] RequiredPackageIds =
     {
         "Bing.Offices.Abstractions",
         "Bing.Offices.Core",
         "Bing.Offices.Npoi",
-        "Bing.Offices.MiniExcel"
+        "Bing.Offices.MiniExcel",
+        "Bing.Offices.ClosedXml"
     };
 
+    /// <summary>
+    /// 参与候选源清单哈希的仓库相对路径范围。
+    /// </summary>
     private static readonly string[] CandidateSourceScope =
     {
         // 只绑定会影响 Release 程序集或 nupkg 内容的输入，避免文档、测试和 CI 配置导致 API 基线失效。
@@ -242,12 +337,23 @@ internal static class CandidateIdentityVerifier
         "framework.props", "common.props", "Directory.Build.targets", "version.props", "version.dev.props"
     };
 
+    /// <summary>
+    /// 从当前程序集、包和仓库状态采集候选身份。
+    /// </summary>
+    /// <param name="assemblyPaths">待采集的程序集路径。</param>
+    /// <param name="packagesRoot">NuGet 包目录；为空时不采集包身份。</param>
+    /// <param name="repositoryRoot">候选仓库根目录。</param>
+    /// <param name="candidateCommit">候选基线提交标识。</param>
+    /// <param name="failures">用于追加采集失败信息的集合。</param>
+    /// <param name="approvalPath">审批文件相对路径；省略时使用默认路径。</param>
+    /// <returns>采集到的候选身份。</returns>
     public static ApiCandidateIdentity Capture(
         IReadOnlyDictionary<string, string> assemblyPaths,
         string? packagesRoot,
         string repositoryRoot,
         string candidateCommit,
-        List<string> failures)
+        List<string> failures,
+        string? approvalPath = null)
     {
         var identity = new ApiCandidateIdentity
         {
@@ -272,25 +378,34 @@ internal static class CandidateIdentityVerifier
         else
             failures.Add($"capture: unable to hash candidate source manifest: {sourceError}");
 
-        identity.BreakingApprovalArtifact = BreakingApprovalPath;
-        var approvalPath = ResolveWithinRoot(repositoryRoot, BreakingApprovalPath);
-        if (approvalPath is null)
+        if (!TryNormalizeApprovalPath(approvalPath, out var normalizedApprovalPath, out var approvalError))
         {
-            failures.Add($"capture: approval file path escapes repository root: {BreakingApprovalPath}");
-        }
-        else if (!File.Exists(approvalPath))
-        {
-            failures.Add($"capture: approval file is missing: {approvalPath}");
+            failures.Add($"capture: approval file path is invalid: {approvalError}");
         }
         else
         {
-            try
+            identity.BreakingApprovalArtifact = normalizedApprovalPath;
+            var fullApprovalPath = ResolveWithinRoot(repositoryRoot, normalizedApprovalPath);
+            if (fullApprovalPath is null)
             {
-                identity.BreakingApprovalSha256 = ApiSnapshotFileHash.ComputeCanonicalTextSha256(approvalPath);
+                failures.Add($"capture: approval file path escapes repository root: {normalizedApprovalPath}");
             }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            else if (!File.Exists(fullApprovalPath))
             {
-                failures.Add($"capture: approval file could not be hashed: {approvalPath}; {exception.Message}");
+                failures.Add($"capture: approval file is missing: {fullApprovalPath}");
+            }
+            else
+            {
+                try
+                {
+                    identity.BreakingApprovalSha256 =
+                        ApiSnapshotFileHash.ComputeCanonicalTextSha256(fullApprovalPath);
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                    failures.Add(
+                        $"capture: approval file could not be hashed: {fullApprovalPath}; {exception.Message}");
+                }
             }
         }
 
@@ -300,12 +415,22 @@ internal static class CandidateIdentityVerifier
         return identity;
     }
 
+    /// <summary>
+    /// 校验候选程序集、包、仓库清单和审批文件身份。
+    /// </summary>
+    /// <param name="baseline">包含候选身份的 API 基线。</param>
+    /// <param name="assemblyPaths">待校验的程序集路径。</param>
+    /// <param name="packagesRoot">NuGet 包目录。</param>
+    /// <param name="repositoryRoot">候选仓库根目录。</param>
+    /// <param name="failures">用于追加校验失败信息的集合。</param>
+    /// <param name="approvalPath">审批文件相对路径；省略时使用默认路径。</param>
     public static void Validate(
         ApiBaselineDocument baseline,
         IReadOnlyDictionary<string, string> assemblyPaths,
         string? packagesRoot,
         string repositoryRoot,
-        List<string> failures)
+        List<string> failures,
+        string? approvalPath = null)
     {
         var identity = baseline.CandidateIdentity;
         if (identity is null)
@@ -333,9 +458,19 @@ internal static class CandidateIdentityVerifier
 
         var actualAssemblyFiles = ValidateAssemblyFiles(identity.AssemblyFiles, assemblyPaths, failures);
         ValidateNupkgFiles(identity.NupkgFiles, packagesRoot, actualAssemblyFiles, assemblyPaths, failures);
-        ValidateApprovalFile(identity, repositoryRoot, failures);
+        if (!TryNormalizeApprovalPath(approvalPath, out var normalizedApprovalPath, out var approvalError))
+            failures.Add($"candidate identity approval file path is invalid: {approvalError}");
+        else
+            ValidateApprovalFile(identity, repositoryRoot, normalizedApprovalPath, failures);
     }
 
+    /// <summary>
+    /// 校验候选程序集身份并返回当前程序集哈希。
+    /// </summary>
+    /// <param name="recordedFiles">基线记录的程序集哈希映射。</param>
+    /// <param name="assemblyPaths">待校验的程序集路径映射。</param>
+    /// <param name="failures">用于追加校验失败信息的集合。</param>
+    /// <returns>当前程序集相对路径到身份哈希的映射。</returns>
     private static Dictionary<string, string> ValidateAssemblyFiles(
         IReadOnlyDictionary<string, string>? recordedFiles,
         IReadOnlyDictionary<string, string> assemblyPaths,
@@ -364,6 +499,14 @@ internal static class CandidateIdentityVerifier
         return actual;
     }
 
+    /// <summary>
+    /// 校验候选 NuGet 包的路径、数量和内容身份。
+    /// </summary>
+    /// <param name="recordedFiles">基线记录的 NuGet 包哈希映射。</param>
+    /// <param name="packagesRoot">待校验的 NuGet 包目录。</param>
+    /// <param name="assemblyFiles">已校验的程序集身份哈希映射。</param>
+    /// <param name="assemblyPaths">候选程序集路径映射。</param>
+    /// <param name="failures">用于追加校验失败信息的集合。</param>
     private static void ValidateNupkgFiles(
         IReadOnlyDictionary<string, string>? recordedFiles,
         string? packagesRoot,
@@ -373,7 +516,7 @@ internal static class CandidateIdentityVerifier
     {
         var recorded = NormalizeHashMap(recordedFiles, "nupkg", failures);
         if (recorded.Count < RequiredPackageIds.Length)
-            failures.Add("candidate identity must contain hashes for the four production nupkg files");
+            failures.Add("candidate identity must contain hashes for the five production nupkg files");
         if (string.IsNullOrWhiteSpace(packagesRoot))
         {
             failures.Add("nupkg hash verification requires --packages <directory>");
@@ -442,13 +585,32 @@ internal static class CandidateIdentityVerifier
         }
     }
 
+    /// <summary>
+    /// 校验候选身份中的审批文件路径和内容哈希。
+    /// </summary>
+    /// <param name="identity">待校验的候选身份。</param>
+    /// <param name="repositoryRoot">候选仓库根目录。</param>
+    /// <param name="expectedPath">当前配置要求的审批文件路径。</param>
+    /// <param name="failures">用于追加校验失败信息的集合。</param>
     private static void ValidateApprovalFile(ApiCandidateIdentity identity, string repositoryRoot,
-        List<string> failures)
+        string expectedPath, List<string> failures)
     {
-        var path = NormalizeRelativePath(identity.BreakingApprovalArtifact);
-        if (!string.Equals(path, BreakingApprovalPath, StringComparison.Ordinal))
+        if (!TryNormalizeApprovalPath(identity.BreakingApprovalArtifact, out var path, out var approvalError))
         {
-            failures.Add($"candidate identity approval path is not the approved task-root file: {path}");
+            failures.Add($"candidate identity approval file path is invalid: {approvalError}");
+            return;
+        }
+
+        if (!string.Equals(identity.BreakingApprovalArtifact, path, StringComparison.Ordinal))
+        {
+            failures.Add($"candidate identity approval path is not normalized: {identity.BreakingApprovalArtifact}");
+            return;
+        }
+
+        if (!string.Equals(path, expectedPath, StringComparison.Ordinal))
+        {
+            failures.Add($"candidate identity approval path does not match configured path: "
+                + $"expected={expectedPath}; actual={path}");
             return;
         }
 
@@ -463,6 +625,74 @@ internal static class CandidateIdentityVerifier
             $"approval file {path}", failures);
     }
 
+    /// <summary>
+    /// 规范化并校验相对于仓库根目录的审批文件路径。
+    /// </summary>
+    /// <param name="value">待处理的路径；为空时使用默认路径。</param>
+    /// <param name="normalized">返回使用正斜杠且已消除相对片段的路径。</param>
+    /// <param name="error">路径无效时返回错误说明。</param>
+    /// <returns>路径有效时返回 <see langword="true"/>，否则返回 <see langword="false"/>。</returns>
+    private static bool TryNormalizeApprovalPath(
+        string? value, out string normalized, out string error)
+    {
+        var candidate = string.IsNullOrWhiteSpace(value) ? BreakingApprovalPath : value.Trim();
+        candidate = candidate.Replace('\\', '/');
+        if (candidate.Length == 0)
+        {
+            normalized = string.Empty;
+            error = "path is empty";
+            return false;
+        }
+
+        if (candidate.StartsWith("/", StringComparison.Ordinal)
+            || candidate.Contains(':', StringComparison.Ordinal))
+        {
+            normalized = string.Empty;
+            error = $"path must be relative: {value}";
+            return false;
+        }
+
+        var segments = new List<string>();
+        foreach (var segment in candidate.Split('/', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (string.Equals(segment, ".", StringComparison.Ordinal))
+                continue;
+            if (string.Equals(segment, "..", StringComparison.Ordinal))
+            {
+                if (segments.Count == 0)
+                {
+                    normalized = string.Empty;
+                    error = $"path escapes repository root: {value}";
+                    return false;
+                }
+
+                segments.RemoveAt(segments.Count - 1);
+                continue;
+            }
+
+            segments.Add(segment);
+        }
+
+        if (segments.Count == 0)
+        {
+            normalized = string.Empty;
+            error = $"path is empty: {value}";
+            return false;
+        }
+
+        normalized = string.Join("/", segments);
+        error = string.Empty;
+        return true;
+    }
+
+    /// <summary>
+    /// 采集生产 NuGet 包的规范化身份哈希。
+    /// </summary>
+    /// <param name="packagesRoot">NuGet 包目录。</param>
+    /// <param name="assemblyFiles">候选程序集身份哈希映射。</param>
+    /// <param name="assemblyPaths">候选程序集路径映射。</param>
+    /// <param name="failures">用于追加采集失败信息的集合。</param>
+    /// <returns>NuGet 包相对路径到身份哈希的映射。</returns>
     private static Dictionary<string, string> CaptureNupkgFiles(string packagesRoot,
         IReadOnlyDictionary<string, string> assemblyFiles,
         IReadOnlyDictionary<string, string> assemblyPaths, List<string> failures)
@@ -502,6 +732,13 @@ internal static class CandidateIdentityVerifier
         return result;
     }
 
+    /// <summary>
+    /// 采集候选程序集的公共 API 身份哈希。
+    /// </summary>
+    /// <param name="assemblyPaths">候选程序集路径映射。</param>
+    /// <param name="operation">当前采集或校验操作名称。</param>
+    /// <param name="failures">用于追加采集失败信息的集合。</param>
+    /// <returns>程序集相对路径到身份哈希的映射。</returns>
     private static Dictionary<string, string> CaptureAssemblyFiles(
         IReadOnlyDictionary<string, string> assemblyPaths, string operation, List<string> failures)
     {
@@ -536,6 +773,12 @@ internal static class CandidateIdentityVerifier
         return result;
     }
 
+    /// <summary>
+    /// 计算程序集公共 API 快照的身份哈希。
+    /// </summary>
+    /// <param name="path">程序集文件路径。</param>
+    /// <param name="additionalAssemblyPaths">解析快照所需的附加程序集路径。</param>
+    /// <returns>程序集身份哈希。</returns>
     private static string ComputeAssemblyIdentityHash(string path, IEnumerable<string> additionalAssemblyPaths)
     {
         var snapshot = PublicApiSnapshot.Load(path, additionalAssemblyPaths);
@@ -548,6 +791,13 @@ internal static class CandidateIdentityVerifier
         }));
     }
 
+    /// <summary>
+    /// 计算 NuGet 包规范化内容的身份哈希。
+    /// </summary>
+    /// <param name="packagePath">NuGet 包文件路径。</param>
+    /// <param name="assemblyFiles">候选程序集身份哈希映射。</param>
+    /// <param name="assemblyPaths">候选程序集路径映射。</param>
+    /// <returns>NuGet 包身份哈希。</returns>
     private static string ComputePackageIdentityHash(string packagePath,
         IReadOnlyDictionary<string, string> assemblyFiles,
         IReadOnlyDictionary<string, string> assemblyPaths)
@@ -569,6 +819,14 @@ internal static class CandidateIdentityVerifier
         return ComputeUtf8Sha256("bing.offices.nupkg-identity.v1\n" + string.Join("\n", entries));
     }
 
+    /// <summary>
+    /// 计算单个 NuGet 包资产的规范化身份哈希。
+    /// </summary>
+    /// <param name="entry">待处理的 ZIP 资产。</param>
+    /// <param name="relativePath">资产在包内的相对路径。</param>
+    /// <param name="assemblyFiles">候选程序集身份哈希映射。</param>
+    /// <param name="assemblyPaths">候选程序集路径映射。</param>
+    /// <returns>带资产类型前缀的身份哈希。</returns>
     private static string ComputePackageEntryIdentityHash(ZipArchiveEntry entry, string relativePath,
         IReadOnlyDictionary<string, string> assemblyFiles,
         IReadOnlyDictionary<string, string> assemblyPaths)
@@ -618,6 +876,12 @@ internal static class CandidateIdentityVerifier
             : "binary:" + ApiSnapshotFileHash.ComputeSha256(stream);
     }
 
+    /// <summary>
+    /// 计算 XML 包资产在格式差异归一化后的身份哈希。
+    /// </summary>
+    /// <param name="stream">XML 资产输入流。</param>
+    /// <param name="normalizeRepositoryMetadata">是否移除 NuGet 注入的仓库提交元数据。</param>
+    /// <returns>规范化 XML 的身份哈希。</returns>
     private static string ComputeXmlPackageEntryIdentityHash(Stream stream, bool normalizeRepositoryMetadata)
     {
         var settings = new XmlReaderSettings
@@ -654,9 +918,19 @@ internal static class CandidateIdentityVerifier
         return ComputeUtf8Sha256(document.ToString(SaveOptions.DisableFormatting));
     }
 
+    /// <summary>
+    /// 判断包内路径是否属于 XML 资产。
+    /// </summary>
+    /// <param name="relativePath">包内相对路径。</param>
+    /// <returns>扩展名为 XML、NUSPEC 或 RELS 时返回 <see langword="true" />。</returns>
     private static bool IsXmlPackageEntry(string relativePath) =>
         Path.GetExtension(relativePath).ToLowerInvariant() is ".xml" or ".nuspec" or ".rels";
 
+    /// <summary>
+    /// 判断包内路径是否应按规范化文本处理。
+    /// </summary>
+    /// <param name="relativePath">包内相对路径。</param>
+    /// <returns>路径属于受支持的文本资产时返回 <see langword="true" />。</returns>
     private static bool IsCanonicalTextPackageEntry(string relativePath)
     {
         var fileName = Path.GetFileName(relativePath);
@@ -668,6 +942,13 @@ internal static class CandidateIdentityVerifier
             or ".props" or ".targets" or ".config";
     }
 
+    /// <summary>
+    /// 规范化身份哈希映射中的路径并记录非法哈希。
+    /// </summary>
+    /// <param name="values">待处理的哈希映射；为 <see langword="null" /> 时返回空映射。</param>
+    /// <param name="label">映射类型标签。</param>
+    /// <param name="failures">用于追加校验失败信息的集合。</param>
+    /// <returns>使用规范化相对路径的哈希映射。</returns>
     private static Dictionary<string, string> NormalizeHashMap(
         IReadOnlyDictionary<string, string>? values, string label, List<string> failures)
     {
@@ -688,6 +969,13 @@ internal static class CandidateIdentityVerifier
     }
 
 
+    /// <summary>
+    /// 计算并校验规范化文本文件的 SHA-256 哈希。
+    /// </summary>
+    /// <param name="path">待校验的文本文件路径。</param>
+    /// <param name="expectedHash">预期 SHA-256 哈希。</param>
+    /// <param name="label">错误信息中的文件标签。</param>
+    /// <param name="failures">用于追加校验失败信息的集合。</param>
     private static void ValidateCanonicalTextFileHash(string path, string expectedHash, string label,
         List<string> failures)
     {
@@ -711,6 +999,13 @@ internal static class CandidateIdentityVerifier
         }
     }
 
+    /// <summary>
+    /// 比较预期和实际身份哈希并记录差异。
+    /// </summary>
+    /// <param name="label">错误信息中的身份标签。</param>
+    /// <param name="expectedHash">预期 SHA-256 哈希。</param>
+    /// <param name="actualHash">实际 SHA-256 哈希。</param>
+    /// <param name="failures">用于追加校验失败信息的集合。</param>
     private static void ValidateHash(string label, string expectedHash, string actualHash, List<string> failures)
     {
         if (!ApiSnapshotFileHash.IsSha256(expectedHash))
@@ -723,6 +1018,13 @@ internal static class CandidateIdentityVerifier
             failures.Add($"candidate identity {label} SHA-256 mismatch: expected={expectedHash}; actual={actualHash}");
     }
 
+    /// <summary>
+    /// 计算候选源文件清单的 Git 规范化 SHA-256 哈希。
+    /// </summary>
+    /// <param name="repositoryRoot">候选仓库根目录。</param>
+    /// <param name="hash">成功时返回源文件清单哈希。</param>
+    /// <param name="error">失败时返回错误说明。</param>
+    /// <returns>成功计算时返回 <see langword="true" />，否则返回 <see langword="false" />。</returns>
     private static bool TryGetCandidateSourceManifestSha256(string repositoryRoot, out string hash, out string error)
     {
         if (!TryRunGit(repositoryRoot,
@@ -773,6 +1075,14 @@ internal static class CandidateIdentityVerifier
         return true;
     }
 
+    /// <summary>
+    /// 运行 Git 命令并以结果参数返回标准输出或错误。
+    /// </summary>
+    /// <param name="repositoryRoot">Git 命令的工作目录。</param>
+    /// <param name="arguments">Git 命令参数。</param>
+    /// <param name="output">成功时返回标准输出。</param>
+    /// <param name="error">失败时返回错误说明。</param>
+    /// <returns>命令成功退出时返回 <see langword="true" />，否则返回 <see langword="false" />。</returns>
     private static bool TryRunGit(string repositoryRoot, IEnumerable<string> arguments,
         out string output, out string error)
     {
@@ -824,6 +1134,11 @@ internal static class CandidateIdentityVerifier
         }
     }
 
+    /// <summary>
+    /// 计算文本 UTF-8 字节序列的 SHA-256 哈希。
+    /// </summary>
+    /// <param name="value">待计算哈希的文本。</param>
+    /// <returns>大写十六进制 SHA-256 哈希。</returns>
     private static string ComputeUtf8Sha256(string value)
     {
         using var sha256 = SHA256.Create();
@@ -831,6 +1146,12 @@ internal static class CandidateIdentityVerifier
             .Replace("-", string.Empty, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 将相对路径解析为根目录内的绝对路径。
+    /// </summary>
+    /// <param name="root">允许访问的根目录。</param>
+    /// <param name="relativePath">待解析的相对路径。</param>
+    /// <returns>路径位于根目录内时返回绝对路径，否则返回 <see langword="null" />。</returns>
     private static string? ResolveWithinRoot(string root, string relativePath)
     {
         if (string.IsNullOrWhiteSpace(relativePath) || Path.IsPathRooted(relativePath))
@@ -854,6 +1175,11 @@ internal static class CandidateIdentityVerifier
         }
     }
 
+    /// <summary>
+    /// 规范化相对路径的分隔符和当前目录片段。
+    /// </summary>
+    /// <param name="path">待规范化的路径。</param>
+    /// <returns>使用正斜杠且移除前导当前目录片段的路径。</returns>
     private static string NormalizeRelativePath(string path)
     {
         var normalized = (path ?? string.Empty).Trim().Replace('\\', '/');
@@ -862,6 +1188,11 @@ internal static class CandidateIdentityVerifier
         return normalized;
     }
 
+    /// <summary>
+    /// 从 NuGet 包文件名识别生产包标识。
+    /// </summary>
+    /// <param name="path">NuGet 包路径或文件名。</param>
+    /// <returns>识别到的生产包标识；无法识别时返回 <see langword="null" />。</returns>
     private static string? GetPackageId(string path)
     {
         var fileName = Path.GetFileName(path);

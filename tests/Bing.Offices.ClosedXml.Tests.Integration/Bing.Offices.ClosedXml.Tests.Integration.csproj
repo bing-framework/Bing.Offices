@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="..\..\common.tests.props" />
+  <PropertyGroup>
+    <TargetFrameworks>net6.0;net8.0</TargetFrameworks>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Bing.Offices.Abstractions\Bing.Offices.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\Bing.Offices.Core\Bing.Offices.Core.csproj" />
+    <ProjectReference Include="..\..\src\Bing.Offices.ClosedXml\Bing.Offices.ClosedXml.csproj" />
+  </ItemGroup>
+</Project>

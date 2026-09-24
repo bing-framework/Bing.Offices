@@ -254,7 +254,7 @@ public sealed class ExcelSheetImportBuilder<TItem> where TItem : class, new()
     /// <summary>
     /// 校验失败时的处理模式，默认为遇到首个失败即停止。
     /// </summary>
-    private ValidateMode _validateMode = ValidateMode.StopOnFirstFailure;
+    private ExcelValidationFailureMode _validationFailureMode = ExcelValidationFailureMode.StopOnFirstFailure;
     /// <summary>
     /// 文本转换使用的区域性，默认为不变区域性。
     /// </summary>
@@ -460,9 +460,9 @@ public sealed class ExcelSheetImportBuilder<TItem> where TItem : class, new()
     /// </summary>
     /// <param name="mode">校验失败时继续读取或立即停止的处理模式。</param>
     /// <returns>当前 Sheet 构建器，用于继续配置。</returns>
-    public ExcelSheetImportBuilder<TItem> Validate(ValidateMode mode)
+    public ExcelSheetImportBuilder<TItem> Validate(ExcelValidationFailureMode mode)
     {
-        _validateMode = mode;
+        _validationFailureMode = mode;
         return this;
     }
 
@@ -512,8 +512,8 @@ public sealed class ExcelSheetImportBuilder<TItem> where TItem : class, new()
             throw new ArgumentOutOfRangeException(nameof(_maxReadColumns));
         if (_headerRowIndex < 0 || _dataRowStartIndex < 0 || _dataRowStartIndex <= _headerRowIndex)
             throw new ArgumentOutOfRangeException(nameof(_dataRowStartIndex));
-        if (!Enum.IsDefined(typeof(ValidateMode), _validateMode))
-            throw new ArgumentOutOfRangeException(nameof(_validateMode));
+        if (!Enum.IsDefined(typeof(ExcelValidationFailureMode), _validationFailureMode))
+            throw new ArgumentOutOfRangeException(nameof(_validationFailureMode));
         if (!Enum.IsDefined(typeof(ExcelNameComparison), _headerComparison))
             throw new ArgumentOutOfRangeException(nameof(_headerComparison));
         if (!Enum.IsDefined(typeof(ExcelWhitespacePolicy), _headerWhitespace))
@@ -533,7 +533,7 @@ public sealed class ExcelSheetImportBuilder<TItem> where TItem : class, new()
         var requestConfiguration = Exports.ExcelDynamicColumnCloner.MergeIntoConfiguration(
             _requestMappingConfiguration, _dynamicColumns);
         return new ExcelSheetImportRequest(_name, _selector, typeof(TItem), targetGetter,
-        _headerRowIndex, _dataRowStartIndex, Exports.ExcelDynamicColumnCloner.Clone(_dynamicColumns), _dynamicTarget, _requireExpectedHeaders, _validateMode, _culture,
+        _headerRowIndex, _dataRowStartIndex, Exports.ExcelDynamicColumnCloner.Clone(_dynamicColumns), _dynamicTarget, _requireExpectedHeaders, _validationFailureMode, _culture,
         requestConfiguration, _mappingDocument,
         dynamicGetter,
         _maxReadColumns,

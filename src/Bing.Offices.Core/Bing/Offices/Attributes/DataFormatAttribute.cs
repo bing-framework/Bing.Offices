@@ -1,7 +1,7 @@
 ﻿namespace Bing.Offices.Attributes;
 
 /// <summary>
-/// 数据格式化特性
+/// 指定 Excel 单元格使用的内置或自定义数据格式。
 /// </summary>
 [AttributeUsage(AttributeTargets.Property, Inherited = true, AllowMultiple = false)]
 public class DataFormatAttribute : Attribute
@@ -21,12 +21,12 @@ public class DataFormatAttribute : Attribute
     /// <summary>
     /// 初始化一个 <see cref="DataFormatAttribute" /> 类型的实例。
     /// </summary>
-    /// <param name="format">内置格式</param>
+    /// <param name="format">Excel 内置数据格式的索引。</param>
     private DataFormatAttribute(short format) => BuiltinFormat = format;
 
     /// <summary>
     /// 初始化一个 <see cref="DataFormatAttribute" /> 类型的实例。
     /// </summary>
-    /// <param name="format">自定义格式</param>
+    /// <param name="format">Excel 自定义数据格式字符串。</param>
     public DataFormatAttribute(string format) => CustomFormat = format;
 }

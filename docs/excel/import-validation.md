@@ -9,7 +9,7 @@
 - `WorkbookRules`：只执行 Workbook 原生规则。
 - `ConfiguredAndWorkbook`：按 Workbook 原生规则在前、配置/属性规则在后的顺序执行两类规则。
 
-在 `ValidateMode.Continue` 下，同一行的 Workbook 原生校验失败后会停止该行后续物化，避免继续转换并产生次生错误；Workbook 校验失败的实体不会进入成功结果，Unique pending journal 也会回滚。配置校验失败但 Workbook 校验通过时，仍按 Continue 规则收集该行可继续发现的配置错误。
+在 `ExcelValidationFailureMode.Continue` 下，同一行的 Workbook 原生校验失败后会停止该行后续物化，避免继续转换并产生次生错误；Workbook 校验失败的实体不会进入成功结果，Unique pending journal 也会回滚。配置校验失败但 Workbook 校验通过时，仍按 Continue 规则收集该行可继续发现的配置错误。
 
 可用 v2 Attribute：
 

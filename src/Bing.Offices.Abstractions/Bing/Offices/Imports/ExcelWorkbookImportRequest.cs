@@ -94,7 +94,7 @@ public sealed class ExcelSheetImportRequest
     /// <param name="dynamicColumns">动态列定义集合。</param>
     /// <param name="dynamicTarget">接收动态列值的目标表达式。</param>
     /// <param name="requireExpectedHeaders">是否要求源表包含期望表头。</param>
-    /// <param name="validateMode">单元格校验模式。</param>
+    /// <param name="validationFailureMode">单元格校验失败处理模式。</param>
     /// <param name="culture">文本和数值解析使用的区域性。</param>
     /// <param name="mappingConfiguration">请求级映射配置。</param>
     /// <param name="mappingDocument">规范化映射文档。</param>
@@ -110,7 +110,7 @@ public sealed class ExcelSheetImportRequest
     internal ExcelSheetImportRequest(string name, ExcelSheetSelector selector, Type itemType, Func<object, object> target,
         int headerRowIndex,
         int dataRowStartIndex, IReadOnlyList<Exports.ExcelDynamicColumnDefinition> dynamicColumns,
-        Expression dynamicTarget, bool requireExpectedHeaders, ValidateMode validateMode,
+        Expression dynamicTarget, bool requireExpectedHeaders, ExcelValidationFailureMode validationFailureMode,
         System.Globalization.CultureInfo culture, Configurations.ExcelMappingConfiguration mappingConfiguration,
         Configurations.ExcelMappingDocument mappingDocument,
         Func<object, object> dynamicTargetGetter, int maxReadColumns,
@@ -128,7 +128,7 @@ public sealed class ExcelSheetImportRequest
         DynamicColumns = dynamicColumns?.ToArray() ?? Array.Empty<Exports.ExcelDynamicColumnDefinition>();
         DynamicTarget = dynamicTarget;
         RequireExpectedHeaders = requireExpectedHeaders;
-        ValidateMode = validateMode;
+        ValidationFailureMode = validationFailureMode;
         Culture = culture;
         MappingConfiguration = mappingConfiguration == null ? null :
             MappingConfigurationCloner.Clone(mappingConfiguration, mappingConfiguration.SourceKind);
@@ -195,10 +195,10 @@ public sealed class ExcelSheetImportRequest
     [EditorBrowsable(EditorBrowsableState.Never)]
     public bool RequireExpectedHeaders { get; }
     /// <summary>
-    /// 获取单元格校验模式。
+    /// 获取单元格校验失败处理模式。
     /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public ValidateMode ValidateMode { get; }
+    public ExcelValidationFailureMode ValidationFailureMode { get; }
     /// <summary>
     /// 获取解析区域性。
     /// </summary>

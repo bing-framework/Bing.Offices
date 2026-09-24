@@ -97,13 +97,19 @@ public sealed class ExcelSheetSelector
     public ExcelSheetSelectorKind Kind { get; }
 
     /// <summary>
-    /// 获取名称选择值；仅 <see cref="ExcelSheetSelectorKind.ByName"/> 模式有值，按索引选择时为 null。
+    /// 获取名称选择值。
     /// </summary>
+    /// <remarks>
+    /// 仅 <see cref="ExcelSheetSelectorKind.ByName"/> 模式有值，按索引选择时为 <see langword="null" />。
+    /// </remarks>
     public string Name { get; }
 
     /// <summary>
-    /// 获取索引选择值；仅 <see cref="ExcelSheetSelectorKind.ByIndex"/> 模式有值，按名称选择时为 null。
+    /// 获取索引选择值。
     /// </summary>
+    /// <remarks>
+    /// 仅 <see cref="ExcelSheetSelectorKind.ByIndex"/> 模式有值，按名称选择时为 <see langword="null" />。
+    /// </remarks>
     public int? Index { get; }
 }
 

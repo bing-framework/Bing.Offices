@@ -1,7 +1,7 @@
 ﻿namespace Bing.Offices;
 
 /// <summary>
-/// 内部常量
+/// 内部常量。
 /// </summary>
 internal static class InternalConst
 {

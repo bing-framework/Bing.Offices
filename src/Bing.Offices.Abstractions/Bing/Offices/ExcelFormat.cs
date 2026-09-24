@@ -3,7 +3,7 @@
 namespace Bing.Offices;
 
 /// <summary>
-/// Excel 格式
+/// Excel 格式。
 /// </summary>
 public enum ExcelFormat
 {

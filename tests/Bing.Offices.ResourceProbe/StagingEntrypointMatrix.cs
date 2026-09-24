@@ -40,7 +40,11 @@ internal static class StagingEntrypointMatrix
     /// <summary>
     /// 入口矩阵测试覆盖的数据行数集合。
     /// </summary>
-    private static readonly int[] RowCounts = { 1000, 10000, 100000 };
+    private static readonly int[] DefaultRowCounts = { 1000, 10000, 100000 };
+    /// <summary>
+    /// 可选单行数参数的最大安全值；加上表头后不超过 XLSX 单表行上限。
+    /// </summary>
+    private const int MaxRequestedRowCount = 1_048_575;
     /// <summary>
     /// 入口矩阵测试覆盖的 Excel 导出入口名称集合。
     /// </summary>
@@ -76,12 +80,20 @@ internal static class StagingEntrypointMatrix
     }
 
     /// <summary>
-    /// 运行。
+    /// 运行全部导出入口的资源矩阵。
     /// </summary>
     /// <param name="artifactPath">目标文件或目录路径。</param>
-    /// <returns>计算得到的数值。</returns>
-    public static int Run(string artifactPath)
+    /// <param name="requestedRowCount">可选的单个行数；取值为 1 到 1,048,575，未指定时使用默认矩阵。</param>
+    /// <returns>所有场景通过时返回零，否则返回一；参数非法时返回二。</returns>
+    public static int Run(string artifactPath, int? requestedRowCount = null)
     {
+        if (requestedRowCount.HasValue
+            && (requestedRowCount.Value < 1 || requestedRowCount.Value > MaxRequestedRowCount))
+            return 2;
+
+        var rowCounts = requestedRowCount.HasValue
+            ? new[] { requestedRowCount.Value }
+            : DefaultRowCounts;
         var fullPath = Path.GetFullPath(artifactPath);
         var directory = Path.GetDirectoryName(fullPath)
             ?? throw new InvalidOperationException("入口矩阵产物路径必须包含目录。");
@@ -95,7 +107,8 @@ internal static class StagingEntrypointMatrix
             schema = 1,
             taskId = TaskId,
             generatedUtc = DateTimeOffset.UtcNow,
-            rowCounts = RowCounts,
+            requestedRowCount,
+            rowCounts,
             entrypoints = Entrypoints,
             strategy = Strategy,
             repetitions = RepetitionCount,
@@ -104,7 +117,7 @@ internal static class StagingEntrypointMatrix
         }));
         writer.Flush();
 
-        foreach (var rowCount in RowCounts)
+        foreach (var rowCount in rowCounts)
             foreach (var entrypoint in Entrypoints)
                 for (var repetition = 1; repetition <= RepetitionCount; repetition++)
                 {
@@ -114,15 +127,15 @@ internal static class StagingEntrypointMatrix
                     passed &= result.Status == "passed";
                 }
 
-        Console.WriteLine($"STAGING_ENTRYPOINTS artifact={fullPath} scenarios={RowCounts.Length * Entrypoints.Length * RepetitionCount} status={(passed ? "passed" : "failed")}");
+        Console.WriteLine($"STAGING_ENTRYPOINTS artifact={fullPath} rowCount={(requestedRowCount.HasValue ? requestedRowCount.Value.ToString(CultureInfo.InvariantCulture) : "default")} rowCounts={string.Join(",", rowCounts)} scenarios={rowCounts.Length * Entrypoints.Length * RepetitionCount} status={(passed ? "passed" : "failed")}");
         return passed ? 0 : 1;
     }
 
     /// <summary>
-    /// 运行失败路径探针。
+    /// 运行受控失败路径探针。
     /// </summary>
     /// <param name="artifactPath">目标文件或目录路径。</param>
-    /// <returns>计算得到的数值。</returns>
+    /// <returns>所有失败场景符合预期时返回零，否则返回一。</returns>
     public static int RunFailureProbe(string artifactPath)
     {
         var fullPath = Path.GetFullPath(artifactPath);

@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics;
 using System.Runtime;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Bing.Offices.Csv;
@@ -15,7 +16,14 @@ namespace Bing.Offices.Benchmarks;
 /// </summary>
 internal static class RealIoProbe
 {
+    /// <summary>
+    /// Real IO 探针使用的数据行数。
+    /// </summary>
     private static readonly int[] RowCounts = { 1000, 10000, 100000 };
+
+    /// <summary>
+    /// Real IO 探针支持的场景名称。
+    /// </summary>
     private static readonly string[] Scenarios =
     {
         "csv-file-sync",
@@ -28,6 +36,11 @@ internal static class RealIoProbe
         "excel-throttled-async"
     };
 
+    /// <summary>
+    /// 运行全部 Real IO 场景并写入子进程结果。
+    /// </summary>
+    /// <param name="artifactPath">JSONL 输出路径。</param>
+    /// <param name="repetitionCount">每个场景的正式测量次数，至少为 3。</param>
     public static void Run(string artifactPath, int repetitionCount)
     {
         if (repetitionCount < 3)
@@ -45,6 +58,7 @@ internal static class RealIoProbe
             sourceRole = Environment.GetEnvironmentVariable("BING_OFFICES_SOURCE_ROLE") ?? "unknown",
             gitHead = Environment.GetEnvironmentVariable("BING_OFFICES_GIT_HEAD") ?? "not-provided",
             diffIdentity = Environment.GetEnvironmentVariable("BING_OFFICES_DIFF_ID") ?? "not-provided",
+            candidateIdentity = GetCandidateIdentity(),
             budgetStatus = Environment.GetEnvironmentVariable("BING_OFFICES_BUDGET_STATUS") ?? "UNAPPROVED",
             dotnet = Environment.Version.ToString(),
             framework = RuntimeInformation.FrameworkDescription,
@@ -75,6 +89,35 @@ internal static class RealIoProbe
             Environment.ExitCode = 1;
     }
 
+    /// <summary>
+    /// 获取真实 IO 探针运行所依赖的程序集身份哈希。
+    /// </summary>
+    /// <returns>按程序集文件名索引的 SHA-256 哈希。</returns>
+    private static IReadOnlyDictionary<string, string> GetCandidateIdentity()
+    {
+        var types = new[]
+        {
+            typeof(RealIoProbe),
+            typeof(ICsvExporter),
+            typeof(IExcelExporter),
+            typeof(Bing.Offices.Mappings.ExcelMappingPlanFactoryProvider),
+            typeof(Bing.Offices.Exports.NpoiExcelExporter),
+            typeof(Bing.Offices.Exports.MiniExcelExcelExporter)
+        };
+        return types.Select(type => type.Assembly.Location)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(path => Path.GetFileName(path),
+                path => Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))),
+                StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// 执行一个 Real IO 场景并输出聚合指标。
+    /// </summary>
+    /// <param name="artifactPath">所属探针结果路径。</param>
+    /// <param name="scenario">场景名称。</param>
+    /// <param name="rowCount">本次操作的数据行数。</param>
+    /// <param name="repetitionCount">正式测量次数。</param>
     public static void RunScenario(string artifactPath, string scenario, int rowCount, int repetitionCount)
     {
         try
@@ -185,6 +228,14 @@ internal static class RealIoProbe
         }
     }
 
+    /// <summary>
+    /// 启动子进程执行一个 Real IO 场景并包装结果。
+    /// </summary>
+    /// <param name="artifactPath">所属探针结果路径。</param>
+    /// <param name="scenario">场景名称。</param>
+    /// <param name="rowCount">本次操作的数据行数。</param>
+    /// <param name="repetitionCount">正式测量次数。</param>
+    /// <returns>子进程结果的 JSON 文本。</returns>
     private static string RunChild(string artifactPath, string scenario, int rowCount, int repetitionCount)
     {
         var processPath = Environment.ProcessPath
@@ -239,6 +290,17 @@ internal static class RealIoProbe
         });
     }
 
+    /// <summary>
+    /// 执行一次指定 Real IO 场景。
+    /// </summary>
+    /// <param name="scenario">场景名称。</param>
+    /// <param name="rowCount">本次操作的数据行数。</param>
+    /// <param name="csvExporter">CSV 导出器。</param>
+    /// <param name="excelExporter">Excel 导出器。</param>
+    /// <param name="rows">待导出的数据行。</param>
+    /// <param name="excelRequest">Excel 导出请求。</param>
+    /// <param name="workDirectory">临时文件目录。</param>
+    /// <returns>输出字节数和受控异步写入统计。</returns>
     private static async Task<OperationResult> ExecuteOnce(string scenario, int rowCount,
         ICsvExporter csvExporter, IExcelExporter excelExporter, IReadOnlyList<RealIoRow> rows,
         ExcelWorkbookExportRequest excelRequest, string workDirectory)
@@ -304,6 +366,11 @@ internal static class RealIoProbe
         }
     }
 
+    /// <summary>
+    /// 校验受控异步写入流并生成写入统计。
+    /// </summary>
+    /// <param name="destination">受控异步写入目标流。</param>
+    /// <returns>目标流的输出和异步写入统计。</returns>
     private static OperationResult Complete(AsyncWriteProbeStream destination)
     {
         if (destination.AsyncWriteCount == 0 || destination.AsyncBytesWritten != destination.Length)
@@ -312,39 +379,102 @@ internal static class RealIoProbe
             destination.AsyncBytesWritten);
     }
 
+    /// <summary>
+    /// 删除已存在的临时文件。
+    /// </summary>
+    /// <param name="path">目标文件路径。</param>
     private static void DeleteIfExists(string path)
     {
         if (File.Exists(path))
             File.Delete(path);
     }
 
+    /// <summary>
+    /// 从已排序的耗时样本中读取指定分位点。
+    /// </summary>
+    /// <param name="sortedValues">升序排列的耗时样本。</param>
+    /// <param name="percentile">分位点，通常位于 0 到 1 之间。</param>
+    /// <returns>对应分位点的耗时，单位为毫秒。</returns>
     private static double Percentile(double[] sortedValues, double percentile)
     {
         var index = (int)Math.Ceiling(sortedValues.Length * percentile) - 1;
         return sortedValues[Math.Clamp(index, 0, sortedValues.Length - 1)];
     }
 
+    /// <summary>
+    /// Real IO 探针使用的行模型。
+    /// </summary>
     private sealed class RealIoRow
     {
+        /// <summary>
+        /// 获取或设置行编码。
+        /// </summary>
         public string Code { get; set; } = string.Empty;
+
+        /// <summary>
+        /// 获取或设置数量。
+        /// </summary>
         public int Quantity { get; set; }
+
+        /// <summary>
+        /// 获取或设置描述文本。
+        /// </summary>
         public string Description { get; set; } = string.Empty;
     }
 
+    /// <summary>
+    /// 记录一次 Real IO 测量样本。
+    /// </summary>
     private sealed class Sample
     {
+        /// <summary>
+        /// 获取或设置测量重复序号。
+        /// </summary>
         public int repetition { get; set; }
+        /// <summary>
+        /// 获取或设置耗时，单位为毫秒。
+        /// </summary>
         public double elapsedMilliseconds { get; set; }
+        /// <summary>
+        /// 获取或设置托管堆分配字节数。
+        /// </summary>
         public long allocatedBytes { get; set; }
+        /// <summary>
+        /// 获取或设置第 0 代 GC 次数。
+        /// </summary>
         public int gen0 { get; set; }
+        /// <summary>
+        /// 获取或设置第 1 代 GC 次数。
+        /// </summary>
         public int gen1 { get; set; }
+        /// <summary>
+        /// 获取或设置第 2 代 GC 次数。
+        /// </summary>
         public int gen2 { get; set; }
+        /// <summary>
+        /// 获取或设置进程峰值工作集字节数。
+        /// </summary>
         public long peakWorkingSetBytes { get; set; }
+        /// <summary>
+        /// 获取或设置输出字节数。
+        /// </summary>
         public long outputBytes { get; set; }
+        /// <summary>
+        /// 获取或设置异步写入次数。
+        /// </summary>
         public long asyncWriteCount { get; set; }
+        /// <summary>
+        /// 获取或设置异步写入字节数。
+        /// </summary>
         public long asyncBytesWritten { get; set; }
     }
 
+    /// <summary>
+    /// 记录一次受控异步输出的统计结果。
+    /// </summary>
+    /// <param name="OutputBytes">输出字节数。</param>
+    /// <param name="AsyncWriteCount">异步写入次数。</param>
+    /// <param name="AsyncBytesWritten">异步写入字节数。</param>
     private readonly record struct OperationResult(long OutputBytes, long AsyncWriteCount,
         long AsyncBytesWritten);
 }

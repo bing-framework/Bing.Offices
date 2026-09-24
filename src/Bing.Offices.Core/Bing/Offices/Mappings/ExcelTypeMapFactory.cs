@@ -180,6 +180,9 @@ internal static class ExcelTypeMapFactory
             .Where(property => property.CanRead)
             .Select(CreatePropertyMap)
             .ToList();
+        var dynamicColumns = properties.Count(property => property.IsDynamicColumn);
+        if (dynamicColumns > 1)
+            throw new ArgumentException($"类型 {typeof(T).FullName} 最多只能声明一个动态列属性。", nameof(T));
         return new ExcelTypeMap<T>(new ReadOnlyCollection<ExcelPropertyMap>(properties));
     }
 

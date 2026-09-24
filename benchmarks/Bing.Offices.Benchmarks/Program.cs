@@ -15,8 +15,11 @@ namespace Bing.Offices.Benchmarks;
 public static class Program
 {
     /// <summary>
-    /// 运行流式 Excel 管线基准。
+    /// 运行基准测试或命令行探针。
     /// </summary>
+    /// <remarks>
+    /// 未指定探针参数时启动 BenchmarkDotNet；指定探针参数时执行对应的隔离采集流程。
+    /// </remarks>
     /// <param name="args">BenchmarkDotNet 命令行参数。</param>
     public static void Main(string[] args)
     {
@@ -51,6 +54,15 @@ public static class Program
             MiniExcelProbe.Run(args[1], int.Parse(args[2]));
             return;
         }
+        if (args.Length >= 4 && string.Equals(args[0], "--entity-probe", StringComparison.OrdinalIgnoreCase))
+        {
+            var phase = args.Length >= 5
+                ? args[4]
+                : Environment.GetEnvironmentVariable("BING_OFFICES_BENCHMARK_PHASE") ?? "after";
+            EntityProbe.RunAsync(args[1], int.Parse(args[2]), int.Parse(args[3]), phase)
+                .GetAwaiter().GetResult();
+            return;
+        }
         if (args.Length >= 4 && string.Equals(args[0], "--provider-comparison-probe",
                 StringComparison.OrdinalIgnoreCase))
         {
@@ -62,11 +74,25 @@ public static class Program
                 .GetAwaiter().GetResult();
             return;
         }
+        if (args.Length >= 5 && string.Equals(args[0], "--closedxml-scenario-probe",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            ClosedXmlScenarioProbe.RunAsync(args[1], int.Parse(args[2]), int.Parse(args[3]), args[4])
+                .GetAwaiter().GetResult();
+            return;
+        }
         if (args.Length >= 6 && string.Equals(args[0], "--provider-comparison-worker",
                 StringComparison.OrdinalIgnoreCase))
         {
             ProviderComparisonProbe.RunWorkerAsync(args[1], int.Parse(args[2]), int.Parse(args[3]),
                     args[4], args[5])
+                .GetAwaiter().GetResult();
+            return;
+        }
+        if (args.Length >= 4 && string.Equals(args[0], "--materialization-binding-probe",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            MaterializationBindingProbe.RunAsync(args[1], int.Parse(args[2]), int.Parse(args[3]))
                 .GetAwaiter().GetResult();
             return;
         }
@@ -108,6 +134,10 @@ public static class Program
             }).Run(args, benchmarkConfig);
     }
 
+    /// <summary>
+    /// 从当前目录向上查找仓库根目录。
+    /// </summary>
+    /// <returns>包含解决方案文件的仓库根目录。</returns>
     private static string FindRepositoryRoot()
     {
         for (var directory = new DirectoryInfo(Directory.GetCurrentDirectory()); directory != null;
@@ -119,10 +149,25 @@ public static class Program
         throw new InvalidOperationException("无法定位 Bing.Offices 仓库根目录。");
     }
 
+    /// <summary>
+    /// 运行资源限制和峰值内存探针。
+    /// </summary>
     private static class ResourceProbe
     {
+        /// <summary>
+        /// 资源探针允许的大对象堆上限，单位为字节。
+        /// </summary>
         private const long LohCeilingBytes = 512L * 1024 * 1024;
+
+        /// <summary>
+        /// 资源探针允许的进程峰值工作集上限，单位为字节。
+        /// </summary>
         private const long PeakWorkingSetCeilingBytes = 1024L * 1024 * 1024;
+
+        /// <summary>
+        /// 执行全部资源矩阵场景并写入结果。
+        /// </summary>
+        /// <param name="artifactPath">JSONL 输出路径。</param>
         public static void Run(string artifactPath)
         {
             var fullPath = Path.GetFullPath(artifactPath);
@@ -154,6 +199,14 @@ public static class Program
             Console.WriteLine($"RESOURCE_PROBE artifact={fullPath} scenarios=16 status=passed");
         }
 
+        /// <summary>
+        /// 执行单个映射计划和唯一值跟踪资源场景。
+        /// </summary>
+        /// <param name="artifactPath">结果所属的资源探针路径。</param>
+        /// <param name="planBuildCount">额外构建映射计划的次数。</param>
+        /// <param name="tenantCount">租户配置数量。</param>
+        /// <param name="uniqueColumnCount">唯一值跟踪的列数。</param>
+        /// <param name="uniqueRowCount">唯一值跟踪的行数。</param>
         public static void RunScenario(string artifactPath, int planBuildCount, int tenantCount,
             int uniqueColumnCount, int uniqueRowCount)
         {
@@ -225,9 +278,22 @@ public static class Program
             Environment.ExitCode = passed ? 0 : 1;
         }
 
+        /// <summary>
+        /// 获取当前大对象堆回收前的大小。
+        /// </summary>
+        /// <returns>大对象堆大小，单位为字节。</returns>
         private static long GetLohSizeBeforeBytes() =>
             GC.GetGCMemoryInfo().GenerationInfo[3].SizeBeforeBytes;
 
+        /// <summary>
+        /// 启动子进程执行单个资源场景并包装结果。
+        /// </summary>
+        /// <param name="artifactPath">结果所属的资源探针路径。</param>
+        /// <param name="planBuildCount">额外构建映射计划的次数。</param>
+        /// <param name="tenantCount">租户配置数量。</param>
+        /// <param name="uniqueColumnCount">唯一值跟踪的列数。</param>
+        /// <param name="uniqueRowCount">唯一值跟踪的行数。</param>
+        /// <returns>子进程结果的 JSON 文本。</returns>
         private static string RunChild(string artifactPath, int planBuildCount, int tenantCount,
             int uniqueColumnCount, int uniqueRowCount)
         {
@@ -273,6 +339,11 @@ public static class Program
             });
         }
 
+        /// <summary>
+        /// 创建资源探针使用的租户映射文档。
+        /// </summary>
+        /// <param name="tenant">租户序号。</param>
+        /// <returns>租户映射文档。</returns>
         private static Bing.Offices.Configurations.ExcelMappingDocument CreateDocument(int tenant)
             => new()
             {
@@ -290,17 +361,38 @@ public static class Program
                 }
             };
 
+        /// <summary>
+        /// 资源探针使用的映射行模型。
+        /// </summary>
         private sealed class ProbeRow
         {
+            /// <summary>
+            /// 获取或设置行编码。
+            /// </summary>
             public string Code { get; set; } = string.Empty;
         }
     }
 
+    /// <summary>
+    /// 运行异步资源准入的尾延迟探针。
+    /// </summary>
     private static class TailLatency
     {
+        /// <summary>
+        /// 尾延迟探针的预热操作数上限。
+        /// </summary>
         private const int WarmupOperationCount = 64;
+
+        /// <summary>
+        /// 每个并发度执行的测量重复次数。
+        /// </summary>
         private const int RepetitionCount = 5;
 
+        /// <summary>
+        /// 执行映射计划冷启动尾延迟探针。
+        /// </summary>
+        /// <param name="artifactPath">JSONL 输出路径。</param>
+        /// <param name="operationCount">每个并发度的测量操作数。</param>
         public static void Run(string artifactPath, int operationCount)
         {
             if (operationCount < 1)
@@ -384,6 +476,13 @@ public static class Program
             Console.WriteLine($"TAIL_LATENCY artifact={fullPath} scenarios=4 budget=UNAPPROVED status=measured");
         }
 
+        /// <summary>
+        /// 以指定并发度执行一批映射计划构建操作。
+        /// </summary>
+        /// <param name="concurrency">worker 并发数。</param>
+        /// <param name="operationCount">本批操作数。</param>
+        /// <param name="captureSamples">是否记录单操作样本。</param>
+        /// <returns>批次耗时、启动耗时和样本。</returns>
         private static BatchResult RunBatch(int concurrency, int operationCount, bool captureSamples)
         {
             using var queue = new BlockingCollection<int>();
@@ -420,6 +519,17 @@ public static class Program
                 startupStopwatch.Elapsed.TotalMilliseconds);
         }
 
+        /// <summary>
+        /// 消费队列并构建分配到当前 worker 的映射计划。
+        /// </summary>
+        /// <param name="queue">待处理操作索引队列。</param>
+        /// <param name="documents">按操作索引排列的映射文档。</param>
+        /// <param name="submittedAt">各操作提交时间戳。</param>
+        /// <param name="samples">各操作的延迟样本数组。</param>
+        /// <param name="factory">映射计划工厂。</param>
+        /// <param name="captureSamples">是否写入延迟样本。</param>
+        /// <param name="ready">worker 就绪计数器。</param>
+        /// <param name="startGate">统一开始信号。</param>
         private static void RunWorker(BlockingCollection<int> queue,
             Bing.Offices.Configurations.ExcelMappingDocument[] documents,
             long[] submittedAt,
@@ -444,6 +554,11 @@ public static class Program
             }
         }
 
+        /// <summary>
+        /// 创建尾延迟探针使用的映射文档。
+        /// </summary>
+        /// <param name="index">文档序号。</param>
+        /// <returns>尾延迟映射文档。</returns>
         private static Bing.Offices.Configurations.ExcelMappingDocument CreateDocument(int index) => new()
         {
             TenantId = $"tail-{index}",
@@ -460,14 +575,29 @@ public static class Program
             }
         };
 
+        /// <summary>
+        /// 从已排序的延迟样本中读取指定分位点。
+        /// </summary>
+        /// <param name="sortedSamples">升序排列的延迟样本。</param>
+        /// <param name="percentile">分位点，通常位于 0 到 1 之间。</param>
+        /// <returns>对应分位点的延迟，单位为微秒。</returns>
         private static long Percentile(long[] sortedSamples, double percentile)
         {
             var index = (int)Math.Ceiling(sortedSamples.Length * percentile) - 1;
             return sortedSamples[Math.Clamp(index, 0, sortedSamples.Length - 1)];
         }
 
+        /// <summary>
+        /// 尾延迟批次测量结果。
+        /// </summary>
         private sealed class BatchResult
         {
+            /// <summary>
+            /// 初始化批次测量结果。
+            /// </summary>
+            /// <param name="samples">批次延迟样本。</param>
+            /// <param name="elapsedSeconds">批次总耗时，单位为秒。</param>
+            /// <param name="workerStartupMilliseconds">worker 启动耗时，单位为毫秒。</param>
             public BatchResult(long[] samples, double elapsedSeconds, double workerStartupMilliseconds)
             {
                 Samples = samples;
@@ -475,15 +605,30 @@ public static class Program
                 WorkerStartupMilliseconds = workerStartupMilliseconds;
             }
 
+            /// <summary>
+            /// 获取批次延迟样本。
+            /// </summary>
             public long[] Samples { get; }
 
+            /// <summary>
+            /// 获取批次总耗时，单位为秒。
+            /// </summary>
             public double ElapsedSeconds { get; }
 
+            /// <summary>
+            /// 获取 worker 启动耗时，单位为毫秒。
+            /// </summary>
             public double WorkerStartupMilliseconds { get; }
         }
 
+        /// <summary>
+        /// 尾延迟探针使用的映射行模型。
+        /// </summary>
         private sealed class TailLatencyRow
         {
+            /// <summary>
+            /// 获取或设置行编码。
+            /// </summary>
             public string Code { get; set; } = string.Empty;
         }
     }

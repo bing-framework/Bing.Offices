@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
+using System.Globalization;
 using System.Linq;
 using Bing.Offices.Imports;
 using Bing.Offices.Npoi.Extensions;
@@ -14,7 +15,22 @@ if (args.Length >= 2 && string.Equals(args[0], "--staging-matrix", StringCompari
     return StagingResourceMatrix.Run(args[1], args.Length >= 3 ? int.Parse(args[2]) : 100000,
         args.Length >= 4 ? args[3] : null, args.Length >= 5 ? args[4] : null);
 if (args.Length >= 2 && string.Equals(args[0], "--staging-entrypoints", StringComparison.OrdinalIgnoreCase))
-    return StagingEntrypointMatrix.Run(args[1]);
+{
+    // 可选行数参数仅接受 XLSX 单表安全范围内的正整数；省略时由矩阵使用默认行数集合。
+    const int maxRequestedRowCount = 1_048_575;
+    if (args.Length > 3)
+        return 2;
+    int? requestedRowCount = null;
+    if (args.Length == 3)
+    {
+        if (!int.TryParse(args[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedRowCount)
+            || parsedRowCount < 1
+            || parsedRowCount > maxRequestedRowCount)
+            return 2;
+        requestedRowCount = parsedRowCount;
+    }
+    return StagingEntrypointMatrix.Run(args[1], requestedRowCount);
+}
 if (args.Length >= 2 && string.Equals(args[0], "--staging-entrypoint-failure-probe", StringComparison.OrdinalIgnoreCase))
     return StagingEntrypointMatrix.RunFailureProbe(args[1]);
 if (args.Length >= 6 && string.Equals(args[0], "--staging-scenario", StringComparison.OrdinalIgnoreCase))
@@ -214,31 +230,31 @@ internal sealed class PreflightMetrics
     /// </summary>
     public long InputBytes { get; }
     /// <summary>
-    /// 获取工作表集合。
+    /// 获取统计到的工作表数量。
     /// </summary>
     public int Sheets { get; }
     /// <summary>
-    /// 获取数据行集合。
+    /// 获取统计到的数据行数量。
     /// </summary>
     public int Rows { get; }
     /// <summary>
-    /// 获取列集合。
+    /// 获取统计到的最大列数量。
     /// </summary>
     public int Columns { get; }
     /// <summary>
-    /// 获取单元格集合。
+    /// 获取统计到的物理单元格数量。
     /// </summary>
     public int Cells { get; }
     /// <summary>
-    /// 获取共享字符串集合。
+    /// 获取统计到的共享字符串数量。
     /// </summary>
     public int SharedStrings { get; }
     /// <summary>
-    /// 获取样式集合。
+    /// 获取统计到的样式数量。
     /// </summary>
     public int Styles { get; }
     /// <summary>
-    /// 获取图片集合。
+    /// 获取统计到的图片数量。
     /// </summary>
     public int Pictures { get; }
     /// <summary>

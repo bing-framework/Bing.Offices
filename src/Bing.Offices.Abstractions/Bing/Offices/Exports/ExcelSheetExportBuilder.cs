@@ -81,6 +81,10 @@ public sealed class ExcelSheetExportBuilder<T> where T : class, new()
     /// </summary>
     private ExcelColumnWidthOptions _columnWidth;
     /// <summary>
+    /// 行高应用选项。
+    /// </summary>
+    private ExcelRowHeightOptions _rowHeight;
+    /// <summary>
     /// 单元格批注冲突处理策略，默认为保留模板批注。
     /// </summary>
     private ExcelCommentConflictPolicy _commentConflictPolicy = ExcelCommentConflictPolicy.Preserve;
@@ -248,6 +252,17 @@ public sealed class ExcelSheetExportBuilder<T> where T : class, new()
     }
 
     /// <summary>
+    /// 设置当前 Sheet 的表头和正文行高。
+    /// </summary>
+    /// <param name="options">当前 Sheet 的行高配置；未设置的高度保留模板或提供程序默认值。</param>
+    /// <returns>当前 Sheet 构建器，用于继续配置。</returns>
+    public ExcelSheetExportBuilder<T> RowHeight(ExcelRowHeightOptions options)
+    {
+        _rowHeight = options ?? throw new ArgumentNullException(nameof(options));
+        return this;
+    }
+
+    /// <summary>
     /// 设置表头批注与模板已有批注冲突时的处理策略。
     /// </summary>
     /// <param name="policy">表头批注与模板批注冲突时采用的策略。</param>
@@ -316,6 +331,7 @@ public sealed class ExcelSheetExportBuilder<T> where T : class, new()
         if (_dataRowStartIndex <= _headerRowIndex)
             throw new ArgumentOutOfRangeException(nameof(_dataRowStartIndex));
         _columnWidth?.Validate();
+        _rowHeight?.Validate();
         if (!Enum.IsDefined(typeof(ExcelCommentConflictPolicy), _commentConflictPolicy))
             throw new ArgumentOutOfRangeException(nameof(_commentConflictPolicy));
         if (!Enum.IsDefined(typeof(ExcelTemplateCellOverwritePolicy), _templateCellOverwritePolicy))
@@ -338,7 +354,7 @@ public sealed class ExcelSheetExportBuilder<T> where T : class, new()
             CloneDynamicColumns(_dynamicColumns), _failOnUnknownDynamicValues, _dynamicGetter, _sheetStyle, _headerStyle, _bodyStyle,
             _templateRegion, _hidden, _charts.AsReadOnly(), _headerRows,
             requestConfiguration, _mappingDocument,
-            _culture, _columnWidth, _commentConflictPolicy, _templateCellOverwritePolicy);
+            _culture, _columnWidth, _rowHeight, _commentConflictPolicy, _templateCellOverwritePolicy);
     }
 
     /// <summary>

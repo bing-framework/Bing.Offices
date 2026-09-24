@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>Bing.Offices.ClosedXml</AssemblyName>
+    <PackageId>Bing.Offices.ClosedXml</PackageId>
+    <Description>Bing.Offices 的 ClosedXML Provider。</Description>
+  </PropertyGroup>
+
+  <Import Project="..\..\framework.props" />
+
+  <PropertyGroup>
+    <PackageTags>bing;dotnetcore;excel;closedxml;</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Bing.Offices.Core\Bing.Offices.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\provider-shared\ExcelXlsxZipPreflight.cs" Link="Bing\Offices\Internals\ExcelXlsxZipPreflight.cs" />
+    <PackageReference Include="ClosedXML" Version="$(ClosedXmlPackageVersion)" />
+  </ItemGroup>
+
+  <ItemGroup Condition=" '$(TargetFramework)' == 'net6.0' ">
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="6.0.0" />
+  </ItemGroup>
+
+  <ItemGroup Condition=" '$(TargetFramework)' == 'net8.0' ">
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.0" />
+  </ItemGroup>
+</Project>

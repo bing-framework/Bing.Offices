@@ -2,15 +2,50 @@
 
 ## Provider 选择
 
-`Bing.Offices.Abstractions` 和 `Bing.Offices.Core` 提供公共契约及 Mapping Plan；`Bing.Offices.Npoi` 与 `Bing.Offices.MiniExcel` 是并列 Provider。应用启动时选择一个 Provider：
+`Bing.Offices.Abstractions` 和 `Bing.Offices.Core` 提供公共契约及 Mapping Plan；`Bing.Offices.Npoi`、`Bing.Offices.MiniExcel` 与 `Bing.Offices.ClosedXml` 是并列 Provider。应用启动时选择一个 Provider：
 
 ```csharp
 services.AddBingOfficesNpoi();
 // 或
 services.AddBingOfficesMiniExcel();
+// 或
+services.AddBingOfficesClosedXml();
 ```
 
 业务层继续注入 `IExcelImporter`、`IExcelExporter`，不应引用 MiniExcel 的原生 Attribute、Workbook 类型或第二套请求模型。两个扩展都通过 `TryAdd` 注册公共服务和 Excel 实现；如果同一个 `IServiceCollection` 同时调用两者，先注册的实现保留。需要切换 Provider 时应在组合根选择注册分支，而不是依赖注册顺序或按请求解析。
+
+## ClosedXML 第一阶段矩阵
+
+ClosedXML 作为富 XLSX Provider 使用同一套 Workbook Request 和 Core Mapping Plan。它适合模板、样式、合并和公式保存场景；DOM 操作仍是单实例串行边界，不是 MiniExcel 的低内存替代品。
+
+| 能力 | ClosedXML 第一阶段 | 说明 |
+| --- | --- | --- |
+| 常规 XLSX List/Workbook 导入/导出 | P0 | 真实 `XLWorkbook` 和 XLSX 读回测试；支持多 Sheet、名称/索引选择 |
+| Mapping/Profile/JSON/XML、Converter、ValueMap、Validation、Unique、Relations | P0/P1 | 由 Core 生成计划；固定列、动态列和 Entity 多 List Region 关系绑定已接入 |
+| 基本字体、填充、对齐、数字格式、列宽、行高 | P1 | 行高单位为 point；null 保留模板高度，显式值覆盖 |
+| Merge、Formula 保存/读回、模板 Stream/File | P1 | 公式契约是保存、读取和缓存值，不是完整 Excel 计算引擎 |
+| 原子文件提交、取消、流所有权、输入大小/ZIP 预检 | P1 | 使用公共文件提交器和共享 XLSX 预检；DOM 创建前拒绝超限输入 |
+| Entity Layout | P1 | 支持固定 Cell、多个同 Sheet/跨 Sheet List Region、Merge、Relations 和模板布局读写；Entity List Region 动态列仍显式不支持 |
+| Failure Workbook、原生 Workbook Validation | Unsupported | ClosedXML 第一版在 Provider 创建 DOM 前 fail-fast，不生成部分结果 |
+| Chart、PivotTable、Image、XLSM 宏保留、XLS | Unsupported | 不静默丢弃结构；请求在 `XLWorkbook` 创建前返回 UnsupportedFeature |
+
+注册方式：
+
+```csharp
+services.AddBingOfficesClosedXml();
+```
+
+该扩展与其他 Provider 一样使用 `TryAdd`。需要限制 ClosedXML DOM 准入时可传入 `ClosedXmlProviderOptions`：
+
+```csharp
+services.AddBingOfficesClosedXml(options =>
+{
+    options.MaxConcurrentWorkbooks = 1;
+    options.MaxQueuedOperations = 64;
+});
+```
+
+同时注册多个 Provider 时保留 first-registration-wins；业务代码只依赖 `IExcelImporter`/`IExcelExporter`。
 
 ## MiniExcel 第一阶段矩阵
 

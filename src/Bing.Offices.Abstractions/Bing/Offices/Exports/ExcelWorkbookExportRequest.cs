@@ -99,6 +99,7 @@ public sealed class ExcelSheetExportRequest
     /// <param name="mappingDocument">规范化映射文档。</param>
     /// <param name="culture">文本格式化使用的区域性。</param>
     /// <param name="columnWidth">列宽计算和应用选项。</param>
+    /// <param name="rowHeight">行高应用选项。</param>
     /// <param name="commentConflictPolicy">批注冲突处理策略。</param>
     /// <param name="templateCellOverwritePolicy">模板单元格被覆盖时的处理策略。</param>
     internal ExcelSheetExportRequest(string name, Type itemType, System.Collections.IEnumerable data,
@@ -109,6 +110,7 @@ public sealed class ExcelSheetExportRequest
         IReadOnlyList<ExcelHeaderRow> headerRows, Configurations.ExcelMappingConfiguration mappingConfiguration,
         Configurations.ExcelMappingDocument mappingDocument,
         System.Globalization.CultureInfo culture, ExcelColumnWidthOptions columnWidth,
+        ExcelRowHeightOptions rowHeight,
         ExcelCommentConflictPolicy commentConflictPolicy,
         ExcelTemplateCellOverwritePolicy templateCellOverwritePolicy)
     {
@@ -148,6 +150,7 @@ public sealed class ExcelSheetExportRequest
         MappingDocument = Configurations.MappingDocumentCloner.Clone(mappingDocument);
         Culture = culture;
         ColumnWidth = columnWidth;
+        RowHeight = rowHeight;
         CommentConflictPolicy = commentConflictPolicy;
         TemplateCellOverwritePolicy = templateCellOverwritePolicy;
     }
@@ -252,6 +255,11 @@ public sealed class ExcelSheetExportRequest
     /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public ExcelColumnWidthOptions ColumnWidth { get; }
+    /// <summary>
+    /// 获取行高策略。
+    /// </summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public ExcelRowHeightOptions RowHeight { get; }
     /// <summary>
     /// 获取批注冲突策略。
     /// </summary>
