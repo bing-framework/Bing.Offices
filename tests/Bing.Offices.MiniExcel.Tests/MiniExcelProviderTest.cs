@@ -13,8 +13,10 @@ using Bing.Offices.Attributes;
 using Bing.Offices.Configurations;
 using Bing.Offices.Conversions;
 using Bing.Offices.Dates;
+using Bing.Offices.Entities;
 using Bing.Offices.Exports;
 using Bing.Offices.Exceptions;
+using Bing.Offices.Extensions;
 using Bing.Offices.Imports;
 using Bing.Offices.MiniExcel.Internals;
 using Bing.Offices.MiniExcel.Extensions;
@@ -30,6 +32,38 @@ namespace Bing.Offices.MiniExcel.Tests;
 /// </summary>
 public sealed class MiniExcelProviderTest
 {
+    /// <summary>
+    /// 验证 MiniExcel 对实体布局入口应在读取输入前报告不支持能力。
+    /// </summary>
+    [Fact]
+    public void EntityLayout_ShouldFailFastBeforeIo()
+    {
+        var layout = ExcelEntity.Layout<Person>(builder => builder.Cell("People", "A1", item => item.Name));
+        using var source = new MemoryStream(new byte[] { 1, 2, 3 });
+
+        var exception = Assert.Throws<BingOfficesUnsupportedFeatureException>(() =>
+            new MiniExcelExcelImporter().ImportEntity(source, layout));
+
+        Assert.Equal("MiniExcel", exception.Provider);
+        Assert.Equal(BingOfficesStage.Preflight, exception.Stage);
+    }
+
+    /// <summary>
+    /// 验证 MiniExcel 实体导出在写出任何字节前报告不支持能力。
+    /// </summary>
+    [Fact]
+    public void EntityExport_ShouldFailFastBeforeOutput()
+    {
+        var layout = ExcelEntity.Layout<Person>(builder => builder.Cell("People", "A1", item => item.Name));
+        using var destination = new MemoryStream();
+
+        var exception = Assert.Throws<BingOfficesUnsupportedFeatureException>(() =>
+            new MiniExcelExcelExporter().ExportEntity(new Person { Name = "unsupported" }, layout, destination));
+
+        Assert.Equal("MiniExcel", exception.Provider);
+        Assert.Equal(0, destination.Length);
+    }
+
     /// <summary>
     /// 验证往返应支持多个工作表并映射。
     /// </summary>
@@ -247,7 +281,7 @@ public sealed class MiniExcelProviderTest
         stream.Position = 0;
         var importRequest = ExcelImport.Workbook<FixedColumnContextWorkbook>(workbook =>
             workbook.Sheet("Data", root => root.Rows,
-                sheet => sheet.Validate(ValidateMode.Continue).Mapping(importMapping)));
+                sheet => sheet.Validate(ExcelValidationFailureMode.Continue).Mapping(importMapping)));
         var result = new MiniExcelExcelImporter(
                 valueConverters: new IExcelValueConverter[] { converter },
                 namedValidationRules: new INamedExcelValidationRule[] { validation })
@@ -861,6 +895,36 @@ public sealed class MiniExcelProviderTest
 
         Assert.True(result.IsSuccess, string.Join(";", result.Errors.Select(error => error.Message)));
         Assert.Equal("Item", Assert.Single(Assert.Single(result.Workbook.Parents).Items).Name);
+    }
+
+    /// <summary>
+    /// 验证关系导航属性为非 IList 的 ICollection 时仍可完成父子绑定。
+    /// </summary>
+    [Fact]
+    public void Relations_ShouldBindNonListCollectionNavigation()
+    {
+        var exportRequest = ExcelExport.Workbook(workbook => workbook
+            .AddSheet("Parents", new[] { new CollectionRelationParent { OrderNo = "A-1" } })
+            .AddSheet("Children", new[] { new CollectionRelationChild { OrderNo = "a-1", Name = "Item" } }));
+        using var stream = new MemoryStream();
+        new MiniExcelExcelExporter().Export(exportRequest, stream);
+
+        stream.Position = 0;
+        var importRequest = ExcelImport.Workbook<CollectionRelationWorkbook>(workbook =>
+        {
+            workbook.Sheet("Parents", root => root.Parents);
+            workbook.Sheet("Children", root => root.Children);
+            workbook.HasMany(root => root.Parents, root => root.Children,
+                parent => parent.OrderNo, child => child.OrderNo,
+                parent => parent.Items, StringComparer.OrdinalIgnoreCase);
+        });
+        var result = new MiniExcelExcelImporter().Import(stream, importRequest);
+
+        Assert.True(result.IsSuccess, string.Join(";", result.Errors.Select(error => error.Message)));
+        var parent = Assert.Single(result.Workbook.Parents);
+        var child = Assert.Single(parent.Items);
+        Assert.Equal("Item", child.Name);
+        Assert.Equal("a-1", child.OrderNo);
     }
 
     /// <summary>
@@ -1588,6 +1652,51 @@ public sealed class MiniExcelProviderTest
     /// 表示关系映射测试中的子项数据。
     /// </summary>
     private sealed class RelationChild
+    {
+        /// <summary>
+        /// 获取或设置订单号。
+        /// </summary>
+        public string OrderNo { get; set; }
+        /// <summary>
+        /// 获取或设置名称。
+        /// </summary>
+        public string Name { get; set; }
+    }
+
+    /// <summary>
+    /// 表示非 IList 关系测试使用的工作簿数据模型。
+    /// </summary>
+    private sealed class CollectionRelationWorkbook
+    {
+        /// <summary>
+        /// 获取父项集合。
+        /// </summary>
+        public List<CollectionRelationParent> Parents { get; } = new();
+        /// <summary>
+        /// 获取子项集合。
+        /// </summary>
+        public List<CollectionRelationChild> Children { get; } = new();
+    }
+
+    /// <summary>
+    /// 表示非 IList 关系测试中的父项数据。
+    /// </summary>
+    private sealed class CollectionRelationParent
+    {
+        /// <summary>
+        /// 获取或设置订单号。
+        /// </summary>
+        public string OrderNo { get; set; }
+        /// <summary>
+        /// 获取由 HashSet 实现的导航集合。
+        /// </summary>
+        public ICollection<CollectionRelationChild> Items { get; } = new HashSet<CollectionRelationChild>();
+    }
+
+    /// <summary>
+    /// 表示非 IList 关系测试中的子项数据。
+    /// </summary>
+    private sealed class CollectionRelationChild
     {
         /// <summary>
         /// 获取或设置订单号。

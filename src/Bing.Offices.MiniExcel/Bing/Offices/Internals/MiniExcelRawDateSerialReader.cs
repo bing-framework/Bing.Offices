@@ -36,6 +36,23 @@ internal static class MiniExcelRawDateSerialReader
     internal static IReadOnlyDictionary<long, double> Read(Stream source, string sheetName,
         CancellationToken cancellationToken = default)
     {
+        return Read(source, sheetName, dateColumns: null, minRow: null, maxRow: null, cancellationToken);
+    }
+
+    /// <summary>
+    /// 按日期列和有效数据行范围读取原始日期 serial，避免缓存无关 numeric 单元格。
+    /// </summary>
+    /// <param name="source">已通过 XLSX 预检且可定位的工作簿流。</param>
+    /// <param name="sheetName">工作表物理名称。</param>
+    /// <param name="dateColumns">需要保留的一基物理列号；为空时读取所有 numeric 单元格。</param>
+    /// <param name="minRow">可选的一基最小数据行号。</param>
+    /// <param name="maxRow">可选的一基最大数据行号。</param>
+    /// <param name="cancellationToken">读取过程使用的取消令牌。</param>
+    /// <returns>原始 numeric serial 索引。</returns>
+    internal static IReadOnlyDictionary<long, double> Read(Stream source, string sheetName,
+        IReadOnlyCollection<int> dateColumns, int? minRow, int? maxRow,
+        CancellationToken cancellationToken = default)
+    {
         if (source == null)
             throw new ArgumentNullException(nameof(source));
         if (string.IsNullOrWhiteSpace(sheetName))
@@ -47,6 +64,8 @@ internal static class MiniExcelRawDateSerialReader
         source.Position = 0;
         try
         {
+            if (dateColumns != null && dateColumns.Count == 0)
+                return new Dictionary<long, double>();
             using var archive = new ZipArchive(source, ZipArchiveMode.Read, leaveOpen: true);
             var worksheetPath = ResolveWorksheetPath(archive, sheetName, cancellationToken);
             var worksheet = archive.GetEntry(worksheetPath);
@@ -64,6 +83,12 @@ internal static class MiniExcelRawDateSerialReader
 
                 var reference = reader.GetAttribute("r");
                 if (!TryParseReference(reference, out var row, out var column))
+                    continue;
+                if (dateColumns != null && !dateColumns.Contains(column))
+                    continue;
+                if (minRow.HasValue && row < minRow.Value)
+                    continue;
+                if (maxRow.HasValue && row > maxRow.Value)
                     continue;
 
                 var cellType = reader.GetAttribute("t");

@@ -22,8 +22,17 @@ namespace Bing.Offices.Exports;
 /// <remarks>
 /// 将行数据以延迟字典序列交给 MiniExcel，避免预先构建完整 DOM。
 /// </remarks>
-public sealed class MiniExcelExcelExporter : IExcelExporter
+public sealed class MiniExcelExcelExporter : IExcelExporter, IExcelProviderCapabilities
 {
+    /// <inheritdoc />
+    public string ProviderName => "MiniExcel";
+
+    /// <inheritdoc />
+    public ExcelProviderCapabilities Capabilities => ExcelProviderCapabilities.List
+        | ExcelProviderCapabilities.Workbook | ExcelProviderCapabilities.Async | ExcelProviderCapabilities.Xlsx;
+
+    /// <inheritdoc />
+    public bool Supports(ExcelProviderCapabilities capabilities) => (Capabilities & capabilities) == capabilities;
     /// <summary>
     /// 用于创建默认映射计划的值转换器集合。
     /// </summary>
@@ -371,6 +380,7 @@ public sealed class MiniExcelExcelExporter : IExcelExporter
                     stage: BingOfficesStage.Preflight);
             if (!string.IsNullOrWhiteSpace(sheet.TemplateRegion)
                 || sheet.SheetStyle != null || sheet.HeaderStyle != null || sheet.BodyStyle != null
+                || sheet.RowHeight != null
                 || sheet.Hidden
                 || (sheet.ColumnWidth != null && sheet.ColumnWidth.Mode != ExcelColumnWidthMode.None)
                 || sheet.CommentConflictPolicy != ExcelCommentConflictPolicy.Preserve

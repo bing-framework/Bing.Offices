@@ -24,8 +24,17 @@ namespace Bing.Offices.Imports;
 /// <remarks>
 /// 由 MiniExcel 逐行读取，并由 Core 映射计划负责转换和校验。
 /// </remarks>
-public sealed class MiniExcelExcelImporter : IExcelImporter
+public sealed class MiniExcelExcelImporter : IExcelImporter, IExcelProviderCapabilities
 {
+    /// <inheritdoc />
+    public string ProviderName => "MiniExcel";
+
+    /// <inheritdoc />
+    public ExcelProviderCapabilities Capabilities => ExcelProviderCapabilities.List
+        | ExcelProviderCapabilities.Workbook | ExcelProviderCapabilities.Async | ExcelProviderCapabilities.Xlsx;
+
+    /// <inheritdoc />
+    public bool Supports(ExcelProviderCapabilities capabilities) => (Capabilities & capabilities) == capabilities;
     /// <summary>
     /// 表示按实体类型异步导入工作表的反射委托。
     /// </summary>
@@ -417,10 +426,15 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
         where TItem : class, new()
     {
         var configuration = CreateConfiguration(request);
-        var rawDateSerials = MiniExcelRawDateSerialReader.Read(source, physicalName, cancellationToken);
+        var dateColumns = MiniExcelSheetPlanBuilder.ResolveDateColumns<TItem>(plan, request);
+        var rawDateSerials = MiniExcelRawDateSerialReader.Read(source, physicalName, dateColumns,
+            request.DataRowStartIndex + 1,
+            workbookRequest.ResourceLimits?.MaxRows is int maximumRows
+                ? request.DataRowStartIndex + maximumRows : (int?)null,
+            cancellationToken);
         source.Position = 0;
         var rowObjects = await MiniExcelApi.QueryAsync(source, true, physicalName, ExcelType.XLSX,
-            CreateStartCell(request), configuration, cancellationToken).ConfigureAwait(false);
+            MiniExcelSheetPlanBuilder.CreateStartCell(request), configuration, cancellationToken).ConfigureAwait(false);
         ImportTypedSheetRows<TWorkbook, TItem>((IEnumerable)rowObjects, physicalName, request, root, results, errors,
             workbookRequest, cancellationToken, plan, isDate1904, rawDateSerials);
     }
@@ -448,10 +462,15 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
         where TItem : class, new()
     {
         var configuration = CreateConfiguration(request);
-        var rawDateSerials = MiniExcelRawDateSerialReader.Read(source, physicalName, cancellationToken);
+        var dateColumns = MiniExcelSheetPlanBuilder.ResolveDateColumns<TItem>(plan, request);
+        var rawDateSerials = MiniExcelRawDateSerialReader.Read(source, physicalName, dateColumns,
+            request.DataRowStartIndex + 1,
+            workbookRequest.ResourceLimits?.MaxRows is int maximumRows
+                ? request.DataRowStartIndex + maximumRows : (int?)null,
+            cancellationToken);
         source.Position = 0;
         var rowObjects = MiniExcelApi.Query(source, true, physicalName, ExcelType.XLSX,
-            CreateStartCell(request), configuration);
+            MiniExcelSheetPlanBuilder.CreateStartCell(request), configuration);
         ImportTypedSheetRows<TWorkbook, TItem>((IEnumerable)rowObjects, physicalName, request, root, results, errors,
             workbookRequest, cancellationToken, plan, isDate1904, rawDateSerials);
     }
@@ -489,9 +508,9 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
             throw new MiniExcelSheetException($"Sheet 没有可读取的表头: {physicalName}");
         var first = ToDictionary((object)enumerator.Current);
         var headers = first.Keys.ToArray();
-        ValidateHeaderCount(headers.Length, request, workbookRequest);
-        var bindings = BuildBindings<TItem>(plan, headers, request);
-        ValidateUnknownHeaders(headers, bindings, plan, request);
+        MiniExcelSheetPlanBuilder.ValidateHeaderCount(headers.Length, request);
+        var bindings = MiniExcelSheetPlanBuilder.BuildBindings<TItem>(plan, headers, request);
+        MiniExcelSheetPlanBuilder.ValidateUnknownHeaders(headers, bindings, plan, request);
         var items = new List<TItem>();
         var rows = new List<int>();
         var sheetErrors = new List<ExcelImportError>();
@@ -519,12 +538,13 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
             current = ToDictionary((object)enumerator.Current);
         }
         AddErrors(errors, sheetErrors, workbookRequest);
-        var target = request.Target(root) as IList;
+        var target = request.Target(root);
         if (target == null)
             throw new BingOfficesConfigurationException($"Workbook 导入目标集合不可写入: {request.Name}",
                 stage: BingOfficesStage.Plan);
+        var addTarget = CreateCollectionAppender(target.GetType(), typeof(TItem));
         foreach (var item in items)
-            target.Add(item);
+            addTarget(target, item);
         results.Add(new ExcelSheetImportResult(physicalName, typeof(TItem), rows, sheetErrors));
     }
 
@@ -549,280 +569,16 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
     /// <param name="isDate1904">当前工作簿是否使用 1904 日期系统。</param>
     /// <param name="rawDateSerials">按物理行列索引的原始日期 serial 集合。</param>
     private void MaterializeRow<TWorkbook>(IDictionary<string, object> row, IReadOnlyList<string> headers,
-        string sheetName,
-        ExcelSheetImportRequest request, IExcelMappingPlan plan, IReadOnlyList<ColumnBinding> bindings,
-        int rowNumber, IList items, ICollection<int> rows,
+        string sheetName, ExcelSheetImportRequest request, IExcelMappingPlan plan,
+        IReadOnlyList<ColumnBinding> bindings, int rowNumber, IList items, ICollection<int> rows,
         ICollection<ExcelImportError> sheetErrors, UniqueTracker unique,
         ExcelWorkbookImportRequest<TWorkbook> workbookRequest, CancellationToken cancellationToken,
         Type itemType, bool isDate1904, IReadOnlyDictionary<long, double> rawDateSerials)
         where TWorkbook : class, new()
     {
-        var item = Activator.CreateInstance(itemType);
-        var valid = true;
-        var configuredValidationEnabled = IsConfiguredValidationEnabled(workbookRequest.ValidationMode);
-        if (configuredValidationEnabled)
-            unique.BeginRow();
-        var dynamicValues = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
-        for (var index = 0; index < bindings.Count; index++)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var binding = bindings[index];
-            row.TryGetValue(binding.Header, out var raw);
-            var text = Normalize(MiniExcelValueAdapter.ToText(raw, request.Culture),
-                binding.Column.ImportWhitespace ?? request.BodyWhitespace);
-            var columnIndex = FindPhysicalColumnIndex(headers, binding.Header, request.ReadColumnRange?.StartIndex ?? 0);
-            var cell = CreateRawDateCell(rawDateSerials, rowNumber, columnIndex, text, isDate1904,
-                binding.Property.PropertyType);
-            try
-            {
-                if (configuredValidationEnabled)
-                    ValidateBindings(binding.Column.ValidationBindings, text, null, sheetName, rowNumber,
-                        columnIndex, binding.Column.Name, raw, request.Culture, binding.Property.PropertyType,
-                        unique, binding.Column.IsUnique, binding.Column.UniqueIgnoreEmpty,
-                        sheetErrors, isDate1904: isDate1904, cell: cell);
-                var converted = MiniExcelValueAdapter.ConvertFrom(raw, binding.Column, binding.Property,
-                    sheetName, rowNumber, columnIndex, request.Culture, isDate1904, cell);
-                if (configuredValidationEnabled)
-                    ValidateBindings(binding.Column.ValidationBindings, text, converted, sheetName, rowNumber,
-                        columnIndex, binding.Column.Name, raw, request.Culture, binding.Property.PropertyType,
-                        unique, binding.Column.IsUnique, binding.Column.UniqueIgnoreEmpty,
-                        sheetErrors, rawOnly: false, isDate1904: isDate1904, cell: cell);
-                binding.Property.SetValue(item, converted);
-            }
-            catch (MiniExcelRowException exception)
-            {
-                AddSheetError(sheetErrors, workbookRequest, exception.Error);
-                valid = false;
-                if (request.ValidateMode == ValidateMode.StopOnFirstFailure)
-                    break;
-            }
-            catch (Exception exception) when (exception is not OperationCanceledException
-                && exception is not OutOfMemoryException && exception is not StackOverflowException)
-            {
-                AddSheetError(sheetErrors, workbookRequest, new ExcelImportError(
-                    ExcelImportErrorCode.ValueConversion, exception.Message, sheetName, rowNumber,
-                    columnIndex, binding.Column.Name, rawValue: raw));
-                valid = false;
-                if (request.ValidateMode == ValidateMode.StopOnFirstFailure)
-                    break;
-            }
-        }
-
-        foreach (var dynamic in plan.DynamicColumns)
-        {
-            var header = FindHeader(row.Keys, dynamic.Title, dynamic.Aliases, request.HeaderComparison,
-                request.HeaderWhitespace);
-            if (header == null)
-                continue;
-            row.TryGetValue(header, out var raw);
-            var columnIndex = FindPhysicalColumnIndex(headers, header, request.ReadColumnRange?.StartIndex ?? 0);
-            var cell = CreateRawDateCell(rawDateSerials, rowNumber, columnIndex,
-                MiniExcelValueAdapter.ToText(raw, request.Culture), isDate1904,
-                MiniExcelValueAdapter.ResolveDynamicType(dynamic.DataTypeName));
-            try
-            {
-                var converted = MiniExcelValueAdapter.ConvertDynamicFrom(raw, dynamic, sheetName,
-                    rowNumber, columnIndex, request.Culture, isDate1904, cell);
-                dynamicValues[dynamic.Key] = converted;
-                if (configuredValidationEnabled)
-                    ValidateBindings(dynamic.ValidationBindings, MiniExcelValueAdapter.ToText(raw, request.Culture),
-                        converted, sheetName, rowNumber, columnIndex, dynamic.Key, raw, request.Culture,
-                        MiniExcelValueAdapter.ResolveDynamicType(dynamic.DataTypeName), unique, dynamic.IsUnique,
-                        dynamic.UniqueIgnoreEmpty, sheetErrors, rawOnly: false, isDate1904: isDate1904,
-                        cell: cell);
-            }
-            catch (MiniExcelRowException exception)
-            {
-                AddSheetError(sheetErrors, workbookRequest, exception.Error);
-                valid = false;
-            }
-            catch (Exception exception) when (exception is not OperationCanceledException
-                && exception is not OutOfMemoryException && exception is not StackOverflowException)
-            {
-                AddSheetError(sheetErrors, workbookRequest, new ExcelImportError(
-                    ExcelImportErrorCode.ValueConversion, exception.Message, sheetName, rowNumber, columnIndex,
-                    dynamic.Key, rawValue: raw));
-                valid = false;
-            }
-        }
-        if (valid)
-        {
-            SetDynamicValues(item, request, dynamicValues);
-            items.Add(item);
-            rows.Add(rowNumber - 1);
-            if (configuredValidationEnabled)
-                unique.CommitRow();
-        }
-        else if (configuredValidationEnabled)
-            unique.RollbackRow();
-    }
-
-    /// <summary>
-    /// 为日期属性恢复原始 Excel 数值单元格。
-    /// </summary>
-    /// <param name="rawDateSerials">按物理行列索引保存的日期 serial 集合。</param>
-    /// <param name="rowNumber">当前行的一基物理行号。</param>
-    /// <param name="columnNumber">当前列的一基物理列号。</param>
-    /// <param name="text">当前单元格的文本值。</param>
-    /// <param name="isDate1904">当前工作簿是否使用 1904 日期系统。</param>
-    /// <param name="propertyType">目标属性类型。</param>
-    /// <returns>匹配到日期 serial 时返回数值单元格，否则返回 null。</returns>
-    private static ExcelCellValue CreateRawDateCell(IReadOnlyDictionary<long, double> rawDateSerials,
-        int rowNumber, int columnNumber, string text, bool isDate1904, Type propertyType)
-    {
-        var targetType = Nullable.GetUnderlyingType(propertyType) ?? propertyType;
-        if (targetType != typeof(DateTime) && targetType != typeof(DateTimeOffset))
-            return null;
-        if (rawDateSerials != null
-            && rawDateSerials.TryGetValue(MiniExcelRawDateSerialReader.CreateKey(rowNumber, columnNumber),
-                out var serial))
-            return new ExcelCellValue(serial, text, ExcelCellKind.Number, isDate1904: isDate1904);
-        return null;
-    }
-
-    /// <summary>
-    /// 查找表头对应的一基物理列号。
-    /// </summary>
-    /// <param name="headers">工作表表头顺序。</param>
-    /// <param name="header">待查找的表头文本。</param>
-    /// <param name="startIndex">读取区域的零基起始列索引。</param>
-    /// <returns>表头对应的一基物理列号。</returns>
-    private static int FindPhysicalColumnIndex(IReadOnlyList<string> headers, string header, int startIndex)
-    {
-        for (var index = 0; index < headers.Count; index++)
-        {
-            if (string.Equals(headers[index], header, StringComparison.Ordinal))
-                return startIndex + index + 1;
-        }
-
-        throw new MiniExcelSheetException($"动态列表头无法定位物理列: {header}");
-    }
-
-    /// <summary>
-    /// 按原始值或转换值执行列校验和唯一性校验。
-    /// </summary>
-    /// <param name="bindings">当前列的校验绑定集合。</param>
-    /// <param name="text">规范化后的文本值。</param>
-    /// <param name="converted">转换后的值。</param>
-    /// <param name="sheetName">工作表实际名称。</param>
-    /// <param name="rowNumber">当前行的一基物理行号。</param>
-    /// <param name="columnNumber">当前列的一基物理列号。</param>
-    /// <param name="propertyName">映射属性或动态列名称。</param>
-    /// <param name="raw">原始单元格值。</param>
-    /// <param name="culture">用于校验的区域性设置。</param>
-    /// <param name="propertyType">目标属性或动态列类型。</param>
-    /// <param name="unique">当前工作表的唯一性跟踪器。</param>
-    /// <param name="isUnique">是否启用唯一性校验。</param>
-    /// <param name="ignoreEmpty">是否忽略空值的唯一性校验。</param>
-    /// <param name="errors">接收校验错误的集合。</param>
-    /// <param name="rawOnly">是否仅执行原始值校验。</param>
-    /// <param name="isDate1904">当前工作簿是否使用 1904 日期系统。</param>
-    /// <param name="cell">可复用的 Excel 单元格值。</param>
-    private static void ValidateBindings(IReadOnlyList<IExcelValidationBinding> bindings, string text,
-        object converted, string sheetName, int rowNumber, int columnNumber, string propertyName,
-        object raw, CultureInfo culture, Type propertyType, UniqueTracker unique,
-        bool isUnique, bool ignoreEmpty, ICollection<ExcelImportError> errors,
-        bool rawOnly = true, bool isDate1904 = false, ExcelCellValue cell = null)
-    {
-        if (bindings == null)
-            bindings = Array.Empty<IExcelValidationBinding>();
-        foreach (var binding in bindings)
-        {
-            if (!rawOnly && binding.IsRaw)
-                continue;
-            if (rawOnly && !binding.IsRaw)
-                continue;
-            if (!rawOnly && binding.Kind == ExcelValidationBindingKind.Unique)
-                continue;
-            if (!binding.Validate(new ExcelValidationContext(text, sheetName, rowNumber, columnNumber,
-                propertyName, converted, propertyType,
-                cell ?? MiniExcelValueAdapter.CreateCell(raw, text, isDate1904), culture)))
-            {
-                throw new MiniExcelRowException(new ExcelImportError(
-                    MiniExcelValueAdapter.GetValidationCode(binding), binding.ErrorMessage, sheetName,
-                    rowNumber, columnNumber, propertyName, rawValue: raw));
-            }
-        }
-        if (!rawOnly && isUnique && !unique.TryReserve(propertyName, text, false, ignoreEmpty, rowNumber))
-        {
-            unique.TryGetFirstRowNumber(propertyName, text, out var firstRow);
-            throw new MiniExcelRowException(new ExcelImportError(ExcelImportErrorCode.Validation,
-                "重复数据。", sheetName, rowNumber, columnNumber, propertyName,
-                rawValue: raw, firstRowNumber: firstRow == 0 ? null : firstRow));
-        }
-    }
-
-    /// <summary>
-    /// 根据映射计划和表头创建可写入的列绑定。
-    /// </summary>
-    /// <typeparam name="TItem">工作表行实体类型。</typeparam>
-    /// <param name="plan">当前工作表的映射计划。</param>
-    /// <param name="headers">工作表表头。</param>
-    /// <param name="request">当前工作表导入配置。</param>
-    /// <returns>已匹配并可写入实体属性的列绑定。</returns>
-    private static List<ColumnBinding> BuildBindings<TItem>(IExcelMappingPlan plan, string[] headers,
-        ExcelSheetImportRequest request) where TItem : class, new()
-    {
-        var bindings = new List<ColumnBinding>();
-        foreach (var column in plan.Columns.Where(column => !column.Ignored && !column.IsDynamicColumn))
-        {
-            var property = typeof(TItem).GetProperty(column.Name,
-                BindingFlags.Instance | BindingFlags.Public);
-            if (property != null && IsNavigationOrDynamicContainer(property.PropertyType))
-                continue;
-            var header = FindHeader(headers, column.Title, column.Aliases, request.HeaderComparison,
-                request.HeaderWhitespace);
-            if (header == null)
-            {
-                if (request.RequireExpectedHeaders)
-                    throw new MiniExcelSheetException($"Sheet {request.Name} 缺少表头: {column.Title}");
-                continue;
-            }
-            if (property == null || !property.CanWrite)
-            {
-                throw new MiniExcelSheetException($"属性不可写入: {column.Name}");
-            }
-            bindings.Add(new ColumnBinding(column, property, header));
-        }
-        return bindings;
-    }
-
-    /// <summary>
-    /// 判断属性是否为关系集合或动态字典容器。
-    /// </summary>
-    /// <param name="propertyType">待检查的属性类型。</param>
-    /// <returns>属性为动态字典或非字符串可枚举类型时返回 true，否则返回 false。</returns>
-    private static bool IsNavigationOrDynamicContainer(Type propertyType) =>
-        typeof(IDictionary<string, object>).IsAssignableFrom(propertyType)
-        || (propertyType != typeof(string) && typeof(IEnumerable).IsAssignableFrom(propertyType));
-
-    /// <summary>
-    /// 校验表头中是否存在未声明的动态列。
-    /// </summary>
-    /// <param name="headers">工作表表头。</param>
-    /// <param name="bindings">已解析的固定列绑定。</param>
-    /// <param name="plan">当前工作表的映射计划。</param>
-    /// <param name="request">当前工作表导入配置。</param>
-    private static void ValidateUnknownHeaders(string[] headers, IReadOnlyList<ColumnBinding> bindings,
-        IExcelMappingPlan plan, ExcelSheetImportRequest request)
-    {
-        if (!request.FailOnUnknownDynamicColumns)
-            return;
-        var known = new HashSet<string>(bindings.Select(binding => binding.Header),
-            request.HeaderComparison == ExcelNameComparison.Ordinal
-                ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase);
-        foreach (var column in plan.DynamicColumns)
-        {
-            foreach (var header in headers)
-            {
-                if (FindHeader(new[] { header }, column.Title, column.Aliases,
-                        request.HeaderComparison, request.HeaderWhitespace) != null)
-                    known.Add(header);
-            }
-        }
-        var unknown = headers.FirstOrDefault(header => !known.Contains(header));
-        if (unknown != null)
-            throw new MiniExcelSheetException($"Sheet {request.Name} 包含未声明动态列: {unknown}");
+        MiniExcelRowMaterializer.MaterializeRow(row, headers, sheetName, request, plan, bindings,
+            rowNumber, items, rows, sheetErrors, unique, workbookRequest, cancellationToken,
+            itemType, isDate1904, rawDateSerials);
     }
 
     /// <summary>
@@ -851,10 +607,10 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
     /// </summary>
     /// <param name="value">字典或普通行对象。</param>
     /// <returns>包含行字段和值的字典。</returns>
-    private static Dictionary<string, object> ToDictionary(object value)
+    private static IDictionary<string, object> ToDictionary(object value)
     {
         if (value is IDictionary<string, object> dictionary)
-            return new Dictionary<string, object>(dictionary, StringComparer.OrdinalIgnoreCase);
+            return dictionary;
         var result = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
         foreach (var property in value.GetType().GetProperties(BindingFlags.Instance | BindingFlags.Public))
             result[property.Name] = property.GetValue(value);
@@ -927,114 +683,28 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
     }
 
     /// <summary>
-    /// 按标题、别名和空白规则查找匹配表头。
+    /// 为强类型集合编译一次添加器，避免把公开的 ICollection 合同限制为 IList。
     /// </summary>
-    /// <param name="headers">待查找的表头集合。</param>
-    /// <param name="title">主标题。</param>
-    /// <param name="aliases">可接受的标题别名。</param>
-    /// <param name="comparison">标题比较规则。</param>
-    /// <param name="whitespace">标题空白处理规则。</param>
-    /// <returns>匹配到的原始表头；未匹配时返回 null。</returns>
-    private static string FindHeader(IEnumerable<string> headers, string title, IReadOnlyList<string> aliases,
-        ExcelNameComparison comparison, ExcelWhitespacePolicy whitespace)
+    /// <param name="collectionType">目标集合的运行时类型。</param>
+    /// <param name="itemType">集合元素类型。</param>
+    /// <returns>将元素追加到目标集合的委托。</returns>
+    private static Action<object, object> CreateCollectionAppender(Type collectionType, Type itemType)
     {
-        var expected = new[] { title }.Concat(aliases ?? Array.Empty<string>());
-        foreach (var header in headers)
-        {
-            var normalized = Normalize(header, whitespace);
-            foreach (var candidate in expected)
-            {
-                if (string.Equals(normalized, Normalize(candidate, whitespace),
-                    comparison == ExcelNameComparison.Ordinal ? StringComparison.Ordinal
-                        : StringComparison.OrdinalIgnoreCase))
-                    return header;
-            }
-        }
-        return null;
+        var contract = typeof(ICollection<>).MakeGenericType(itemType);
+        if (!contract.IsAssignableFrom(collectionType))
+            throw new BingOfficesConfigurationException(
+                $"目标集合 {collectionType.FullName} 未实现 ICollection<{itemType.FullName}>。",
+                stage: BingOfficesStage.Plan);
+        var collection = Expression.Parameter(typeof(object), "collection");
+        var item = Expression.Parameter(typeof(object), "item");
+        var add = contract.GetMethod(nameof(ICollection<object>.Add));
+        var call = Expression.Call(Expression.Convert(collection, contract), add,
+            Expression.Convert(item, itemType));
+        return Expression.Lambda<Action<object, object>>(call, collection, item).Compile();
     }
 
     /// <summary>
-    /// 按指定规则规范化文本空白。
-    /// </summary>
-    /// <param name="value">待规范化的文本。</param>
-    /// <param name="policy">空白处理规则。</param>
-    /// <returns>规范化后的文本。</returns>
-    private static string Normalize(string value, ExcelWhitespacePolicy policy)
-    {
-        value ??= string.Empty;
-        return policy switch
-        {
-            ExcelWhitespacePolicy.Preserve => value,
-            ExcelWhitespacePolicy.Trim => value.Trim(),
-            ExcelWhitespacePolicy.RemoveAll => new string(value.Where(character => !char.IsWhiteSpace(character)).ToArray()),
-            _ => throw new ArgumentOutOfRangeException(nameof(policy))
-        };
-    }
-
-    /// <summary>
-    /// 根据读取区域计算 MiniExcel 查询起始单元格。
-    /// </summary>
-    /// <param name="request">当前工作表导入配置。</param>
-    /// <returns>Excel A1 格式的起始单元格地址。</returns>
-    private static string CreateStartCell(ExcelSheetImportRequest request)
-    {
-        if (request.HeaderRowIndex == 0 && request.ReadColumnRange == null)
-            return "A1";
-        var column = request.ReadColumnRange?.StartIndex ?? 0;
-        var letters = string.Empty;
-        do
-        {
-            letters = (char)('A' + column % 26) + letters;
-            column = column / 26 - 1;
-        } while (column >= 0);
-        return letters + (request.HeaderRowIndex + 1).ToString(CultureInfo.InvariantCulture);
-    }
-
-    /// <summary>
-    /// 校验表头列数不超过工作表读取限制。
-    /// </summary>
-    /// <param name="count">实际表头列数。</param>
-    /// <param name="request">当前工作表导入配置。</param>
-    /// <param name="workbookRequest">当前工作簿导入请求。</param>
-    private static void ValidateHeaderCount(int count, ExcelSheetImportRequest request,
-        object workbookRequest)
-    {
-        if (count > request.MaxReadColumns)
-            throw new MiniExcelSheetException($"Sheet {request.Name} 的表头列数超过限制: {request.MaxReadColumns}");
-    }
-
-    /// <summary>
-    /// 将动态列值写入实体的动态目标成员。
-    /// </summary>
-    /// <param name="item">待写入的行实体。</param>
-    /// <param name="request">当前工作表导入配置。</param>
-    /// <param name="values">待写入的动态列值。</param>
-    private static void SetDynamicValues(object item, ExcelSheetImportRequest request,
-        IDictionary<string, object> values)
-    {
-        if (request.DynamicTarget == null || values.Count == 0)
-            return;
-        var member = (request.DynamicTarget as LambdaExpression)?.Body as MemberExpression;
-        if (member?.Member is PropertyInfo property && property.CanWrite)
-        {
-            var current = property.GetValue(item) as IDictionary<string, object>;
-            if (current == null)
-            {
-                current = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
-                property.SetValue(item, current);
-            }
-            foreach (var pair in values)
-                current[pair.Key] = pair.Value;
-            return;
-        }
-        var target = request.DynamicTargetGetter?.Invoke(item) as IDictionary<string, object>;
-        if (target != null)
-            foreach (var pair in values)
-                target[pair.Key] = pair.Value;
-    }
-
-    /// <summary>
-    /// 按请求将导入的父子实体绑定到导航集合。
+    /// 将关系绑定委托给独立协调器，并保留内部职责测试的稳定调用点。
     /// </summary>
     /// <typeparam name="TWorkbook">导入结果的工作簿根实体类型。</typeparam>
     /// <param name="root">已导入的工作簿根实体。</param>
@@ -1046,67 +716,7 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
         ICollection<ExcelImportError> errors, ExcelWorkbookImportRequest<TWorkbook> request,
         CancellationToken cancellationToken) where TWorkbook : class, new()
     {
-        foreach (var relation in relations ?? Array.Empty<ExcelRelationRequest>())
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            try
-            {
-                var parents = (relation.Parents(root) as IEnumerable)?.Cast<object>().ToArray()
-                    ?? Array.Empty<object>();
-                var children = (relation.Children(root) as IEnumerable)?.Cast<object>().ToArray()
-                    ?? Array.Empty<object>();
-                foreach (var child in children)
-                {
-                    var key = relation.ChildKey.DynamicInvoke(child);
-                    // 保持公开委托的逐子项调用、首匹配和异常边界；委托可能有副作用，
-                    // 因此不能跨子项缓存 ParentKey 或跳过后续调用。
-                    var parent = parents.FirstOrDefault(candidate => RelationKeysEqual(
-                        relation.ParentKey.DynamicInvoke(candidate), key, relation.Comparer));
-                    if (parent == null)
-                    {
-                        AddError(errors, request, new ExcelImportError(ExcelImportErrorCode.Relationship,
-                            $"未找到关联父实体: {key}", null, 0, 0, null, rawValue: key));
-                        continue;
-                    }
-                    var navigation = relation.Navigation(parent) as IList;
-                    navigation?.Add(child);
-                }
-            }
-            catch (Exception exception) when (exception is not OperationCanceledException
-                && exception is not OutOfMemoryException && exception is not StackOverflowException)
-            {
-                AddError(errors, request, new ExcelImportError(ExcelImportErrorCode.Relationship,
-                    exception.Message, null, 0, 0, null));
-            }
-        }
-    }
-
-    /// <summary>
-    /// 按指定比较器比较父子关系键。
-    /// </summary>
-    /// <param name="left">左侧关系键。</param>
-    /// <param name="right">右侧关系键。</param>
-    /// <param name="comparer">非泛型、泛型或反射比较器。</param>
-    /// <returns>关系键相等时返回 true，否则返回 false。</returns>
-    private static bool RelationKeysEqual(object left, object right, object comparer)
-    {
-        if (comparer is System.Collections.IEqualityComparer nonGeneric)
-            return nonGeneric.Equals(left, right);
-        if (comparer is IEqualityComparer<object> objectComparer)
-            return objectComparer.Equals(left, right);
-        if (comparer != null)
-        {
-            var leftType = left?.GetType() ?? right?.GetType();
-            if (leftType != null)
-            {
-                var equals = comparer.GetType().GetMethod(nameof(object.Equals),
-                    BindingFlags.Instance | BindingFlags.Public, binder: null,
-                    types: new[] { leftType, leftType }, modifiers: null);
-                if (equals != null)
-                    return equals.Invoke(comparer, new[] { left, right }) is true;
-            }
-        }
-        return Equals(left, right);
+        MiniExcelRelationCoordinator.Bind(root, relations, errors, request, cancellationToken);
     }
 
     /// <summary>
@@ -1146,20 +756,6 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
     }
 
     /// <summary>
-    /// 将工作表错误追加到受资源限制控制的集合。
-    /// </summary>
-    /// <typeparam name="TWorkbook">导入结果的工作簿根实体类型。</typeparam>
-    /// <param name="errors">接收错误的集合。</param>
-    /// <param name="request">当前工作簿导入请求。</param>
-    /// <param name="error">待追加的工作表错误。</param>
-    private static void AddSheetError<TWorkbook>(ICollection<ExcelImportError> errors,
-        ExcelWorkbookImportRequest<TWorkbook> request, ExcelImportError error)
-        where TWorkbook : class, new()
-    {
-        AddError(errors, request, error);
-    }
-
-    /// <summary>
     /// 判断工作簿错误集合是否已达到配置的上限。
     /// </summary>
     /// <typeparam name="TWorkbook">导入结果的工作簿根实体类型。</typeparam>
@@ -1169,24 +765,6 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
     private static bool IsErrorLimitReached<TWorkbook>(ICollection<ExcelImportError> errors,
         ExcelWorkbookImportRequest<TWorkbook> request) where TWorkbook : class, new() =>
         request.ResourceLimits?.MaxErrors is int maximum && errors.Count >= maximum;
-
-    /// <summary>
-    /// 保持非泛型错误限制调用的兼容结果。
-    /// </summary>
-    /// <param name="errors">当前错误集合。</param>
-    /// <param name="request">预留的请求对象。</param>
-    /// <returns>当前非泛型路径始终返回 false。</returns>
-    private static bool IsErrorLimitReached(ICollection<ExcelImportError> errors,
-        object request) => false;
-
-    /// <summary>
-    /// 判断是否启用配置的校验规则。
-    /// </summary>
-    /// <param name="mode">当前导入校验模式。</param>
-    /// <returns>模式包含配置规则时返回 true，否则返回 false。</returns>
-    private static bool IsConfiguredValidationEnabled(ExcelImportValidationMode mode) =>
-        mode == ExcelImportValidationMode.ConfiguredRules
-        || mode == ExcelImportValidationMode.ConfiguredAndWorkbook;
 
     /// <summary>
     /// 根据字符串比较选项创建对应的字符串比较器。
@@ -1299,7 +877,7 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
     /// <summary>
     /// 记录 Excel 列与目标属性之间的绑定关系。
     /// </summary>
-    private sealed class ColumnBinding
+    internal sealed class ColumnBinding
     {
         /// <summary>
         /// 初始化一个 <see cref="ColumnBinding" /> 类型的实例。
@@ -1307,11 +885,16 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
         /// <param name="column">绑定的 Excel 列映射。</param>
         /// <param name="property">绑定的目标属性。</param>
         /// <param name="header">匹配到的表头文本。</param>
-        public ColumnBinding(IExcelMappingColumn column, PropertyInfo property, string header)
+        /// <param name="columnIndex">已解析的一基物理列号。</param>
+        /// <param name="setter">已编译的属性写入器。</param>
+        public ColumnBinding(IExcelMappingColumn column, PropertyInfo property, string header,
+            int columnIndex, Action<object, object> setter)
         {
             Column = column;
             Property = property;
             Header = header;
+            ColumnIndex = columnIndex;
+            Setter = setter;
         }
 
         /// <summary>
@@ -1328,12 +911,22 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
         /// 获取匹配到的表头文本。
         /// </summary>
         public string Header { get; }
+
+        /// <summary>
+        /// 获取已解析的一基物理列号。
+        /// </summary>
+        public int ColumnIndex { get; }
+
+        /// <summary>
+        /// 获取已编译的属性写入器。
+        /// </summary>
+        public Action<object, object> Setter { get; }
     }
 
     /// <summary>
     /// 表示工作表级导入处理失败。
     /// </summary>
-    private sealed class MiniExcelSheetException : Exception
+    internal sealed class MiniExcelSheetException : Exception
     {
         /// <summary>
         /// 初始化一个 <see cref="MiniExcelSheetException" /> 类型的实例。
@@ -1345,7 +938,7 @@ public sealed class MiniExcelExcelImporter : IExcelImporter
     /// <summary>
     /// 表示单行导入处理失败并携带结构化错误。
     /// </summary>
-    private sealed class MiniExcelRowException : Exception
+    internal sealed class MiniExcelRowException : Exception
     {
         /// <summary>
         /// 初始化一个 <see cref="MiniExcelRowException" /> 类型的实例。
