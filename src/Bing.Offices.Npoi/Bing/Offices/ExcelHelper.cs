@@ -6,12 +6,12 @@ using Bing.Offices.Internals;
 namespace Bing.Offices;
 
 /// <summary>
-/// Excel 操作辅助类
+/// Excel 操作辅助类。
 /// </summary>
 internal static class ExcelHelper
 {
     /// <summary>
-    /// 应用程序版本
+    /// 应用程序版本。
     /// </summary>
     private static readonly Version AppVersion = typeof(ExcelHelper).Assembly.GetName().Version!;
 

@@ -54,7 +54,7 @@ public sealed class ExcelP0RegressionTest
         }));
         var request = ExcelImport.Workbook<RowsWorkbook<ValidationModeRow>>(builder => builder
             .ValidationMode(mode)
-            .Sheet("Data", root => root.Rows, sheet => sheet.Validate(ValidateMode.Continue)));
+            .Sheet("Data", root => root.Rows, sheet => sheet.Validate(ExcelValidationFailureMode.Continue)));
 
         // Act
         var result = new NpoiExcelImporter().Import(source, request);
@@ -91,7 +91,7 @@ public sealed class ExcelP0RegressionTest
         }));
         var request = ExcelImport.Workbook<RowsWorkbook<ConversionRow>>(builder => builder
             .ValidationMode(validationMode)
-            .Sheet("Data", root => root.Rows, sheet => sheet.Validate(ValidateMode.Continue)));
+            .Sheet("Data", root => root.Rows, sheet => sheet.Validate(ExcelValidationFailureMode.Continue)));
 
         // Act
         var result = new NpoiExcelImporter().Import(source, request);
@@ -409,10 +409,10 @@ public sealed class ExcelP0RegressionTest
     /// <param name="validateMode">要测试的错误处理模式。</param>
     /// <param name="expectedErrorCount">预期收集的错误数。</param>
     [Theory]
-    [InlineData(ValidateMode.Continue, 2)]
-    [InlineData(ValidateMode.StopOnFirstFailure, 1)]
+    [InlineData(ExcelValidationFailureMode.Continue, 2)]
+    [InlineData(ExcelValidationFailureMode.StopOnFirstFailure, 1)]
     public void Import_WorkbookValidation_ShouldRespectContinueAndStop(
-        ValidateMode validateMode, int expectedErrorCount)
+        ExcelValidationFailureMode validateMode, int expectedErrorCount)
     {
         // Arrange
         using var source = new MemoryStream(CreateWorkbook(workbook =>

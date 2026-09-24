@@ -2,10 +2,15 @@
 using System.Globalization;
 using System.Reflection;
 using System.Text.RegularExpressions;
+using Bing.Offices.Attributes;
 using Bing.Offices.Conversions;
+using Bing.Offices.Entities;
 using Bing.Offices.Exceptions;
 using Bing.Offices.IO;
 using Bing.Offices.Providers;
+using NPOI.SS.UserModel;
+using NPOI.XSSF.Streaming;
+using NPOI.XSSF.UserModel;
 
 namespace Bing.Offices.Exports;
 
@@ -15,8 +20,25 @@ namespace Bing.Offices.Exports;
 /// <remarks>
 /// NPOI 工作簿在内存中构建后写入目标流。
 /// </remarks>
-public sealed class NpoiExcelExporter : IExcelExporter
+public sealed class NpoiExcelExporter : IExcelExporter, IExcelEntityExporter, IExcelProviderCapabilities
 {
+    /// <summary>
+    /// 进入 SXSSF 流式路径所需的最小列表行数。
+    /// </summary>
+    private const int StreamingRowThreshold = 100000;
+
+    /// <inheritdoc />
+    public string ProviderName => "NPOI";
+
+    /// <inheritdoc />
+    public ExcelProviderCapabilities Capabilities => ExcelProviderCapabilities.List
+        | ExcelProviderCapabilities.Workbook | ExcelProviderCapabilities.Entity
+        | ExcelProviderCapabilities.Template | ExcelProviderCapabilities.Merge
+        | ExcelProviderCapabilities.Async | ExcelProviderCapabilities.Xls
+        | ExcelProviderCapabilities.Xlsx;
+
+    /// <inheritdoc />
+    public bool Supports(ExcelProviderCapabilities capabilities) => (Capabilities & capabilities) == capabilities;
     /// <summary>
     /// 调用指定实体类型的工作表写入逻辑。
     /// </summary>
@@ -39,6 +61,10 @@ public sealed class NpoiExcelExporter : IExcelExporter
     /// </summary>
     private readonly IReadOnlyList<IExcelValueConverter> _valueConverters;
     /// <summary>
+    /// 当前导出器使用的映射计划工厂。
+    /// </summary>
+    private readonly IExcelMappingPlanFactory _mappingPlanFactory;
+    /// <summary>
     /// 将导出请求编译为按工作表执行的映射计划生成器。
     /// </summary>
     private readonly NpoiExportPlanBuilder _planBuilder;
@@ -58,6 +84,14 @@ public sealed class NpoiExcelExporter : IExcelExporter
     /// 负责外围异步输出的可替换 staging 策略。
     /// </summary>
     private readonly INpoiAsyncStagingFactory _asyncStagingFactory;
+    /// <summary>
+    /// 单个实体布局执行器。
+    /// </summary>
+    private readonly NpoiEntityExportExecutor _entityExecutor;
+    /// <summary>
+    /// 大型简单列表的流式工作表写入器。
+    /// </summary>
+    private readonly NpoiStreamingSheetWriter _streamingSheetWriter;
 
     /// <summary>
     /// 初始化一个 <see cref="NpoiExcelExporter" /> 类型的实例。
@@ -89,12 +123,14 @@ public sealed class NpoiExcelExporter : IExcelExporter
         IFileExportCommitter fileExportCommitter, INpoiAsyncStagingFactory asyncStagingFactory)
     {
         _valueConverters = valueConverters?.ToArray() ?? Array.Empty<IExcelValueConverter>();
-        _planBuilder = new NpoiExportPlanBuilder(mappingPlanFactory ?? NpoiMappingPlanFactoryResolver.CreateDefault(
-            _valueConverters));
+        _mappingPlanFactory = mappingPlanFactory ?? NpoiMappingPlanFactoryResolver.CreateDefault(_valueConverters);
+        _planBuilder = new NpoiExportPlanBuilder(_mappingPlanFactory);
         _sheetWriter = new NpoiExportSheetWriter();
         _exceptionDispatcher = new BingOfficesExceptionDispatcher(exceptionObservers);
         _fileExportCommitter = fileExportCommitter ?? new DefaultFileExportCommitter();
         _asyncStagingFactory = asyncStagingFactory ?? throw new ArgumentNullException(nameof(asyncStagingFactory));
+        _entityExecutor = new NpoiEntityExportExecutor(_mappingPlanFactory, _valueConverters);
+        _streamingSheetWriter = new NpoiStreamingSheetWriter();
     }
 
     /// <summary>
@@ -106,6 +142,263 @@ public sealed class NpoiExcelExporter : IExcelExporter
         INpoiAsyncStagingFactory asyncStagingFactory)
         : this(null, null, null, fileExportCommitter, asyncStagingFactory)
     {
+    }
+
+    /// <inheritdoc />
+    public void ExportEntity<TEntity>(TEntity entity, ExcelEntityLayout<TEntity> layout, Stream destination,
+        CancellationToken cancellationToken = default) where TEntity : class, new()
+    {
+        ValidateEntityDestination(entity, layout, destination);
+        try
+        {
+            ExportEntityCore(entity, layout, destination, null, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception) when (cancellationToken.IsCancellationRequested
+            && exception.GetBaseException() is OperationCanceledException)
+        {
+            throw new OperationCanceledException(cancellationToken);
+        }
+        catch (BingOfficesException exception)
+        {
+            _exceptionDispatcher.Observe(exception);
+            throw;
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException
+            && exception is not StackOverflowException)
+        {
+            var translated = new BingOfficesExportException("Excel 实体导出失败。", exception, "NPOI",
+                BingOfficesStage.Write);
+            _exceptionDispatcher.Observe(translated);
+            throw translated;
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task ExportEntityAsync<TEntity>(TEntity entity, ExcelEntityLayout<TEntity> layout,
+        Stream destination, CancellationToken cancellationToken = default) where TEntity : class, new()
+    {
+        ValidateEntityDestination(entity, layout, destination);
+        INpoiAsyncStaging staging = null;
+        Exception primaryException = null;
+        try
+        {
+            staging = _asyncStagingFactory.Create("bing-offices-entity-async-");
+            ExportEntityCore(entity, layout, staging.WriteStream, null, cancellationToken);
+            await staging.FlushAsync(cancellationToken).ConfigureAwait(false);
+            await staging.CopyToAsync(destination, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException exception)
+        {
+            primaryException = exception;
+            throw;
+        }
+        catch (Exception exception) when (cancellationToken.IsCancellationRequested
+            && exception.GetBaseException() is OperationCanceledException)
+        {
+            primaryException = new OperationCanceledException(cancellationToken);
+            throw primaryException;
+        }
+        catch (BingOfficesException exception)
+        {
+            primaryException = exception;
+            _exceptionDispatcher.Observe(exception);
+            throw;
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException
+            && exception is not StackOverflowException)
+        {
+            var translated = new BingOfficesExportException("Excel 实体异步导出失败。", exception, "NPOI",
+                BingOfficesStage.Write);
+            primaryException = translated;
+            _exceptionDispatcher.Observe(translated);
+            throw translated;
+        }
+        finally
+        {
+            if (staging != null)
+            {
+                try { staging.Dispose(); }
+                catch (Exception cleanupException) when (cleanupException is IOException
+                    || cleanupException is UnauthorizedAccessException)
+                {
+                    if (primaryException != null)
+                        primaryException.Data["Bing.Offices.EntityStagingCleanupException"] = cleanupException;
+                    else
+                        throw;
+                }
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    public void ExportEntityToFile<TEntity>(TEntity entity, ExcelEntityLayout<TEntity> layout, string path,
+        CancellationToken cancellationToken = default) where TEntity : class, new()
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            throw new ArgumentException("目标文件路径不能为空。", nameof(path));
+        _fileExportCommitter.Commit(path,
+            destination => ExportEntity(entity, layout, destination, cancellationToken),
+            cancellationToken, "Excel entity");
+    }
+
+    /// <inheritdoc />
+    public async Task ExportEntityToFileAsync<TEntity>(TEntity entity, ExcelEntityLayout<TEntity> layout,
+        string path, CancellationToken cancellationToken = default) where TEntity : class, new()
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            throw new ArgumentException("目标文件路径不能为空。", nameof(path));
+        await _fileExportCommitter.CommitAsync(path,
+            (destination, token) => ExportEntityAsync(entity, layout, destination, token),
+            cancellationToken, "Excel entity").ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public void ExportForTemplate<TEntity>(TEntity entity, ExcelEntityLayout<TEntity> layout,
+        ExcelEntityTemplateOptions template, Stream destination,
+        CancellationToken cancellationToken = default) where TEntity : class, new()
+    {
+        ValidateEntityDestination(entity, layout, destination);
+        if (template == null)
+            throw new ArgumentNullException(nameof(template));
+        try
+        {
+            ExportEntityCore(entity, layout, destination, template, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception) when (cancellationToken.IsCancellationRequested
+            && exception.GetBaseException() is OperationCanceledException)
+        {
+            throw new OperationCanceledException(cancellationToken);
+        }
+        catch (BingOfficesException exception)
+        {
+            _exceptionDispatcher.Observe(exception);
+            throw;
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException
+            && exception is not StackOverflowException)
+        {
+            var translated = new BingOfficesExportException("Excel 模板实体导出失败。", exception, "NPOI",
+                BingOfficesStage.Write);
+            _exceptionDispatcher.Observe(translated);
+            throw translated;
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task ExportForTemplateAsync<TEntity>(TEntity entity, ExcelEntityLayout<TEntity> layout,
+        ExcelEntityTemplateOptions template, Stream destination,
+        CancellationToken cancellationToken = default) where TEntity : class, new()
+    {
+        ValidateEntityDestination(entity, layout, destination);
+        if (template == null)
+            throw new ArgumentNullException(nameof(template));
+        INpoiAsyncStaging staging = null;
+        Exception primaryException = null;
+        try
+        {
+            staging = _asyncStagingFactory.Create("bing-offices-entity-template-async-");
+            ExportEntityCore(entity, layout, staging.WriteStream, template, cancellationToken);
+            await staging.FlushAsync(cancellationToken).ConfigureAwait(false);
+            await staging.CopyToAsync(destination, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException exception)
+        {
+            primaryException = exception;
+            throw;
+        }
+        catch (Exception exception) when (cancellationToken.IsCancellationRequested
+            && exception.GetBaseException() is OperationCanceledException)
+        {
+            primaryException = new OperationCanceledException(cancellationToken);
+            throw primaryException;
+        }
+        catch (BingOfficesException exception)
+        {
+            primaryException = exception;
+            _exceptionDispatcher.Observe(exception);
+            throw;
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException
+            && exception is not StackOverflowException)
+        {
+            var translated = new BingOfficesExportException("Excel 模板实体异步导出失败。", exception, "NPOI",
+                BingOfficesStage.Write);
+            primaryException = translated;
+            _exceptionDispatcher.Observe(translated);
+            throw translated;
+        }
+        finally
+        {
+            if (staging != null)
+            {
+                try { staging.Dispose(); }
+                catch (Exception cleanupException) when (cleanupException is IOException
+                    || cleanupException is UnauthorizedAccessException)
+                {
+                    if (primaryException != null)
+                        primaryException.Data["Bing.Offices.EntityTemplateStagingCleanupException"] = cleanupException;
+                    else
+                        throw;
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// 创建或打开工作簿并同步执行实体布局导出。
+    /// </summary>
+    /// <typeparam name="TEntity">实体类型。</typeparam>
+    /// <param name="entity">待导出的实体。</param>
+    /// <param name="layout">实体布局。</param>
+    /// <param name="destination">接收工作簿内容的目标流。</param>
+    /// <param name="template">可选的模板配置。</param>
+    /// <param name="cancellationToken">用于取消导出的令牌。</param>
+    private void ExportEntityCore<TEntity>(TEntity entity, ExcelEntityLayout<TEntity> layout, Stream destination,
+        ExcelEntityTemplateOptions template, CancellationToken cancellationToken) where TEntity : class, new()
+    {
+        IWorkbook workbook = null;
+        try
+        {
+            workbook = template == null
+                ? ExcelHelper.PrepareWorkbook(ExcelFormat.Xlsx)
+                : NPOI.SS.UserModel.WorkbookFactory.Create(new NpoiNonDisposingStream(template.Template));
+            _entityExecutor.Write(workbook, entity, layout, template != null, cancellationToken);
+            workbook.Write(new NpoiNonDisposingStream(destination, cancellationToken), false);
+        }
+        finally
+        {
+            workbook?.Close();
+            if (template != null && !template.LeaveOpen)
+                template.Template.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// 校验实体导出所需的实体、布局和目标流参数。
+    /// </summary>
+    /// <typeparam name="TEntity">实体类型。</typeparam>
+    /// <param name="entity">待导出的实体。</param>
+    /// <param name="layout">实体布局。</param>
+    /// <param name="destination">接收工作簿内容的目标流。</param>
+    private static void ValidateEntityDestination<TEntity>(TEntity entity, ExcelEntityLayout<TEntity> layout,
+        Stream destination) where TEntity : class, new()
+    {
+        if (entity == null)
+            throw new ArgumentNullException(nameof(entity));
+        if (layout == null)
+            throw new ArgumentNullException(nameof(layout));
+        if (destination == null)
+            throw new ArgumentNullException(nameof(destination));
+        if (!destination.CanWrite)
+            throw new ArgumentException("目标流不可写入。", nameof(destination));
     }
 
     /// <inheritdoc />
@@ -130,7 +423,6 @@ public sealed class NpoiExcelExporter : IExcelExporter
                 if (!names.Add(sheetRequest.Name))
                     throw new ArgumentException($"Workbook 包含重复 Sheet 名称: {sheetRequest.Name}");
             }
-            using var workbook = CreateWorkbook(request);
             Dictionary<ExcelSheetExportRequest, IExcelMappingPlan> planBySheet;
             try
             {
@@ -150,6 +442,7 @@ public sealed class NpoiExcelExporter : IExcelExporter
                 throw new BingOfficesConfigurationException("Excel 导出映射配置无效。", exception,
                     BingOfficesStage.Plan);
             }
+            using var workbook = CreateWorkbook(request, CanUseStreamingWorkbook(request, planBySheet));
             foreach (var sheetRequest in request.Sheets)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -324,17 +617,82 @@ public sealed class NpoiExcelExporter : IExcelExporter
     /// 创建普通或模板工作簿。模板加载后沿用同一 Sheet Writer。
     /// </summary>
     /// <param name="request">包含格式、模板流和元数据的导出请求。</param>
+    /// <param name="useStreaming">是否为大型纯列表创建 SXSSF 流式工作簿。</param>
     /// <returns>已准备好的 NPOI 工作簿。</returns>
-    private static NPOI.SS.UserModel.IWorkbook CreateWorkbook(ExcelWorkbookExportRequest request)
+    private static NPOI.SS.UserModel.IWorkbook CreateWorkbook(ExcelWorkbookExportRequest request,
+        bool useStreaming)
     {
         if (request.Template == null)
+        {
+            if (useStreaming)
+            {
+                var baseWorkbook = (XSSFWorkbook)ExcelHelper.PrepareWorkbook(request.Format, request.Metadata);
+                return new SXSSFWorkbook(baseWorkbook, 100, false, false);
+            }
             return ExcelHelper.PrepareWorkbook(request.Format, request.Metadata);
+        }
         if (!request.Template.CanRead)
             throw new ArgumentException("模板流不可读取。", nameof(request));
         var workbook = NPOI.SS.UserModel.WorkbookFactory.Create(new NpoiNonDisposingStream(request.Template));
         if (request.MetadataSpecified)
             ExcelHelper.ApplyWorkbookMetadata(workbook, request.Metadata);
         return workbook;
+    }
+
+    /// <summary>
+    /// 判断请求是否满足大型纯列表的 SXSSF 行刷新约束。
+    /// </summary>
+    /// <param name="request">待执行的导出请求。</param>
+    /// <param name="plans">已编译的工作表映射计划。</param>
+    /// <returns>满足约束并且至少包含一个大型集合时返回 <see langword="true" />。</returns>
+    private static bool CanUseStreamingWorkbook(ExcelWorkbookExportRequest request,
+        IReadOnlyDictionary<ExcelSheetExportRequest, IExcelMappingPlan> plans)
+    {
+        if (request.Template != null || request.Format != ExcelFormat.Xlsx || request.Sheets.Count == 0)
+            return false;
+
+        foreach (var sheet in request.Sheets)
+        {
+            if (!TryGetCollectionCount(sheet.Data, out var count) || count < StreamingRowThreshold
+                || (sheet.HeaderRows?.Count ?? 0) != 0 || (sheet.Charts?.Count ?? 0) != 0
+                || sheet.ColumnWidth != null
+                || sheet.DynamicColumns.Count != 0 || sheet.TemplateRegion != null)
+                return false;
+            if (!plans.TryGetValue(sheet, out var plan)
+                || plan.DynamicColumns.Count != 0
+                || plan.Columns.Any(column => column.IsDynamicColumn))
+                return false;
+            if (HasMergeColumns(sheet.ItemType)
+                || sheet.ItemType.IsDefined(typeof(WrapTextAttribute), inherit: true))
+                return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// 检查实体属性是否声明了需要回溯合并的列。
+    /// </summary>
+    /// <param name="itemType">工作表数据项类型。</param>
+    /// <returns>存在合并列声明时返回 <see langword="true" />。</returns>
+    private static bool HasMergeColumns(Type itemType) =>
+        itemType.GetProperties(BindingFlags.Instance | BindingFlags.Public)
+            .Any(property => property.IsDefined(typeof(MergeColumnsAttribute), inherit: true));
+
+    /// <summary>
+    /// 获取可重复枚举集合的元素数量；未知数量的延迟序列不进入流式路径。
+    /// </summary>
+    /// <param name="data">待检查的数据序列。</param>
+    /// <param name="count">集合元素数量。</param>
+    /// <returns>能够无额外枚举获取数量时返回 <see langword="true" />。</returns>
+    private static bool TryGetCollectionCount(System.Collections.IEnumerable data, out int count)
+    {
+        if (data is System.Collections.ICollection collection)
+        {
+            count = collection.Count;
+            return true;
+        }
+        count = 0;
+        return false;
     }
 
     /// <summary>
@@ -424,8 +782,12 @@ public sealed class NpoiExcelExporter : IExcelExporter
         }
         var headerRowIndex = templateOrigin.Row + request.HeaderRowIndex;
         var firstColumnIndex = templateOrigin.Column;
-        _sheetWriter.Write<T>(workbook, request, cancellationToken, map, columns, templateOrigin.Row,
-            firstColumnIndex);
+        if (workbook is SXSSFWorkbook)
+            _streamingSheetWriter.Write<T>(workbook, request, cancellationToken, map, columns,
+                templateOrigin.Row, firstColumnIndex);
+        else
+            _sheetWriter.Write<T>(workbook, request, cancellationToken, map, columns, templateOrigin.Row,
+                firstColumnIndex);
     }
 
     /// <summary>

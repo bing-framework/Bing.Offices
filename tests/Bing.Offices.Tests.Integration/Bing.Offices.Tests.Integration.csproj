@@ -21,5 +21,6 @@
     <ProjectReference Include="..\..\src\Bing.Offices.Core\Bing.Offices.Core.csproj" />
     <ProjectReference Include="..\..\src\Bing.Offices.Npoi\Bing.Offices.Npoi.csproj" />
     <ProjectReference Include="..\..\src\Bing.Offices.MiniExcel\Bing.Offices.MiniExcel.csproj" />
+    <ProjectReference Include="..\..\src\Bing.Offices.ClosedXml\Bing.Offices.ClosedXml.csproj" />
   </ItemGroup>
 </Project>

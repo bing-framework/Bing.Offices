@@ -79,6 +79,11 @@ internal sealed class NpoiImportPlanBuilder
     }
 
     /// <summary>
+    /// 获取当前计划构建器使用的映射计划工厂。
+    /// </summary>
+    internal IExcelMappingPlanFactory MappingPlanFactory => _mappingPlanFactory;
+
+    /// <summary>
     /// 按规范化请求分组创建导入计划，并将计划映射回原始 Sheet 请求。
     /// </summary>
     /// <param name="existingSheets">已成功解析为物理工作表的请求描述。</param>

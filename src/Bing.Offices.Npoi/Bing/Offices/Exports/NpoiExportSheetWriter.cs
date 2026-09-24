@@ -93,6 +93,9 @@ internal sealed class NpoiExportSheetWriter
         ApplyHeaderStyle<T>(workbook, sheet, headerRowIndex);
         ApplyWrapText<T>(sheet);
         ApplyColumnWidths(sheet, columns, originColumn, originRow, request.ColumnWidth);
+        ApplyRowHeights(sheet, request.RowHeight, headerRowIndex,
+            originRow + request.DataRowStartIndex, rowIndex - 1, originRow,
+            request.HeaderRows);
         MergeColumns<T>(sheet, columns, originRow + request.DataRowStartIndex, rowIndex - 1, originColumn);
         CreateCharts(workbook, sheet, columns, request.Charts, originRow + request.DataRowStartIndex,
             rowIndex, originColumn);
@@ -104,7 +107,7 @@ internal sealed class NpoiExportSheetWriter
     /// <param name="request">包含动态列失败策略的导出请求。</param>
     /// <param name="values">当前数据项产生的动态值字典。</param>
     /// <param name="dynamicKeys">已声明的动态列键集合。</param>
-    private static void ValidateUnknownDynamicValues(ExcelSheetExportRequest request,
+    internal static void ValidateUnknownDynamicValues(ExcelSheetExportRequest request,
         IDictionary<string, object> values, ISet<string> dynamicKeys)
     {
         if (!request.FailOnUnknownDynamicValues || values == null || dynamicKeys == null)
@@ -289,7 +292,7 @@ internal sealed class NpoiExportSheetWriter
     /// <param name="key">待解析的样式键；为空时不应用样式。</param>
     /// <param name="header">是否解析表头样式。</param>
     /// <returns>解析出的样式；键为空时返回 <see langword="null" />。</returns>
-    private static Styles.ExcelCellStyle ResolveStyle(string key, bool header)
+    internal static Styles.ExcelCellStyle ResolveStyle(string key, bool header)
     {
         if (string.IsNullOrWhiteSpace(key))
             return null;
@@ -451,6 +454,40 @@ internal sealed class NpoiExportSheetWriter
     }
 
     /// <summary>
+    /// 应用导出表头和数据行的行高配置。
+    /// </summary>
+    /// <param name="sheet">目标工作表。</param>
+    /// <param name="options">行高配置；为空时不处理。</param>
+    /// <param name="headerRowIndex">属性表头的零基行号。</param>
+    /// <param name="firstDataRowIndex">数据区域的零基起始行号。</param>
+    /// <param name="lastDataRowIndex">数据区域的零基结束行号。</param>
+    /// <param name="originRow">自定义表头区域的零基起始行号。</param>
+    /// <param name="customHeaders">自定义表头行集合。</param>
+    private static void ApplyRowHeights(ISheet sheet, ExcelRowHeightOptions options,
+        int headerRowIndex, int firstDataRowIndex, int lastDataRowIndex, int originRow,
+        IReadOnlyList<ExcelHeaderRow> customHeaders)
+    {
+        if (options == null)
+            return;
+        options.Validate();
+        if (options.HeaderHeight.HasValue)
+        {
+            (sheet.GetRow(headerRowIndex) ?? sheet.CreateRow(headerRowIndex)).HeightInPoints =
+                (float)options.HeaderHeight.Value;
+            foreach (var header in customHeaders ?? Array.Empty<ExcelHeaderRow>())
+                (sheet.GetRow(originRow + header.RowIndex) ??
+                    sheet.CreateRow(originRow + header.RowIndex)).HeightInPoints =
+                    (float)options.HeaderHeight.Value;
+        }
+        if (options.BodyHeight.HasValue && lastDataRowIndex >= firstDataRowIndex)
+        {
+            for (var rowIndex = firstDataRowIndex; rowIndex <= lastDataRowIndex; rowIndex++)
+                (sheet.GetRow(rowIndex) ?? sheet.CreateRow(rowIndex)).HeightInPoints =
+                    (float)options.BodyHeight.Value;
+        }
+    }
+
+    /// <summary>
     /// 计算自适应列宽。
     /// </summary>
     /// <param name="sheet">包含样本数据的工作表。</param>
@@ -552,7 +589,7 @@ internal sealed class NpoiExportSheetWriter
     /// <param name="rowIndex">错误定位使用的工作表行号。</param>
     /// <param name="columnIndex">错误定位使用的工作表列号。</param>
     /// <param name="culture">值转换和格式化使用的区域性。</param>
-    private static void WriteCell<T>(ICell cell, T item, ExcelColumnPlan column,
+    internal static void WriteCell<T>(ICell cell, T item, ExcelColumnPlan column,
         IDictionary<string, object> dynamicValues, string sheetName, int rowIndex, int columnIndex,
         CultureInfo culture) where T : class, new()
     {

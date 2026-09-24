@@ -7,6 +7,9 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Bing.Offices.ApiSnapshot;
+using Bing.Offices.ClosedXml.Exports;
+using Bing.Offices.ClosedXml.Extensions;
+using Bing.Offices.ClosedXml.Imports;
 using Bing.Offices.Configurations;
 using Bing.Offices.Exceptions;
 using Bing.Offices.Imports;
@@ -87,6 +90,7 @@ public class PublicApiContractTest
             ["Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelColumnPlacement"] = "User API",
             ["Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelColumnWidthMode"] = "User API",
             ["Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelColumnWidthOptions"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelRowHeightOptions"] = "User API",
             ["Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelCommentConflictPolicy"] = "User API",
             ["Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelTemplateCellOverwritePolicy"] = "User API",
             ["Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelComment"] = "User API",
@@ -129,6 +133,22 @@ public class PublicApiContractTest
             ["Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelWorkbookImportRequest`1"] = "User API",
             ["Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelWorkbookImportResult`1"] = "User API",
             ["Bing.Offices.Abstractions:Bing.Offices.Imports.IExcelImporter"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Entities.ExcelEntity"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Entities.ExcelEntityLayoutBuilder`1"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Entities.ExcelEntityListRegionBuilder`1"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Entities.ExcelEntityLayout`1"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Entities.ExcelEntityCellBinding`1"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Entities.ExcelEntityCellBuilder`1"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Entities.ExcelEntityListRegion`1"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Entities.ExcelEntityMergeRegion"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Entities.ExcelEntityCellReference"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Entities.ExcelEntityCellRange"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Entities.ExcelEntityImportResult`1"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Entities.ExcelEntityTemplateOptions"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Entities.IExcelEntityExporter"] = "Provider SPI",
+            ["Bing.Offices.Abstractions:Bing.Offices.Entities.IExcelEntityImporter"] = "Provider SPI",
+            ["Bing.Offices.Abstractions:Bing.Offices.Providers.ExcelProviderCapabilities"] = "Provider SPI",
+            ["Bing.Offices.Abstractions:Bing.Offices.Providers.IExcelProviderCapabilities"] = "Provider SPI",
             ["Bing.Offices.Abstractions:Bing.Offices.Providers.UniqueTracker"] = "Provider SPI",
             ["Bing.Offices.Abstractions:Bing.Offices.Providers.IExcelDynamicMappingColumn"] = "Provider SPI",
             ["Bing.Offices.Abstractions:Bing.Offices.Providers.IExcelMappingLayout"] = "Provider SPI",
@@ -139,7 +159,7 @@ public class PublicApiContractTest
             ["Bing.Offices.Abstractions:Bing.Offices.Providers.IExcelMappingStyle"] = "Provider SPI",
             ["Bing.Offices.Abstractions:Bing.Offices.Providers.IExcelMappingWorkbookPlan"] = "Provider SPI",
             ["Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelUnsupportedFeaturePolicy"] = "User API",
-            ["Bing.Offices.Abstractions:Bing.Offices.Imports.ValidateMode"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelValidationFailureMode"] = "User API",
             ["Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelWhitespacePolicy"] = "User API",
             ["Bing.Offices.Abstractions:Bing.Offices.Styles.ExcelBorderLineStyle"] = "User API",
             ["Bing.Offices.Abstractions:Bing.Offices.Styles.ExcelBorderStyle"] = "User API",
@@ -174,6 +194,7 @@ public class PublicApiContractTest
             ["Bing.Offices.Core:Bing.Offices.Configurations.ExcelMappingConfigurationLoader"] = "User API",
             ["Bing.Offices.Core:Bing.Offices.Extensions.CsvStreamExtensions"] = "User API",
             ["Bing.Offices.Core:Bing.Offices.Extensions.ExcelStreamExtensions"] = "User API",
+            ["Bing.Offices.Core:Bing.Offices.Extensions.ExcelEntityExtensions"] = "User API",
             ["Bing.Offices.Core:Bing.Offices.Extensions.MappingProfileServiceCollectionExtensions"] = "User API",
             ["Bing.Offices.Core:Bing.Offices.Exceptions.BingOfficesExceptionDispatcher"] = "Provider SPI",
             ["Bing.Offices.Core:Bing.Offices.IO.DefaultFileExportCommitter"] = "Provider SPI",
@@ -196,6 +217,10 @@ public class PublicApiContractTest
             ["Bing.Offices.MiniExcel:Bing.Offices.Exports.MiniExcelExcelExporter"] = "Provider User API",
             ["Bing.Offices.MiniExcel:Bing.Offices.Imports.MiniExcelExcelImporter"] = "Provider User API",
             ["Bing.Offices.MiniExcel:Bing.Offices.MiniExcel.Extensions.ExcelMiniExcelServiceCollectionExtensions"] = "User API",
+            ["Bing.Offices.ClosedXml:Bing.Offices.ClosedXml.Exports.ClosedXmlExcelExporter"] = "Provider User API",
+            ["Bing.Offices.ClosedXml:Bing.Offices.ClosedXml.Imports.ClosedXmlExcelImporter"] = "Provider User API",
+            ["Bing.Offices.ClosedXml:Bing.Offices.ClosedXml.Extensions.ExcelClosedXmlServiceCollectionExtensions"] = "User API",
+            ["Bing.Offices.ClosedXml:Bing.Offices.ClosedXml.ClosedXmlProviderOptions"] = "Provider User API",
         };
 
     /// <summary>
@@ -360,6 +385,7 @@ public class PublicApiContractTest
             "Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelColumnPlacement",
             "Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelColumnWidthMode",
             "Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelColumnWidthOptions",
+            "Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelRowHeightOptions",
             "Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelCommentConflictPolicy",
             "Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelTemplateCellOverwritePolicy",
             "Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelComment",
@@ -402,6 +428,22 @@ public class PublicApiContractTest
             "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelWorkbookImportRequest`1",
             "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelWorkbookImportResult`1",
             "Bing.Offices.Abstractions:Bing.Offices.Imports.IExcelImporter",
+            "Bing.Offices.Abstractions:Bing.Offices.Entities.ExcelEntity",
+            "Bing.Offices.Abstractions:Bing.Offices.Entities.ExcelEntityCellBinding`1",
+            "Bing.Offices.Abstractions:Bing.Offices.Entities.ExcelEntityCellBuilder`1",
+            "Bing.Offices.Abstractions:Bing.Offices.Entities.ExcelEntityCellRange",
+            "Bing.Offices.Abstractions:Bing.Offices.Entities.ExcelEntityCellReference",
+            "Bing.Offices.Abstractions:Bing.Offices.Entities.ExcelEntityImportResult`1",
+            "Bing.Offices.Abstractions:Bing.Offices.Entities.ExcelEntityLayout`1",
+            "Bing.Offices.Abstractions:Bing.Offices.Entities.ExcelEntityLayoutBuilder`1",
+            "Bing.Offices.Abstractions:Bing.Offices.Entities.ExcelEntityListRegion`1",
+            "Bing.Offices.Abstractions:Bing.Offices.Entities.ExcelEntityListRegionBuilder`1",
+            "Bing.Offices.Abstractions:Bing.Offices.Entities.ExcelEntityMergeRegion",
+            "Bing.Offices.Abstractions:Bing.Offices.Entities.ExcelEntityTemplateOptions",
+            "Bing.Offices.Abstractions:Bing.Offices.Entities.IExcelEntityExporter",
+            "Bing.Offices.Abstractions:Bing.Offices.Entities.IExcelEntityImporter",
+            "Bing.Offices.Abstractions:Bing.Offices.Providers.ExcelProviderCapabilities",
+            "Bing.Offices.Abstractions:Bing.Offices.Providers.IExcelProviderCapabilities",
             "Bing.Offices.Abstractions:Bing.Offices.Providers.UniqueTracker",
             "Bing.Offices.Abstractions:Bing.Offices.Providers.IExcelDynamicMappingColumn",
             "Bing.Offices.Abstractions:Bing.Offices.Providers.IExcelMappingLayout",
@@ -412,7 +454,7 @@ public class PublicApiContractTest
             "Bing.Offices.Abstractions:Bing.Offices.Providers.IExcelMappingStyle",
             "Bing.Offices.Abstractions:Bing.Offices.Providers.IExcelMappingWorkbookPlan",
             "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelUnsupportedFeaturePolicy",
-            "Bing.Offices.Abstractions:Bing.Offices.Imports.ValidateMode",
+            "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelValidationFailureMode",
             "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelWhitespacePolicy",
             "Bing.Offices.Abstractions:Bing.Offices.Styles.ExcelBorderLineStyle",
             "Bing.Offices.Abstractions:Bing.Offices.Styles.ExcelBorderStyle",
@@ -448,6 +490,7 @@ public class PublicApiContractTest
             "Bing.Offices.Core:Bing.Offices.Configurations.ExcelMappingConfigurationLoader",
             "Bing.Offices.Core:Bing.Offices.Extensions.CsvStreamExtensions",
             "Bing.Offices.Core:Bing.Offices.Extensions.ExcelStreamExtensions",
+            "Bing.Offices.Core:Bing.Offices.Extensions.ExcelEntityExtensions",
             "Bing.Offices.Core:Bing.Offices.Exceptions.BingOfficesExceptionDispatcher",
             "Bing.Offices.Core:Bing.Offices.IO.DefaultFileExportCommitter",
             "Bing.Offices.Core:Bing.Offices.Metadata.MergedRegionInfo",
@@ -468,6 +511,10 @@ public class PublicApiContractTest
             "Bing.Offices.MiniExcel:Bing.Offices.Exports.MiniExcelExcelExporter",
             "Bing.Offices.MiniExcel:Bing.Offices.Imports.MiniExcelExcelImporter",
             "Bing.Offices.MiniExcel:Bing.Offices.MiniExcel.Extensions.ExcelMiniExcelServiceCollectionExtensions",
+            "Bing.Offices.ClosedXml:Bing.Offices.ClosedXml.Exports.ClosedXmlExcelExporter",
+            "Bing.Offices.ClosedXml:Bing.Offices.ClosedXml.Imports.ClosedXmlExcelImporter",
+            "Bing.Offices.ClosedXml:Bing.Offices.ClosedXml.Extensions.ExcelClosedXmlServiceCollectionExtensions",
+            "Bing.Offices.ClosedXml:Bing.Offices.ClosedXml.ClosedXmlProviderOptions",
             "Bing.Offices.Core:Bing.Offices.Extensions.MappingProfileServiceCollectionExtensions"
         };
         var assemblies = new[]
@@ -475,7 +522,8 @@ public class PublicApiContractTest
             typeof(IExcelImporter).Assembly,
             typeof(ExcelMappingConfigurationLoader).Assembly,
             typeof(NpoiExcelImporter).Assembly,
-            typeof(MiniExcelExcelImporter).Assembly
+            typeof(MiniExcelExcelImporter).Assembly,
+            typeof(ClosedXmlExcelImporter).Assembly
         };
 
         // Act
@@ -535,7 +583,8 @@ public class PublicApiContractTest
             typeof(IExcelImporter).Assembly,
             typeof(ExcelMappingConfigurationLoader).Assembly,
             typeof(NpoiExcelImporter).Assembly,
-            typeof(MiniExcelExcelImporter).Assembly
+            typeof(MiniExcelExcelImporter).Assembly,
+            typeof(ClosedXmlExcelImporter).Assembly
         };
 
         // Act
@@ -595,7 +644,8 @@ public class PublicApiContractTest
             typeof(IExcelImporter).Assembly,
             typeof(ExcelMappingConfigurationLoader).Assembly,
             typeof(NpoiExcelImporter).Assembly,
-            typeof(MiniExcelExcelImporter).Assembly
+            typeof(MiniExcelExcelImporter).Assembly,
+            typeof(ClosedXmlExcelImporter).Assembly
         };
 
         // Act
@@ -608,7 +658,9 @@ public class PublicApiContractTest
             [typeof(NpoiExcelImporter).Assembly.GetName().Name] = new HashSet<string>(
                 new[] { "Bing.Offices.Npoi.Tests", "Bing.Offices.Npoi.Tests.Integration" }, StringComparer.Ordinal),
             [typeof(MiniExcelExcelImporter).Assembly.GetName().Name] = new HashSet<string>(
-                new[] { "Bing.Offices.MiniExcel.Tests", "Bing.Offices.MiniExcel.Tests.Integration" }, StringComparer.Ordinal)
+                new[] { "Bing.Offices.MiniExcel.Tests", "Bing.Offices.MiniExcel.Tests.Integration" }, StringComparer.Ordinal),
+            [typeof(ClosedXmlExcelImporter).Assembly.GetName().Name] = new HashSet<string>(
+                new[] { "Bing.Offices.ClosedXml.Tests", "Bing.Offices.ClosedXml.Tests.Integration" }, StringComparer.Ordinal)
         };
 
         // Assert
@@ -763,7 +815,9 @@ public class PublicApiContractTest
             [typeof(NpoiExcelImporter).Assembly.GetName().Name!] =
                 Path.Combine(releaseRoot, expectedTfm, "Bing.Offices.Npoi.dll"),
             [typeof(MiniExcelExcelImporter).Assembly.GetName().Name!] =
-                Path.Combine(releaseRoot, expectedTfm, "Bing.Offices.MiniExcel.dll")
+                Path.Combine(releaseRoot, expectedTfm, "Bing.Offices.MiniExcel.dll"),
+            [typeof(ClosedXmlExcelImporter).Assembly.GetName().Name!] =
+                Path.Combine(releaseRoot, expectedTfm, "Bing.Offices.ClosedXml.dll")
         };
 
         Assert.True(root.GetProperty("assemblies").TryGetProperty(expectedTfm, out var expected),

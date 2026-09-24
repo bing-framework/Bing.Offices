@@ -283,7 +283,7 @@ public class StreamPipelineTest
 
         // Act
         var result = new NpoiExcelImporter().Import(source, CreateSingleSheetRequest<ValidatedRow>(sheet =>
-            sheet.Validate(ValidateMode.Continue)));
+            sheet.Validate(ExcelValidationFailureMode.Continue)));
 
         // Assert
         Assert.Single(result.Workbook.Items);
@@ -1499,6 +1499,19 @@ public class StreamPipelineTest
     }
 
     /// <summary>
+    /// 测试 - 一个实体最多只能声明一个动态列属性，且应在类型映射阶段失败。
+    /// </summary>
+    [Fact]
+    public void TypeMap_MultipleDynamicColumnProperties_ShouldThrowArgumentException()
+    {
+        var action = () => ExcelTypeMapFactory.Get<MultipleDynamicRow>();
+
+        var exception = Assert.Throws<ArgumentException>(action);
+
+        Assert.Contains("最多只能声明一个动态列属性", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 测试 - 匹配到只读属性的导入模板应在绑定前被明确拒绝。
     /// </summary>
     [Fact]
@@ -1810,7 +1823,7 @@ public class StreamPipelineTest
 
         // Act
         var import = () => new NpoiExcelImporter().Import(source,
-            CreateSingleSheetRequest<StreamRow>(sheet => sheet.Validate((ValidateMode)99)));
+            CreateSingleSheetRequest<StreamRow>(sheet => sheet.Validate((ExcelValidationFailureMode)99)));
 
         // Assert
         Assert.Throws<ArgumentOutOfRangeException>(import);

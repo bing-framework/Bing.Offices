@@ -12,7 +12,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace Bing.Offices.Npoi.Extensions;
 
 /// <summary>
-/// 服务扩展
+/// NPOI 服务注册扩展。
 /// </summary>
 public static class ExcelNpoiServiceCollectionExtensions
 {

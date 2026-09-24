@@ -40,6 +40,11 @@ internal sealed class NpoiExportPlanBuilder
     }
 
     /// <summary>
+    /// 获取当前计划构建器使用的映射计划工厂。
+    /// </summary>
+    internal IExcelMappingPlanFactory MappingPlanFactory => _mappingPlanFactory;
+
+    /// <summary>
     /// 按规范化请求分组创建导出计划，并将计划映射回原始 Sheet 请求。
     /// </summary>
     /// <param name="request">包含工作表和映射配置的工作簿导出请求。</param>

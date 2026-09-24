@@ -4,12 +4,12 @@ using NPOI.SS.Util;
 namespace Bing.Offices.Npoi.Extensions;
 
 /// <summary>
-/// NPOI工作表(<see cref="NPOI.SS.UserModel.ISheet"/>) 扩展
+/// NPOI 工作表扩展。
 /// </summary>
 public static partial class SheetExtensions
 {
     /// <summary>
-    /// 添加合并区域
+    /// 添加合并区域。
     /// </summary>
     /// <param name="sheet">NPOI工作表</param>
     /// <param name="regionInfo">合并区域信息</param>

@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using Bing.Offices.Conversions;
 using Bing.Offices.Configurations;
+using Bing.Offices.Entities;
 using Bing.Offices.Exceptions;
 using Bing.Offices.Extensions;
 using Bing.Offices.IO;
@@ -18,8 +19,20 @@ namespace Bing.Offices.Imports;
 /// <remarks>
 /// 输入会先复制，并由 NPOI 建立内存中的 Workbook DOM。
 /// </remarks>
-public sealed class NpoiExcelImporter : IExcelImporter
+public sealed class NpoiExcelImporter : IExcelImporter, IExcelEntityImporter, IExcelProviderCapabilities
 {
+    /// <inheritdoc />
+    public string ProviderName => "NPOI";
+
+    /// <inheritdoc />
+    public ExcelProviderCapabilities Capabilities => ExcelProviderCapabilities.List
+        | ExcelProviderCapabilities.Workbook | ExcelProviderCapabilities.Entity
+        | ExcelProviderCapabilities.Template | ExcelProviderCapabilities.Merge
+        | ExcelProviderCapabilities.Async | ExcelProviderCapabilities.Xls
+        | ExcelProviderCapabilities.Xlsx;
+
+    /// <inheritdoc />
+    public bool Supports(ExcelProviderCapabilities capabilities) => (Capabilities & capabilities) == capabilities;
     /// <summary>
     /// 调用指定工作簿根类型的泛型工作表导入逻辑。
     /// </summary>
@@ -95,6 +108,10 @@ public sealed class NpoiExcelImporter : IExcelImporter
     /// 保存负责失败工作簿外围异步输出的可替换 staging 策略。
     /// </summary>
     private readonly INpoiAsyncStagingFactory _asyncStagingFactory;
+    /// <summary>
+    /// 单个实体布局执行器。
+    /// </summary>
+    private readonly NpoiEntityImportExecutor _entityExecutor;
 
     /// <summary>
     /// 初始化一个 <see cref="NpoiExcelImporter" /> 类型的实例。
@@ -140,6 +157,7 @@ public sealed class NpoiExcelImporter : IExcelImporter
         _sheetExecutor = new NpoiImportSheetExecutor(_rowMaterializer);
         _exceptionDispatcher = new BingOfficesExceptionDispatcher(exceptionObservers);
         _asyncStagingFactory = asyncStagingFactory ?? throw new ArgumentNullException(nameof(asyncStagingFactory));
+        _entityExecutor = new NpoiEntityImportExecutor(_mappingPlanFactory, _valueConverters);
     }
 
     /// <summary>
@@ -149,6 +167,209 @@ public sealed class NpoiExcelImporter : IExcelImporter
     internal NpoiExcelImporter(INpoiAsyncStagingFactory asyncStagingFactory)
         : this(null, null, null, null, null, asyncStagingFactory)
     {
+    }
+
+    /// <inheritdoc />
+    public ExcelEntityImportResult<TEntity> ImportEntity<TEntity>(Stream source,
+        ExcelEntityLayout<TEntity> layout, CancellationToken cancellationToken = default)
+        where TEntity : class, new()
+    {
+        ValidateEntitySource(source, layout);
+        try
+        {
+            using var buffered = new MemoryStream();
+            NpoiStreamCopier.Copy(source, buffered, cancellationToken);
+            return ImportEntityBuffered(buffered, layout, false, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (BingOfficesException exception)
+        {
+            _exceptionDispatcher.Observe(exception);
+            throw;
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException
+            && exception is not StackOverflowException)
+        {
+            var translated = new BingOfficesImportException("Excel 实体导入失败。", exception, "NPOI",
+                BingOfficesStage.Read);
+            _exceptionDispatcher.Observe(translated);
+            throw translated;
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<ExcelEntityImportResult<TEntity>> ImportEntityAsync<TEntity>(Stream source,
+        ExcelEntityLayout<TEntity> layout, CancellationToken cancellationToken = default)
+        where TEntity : class, new()
+    {
+        ValidateEntitySource(source, layout);
+        try
+        {
+            using var buffered = new MemoryStream();
+            await NpoiStreamCopier.CopyAsync(source, buffered, cancellationToken).ConfigureAwait(false);
+            return ImportEntityBuffered(buffered, layout, false, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (BingOfficesException exception)
+        {
+            _exceptionDispatcher.Observe(exception);
+            throw;
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException
+            && exception is not StackOverflowException)
+        {
+            var translated = new BingOfficesImportException("Excel 实体异步导入失败。", exception, "NPOI",
+                BingOfficesStage.Read);
+            _exceptionDispatcher.Observe(translated);
+            throw translated;
+        }
+    }
+
+    /// <inheritdoc />
+    public ExcelEntityImportResult<TEntity> ImportForTemplate<TEntity>(Stream source,
+        ExcelEntityLayout<TEntity> layout, ExcelEntityTemplateOptions template,
+        CancellationToken cancellationToken = default) where TEntity : class, new()
+    {
+        ValidateEntitySource(source, layout);
+        if (template == null)
+            throw new ArgumentNullException(nameof(template));
+        try
+        {
+            using var templateBuffer = new MemoryStream();
+            NpoiStreamCopier.Copy(template.Template, templateBuffer, cancellationToken);
+            using var templateWorkbook = OpenEntityWorkbook(templateBuffer, cancellationToken);
+            ValidateEntityTemplate(templateWorkbook, layout);
+            using var buffered = new MemoryStream();
+            NpoiStreamCopier.Copy(source, buffered, cancellationToken);
+            return ImportEntityBuffered(buffered, layout, false, cancellationToken);
+        }
+        finally
+        {
+            if (!template.LeaveOpen)
+                template.Template.Dispose();
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<ExcelEntityImportResult<TEntity>> ImportForTemplateAsync<TEntity>(Stream source,
+        ExcelEntityLayout<TEntity> layout, ExcelEntityTemplateOptions template,
+        CancellationToken cancellationToken = default) where TEntity : class, new()
+    {
+        ValidateEntitySource(source, layout);
+        if (template == null)
+            throw new ArgumentNullException(nameof(template));
+        try
+        {
+            using var templateBuffer = new MemoryStream();
+            await NpoiStreamCopier.CopyAsync(template.Template, templateBuffer, cancellationToken).ConfigureAwait(false);
+            using var templateWorkbook = OpenEntityWorkbook(templateBuffer, cancellationToken);
+            ValidateEntityTemplate(templateWorkbook, layout);
+            using var buffered = new MemoryStream();
+            await NpoiStreamCopier.CopyAsync(source, buffered, cancellationToken).ConfigureAwait(false);
+            return ImportEntityBuffered(buffered, layout, false, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (BingOfficesException exception)
+        {
+            _exceptionDispatcher.Observe(exception);
+            throw;
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException
+            && exception is not StackOverflowException)
+        {
+            var translated = new BingOfficesImportException("Excel 模板实体异步导入失败。", exception, "NPOI",
+                BingOfficesStage.Read);
+            _exceptionDispatcher.Observe(translated);
+            throw translated;
+        }
+        finally
+        {
+            if (!template.LeaveOpen)
+                template.Template.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// 从已缓冲的输入流创建工作簿并执行实体布局导入。
+    /// </summary>
+    /// <typeparam name="TEntity">实体类型。</typeparam>
+    /// <param name="buffered">已定位到内存中的工作簿流。</param>
+    /// <param name="layout">实体布局。</param>
+    /// <param name="requireTemplateMerges">是否要求模板中的合并区域已存在。</param>
+    /// <param name="cancellationToken">用于取消导入的令牌。</param>
+    /// <returns>实体导入结果。</returns>
+    private ExcelEntityImportResult<TEntity> ImportEntityBuffered<TEntity>(MemoryStream buffered,
+        ExcelEntityLayout<TEntity> layout, bool requireTemplateMerges, CancellationToken cancellationToken)
+        where TEntity : class, new()
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        buffered.Position = 0;
+        NpoiXlsxZipPreflight.Validate(buffered, new ExcelResourceLimits(), cancellationToken);
+        buffered.Position = 0;
+        using var workbook = WorkbookFactory.Create(buffered);
+        return _entityExecutor.Read(workbook, new TEntity(), layout, requireTemplateMerges, cancellationToken);
+    }
+
+    /// <summary>
+    /// 对已缓冲的实体输入执行预检并打开 NPOI 工作簿。
+    /// </summary>
+    /// <param name="buffered">已缓冲的工作簿流。</param>
+    /// <param name="cancellationToken">用于取消预检和打开操作的令牌。</param>
+    /// <returns>已打开的 NPOI 工作簿。</returns>
+    private static IWorkbook OpenEntityWorkbook(MemoryStream buffered, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        buffered.Position = 0;
+        NpoiXlsxZipPreflight.Validate(buffered, new ExcelResourceLimits(), cancellationToken);
+        buffered.Position = 0;
+        return WorkbookFactory.Create(buffered);
+    }
+
+    /// <summary>
+    /// 校验实体模板包含布局声明的工作表和合并区域。
+    /// </summary>
+    /// <typeparam name="TEntity">实体类型。</typeparam>
+    /// <param name="workbook">已打开的模板工作簿。</param>
+    /// <param name="layout">实体布局。</param>
+    private static void ValidateEntityTemplate<TEntity>(IWorkbook workbook, ExcelEntityLayout<TEntity> layout)
+        where TEntity : class, new()
+    {
+        foreach (var name in layout.Cells.Select(item => item.SheetName)
+                     .Concat(layout.ListRegions.Select(item => item.SheetName))
+                     .Concat(layout.Merges.Select(item => item.SheetName))
+                     .Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var sheet = workbook.GetSheet(name);
+            if (sheet == null)
+                throw new BingOfficesConfigurationException($"模板缺少请求的 Sheet: {name}", stage: BingOfficesStage.Plan);
+            NpoiEntityLayoutSupport.PreflightMerges(sheet, layout.Merges, false, true);
+        }
+    }
+
+    /// <summary>
+    /// 校验实体导入源流和布局参数。
+    /// </summary>
+    /// <typeparam name="TEntity">实体类型。</typeparam>
+    /// <param name="source">待读取的工作簿流。</param>
+    /// <param name="layout">实体布局。</param>
+    private static void ValidateEntitySource<TEntity>(Stream source, ExcelEntityLayout<TEntity> layout)
+        where TEntity : class, new()
+    {
+        if (source == null)
+            throw new ArgumentNullException(nameof(source));
+        if (!source.CanRead)
+            throw new ArgumentException("输入流不可读取。", nameof(source));
+        if (layout == null)
+            throw new ArgumentNullException(nameof(layout));
     }
 
     /// <inheritdoc />
@@ -596,7 +817,7 @@ public sealed class NpoiExcelImporter : IExcelImporter
             UnsupportedFeaturePolicy = unsupportedFeaturePolicy,
             DynamicTargetGetter = request.DynamicTargetGetter,
             RequireExpectedHeaders = request.RequireExpectedHeaders,
-            ValidateMode = request.ValidateMode,
+            ValidationFailureMode = request.ValidationFailureMode,
             Culture = request.Culture,
             DynamicColumns = request.DynamicColumns,
             FailOnUnknownDynamicColumns = request.FailOnUnknownDynamicColumns,
@@ -633,14 +854,6 @@ public sealed class NpoiExcelImporter : IExcelImporter
         if (dynamicProperties > 1)
             throw new BingOfficesConfigurationException(
                 $"导入模板 {typeof(TItem).FullName} 只能声明一个动态列属性。", stage: BingOfficesStage.Plan);
-        var readOnlyProperty = mappingPlan.Columns.FirstOrDefault(property => !property.Ignored
-            && !property.IsDynamicColumn
-            && !typeof(TItem).GetProperty(property.Name, BindingFlags.Instance | BindingFlags.Public).CanWrite);
-        if (readOnlyProperty != null)
-        {
-            var cause = new InvalidOperationException($"属性不可写入: {readOnlyProperty.Name}");
-            throw new BingOfficesConfigurationException(cause.Message, cause, BingOfficesStage.Plan);
-        }
         var items = new List<TItem>();
         var rows = new List<int>();
         var sheetErrors = errors.CreateChild();

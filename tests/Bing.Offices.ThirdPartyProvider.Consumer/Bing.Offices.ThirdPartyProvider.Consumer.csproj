@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net6.0;net8.0</TargetFrameworks>
+    <OutputType>Exe</OutputType>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <BingOfficesPackageVersion Condition="'$(BingOfficesPackageVersion)' == ''"></BingOfficesPackageVersion>
+  </PropertyGroup>
+
+  <Target Name="ValidateBingOfficesPackageVersion" BeforeTargets="Restore;Build">
+    <Error Condition="'$(BingOfficesPackageVersion)' == ''"
+           Text="BingOfficesPackageVersion must be supplied from the packages produced by this build." />
+  </Target>
+
+  <ItemGroup>
+    <PackageReference Include="Bing.Offices.Abstractions" Version="$(BingOfficesPackageVersion)" />
+    <PackageReference Include="Bing.Offices.Core" Version="$(BingOfficesPackageVersion)" />
+    <PackageReference Include="Bing.Offices.MiniExcel" Version="$(BingOfficesPackageVersion)" />
+    <PackageReference Include="Bing.Offices.Npoi" Version="$(BingOfficesPackageVersion)" />
+    <PackageReference Include="Bing.Offices.ClosedXml" Version="$(BingOfficesPackageVersion)" />
+  </ItemGroup>
+</Project>

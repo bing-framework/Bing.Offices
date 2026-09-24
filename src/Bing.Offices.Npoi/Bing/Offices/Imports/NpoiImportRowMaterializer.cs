@@ -81,7 +81,7 @@ internal sealed class NpoiImportRowMaterializer
     /// <param name="duplicateValues">兼容旧校验规则的重复值状态。</param>
     /// <param name="sheetName">用于错误定位的工作表名称。</param>
     /// <param name="rowIndex">当前行的零基索引。</param>
-    /// <param name="validateMode">发生校验失败后的继续策略。</param>
+    /// <param name="validationFailureMode">发生校验失败后的继续策略。</param>
     /// <param name="culture">校验上下文使用的区域性。</param>
     /// <param name="bodyWhitespace">正文单元格文本的空白处理策略。</param>
     /// <param name="errors">接收原始值校验错误的收集器。</param>
@@ -89,7 +89,7 @@ internal sealed class NpoiImportRowMaterializer
     /// <returns>当前行全部原始值校验通过时为 true。</returns>
     internal bool ValidateRawValues(IRow row, IReadOnlyDictionary<int, ExcelColumnPlan> columns,
         IDictionary<string, HashSet<string>> duplicateValues, string sheetName, int rowIndex,
-        ValidateMode validateMode, CultureInfo culture, ExcelWhitespacePolicy bodyWhitespace,
+        ExcelValidationFailureMode validationFailureMode, CultureInfo culture, ExcelWhitespacePolicy bodyWhitespace,
         ExcelImportErrorCollector errors, bool isDate1904)
     {
         var valid = true;
@@ -131,7 +131,7 @@ internal sealed class NpoiImportRowMaterializer
                         rowIndex + 1, column.Key + 1, column.Value.Property.Name, GetErrorColumnKey(column.Value),
                         column.Value.HeaderName, cellValue.Value ?? cellValue.Text));
                     valid = false;
-                    if (validateMode == ValidateMode.StopOnFirstFailure)
+                    if (validationFailureMode == ExcelValidationFailureMode.StopOnFirstFailure)
                         return false;
                     continue;
                 }
@@ -141,7 +141,7 @@ internal sealed class NpoiImportRowMaterializer
                     rowIndex + 1, column.Key + 1, column.Value.Property.Name, GetErrorColumnKey(column.Value),
                     column.Value.HeaderName, cellValue.Value ?? cellValue.Text));
                 valid = false;
-                if (validateMode == ValidateMode.StopOnFirstFailure)
+                if (validationFailureMode == ExcelValidationFailureMode.StopOnFirstFailure)
                     return false;
             }
         }
@@ -158,7 +158,7 @@ internal sealed class NpoiImportRowMaterializer
     /// <param name="uniqueTracker">负责当前行唯一值预留、提交和回滚的跟踪器。</param>
     /// <param name="sheetName">用于错误定位的工作表名称。</param>
     /// <param name="rowIndex">当前行的零基索引。</param>
-    /// <param name="validateMode">发生校验失败后的继续策略。</param>
+    /// <param name="validationFailureMode">发生校验失败后的继续策略。</param>
     /// <param name="configuredValidationEnabled">是否执行配置校验规则。</param>
     /// <param name="errors">接收转换和校验错误的收集器。</param>
     /// <param name="culture">文本转换和校验使用的区域性。</param>
@@ -170,7 +170,7 @@ internal sealed class NpoiImportRowMaterializer
     /// <returns>当前行成功转换并通过校验时为 true。</returns>
     internal bool TryCreateItem<T>(IRow row, IReadOnlyDictionary<int, ExcelColumnPlan> columns,
         IDictionary<string, HashSet<string>> duplicateValues, UniqueTracker uniqueTracker,
-        string sheetName, int rowIndex, ValidateMode validateMode, bool configuredValidationEnabled,
+        string sheetName, int rowIndex, ExcelValidationFailureMode validationFailureMode, bool configuredValidationEnabled,
         ExcelImportErrorCollector errors, CultureInfo culture, ExcelWhitespacePolicy bodyWhitespace,
         Func<object, object> dynamicTargetGetter,
         IReadOnlyDictionary<(int Row, int Column), IReadOnlyList<PictureInfo>> imageIndex,
@@ -219,7 +219,7 @@ internal sealed class NpoiImportRowMaterializer
                     }
                     if (configuredValidationEnabled && !ValidateColumnValue(value, cellValue,
                         dynamicConvertedValue, column.Value, duplicateValues, uniqueTracker, sheetName, rowIndex,
-                        validateMode, culture, errors))
+                        validationFailureMode, culture, errors))
                     {
                         item = null;
                         return false;
@@ -231,7 +231,7 @@ internal sealed class NpoiImportRowMaterializer
                     ? ConvertImages(images, column.Value.ValueType, imageMultiplicity)
                     : column.Value.ConvertFrom(value, cellValue, sheetName, rowIndex + 1, column.Key + 1, culture);
                 if (configuredValidationEnabled && !ValidateColumnValue(value, cellValue, converted,
-                    column.Value, duplicateValues, uniqueTracker, sheetName, rowIndex, validateMode, culture,
+                    column.Value, duplicateValues, uniqueTracker, sheetName, rowIndex, validationFailureMode, culture,
                     errors))
                 {
                     item = null;
@@ -362,13 +362,13 @@ internal sealed class NpoiImportRowMaterializer
     /// <param name="uniqueTracker">负责当前行唯一值预留的跟踪器。</param>
     /// <param name="sheetName">用于错误定位的工作表名称。</param>
     /// <param name="rowIndex">当前行的零基索引。</param>
-    /// <param name="validateMode">发生校验失败后的继续策略。</param>
+    /// <param name="validationFailureMode">发生校验失败后的继续策略。</param>
     /// <param name="culture">校验上下文使用的区域性。</param>
     /// <param name="errors">接收校验错误的收集器。</param>
     /// <returns>值通过配置校验和唯一性检查时为 true，否则为 false。</returns>
     private static bool ValidateColumnValue(string value, ExcelCellValue cellValue, object convertedValue,
         ExcelColumnPlan column, IDictionary<string, HashSet<string>> duplicateValues,
-        UniqueTracker uniqueTracker, string sheetName, int rowIndex, ValidateMode validateMode,
+        UniqueTracker uniqueTracker, string sheetName, int rowIndex, ExcelValidationFailureMode validationFailureMode,
         CultureInfo culture, ExcelImportErrorCollector errors)
     {
         var valid = true;
@@ -406,7 +406,7 @@ internal sealed class NpoiImportRowMaterializer
                     rowIndex + 1, column.ColumnIndex + 1, property.Name, GetErrorColumnKey(column),
                     column.HeaderName, cellValue.Value ?? cellValue.Text));
                 valid = false;
-                if (validateMode == ValidateMode.StopOnFirstFailure)
+                if (validationFailureMode == ExcelValidationFailureMode.StopOnFirstFailure)
                     return false;
                 continue;
             }
@@ -416,7 +416,7 @@ internal sealed class NpoiImportRowMaterializer
                 rowIndex + 1, column.ColumnIndex + 1, property.Name, GetErrorColumnKey(column),
                 column.HeaderName, cellValue.Value ?? cellValue.Text));
             valid = false;
-            if (validateMode == ValidateMode.StopOnFirstFailure)
+            if (validationFailureMode == ExcelValidationFailureMode.StopOnFirstFailure)
                 return false;
         }
         if (column.IsUnique)

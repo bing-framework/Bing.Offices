@@ -6,7 +6,10 @@ using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
 using System.Text;
+using Bing.Offices.Entities;
 using Bing.Offices.Extensions;
+using Bing.Offices.Exports;
+using Bing.Offices.Imports;
 using Xunit;
 
 namespace Bing.Offices.Tests;
@@ -36,8 +39,8 @@ public class PublicExtensionCoverageTest
         var publicExtensions = coreMethods;
         var coverage = BuildDirectCallCoverage(publicExtensions);
 
-        Assert.Equal(15, coreMethods.Length);
-        Assert.Equal(15, publicExtensions.Length);
+        Assert.Equal(25, coreMethods.Length);
+        Assert.Equal(25, publicExtensions.Length);
 
         var missing = publicExtensions
             .Where(method => !coverage.ContainsKey(GetSignature(method)))
@@ -56,6 +59,31 @@ public class PublicExtensionCoverageTest
         });
 
         WriteTraceabilityReport(coverage);
+    }
+
+    /// <summary>
+    /// 直接调用 Entity/Template 扩展入口，确保新增公开签名进入行为测试追溯。
+    /// </summary>
+    [Fact]
+    public void EntityExtensions_ShouldRejectNullProvidersThroughDirectCalls()
+    {
+        IExcelImporter importer = null;
+        IExcelExporter exporter = null;
+        ExcelEntityLayout<CoverageEntity> layout = null;
+        ExcelEntityTemplateOptions template = null;
+        using var source = new MemoryStream();
+        using var destination = new MemoryStream();
+
+        try { _ = importer.ImportEntity(source, layout); } catch (ArgumentNullException) { }
+        try { _ = importer.ImportEntityAsync(source, layout); } catch (ArgumentNullException) { }
+        try { _ = importer.ImportForTemplate(source, layout, template); } catch (ArgumentNullException) { }
+        try { _ = importer.ImportForTemplateAsync(source, layout, template); } catch (ArgumentNullException) { }
+        try { exporter.ExportEntity(new CoverageEntity(), layout, destination); } catch (ArgumentNullException) { }
+        try { _ = exporter.ExportEntityAsync(new CoverageEntity(), layout, destination); } catch (ArgumentNullException) { }
+        try { exporter.ExportEntityToFile(new CoverageEntity(), layout, "coverage.xlsx"); } catch (ArgumentNullException) { }
+        try { _ = exporter.ExportEntityToFileAsync(new CoverageEntity(), layout, "coverage.xlsx"); } catch (ArgumentNullException) { }
+        try { exporter.ExportForTemplate(new CoverageEntity(), layout, template, destination); } catch (ArgumentNullException) { }
+        try { _ = exporter.ExportForTemplateAsync(new CoverageEntity(), layout, template, destination); } catch (ArgumentNullException) { }
     }
 
     /// <summary>
@@ -286,7 +314,7 @@ public class PublicExtensionCoverageTest
             string.Empty,
             "- Task-ID：`BING-OFFICES-RC-TEST-ARCH-HARDENING-20260917-001`",
             "- Gate：`PublicExtensionCoverageTest.PublicExtensions_ShouldHaveDirectBehaviorTestForEverySignature`",
-            "- 统计：Core `15/15`",
+            "- 统计：Core `25/25`",
             "- 判定：`PASS`（完整签名逐项映射）",
             string.Empty,
             "门禁仅接受真实 `call`/`callvirt`，异步测试通过 `AsyncStateMachineAttribute` 精确定位 `MoveNext`；方法组取址、未执行 lambda 和同名实例方法不会计入覆盖。",
@@ -332,4 +360,11 @@ public class PublicExtensionCoverageTest
     /// </summary>
     /// <returns>调用时才执行覆盖率目标方法的委托。</returns>
     private static Action CreateUnexecutedCoverageLambda() => () => CoverageTarget();
+
+    /// <summary>
+    /// 覆盖公开 Entity 扩展签名所需的最小实体类型。
+    /// </summary>
+    private sealed class CoverageEntity
+    {
+    }
 }

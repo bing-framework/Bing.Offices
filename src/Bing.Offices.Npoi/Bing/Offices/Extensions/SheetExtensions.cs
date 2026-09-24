@@ -158,7 +158,7 @@ public static partial class SheetExtensions
     }
 
     /// <summary>
-    /// 判断指定区域是否在内部或交叉
+    /// 判断指定区域是否位于内部或与已有区域相交。
     /// </summary>
     /// <param name="rangeMinRow">区域最小行索引</param>
     /// <param name="rangeMaxRow">区域最大行索引</param>

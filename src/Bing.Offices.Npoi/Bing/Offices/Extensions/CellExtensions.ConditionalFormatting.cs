@@ -3,7 +3,7 @@
 namespace Bing.Offices.Npoi.Extensions;
 
 /// <summary>
-/// NPOI单元格(<see cref="NPOI.SS.UserModel.ICell"/>) 扩展
+/// NPOI 单元格扩展。
 /// </summary>
 public static partial class CellExtensions
 {

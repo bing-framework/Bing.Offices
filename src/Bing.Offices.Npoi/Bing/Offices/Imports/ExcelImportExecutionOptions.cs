@@ -78,7 +78,7 @@ internal sealed class ExcelImportExecutionOptions<T> where T : class, new()
     /// <summary>
     /// 获取或设置单行校验失败后的继续策略。
     /// </summary>
-    internal ValidateMode ValidateMode { get; set; } = ValidateMode.StopOnFirstFailure;
+    internal ExcelValidationFailureMode ValidationFailureMode { get; set; } = ExcelValidationFailureMode.StopOnFirstFailure;
     /// <summary>
     /// 获取或设置是否将数据区空行记录为错误。
     /// </summary>

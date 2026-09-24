@@ -3,12 +3,12 @@
 namespace Bing.Offices.Resolvers;
 
 /// <summary>
-/// 颜色解析器
+/// 颜色解析器。
 /// </summary>
 internal static class ColorResolver
 {
     /// <summary>
-    /// 解析
+    /// 解析颜色。
     /// </summary>
     /// <param name="color">颜色枚举</param>
     /// <returns>对应的 NPOI 短整型颜色索引。</returns>

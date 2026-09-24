@@ -110,7 +110,7 @@ internal sealed class NpoiImportSheetExecutor
             if (configuredValidationEnabled)
                 uniqueTracker.BeginRow();
             var workbookValid = NpoiWorkbookValidationPipeline.Validate(row, columns, validationIndex, sheet,
-                sheet.SheetName, rowIndex, options.BodyWhitespace, options.ValidateMode,
+                sheet.SheetName, rowIndex, options.BodyWhitespace, options.ValidationFailureMode,
                 options.UnsupportedFeaturePolicy, errors, options.IsDate1904);
             if (!workbookValid)
             {
@@ -124,7 +124,7 @@ internal sealed class NpoiImportSheetExecutor
                 continue;
             }
             if (configuredValidationEnabled && !_rowMaterializer.ValidateRawValues(row, columns, duplicateValues,
-                    sheet.SheetName, rowIndex, options.ValidateMode, options.Culture, options.BodyWhitespace, errors,
+                    sheet.SheetName, rowIndex, options.ValidationFailureMode, options.Culture, options.BodyWhitespace, errors,
                     options.IsDate1904))
             {
                 uniqueTracker.RollbackRow();
@@ -136,7 +136,7 @@ internal sealed class NpoiImportSheetExecutor
                 continue;
             }
             if (_rowMaterializer.TryCreateItem(row, columns, duplicateValues, uniqueTracker, sheet.SheetName,
-                    rowIndex, options.ValidateMode, configuredValidationEnabled, errors, options.Culture,
+                    rowIndex, options.ValidationFailureMode, configuredValidationEnabled, errors, options.Culture,
                     options.BodyWhitespace, options.DynamicTargetGetter, imageIndex, options.IsDate1904,
                     out T item))
             {
@@ -183,7 +183,8 @@ internal sealed class NpoiImportSheetExecutor
         if (dynamicProperties.Count > 1)
             throw new BingOfficesConfigurationException(
                 $"导入模板 {typeof(T).FullName} 只能声明一个动态列属性。", stage: BingOfficesStage.Plan);
-        var fixedProperties = map.Columns.Where(property => !property.Ignored && !property.IsDynamicColumn).ToList();
+        var fixedProperties = map.Columns.Where(property => !property.Ignored && !property.IsDynamicColumn
+            && !IsNavigationOrDynamicContainer<T>(property)).ToList();
         var headerNames = new HashSet<string>(options.HeaderComparison == ExcelNameComparison.Ordinal
             ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase);
         var columns = new Dictionary<int, ExcelColumnPlan>();
@@ -220,8 +221,10 @@ internal sealed class NpoiImportSheetExecutor
                 throw new BingOfficesConfigurationException($"无法解析映射属性: {property.Name}",
                     stage: BingOfficesStage.Plan);
             if (!property.IsDynamicColumn && !reflectionProperty.CanWrite)
-                throw new BingOfficesConfigurationException($"属性不可写入: {property.Name}",
-                    stage: BingOfficesStage.Plan);
+            {
+                var cause = new InvalidOperationException($"属性不可写入: {property.Name}");
+                throw new BingOfficesConfigurationException(cause.Message, cause, BingOfficesStage.Plan);
+            }
             var valueConverters = isUnspecifiedDynamicColumn
                 ? (IReadOnlyList<Conversions.IExcelValueConverter>)Array.Empty<Conversions.IExcelValueConverter>()
                 : property.IsDynamicColumn ? dynamicPlan.ValueConverters : property.ValueConverters;
@@ -338,6 +341,48 @@ internal sealed class NpoiImportSheetExecutor
         return properties.FirstOrDefault(property => string.Equals(property.Title, headerName, stringComparison)
             || property.Aliases.Any(alias => string.Equals(alias, headerName, stringComparison))
             || string.Equals(property.Name, headerName, stringComparison));
+    }
+
+    /// <summary>
+    /// 判断关系集合或动态字典是否应由关系/动态列阶段处理，而不是作为单元格列导入。
+    /// </summary>
+    /// <typeparam name="T">当前工作表行类型。</typeparam>
+    /// <param name="property">待判断的映射列。</param>
+    /// <returns>属性为非图片可枚举集合或动态字典时返回 true。</returns>
+    private static bool IsNavigationOrDynamicContainer<T>(IExcelMappingColumn property)
+        where T : class, new()
+    {
+        var reflectionProperty = typeof(T).GetProperty(property.Name, BindingFlags.Instance | BindingFlags.Public);
+        if (reflectionProperty == null)
+            return false;
+        var propertyType = reflectionProperty.PropertyType;
+        if (typeof(IDictionary<string, object>).IsAssignableFrom(propertyType))
+            return true;
+        if (propertyType == typeof(string) || propertyType == typeof(byte[])
+            || !typeof(System.Collections.IEnumerable).IsAssignableFrom(propertyType))
+            return false;
+        return !IsImageCollection(propertyType);
+    }
+
+    /// <summary>
+    /// 判断集合是否承载 NPOI 导入器支持的图片值。
+    /// </summary>
+    /// <param name="propertyType">待判断的属性类型。</param>
+    /// <returns>集合元素为 <see cref="ExcelImageData" /> 时返回 true。</returns>
+    private static bool IsImageCollection(Type propertyType)
+    {
+        if (propertyType.IsArray)
+            return propertyType.GetElementType() == typeof(ExcelImageData);
+        foreach (var interfaceType in propertyType.GetInterfaces())
+        {
+            if (interfaceType.IsGenericType
+                && interfaceType.GetGenericTypeDefinition() == typeof(IEnumerable<>)
+                && interfaceType.GetGenericArguments()[0] == typeof(ExcelImageData))
+                return true;
+        }
+        return propertyType.IsGenericType
+            && propertyType.GetGenericTypeDefinition() == typeof(IEnumerable<>)
+            && propertyType.GetGenericArguments()[0] == typeof(ExcelImageData);
     }
 
     /// <summary>

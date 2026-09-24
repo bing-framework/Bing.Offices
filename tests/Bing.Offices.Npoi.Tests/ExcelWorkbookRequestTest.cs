@@ -81,6 +81,132 @@ public sealed class ExcelWorkbookRequestTest
     }
 
     /// <summary>
+    /// 测试 - 大型无高级布局的 XLSX 列表应使用流式工作簿并保持完整结果和样式。
+    /// </summary>
+    [Fact]
+    public void Export_LargeSimpleXlsx_ShouldRoundTripRowsAndStyles()
+    {
+        // Arrange
+        var rows = Enumerable.Range(0, 100000).Select(index => new LargeExportRow
+        {
+            Code = $"CODE-{index:D6}",
+            Amount = index + 0.25m
+        }).ToArray();
+        var configuration = new ExcelMappingConfiguration
+        {
+            Columns = new List<ExcelColumnConfiguration>
+            {
+                new() { PropertyName = nameof(LargeExportRow.Code) },
+                new() { PropertyName = nameof(LargeExportRow.Amount), Formatter = "0.0000" }
+            }
+        };
+        var request = ExcelExport.Workbook(workbook => workbook
+            .AddSheet("Data", rows, sheet => sheet
+                .Mapping(configuration)
+                .HeaderStyle(new ExcelCellStyle { Bold = true })
+                .BodyStyle(new ExcelCellStyle { NumberFormat = "#,##0.00" })));
+        using var destination = new MemoryStream();
+
+        // Act
+        new NpoiExcelExporter().Export(request, destination);
+
+        // Assert
+        destination.Position = 0;
+        using var workbook = WorkbookFactory.Create(destination);
+        var sheet = workbook.GetSheet("Data");
+        Assert.Equal(100000, sheet.LastRowNum);
+        Assert.Equal("Code", sheet.GetRow(0).GetCell(0).StringCellValue);
+        Assert.Equal("CODE-000000", sheet.GetRow(1).GetCell(0).StringCellValue);
+        Assert.Equal("CODE-099999", sheet.GetRow(100000).GetCell(0).StringCellValue);
+        Assert.Equal(99999.25, sheet.GetRow(100000).GetCell(1).NumericCellValue, 3);
+        Assert.True(sheet.GetRow(0).GetCell(0).CellStyle.GetFont(workbook).IsBold);
+        Assert.Equal("#,##0.00", sheet.GetRow(1).GetCell(1).CellStyle.GetDataFormatString());
+    }
+
+    /// <summary>
+    /// 测试 - 大型列表包含属性级合并声明时，应保留合并语义而不进入 SXSSF 路径。
+    /// </summary>
+    [Fact]
+    public void Export_LargeMergedList_ShouldPreserveMergedRegion()
+    {
+        // Arrange
+        var rows = Enumerable.Range(0, 100000).Select(_ => new LargeMergedExportRow
+        {
+            Group = "同一组"
+        }).ToArray();
+        var request = ExcelExport.Workbook(workbook => workbook.AddSheet("Data", rows,
+            sheet => sheet.Mapping(new ExcelMappingConfiguration
+            {
+                Columns = new List<ExcelColumnConfiguration>
+                {
+                    new() { PropertyName = nameof(LargeMergedExportRow.Group), Title = "分组别名" }
+                }
+            })));
+        using var destination = new MemoryStream();
+
+        // Act
+        new NpoiExcelExporter().Export(request, destination);
+
+        // Assert
+        destination.Position = 0;
+        using var workbook = WorkbookFactory.Create(destination);
+        var sheet = workbook.GetSheet("Data");
+        Assert.Equal(1, sheet.NumMergedRegions);
+        var merged = sheet.GetMergedRegion(0);
+        Assert.Equal(1, merged.FirstRow);
+        Assert.Equal(100000, merged.LastRow);
+        Assert.Equal(0, merged.FirstColumn);
+        Assert.Equal(0, merged.LastColumn);
+    }
+
+    /// <summary>
+    /// 测试 - 大型流式列表中途取消时，应保留原目标文件并清理原子提交临时文件。
+    /// </summary>
+    [Fact]
+    public void Export_LargeSimpleXlsx_CancellationShouldPreserveTargetAndCleanTemporaryFile()
+    {
+        // Arrange
+        var rows = Enumerable.Range(0, 100000).Select(index => new LargeExportRow
+        {
+            Code = $"CODE-{index:D6}",
+            Amount = index + 0.25m
+        }).ToArray();
+        var configuration = new ExcelMappingConfiguration
+        {
+            Columns = new List<ExcelColumnConfiguration>
+            {
+                new() { PropertyName = nameof(LargeExportRow.Code), ConverterName = "large-cancel" },
+                new() { PropertyName = nameof(LargeExportRow.Amount) }
+            }
+        };
+        var request = ExcelExport.Workbook(workbook => workbook
+            .AddSheet("Data", rows, sheet => sheet.Mapping(configuration)));
+        var path = Path.Combine(Path.GetTempPath(), $"Bing.Offices.LargeCancel.{Guid.NewGuid():N}.xlsx");
+        var original = new byte[] { 0x42, 0x49, 0x4E, 0x47, 0x2D, 0x4F, 0x4B };
+        File.WriteAllBytes(path, original);
+        using var cancellation = new CancellationTokenSource();
+        var converter = new CancelAfterFirstLargeExportConverter(cancellation);
+
+        try
+        {
+            // Act
+            Assert.Throws<OperationCanceledException>(() => new NpoiExcelExporter(new[] { converter })
+                .ExportToFile(request, path, cancellation.Token));
+
+            // Assert
+            Assert.Equal(original, File.ReadAllBytes(path));
+            var temporaryFiles = Directory.GetFiles(Path.GetDirectoryName(path),
+                Path.GetFileName(path) + ".*.tmp");
+            Assert.Empty(temporaryFiles);
+        }
+        finally
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+    }
+
+    /// <summary>
     /// 测试 - Workbook 请求应复制 metadata，避免调用方后续修改配置影响已构建请求。
     /// </summary>
     [Fact]
@@ -590,6 +716,40 @@ public sealed class ExcelWorkbookRequestTest
         // Assert
         Assert.True(result.IsSuccess, string.Join("; ", result.Errors.Select(error => error.Message)));
         Assert.Equal("商品", Assert.Single(Assert.Single(result.Workbook.Orders).DetailItems).Name);
+    }
+
+    /// <summary>
+    /// 测试 - 关系导航属性为非 IList 的 ICollection 时仍应绑定子项。
+    /// </summary>
+    [Fact]
+    public void Import_RelationWithNonListCollectionNavigation_ShouldBindChildren()
+    {
+        using var source = new MemoryStream(CreateWorkbook(workbook =>
+        {
+            var parents = workbook.CreateSheet("Parents");
+            parents.CreateRow(0).CreateCell(0).SetCellValue(nameof(CollectionRelationParent.OrderNo));
+            parents.CreateRow(1).CreateCell(0).SetCellValue("A-1");
+            var children = workbook.CreateSheet("Children");
+            children.CreateRow(0).CreateCell(0).SetCellValue(nameof(CollectionRelationChild.OrderNo));
+            children.GetRow(0).CreateCell(1).SetCellValue(nameof(CollectionRelationChild.Name));
+            children.CreateRow(1).CreateCell(0).SetCellValue("a-1");
+            children.GetRow(1).CreateCell(1).SetCellValue("商品");
+        }));
+        var request = ExcelImport.Workbook<CollectionRelationWorkbook>(builder =>
+        {
+            builder.Sheet("Parents", root => root.Parents);
+            builder.Sheet("Children", root => root.Children);
+            builder.HasMany(root => root.Parents, root => root.Children,
+                parent => parent.OrderNo, child => child.OrderNo,
+                parent => parent.Items, StringComparer.OrdinalIgnoreCase);
+        });
+
+        var result = new NpoiExcelImporter().Import(source, request);
+
+        Assert.True(result.IsSuccess, string.Join("; ", result.Errors.Select(error => error.Message)));
+        var child = Assert.Single(Assert.Single(result.Workbook.Parents).Items);
+        Assert.Equal("a-1", child.OrderNo);
+        Assert.Equal("商品", child.Name);
     }
 
     /// <summary>
@@ -2752,6 +2912,34 @@ public sealed class ExcelWorkbookRequestTest
     }
 
     /// <summary>
+    /// 表示大型流式导出测试使用的一行数据。
+    /// </summary>
+    private sealed class LargeExportRow
+    {
+        /// <summary>
+        /// 获取或设置业务编码。
+        /// </summary>
+        public string Code { get; set; }
+
+        /// <summary>
+        /// 获取或设置金额。
+        /// </summary>
+        public decimal Amount { get; set; }
+    }
+
+    /// <summary>
+    /// 表示大型合并列导出测试使用的一行数据。
+    /// </summary>
+    private sealed class LargeMergedExportRow
+    {
+        /// <summary>
+        /// 获取或设置需要跨相邻行合并的分组名称。
+        /// </summary>
+        [MergeColumns]
+        public string Group { get; set; }
+    }
+
+    /// <summary>
     /// 记录工作簿元数据请求的期望快照。
     /// </summary>
     private sealed class MetadataSnapshot
@@ -2998,6 +3186,51 @@ public sealed class ExcelWorkbookRequestTest
         /// 获取或设置名称。
         /// </summary>
         [ColumnName("名称")]
+        public string Name { get; set; }
+    }
+
+    /// <summary>
+    /// 表示非 IList 关系测试使用的工作簿数据模型。
+    /// </summary>
+    private sealed class CollectionRelationWorkbook
+    {
+        /// <summary>
+        /// 获取父项集合。
+        /// </summary>
+        public List<CollectionRelationParent> Parents { get; } = new();
+        /// <summary>
+        /// 获取子项集合。
+        /// </summary>
+        public List<CollectionRelationChild> Children { get; } = new();
+    }
+
+    /// <summary>
+    /// 表示非 IList 关系测试中的父项数据。
+    /// </summary>
+    private sealed class CollectionRelationParent
+    {
+        /// <summary>
+        /// 获取或设置订单号。
+        /// </summary>
+        public string OrderNo { get; set; }
+        /// <summary>
+        /// 获取由 HashSet 实现的导航集合。
+        /// </summary>
+        public ICollection<CollectionRelationChild> Items { get; } = new HashSet<CollectionRelationChild>();
+    }
+
+    /// <summary>
+    /// 表示非 IList 关系测试中的子项数据。
+    /// </summary>
+    private sealed class CollectionRelationChild
+    {
+        /// <summary>
+        /// 获取或设置订单号。
+        /// </summary>
+        public string OrderNo { get; set; }
+        /// <summary>
+        /// 获取或设置名称。
+        /// </summary>
         public string Name { get; set; }
     }
 
@@ -3352,6 +3585,53 @@ public sealed class ExcelWorkbookRequestTest
         {
             ConvertToCalls++;
             value = context.Value;
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// 在大型列表第一列转换后触发取消的测试转换器。
+    /// </summary>
+    private sealed class CancelAfterFirstLargeExportConverter : INamedExcelValueConverter
+    {
+        /// <summary>
+        /// 保存用于触发中途取消的令牌源。
+        /// </summary>
+        private readonly CancellationTokenSource _cancellation;
+
+        /// <summary>
+        /// 记录已执行的转换次数。
+        /// </summary>
+        private int _calls;
+
+        /// <summary>
+        /// 初始化一个 <see cref="CancelAfterFirstLargeExportConverter" /> 类型的实例。
+        /// </summary>
+        /// <param name="cancellation">用于触发中途取消的令牌源。</param>
+        public CancelAfterFirstLargeExportConverter(CancellationTokenSource cancellation)
+        {
+            _cancellation = cancellation;
+        }
+
+        /// <inheritdoc />
+        public string Name => "large-cancel";
+
+        /// <inheritdoc />
+        public bool CanConvert(Type propertyType) => propertyType == typeof(string);
+
+        /// <inheritdoc />
+        public bool TryConvertFrom(ExcelConversionContext context, out object value)
+        {
+            value = context.Value;
+            return true;
+        }
+
+        /// <inheritdoc />
+        public bool TryConvertTo(ExcelConversionContext context, out object value)
+        {
+            value = context.Value;
+            if (Interlocked.Increment(ref _calls) == 1)
+                _cancellation.Cancel();
             return true;
         }
     }

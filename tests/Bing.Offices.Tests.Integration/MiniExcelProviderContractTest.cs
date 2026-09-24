@@ -130,7 +130,7 @@ public sealed class MiniExcelProviderContractTest
             sheet => sheet.Mapping(mapping)));
         var importRequest = ExcelImport.Workbook<RuleContractWorkbook>(workbook => workbook
             .Sheet<RuleContractRow>("Data", root => root.Rows, sheet => sheet
-                .Mapping(mapping).Validate(ValidateMode.Continue)));
+                .Mapping(mapping).Validate(ExcelValidationFailureMode.Continue)));
 
         using var npoiStream = new System.IO.MemoryStream();
         await new Bing.Offices.Exports.NpoiExcelExporter(
@@ -171,7 +171,7 @@ public sealed class MiniExcelProviderContractTest
             new[] { new RequiredContractRow { Code = string.Empty, Quantity = 0 } }));
         var importRequest = ExcelImport.Workbook<RequiredContractWorkbook>(workbook => workbook
             .Sheet<RequiredContractRow>("Data", root => root.Rows,
-                sheet => sheet.Validate(ValidateMode.Continue)));
+                sheet => sheet.Validate(ExcelValidationFailureMode.Continue)));
 
         var npoi = await RoundTripAsync(new Bing.Offices.Exports.NpoiExcelExporter(),
             new Bing.Offices.Imports.NpoiExcelImporter(), exportRequest, importRequest);

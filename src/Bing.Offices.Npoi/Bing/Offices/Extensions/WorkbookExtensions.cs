@@ -5,7 +5,7 @@ using NPOI.XSSF.UserModel;
 namespace Bing.Offices.Npoi.Extensions;
 
 /// <summary>
-/// NPOI工作簿(<see cref="NPOI.SS.UserModel.IWorkbook"/>) 扩展
+/// NPOI 工作簿扩展。
 /// </summary>
 public static class WorkbookExtensions
 {
@@ -54,8 +54,11 @@ public static class WorkbookExtensions
     #region SetAllSheetAutoCompute(设置所有工作表自动计算)
 
     /// <summary>
-    /// 将所有工作表的 <see cref="ISheet.ForceFormulaRecalculation"/> 设置为 true；空工作簿不执行任何操作。
+    /// 将所有工作表设置为自动计算。
     /// </summary>
+    /// <remarks>
+    /// 空工作簿不执行任何操作。
+    /// </remarks>
     /// <param name="workbook">工作簿</param>
     public static void SetAllSheetAutoCompute(this IWorkbook workbook)
     {

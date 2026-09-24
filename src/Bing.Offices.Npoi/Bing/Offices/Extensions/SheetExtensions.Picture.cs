@@ -8,7 +8,7 @@ using NPOI.XSSF.UserModel;
 namespace Bing.Offices.Npoi.Extensions;
 
 /// <summary>
-/// NPOI工作表(<see cref="NPOI.SS.UserModel.ISheet"/>) 扩展
+/// NPOI 工作表扩展。
 /// </summary>
 public static partial class SheetExtensions
 {

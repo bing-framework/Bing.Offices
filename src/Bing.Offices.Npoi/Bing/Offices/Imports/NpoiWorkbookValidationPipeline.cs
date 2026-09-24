@@ -21,14 +21,14 @@ internal static class NpoiWorkbookValidationPipeline
     /// <param name="sheetName">用于错误定位的工作表名称。</param>
     /// <param name="rowIndex">当前数据行的零基索引。</param>
     /// <param name="bodyWhitespace">单元格文本的空白处理策略。</param>
-    /// <param name="validateMode">发生校验失败后的继续策略。</param>
+    /// <param name="validationFailureMode">发生校验失败后的继续策略。</param>
     /// <param name="unsupportedFeaturePolicy">不支持的原生校验规则的处理策略。</param>
     /// <param name="errors">接收工作簿校验错误的收集器。</param>
     /// <param name="isDate1904">当前工作簿是否使用 1904 日期系统。</param>
     /// <returns>当前行所有可执行规则均通过时为 true。</returns>
     public static bool Validate(IRow row, IReadOnlyDictionary<int, ExcelColumnPlan> columns,
         ValidationRangeIndex validationIndex, ISheet sheet, string sheetName, int rowIndex,
-        ExcelWhitespacePolicy bodyWhitespace, ValidateMode validateMode,
+        ExcelWhitespacePolicy bodyWhitespace, ExcelValidationFailureMode validationFailureMode,
         ExcelUnsupportedFeaturePolicy unsupportedFeaturePolicy, ExcelImportErrorCollector errors,
         bool isDate1904)
     {
@@ -50,7 +50,7 @@ internal static class NpoiWorkbookValidationPipeline
                         StringComparison.Ordinal))
                     continue;
                 valid = false;
-                if (validateMode == ValidateMode.StopOnFirstFailure)
+                if (validationFailureMode == ExcelValidationFailureMode.StopOnFirstFailure)
                     return false;
             }
         }
