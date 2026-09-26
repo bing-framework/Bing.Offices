@@ -10,6 +10,11 @@ on:
         required: false
         default: false
         type: boolean
+      run_capacity:
+        description: '运行 Docker 100K/500K/1M 流式容量矩阵'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -32,6 +37,12 @@ jobs:
           dotnet-version: |
             6.0.x
             8.0.x
+
+      - name: Install deterministic fonts
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends fontconfig fonts-dejavu-core fonts-noto-cjk
+          fc-list : family | grep -E 'DejaVu|Noto Sans CJK' | head -n 2
 
       - name: Capture version files
         shell: bash
@@ -78,6 +89,24 @@ jobs:
           - role: unit-miniexcel
             project: tests/Bing.Offices.MiniExcel.Tests/Bing.Offices.MiniExcel.Tests.csproj
             tfm: net8.0
+          - role: unit-closedxml
+            project: tests/Bing.Offices.ClosedXml.Tests/Bing.Offices.ClosedXml.Tests.csproj
+            tfm: net6.0
+          - role: unit-closedxml
+            project: tests/Bing.Offices.ClosedXml.Tests/Bing.Offices.ClosedXml.Tests.csproj
+            tfm: net8.0
+          - role: unit-exceldatareader
+            project: tests/Bing.Offices.ExcelDataReader.Tests/Bing.Offices.ExcelDataReader.Tests.csproj
+            tfm: net6.0
+          - role: unit-exceldatareader
+            project: tests/Bing.Offices.ExcelDataReader.Tests/Bing.Offices.ExcelDataReader.Tests.csproj
+            tfm: net8.0
+          - role: provider-contract
+            project: tests/Bing.Offices.ProviderContract.Tests/Bing.Offices.ProviderContract.Tests.csproj
+            tfm: net6.0
+          - role: provider-contract
+            project: tests/Bing.Offices.ProviderContract.Tests/Bing.Offices.ProviderContract.Tests.csproj
+            tfm: net8.0
           - role: integration-npoi
             project: tests/Bing.Offices.Npoi.Tests.Integration/Bing.Offices.Npoi.Tests.Integration.csproj
             tfm: net6.0
@@ -89,6 +118,12 @@ jobs:
             tfm: net6.0
           - role: integration-miniexcel
             project: tests/Bing.Offices.MiniExcel.Tests.Integration/Bing.Offices.MiniExcel.Tests.Integration.csproj
+            tfm: net8.0
+          - role: integration-closedxml
+            project: tests/Bing.Offices.ClosedXml.Tests.Integration/Bing.Offices.ClosedXml.Tests.Integration.csproj
+            tfm: net6.0
+          - role: integration-closedxml
+            project: tests/Bing.Offices.ClosedXml.Tests.Integration/Bing.Offices.ClosedXml.Tests.Integration.csproj
             tfm: net8.0
           - role: integration-cross-provider
             project: tests/Bing.Offices.Tests.Integration/Bing.Offices.Tests.Integration.csproj
@@ -107,6 +142,11 @@ jobs:
             6.0.x
             8.0.x
 
+      - name: Install deterministic fonts
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends fontconfig fonts-dejavu-core fonts-noto-cjk
+
       - name: Restore
         run: dotnet restore ${{ matrix.project }}
 
@@ -122,6 +162,45 @@ jobs:
         with:
           name: tests-${{ matrix.role }}-${{ matrix.tfm }}
           path: artifacts/tests/${{ matrix.role }}/${{ matrix.tfm }}
+
+  docker-smoke:
+    name: Docker Linux smoke
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run read-only Linux contracts and fontless probe
+        shell: bash
+        run: bash scripts/verify-docker.sh smoke
+
+      - name: Upload Docker smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-smoke-evidence
+          path: artifacts/docker
+
+  docker-capacity:
+    name: Docker streaming capacity
+    if: github.event_name == 'workflow_dispatch' && inputs.run_capacity == true
+    needs: docker-smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run capacity matrix
+        shell: bash
+        run: bash scripts/verify-docker.sh --capacity
+
+      - name: Upload capacity evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-capacity-evidence
+          path: artifacts/docker
 
   large-tests:
     name: large / ${{ matrix.role }} / ${{ matrix.tfm }}
@@ -205,6 +284,11 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
+
+      - name: Install deterministic fonts
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends fontconfig fonts-dejavu-core fonts-noto-cjk
 
       - name: Restore
         run: dotnet restore tests/Bing.Offices.Docs.Tests/Bing.Offices.Docs.Tests.csproj
@@ -333,12 +417,16 @@ jobs:
           dotnet pack src/Bing.Offices.Core/Bing.Offices.Core.csproj -c Release --no-restore -o artifacts/packages
           dotnet pack src/Bing.Offices.Npoi/Bing.Offices.Npoi.csproj -c Release --no-restore -o artifacts/packages
           dotnet pack src/Bing.Offices.MiniExcel/Bing.Offices.MiniExcel.csproj -c Release --no-restore -o artifacts/packages
+          dotnet pack src/Bing.Offices.ClosedXml/Bing.Offices.ClosedXml.csproj -c Release --no-restore -o artifacts/packages
+          dotnet pack src/Bing.Offices.ExcelDataReader/Bing.Offices.ExcelDataReader.csproj -c Release --no-restore -o artifacts/packages
+          dotnet pack src/Bing.Offices.SpreadCheetah/Bing.Offices.SpreadCheetah.csproj -c Release --no-restore -o artifacts/packages
+          dotnet pack src/Bing.Offices.AsposeCells/Bing.Offices.AsposeCells.csproj -c Release --no-restore -o artifacts/packages
 
       - name: Verify packages
         shell: bash
         run: |
-          test "$(find artifacts/packages -name '*.nupkg' | wc -l)" -eq 4
-          test "$(find artifacts/packages -name '*.snupkg' | wc -l)" -eq 4
+          test "$(find artifacts/packages -name '*.nupkg' | wc -l)" -eq 8
+          test "$(find artifacts/packages -name '*.snupkg' | wc -l)" -eq 8
           for package in artifacts/packages/*.nupkg; do
             unzip -l "$package" | grep -q 'lib/'
             unzip -l "$package" | grep -q '\.xml$'
@@ -347,7 +435,7 @@ jobs:
           test "${#mini_packages[@]}" -eq 1
           package_version="$(unzip -p "${mini_packages[0]}" '*.nuspec'             | python3 -c 'import sys, xml.etree.ElementTree as ET; root=ET.parse(sys.stdin).getroot(); ns={"n":"http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd"}; print(root.findtext(".//n:version", namespaces=ns) or root.findtext(".//version") or "")')"
           test -n "$package_version"
-          for package_id in Bing.Offices.Abstractions Bing.Offices.Core Bing.Offices.Npoi Bing.Offices.MiniExcel; do
+          for package_id in Bing.Offices.Abstractions Bing.Offices.Core Bing.Offices.Npoi Bing.Offices.MiniExcel Bing.Offices.ClosedXml Bing.Offices.ExcelDataReader Bing.Offices.SpreadCheetah Bing.Offices.AsposeCells; do
             test -f "artifacts/packages/${package_id}.${package_version}.nupkg"
           done
           if unzip -p "${mini_packages[0]}" '*.nuspec' | grep -qi 'NPOI'; then
@@ -367,8 +455,8 @@ jobs:
           dotnet build tests/Bing.Offices.Consumer.Net8/Bing.Offices.Consumer.Net8.csproj             -c Release --no-restore -p:BingOfficesPackageVersion="$BING_OFFICES_PACKAGE_VERSION"             | tee artifacts/consumers/results/net8-build.log
           dotnet run --project tests/Bing.Offices.Consumer.Net6/Bing.Offices.Consumer.Net6.csproj             -c Release --no-build --no-restore -p:BingOfficesPackageVersion="$BING_OFFICES_PACKAGE_VERSION"             | tee artifacts/consumers/results/net6-run.log
           dotnet run --project tests/Bing.Offices.Consumer.Net8/Bing.Offices.Consumer.Net8.csproj             -c Release --no-build --no-restore -p:BingOfficesPackageVersion="$BING_OFFICES_PACKAGE_VERSION"             | tee artifacts/consumers/results/net8-run.log
-          grep -q "Bing.Offices.Npoi+Bing.Offices.MiniExcel/$BING_OFFICES_PACKAGE_VERSION" artifacts/consumers/results/net6-run.log
-          grep -q "Bing.Offices.Npoi+Bing.Offices.MiniExcel/$BING_OFFICES_PACKAGE_VERSION" artifacts/consumers/results/net8-run.log
+          grep -q "Bing.Offices.Npoi+Bing.Offices.MiniExcel+Bing.Offices.ClosedXml+Bing.Offices.ExcelDataReader+Bing.Offices.SpreadCheetah+Bing.Offices.AsposeCells/$BING_OFFICES_PACKAGE_VERSION" artifacts/consumers/results/net6-run.log
+          grep -q "Bing.Offices.Npoi+Bing.Offices.MiniExcel+Bing.Offices.ClosedXml+Bing.Offices.ExcelDataReader+Bing.Offices.SpreadCheetah+Bing.Offices.AsposeCells/$BING_OFFICES_PACKAGE_VERSION" artifacts/consumers/results/net8-run.log
 
       - name: Upload release evidence
         if: always()
@@ -415,7 +503,7 @@ jobs:
         run: |
           mkdir -p artifacts/api
           dotnet run --project build/ApiSnapshot/ApiSnapshot.csproj -c Release --no-build --no-restore -- --identity-self-test true | tee artifacts/api/identity-self-test.log
-          dotnet run --project build/ApiSnapshot/ApiSnapshot.csproj -c Release --no-build --no-restore -- --root output/release --baseline build/api-snapshot-baseline.json --packages artifacts/packages --repository . --output artifacts/api/compare | tee artifacts/api/compare.log
+          dotnet run --project build/ApiSnapshot/ApiSnapshot.csproj -c Release --no-build --no-restore -- --root output/release --baseline build/api-snapshot-baseline.json --packages artifacts/packages --repository . --approval ai_docs/tasks/BING-OFFICES-ADVANCED-EXCEL-ROADMAP-20260926-001/api-approval.md --output artifacts/api/compare | tee artifacts/api/compare.log
           test "$(sha256sum version.props | cut -d' ' -f1 | tr '[:lower:]' '[:upper:]')" = "$BING_VERSION_PROPS_SHA"
           test "$(sha256sum version.dev.props | cut -d' ' -f1 | tr '[:lower:]' '[:upper:]')" = "$BING_VERSION_DEV_PROPS_SHA"
           test -z "$(find src tests benchmarks -type d \( -name artifacts -o -name TestResults -o -name BenchmarkDotNet.Artifacts \) -print -quit)"

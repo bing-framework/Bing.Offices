@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>Bing.Offices.AsposeCells</AssemblyName>
+    <PackageId>Bing.Offices.AsposeCells</PackageId>
+    <Description>Bing.Offices 的 Aspose.Cells 商业扩展 Provider。</Description>
+    <PackageTags>bing;excel;aspose;pdf;render;xlsm;ods;encryption;</PackageTags>
+  </PropertyGroup>
+
+  <Import Project="..\..\framework.props" />
+
+  <ItemGroup>
+    <ProjectReference Include="..\Bing.Offices.Core\Bing.Offices.Core.csproj" />
+    <PackageReference Include="Aspose.Cells" Version="26.8.0" />
+  </ItemGroup>
+
+  <ItemGroup Condition=" '$(TargetFramework)' == 'net6.0' ">
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="6.0.0" />
+  </ItemGroup>
+
+  <ItemGroup Condition=" '$(TargetFramework)' == 'net8.0' ">
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.0" />
+  </ItemGroup>
+</Project>
