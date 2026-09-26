@@ -11,8 +11,12 @@ using Bing.Offices.ClosedXml.Exports;
 using Bing.Offices.ClosedXml.Extensions;
 using Bing.Offices.ClosedXml.Imports;
 using Bing.Offices.Configurations;
+using Bing.Offices.ExcelDataReader;
 using Bing.Offices.Exceptions;
 using Bing.Offices.Imports;
+using Bing.Offices.AsposeCells;
+using Bing.Offices.Exports;
+using Bing.Offices.SpreadCheetah.Extensions;
 using Xunit;
 
 namespace Bing.Offices.Tests;
@@ -64,6 +68,11 @@ public class PublicApiContractTest
             ["Bing.Offices.Abstractions:Bing.Offices.Conversions.ExcelCellKind"] = "User API",
             ["Bing.Offices.Abstractions:Bing.Offices.Conversions.ExcelCellValue"] = "User API",
             ["Bing.Offices.Abstractions:Bing.Offices.Conversions.ExcelConversionContext"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Conversions.ExcelDocumentConversionResult"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Conversions.ExcelMacroPolicy"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Conversions.ExcelWorkbookOpenOptions"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Conversions.ExcelWorkbookSaveOptions"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Conversions.IExcelDocumentConverter"] = "User API",
             ["Bing.Offices.Abstractions:Bing.Offices.Exceptions.BingOfficesErrorCode"] = "User API",
             ["Bing.Offices.Abstractions:Bing.Offices.Exceptions.BingOfficesOperation"] = "User API",
             ["Bing.Offices.Abstractions:Bing.Offices.Exceptions.BingOfficesStage"] = "User API",
@@ -110,6 +119,35 @@ public class PublicApiContractTest
             ["Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelWorkbookMetadataOptions"] = "User API",
             ["Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelWorkbookExportRequest"] = "User API",
             ["Bing.Offices.Abstractions:Bing.Offices.Exports.IExcelExporter"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Exports.IExcelStreamingExporter"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelStreamingExportOptions"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelSheetImageDefinition"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelDataValidationDefinition"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelDataValidationType"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelAutoFilterDefinition"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelConditionalComparisonOperator"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelConditionalFormatDefinition"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelConditionalFormatType"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelFreezePaneDefinition"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelNamedRangeDefinition"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelPrintLayoutOptions"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelPrintOrientation"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelPrintPaperSize"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelRangeDefinition"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelTableDefinition"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Formula.ExcelFormulaReadMode"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Formula.ExcelFormulaCalculationMode"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Formula.ExcelFormulaRequest"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Formula.ExcelFormulaCellResult"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Formula.ExcelFormulaResult"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Formula.IExcelFormulaProcessor"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Rendering.ExcelRenderFormat"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Rendering.ExcelPdfCompliance"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Rendering.ExcelRenderRequest"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Rendering.ExcelRenderWarning"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Rendering.ExcelRenderResult"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Rendering.IExcelDocumentRenderer"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Rendering.IExcelPageRenderer"] = "User API",
             ["Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelImport"] = "User API",
             ["Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelImportError"] = "User API",
             ["Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelImportErrorCode"] = "User API",
@@ -133,6 +171,10 @@ public class PublicApiContractTest
             ["Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelWorkbookImportRequest`1"] = "User API",
             ["Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelWorkbookImportResult`1"] = "User API",
             ["Bing.Offices.Abstractions:Bing.Offices.Imports.IExcelImporter"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Imports.IExcelBatchImporter"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelBatchImportRequest`1"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelImportBatch`1"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelBatchImportSummary"] = "User API",
             ["Bing.Offices.Abstractions:Bing.Offices.Entities.ExcelEntity"] = "User API",
             ["Bing.Offices.Abstractions:Bing.Offices.Entities.ExcelEntityLayoutBuilder`1"] = "User API",
             ["Bing.Offices.Abstractions:Bing.Offices.Entities.ExcelEntityListRegionBuilder`1"] = "User API",
@@ -144,11 +186,16 @@ public class PublicApiContractTest
             ["Bing.Offices.Abstractions:Bing.Offices.Entities.ExcelEntityCellReference"] = "User API",
             ["Bing.Offices.Abstractions:Bing.Offices.Entities.ExcelEntityCellRange"] = "User API",
             ["Bing.Offices.Abstractions:Bing.Offices.Entities.ExcelEntityImportResult`1"] = "User API",
+            ["Bing.Offices.Abstractions:Bing.Offices.Entities.ExcelEntityImportOptions"] = "User API",
             ["Bing.Offices.Abstractions:Bing.Offices.Entities.ExcelEntityTemplateOptions"] = "User API",
             ["Bing.Offices.Abstractions:Bing.Offices.Entities.IExcelEntityExporter"] = "Provider SPI",
             ["Bing.Offices.Abstractions:Bing.Offices.Entities.IExcelEntityImporter"] = "Provider SPI",
+            ["Bing.Offices.Abstractions:Bing.Offices.Entities.IExcelEntityResourceImporter"] = "Provider SPI",
             ["Bing.Offices.Abstractions:Bing.Offices.Providers.ExcelProviderCapabilities"] = "Provider SPI",
             ["Bing.Offices.Abstractions:Bing.Offices.Providers.IExcelProviderCapabilities"] = "Provider SPI",
+            ["Bing.Offices.Abstractions:Bing.Offices.Providers.IExcelProviderCapabilityDescriptor"] = "Provider SPI",
+            ["Bing.Offices.Abstractions:Bing.Offices.Providers.ExcelProviderFeatures"] = "Provider SPI",
+            ["Bing.Offices.Abstractions:Bing.Offices.Providers.IExcelProviderFeatureDescriptor"] = "Provider SPI",
             ["Bing.Offices.Abstractions:Bing.Offices.Providers.UniqueTracker"] = "Provider SPI",
             ["Bing.Offices.Abstractions:Bing.Offices.Providers.IExcelDynamicMappingColumn"] = "Provider SPI",
             ["Bing.Offices.Abstractions:Bing.Offices.Providers.IExcelMappingLayout"] = "Provider SPI",
@@ -221,6 +268,16 @@ public class PublicApiContractTest
             ["Bing.Offices.ClosedXml:Bing.Offices.ClosedXml.Imports.ClosedXmlExcelImporter"] = "Provider User API",
             ["Bing.Offices.ClosedXml:Bing.Offices.ClosedXml.Extensions.ExcelClosedXmlServiceCollectionExtensions"] = "User API",
             ["Bing.Offices.ClosedXml:Bing.Offices.ClosedXml.ClosedXmlProviderOptions"] = "Provider User API",
+            ["Bing.Offices.ExcelDataReader:Bing.Offices.ExcelDataReader.ExcelDataReaderExcelImporter"] = "Provider User API",
+            ["Bing.Offices.ExcelDataReader:Bing.Offices.ExcelDataReader.Extensions.ExcelDataReaderServiceCollectionExtensions"] = "User API",
+            ["Bing.Offices.AsposeCells:Bing.Offices.AsposeCells.AsposeCellsEngine"] = "Provider User API",
+            ["Bing.Offices.AsposeCells:Bing.Offices.AsposeCells.AsposeCellsProviderOptions"] = "Provider User API",
+            ["Bing.Offices.AsposeCells:Bing.Offices.AsposeCells.AsposeCellsFontConfiguration"] = "Provider User API",
+            ["Bing.Offices.AsposeCells:Bing.Offices.AsposeCells.Extensions"] = "User API",
+            ["Bing.Offices.SpreadCheetah:Bing.Offices.Exports.SpreadCheetahStreamingExcelExporter"] = "Provider User API",
+            ["Bing.Offices.SpreadCheetah:Bing.Offices.SpreadCheetah.Extensions.ExcelSpreadCheetahServiceCollectionExtensions"] = "User API",
+            ["Bing.Offices.Npoi:Bing.Offices.Npoi.Formula.NpoiExcelFormulaProcessor"] = "Provider User API",
+            ["Bing.Offices.ClosedXml:Bing.Offices.ClosedXml.Formula.ClosedXmlExcelFormulaProcessor"] = "Provider User API",
         };
 
     /// <summary>
@@ -356,9 +413,14 @@ public class PublicApiContractTest
             "Bing.Offices.Abstractions:Bing.Offices.Configurations.MappingSourceKind",
             "Bing.Offices.Abstractions:Bing.Offices.Configurations.ExcelModelAliasRegistry",
             "Bing.Offices.Abstractions:Bing.Offices.Configurations.ProfileDescriptor",
-            "Bing.Offices.Abstractions:Bing.Offices.Conversions.ExcelCellKind",
-            "Bing.Offices.Abstractions:Bing.Offices.Conversions.ExcelCellValue",
-            "Bing.Offices.Abstractions:Bing.Offices.Conversions.ExcelConversionContext",
+             "Bing.Offices.Abstractions:Bing.Offices.Conversions.ExcelCellKind",
+             "Bing.Offices.Abstractions:Bing.Offices.Conversions.ExcelCellValue",
+             "Bing.Offices.Abstractions:Bing.Offices.Conversions.ExcelConversionContext",
+             "Bing.Offices.Abstractions:Bing.Offices.Conversions.ExcelDocumentConversionResult",
+             "Bing.Offices.Abstractions:Bing.Offices.Conversions.ExcelMacroPolicy",
+             "Bing.Offices.Abstractions:Bing.Offices.Conversions.ExcelWorkbookOpenOptions",
+             "Bing.Offices.Abstractions:Bing.Offices.Conversions.ExcelWorkbookSaveOptions",
+             "Bing.Offices.Abstractions:Bing.Offices.Conversions.IExcelDocumentConverter",
             "Bing.Offices.Abstractions:Bing.Offices.Exceptions.BingOfficesErrorCode",
             "Bing.Offices.Abstractions:Bing.Offices.Exceptions.BingOfficesOperation",
             "Bing.Offices.Abstractions:Bing.Offices.Exceptions.BingOfficesStage",
@@ -402,9 +464,38 @@ public class PublicApiContractTest
             "Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelSheetExportRequest",
             "Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelUnknownDynamicValuePolicy",
             "Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelWorkbookExportBuilder",
-            "Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelWorkbookMetadataOptions",
-            "Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelWorkbookExportRequest",
-            "Bing.Offices.Abstractions:Bing.Offices.Exports.IExcelExporter",
+             "Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelWorkbookMetadataOptions",
+             "Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelWorkbookExportRequest",
+             "Bing.Offices.Abstractions:Bing.Offices.Exports.IExcelExporter",
+             "Bing.Offices.Abstractions:Bing.Offices.Exports.IExcelStreamingExporter",
+             "Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelStreamingExportOptions",
+             "Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelSheetImageDefinition",
+             "Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelDataValidationDefinition",
+             "Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelDataValidationType",
+             "Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelAutoFilterDefinition",
+             "Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelConditionalComparisonOperator",
+             "Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelConditionalFormatDefinition",
+             "Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelConditionalFormatType",
+             "Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelFreezePaneDefinition",
+             "Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelNamedRangeDefinition",
+             "Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelPrintLayoutOptions",
+             "Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelPrintOrientation",
+             "Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelPrintPaperSize",
+             "Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelRangeDefinition",
+             "Bing.Offices.Abstractions:Bing.Offices.Exports.ExcelTableDefinition",
+             "Bing.Offices.Abstractions:Bing.Offices.Formula.ExcelFormulaCalculationMode",
+             "Bing.Offices.Abstractions:Bing.Offices.Formula.ExcelFormulaCellResult",
+             "Bing.Offices.Abstractions:Bing.Offices.Formula.ExcelFormulaReadMode",
+             "Bing.Offices.Abstractions:Bing.Offices.Formula.ExcelFormulaRequest",
+             "Bing.Offices.Abstractions:Bing.Offices.Formula.ExcelFormulaResult",
+             "Bing.Offices.Abstractions:Bing.Offices.Formula.IExcelFormulaProcessor",
+             "Bing.Offices.Abstractions:Bing.Offices.Rendering.ExcelRenderFormat",
+             "Bing.Offices.Abstractions:Bing.Offices.Rendering.ExcelPdfCompliance",
+             "Bing.Offices.Abstractions:Bing.Offices.Rendering.ExcelRenderRequest",
+             "Bing.Offices.Abstractions:Bing.Offices.Rendering.ExcelRenderResult",
+             "Bing.Offices.Abstractions:Bing.Offices.Rendering.ExcelRenderWarning",
+             "Bing.Offices.Abstractions:Bing.Offices.Rendering.IExcelDocumentRenderer",
+             "Bing.Offices.Abstractions:Bing.Offices.Rendering.IExcelPageRenderer",
             "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelImport",
             "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelImportError",
             "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelImportErrorCode",
@@ -428,6 +519,10 @@ public class PublicApiContractTest
             "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelWorkbookImportRequest`1",
             "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelWorkbookImportResult`1",
             "Bing.Offices.Abstractions:Bing.Offices.Imports.IExcelImporter",
+            "Bing.Offices.Abstractions:Bing.Offices.Imports.IExcelBatchImporter",
+            "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelBatchImportRequest`1",
+            "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelImportBatch`1",
+            "Bing.Offices.Abstractions:Bing.Offices.Imports.ExcelBatchImportSummary",
             "Bing.Offices.Abstractions:Bing.Offices.Entities.ExcelEntity",
             "Bing.Offices.Abstractions:Bing.Offices.Entities.ExcelEntityCellBinding`1",
             "Bing.Offices.Abstractions:Bing.Offices.Entities.ExcelEntityCellBuilder`1",
@@ -439,11 +534,16 @@ public class PublicApiContractTest
             "Bing.Offices.Abstractions:Bing.Offices.Entities.ExcelEntityListRegion`1",
             "Bing.Offices.Abstractions:Bing.Offices.Entities.ExcelEntityListRegionBuilder`1",
             "Bing.Offices.Abstractions:Bing.Offices.Entities.ExcelEntityMergeRegion",
+            "Bing.Offices.Abstractions:Bing.Offices.Entities.ExcelEntityImportOptions",
             "Bing.Offices.Abstractions:Bing.Offices.Entities.ExcelEntityTemplateOptions",
             "Bing.Offices.Abstractions:Bing.Offices.Entities.IExcelEntityExporter",
             "Bing.Offices.Abstractions:Bing.Offices.Entities.IExcelEntityImporter",
-            "Bing.Offices.Abstractions:Bing.Offices.Providers.ExcelProviderCapabilities",
-            "Bing.Offices.Abstractions:Bing.Offices.Providers.IExcelProviderCapabilities",
+            "Bing.Offices.Abstractions:Bing.Offices.Entities.IExcelEntityResourceImporter",
+             "Bing.Offices.Abstractions:Bing.Offices.Providers.ExcelProviderCapabilities",
+             "Bing.Offices.Abstractions:Bing.Offices.Providers.IExcelProviderCapabilities",
+             "Bing.Offices.Abstractions:Bing.Offices.Providers.IExcelProviderCapabilityDescriptor",
+             "Bing.Offices.Abstractions:Bing.Offices.Providers.ExcelProviderFeatures",
+             "Bing.Offices.Abstractions:Bing.Offices.Providers.IExcelProviderFeatureDescriptor",
             "Bing.Offices.Abstractions:Bing.Offices.Providers.UniqueTracker",
             "Bing.Offices.Abstractions:Bing.Offices.Providers.IExcelDynamicMappingColumn",
             "Bing.Offices.Abstractions:Bing.Offices.Providers.IExcelMappingLayout",
@@ -515,7 +615,17 @@ public class PublicApiContractTest
             "Bing.Offices.ClosedXml:Bing.Offices.ClosedXml.Imports.ClosedXmlExcelImporter",
             "Bing.Offices.ClosedXml:Bing.Offices.ClosedXml.Extensions.ExcelClosedXmlServiceCollectionExtensions",
             "Bing.Offices.ClosedXml:Bing.Offices.ClosedXml.ClosedXmlProviderOptions",
-            "Bing.Offices.Core:Bing.Offices.Extensions.MappingProfileServiceCollectionExtensions"
+             "Bing.Offices.ExcelDataReader:Bing.Offices.ExcelDataReader.ExcelDataReaderExcelImporter",
+             "Bing.Offices.ExcelDataReader:Bing.Offices.ExcelDataReader.Extensions.ExcelDataReaderServiceCollectionExtensions",
+             "Bing.Offices.SpreadCheetah:Bing.Offices.Exports.SpreadCheetahStreamingExcelExporter",
+             "Bing.Offices.SpreadCheetah:Bing.Offices.SpreadCheetah.Extensions.ExcelSpreadCheetahServiceCollectionExtensions",
+             "Bing.Offices.AsposeCells:Bing.Offices.AsposeCells.AsposeCellsEngine",
+             "Bing.Offices.AsposeCells:Bing.Offices.AsposeCells.AsposeCellsProviderOptions",
+             "Bing.Offices.AsposeCells:Bing.Offices.AsposeCells.AsposeCellsFontConfiguration",
+             "Bing.Offices.AsposeCells:Bing.Offices.AsposeCells.Extensions",
+             "Bing.Offices.Npoi:Bing.Offices.Npoi.Formula.NpoiExcelFormulaProcessor",
+             "Bing.Offices.ClosedXml:Bing.Offices.ClosedXml.Formula.ClosedXmlExcelFormulaProcessor",
+             "Bing.Offices.Core:Bing.Offices.Extensions.MappingProfileServiceCollectionExtensions"
         };
         var assemblies = new[]
         {
@@ -523,7 +633,10 @@ public class PublicApiContractTest
             typeof(ExcelMappingConfigurationLoader).Assembly,
             typeof(NpoiExcelImporter).Assembly,
             typeof(MiniExcelExcelImporter).Assembly,
-            typeof(ClosedXmlExcelImporter).Assembly
+            typeof(ClosedXmlExcelImporter).Assembly,
+            typeof(ExcelDataReaderExcelImporter).Assembly,
+            typeof(SpreadCheetahStreamingExcelExporter).Assembly,
+            typeof(AsposeCellsEngine).Assembly
         };
 
         // Act
@@ -584,7 +697,10 @@ public class PublicApiContractTest
             typeof(ExcelMappingConfigurationLoader).Assembly,
             typeof(NpoiExcelImporter).Assembly,
             typeof(MiniExcelExcelImporter).Assembly,
-            typeof(ClosedXmlExcelImporter).Assembly
+            typeof(ClosedXmlExcelImporter).Assembly,
+            typeof(ExcelDataReaderExcelImporter).Assembly,
+            typeof(SpreadCheetahStreamingExcelExporter).Assembly,
+            typeof(AsposeCellsEngine).Assembly
         };
 
         // Act
@@ -645,7 +761,8 @@ public class PublicApiContractTest
             typeof(ExcelMappingConfigurationLoader).Assembly,
             typeof(NpoiExcelImporter).Assembly,
             typeof(MiniExcelExcelImporter).Assembly,
-            typeof(ClosedXmlExcelImporter).Assembly
+            typeof(ClosedXmlExcelImporter).Assembly,
+            typeof(ExcelDataReaderExcelImporter).Assembly
         };
 
         // Act
@@ -654,13 +771,19 @@ public class PublicApiContractTest
             [typeof(IExcelImporter).Assembly.GetName().Name] = new HashSet<string>(
                 new[] { "Bing.Offices.Tests", "Bing.Offices.Npoi.Tests" }, StringComparer.Ordinal),
             [typeof(ExcelMappingConfigurationLoader).Assembly.GetName().Name] = new HashSet<string>(
-                new[] { "Bing.Offices.Tests", "Bing.Offices.Npoi.Tests" }, StringComparer.Ordinal),
+                new[]
+                {
+                    "Bing.Offices.Tests", "Bing.Offices.Npoi.Tests", "Bing.Offices.Npoi",
+                    "Bing.Offices.ClosedXml"
+                }, StringComparer.Ordinal),
             [typeof(NpoiExcelImporter).Assembly.GetName().Name] = new HashSet<string>(
                 new[] { "Bing.Offices.Npoi.Tests", "Bing.Offices.Npoi.Tests.Integration" }, StringComparer.Ordinal),
             [typeof(MiniExcelExcelImporter).Assembly.GetName().Name] = new HashSet<string>(
                 new[] { "Bing.Offices.MiniExcel.Tests", "Bing.Offices.MiniExcel.Tests.Integration" }, StringComparer.Ordinal),
             [typeof(ClosedXmlExcelImporter).Assembly.GetName().Name] = new HashSet<string>(
-                new[] { "Bing.Offices.ClosedXml.Tests", "Bing.Offices.ClosedXml.Tests.Integration" }, StringComparer.Ordinal)
+                new[] { "Bing.Offices.ClosedXml.Tests", "Bing.Offices.ClosedXml.Tests.Integration" }, StringComparer.Ordinal),
+            [typeof(ExcelDataReaderExcelImporter).Assembly.GetName().Name] = new HashSet<string>(
+                new[] { "Bing.Offices.ExcelDataReader.Tests" }, StringComparer.Ordinal)
         };
 
         // Assert
@@ -700,7 +823,8 @@ public class PublicApiContractTest
             "Bing.Offices.Npoi.Extensions.FontExtensions",
             "Bing.Offices.Npoi.Extensions.RowExtensions",
             "Bing.Offices.Npoi.Extensions.SheetExtensions",
-            "Bing.Offices.Npoi.Extensions.WorkbookExtensions"
+            "Bing.Offices.Npoi.Extensions.WorkbookExtensions",
+            "Bing.Offices.Npoi.Formula.NpoiExcelFormulaProcessor"
         }, exported);
         Assert.DoesNotContain(assembly.GetExportedTypes(), type =>
             type.FullName == "Bing.Offices.Npoi.Extensions.InternalExtensions"
@@ -776,6 +900,9 @@ public class PublicApiContractTest
         Assert.Contains(
             "property|Bing.Offices.Imports.ExcelImportFailureOptions.MaxEstimatedTargetObjects|type=System.Nullable`1[[System.Int64]]|params=|accessors=MaxEstimatedTargetObjects:public:instance,hidebysig,MaxEstimatedTargetObjects:public:instance,hidebysig|attributes=",
             abstractions.Lines);
+        Assert.Contains(
+            "property|Bing.Offices.Imports.ExcelImportFailureOptions.DestinationPath|type=System.String|params=|accessors=DestinationPath:public:instance,hidebysig,DestinationPath:public:instance,hidebysig|attributes=",
+            abstractions.Lines);
     }
 
     /// <summary>
@@ -817,7 +944,9 @@ public class PublicApiContractTest
             [typeof(MiniExcelExcelImporter).Assembly.GetName().Name!] =
                 Path.Combine(releaseRoot, expectedTfm, "Bing.Offices.MiniExcel.dll"),
             [typeof(ClosedXmlExcelImporter).Assembly.GetName().Name!] =
-                Path.Combine(releaseRoot, expectedTfm, "Bing.Offices.ClosedXml.dll")
+                Path.Combine(releaseRoot, expectedTfm, "Bing.Offices.ClosedXml.dll"),
+            [typeof(ExcelDataReaderExcelImporter).Assembly.GetName().Name!] =
+                Path.Combine(releaseRoot, expectedTfm, "Bing.Offices.ExcelDataReader.dll")
         };
 
         Assert.True(root.GetProperty("assemblies").TryGetProperty(expectedTfm, out var expected),

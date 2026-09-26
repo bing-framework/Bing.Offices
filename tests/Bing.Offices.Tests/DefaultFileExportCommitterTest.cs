@@ -106,6 +106,41 @@ public sealed class DefaultFileExportCommitterTest
     }
 
     /// <summary>
+    /// 验证写入后取消保留目标文件状态并清理临时文件。
+    /// </summary>
+    /// <param name="existingTarget">是否预先创建需要保留的目标文件。</param>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Commit_CanceledAfterWrite_ShouldPreserveTargetAndCleanTemporaryFile(bool existingTarget)
+    {
+        var path = CreatePath();
+        var sentinel = Encoding.UTF8.GetBytes("existing-target");
+        if (existingTarget)
+            File.WriteAllBytes(path, sentinel);
+        using var cancellation = new CancellationTokenSource();
+        try
+        {
+            Assert.Throws<OperationCanceledException>(() =>
+                new DefaultFileExportCommitter().Commit(path, stream =>
+                {
+                    WriteText(stream, "部分内容");
+                    cancellation.Cancel();
+                }, cancellation.Token, "CSV"));
+
+            if (existingTarget)
+                Assert.Equal(sentinel, File.ReadAllBytes(path));
+            else
+                Assert.False(File.Exists(path));
+            Assert.Empty(GetTemporaryFiles(path));
+        }
+        finally
+        {
+            DeleteFile(path);
+        }
+    }
+
+    /// <summary>
     /// 验证异步提交新目标时会写入临时文件并移动为目标文件。
     /// </summary>
     [Fact]
@@ -204,12 +239,18 @@ public sealed class DefaultFileExportCommitterTest
     }
 
     /// <summary>
-    /// 验证异步提交写入期间取消时会清理临时文件。
+    /// 验证写入后取消保留目标文件状态并清理临时文件。
     /// </summary>
-    [Fact]
-    public async Task CommitAsync_CanceledAfterWrite_ShouldCleanTemporaryFile()
+    /// <param name="existingTarget">是否预先创建需要保留的目标文件。</param>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CommitAsync_CanceledAfterWrite_ShouldCleanTemporaryFile(bool existingTarget)
     {
         var path = CreatePath();
+        var sentinel = Encoding.UTF8.GetBytes("existing-target");
+        if (existingTarget)
+            File.WriteAllBytes(path, sentinel);
         using var cancellation = new CancellationTokenSource();
         try
         {
@@ -221,7 +262,10 @@ public sealed class DefaultFileExportCommitterTest
                     cancellation.Cancel();
                 }, cancellation.Token, "CSV"));
 
-            Assert.False(File.Exists(path));
+            if (existingTarget)
+                Assert.Equal(sentinel, File.ReadAllBytes(path));
+            else
+                Assert.False(File.Exists(path));
             Assert.Empty(GetTemporaryFiles(path));
         }
         finally

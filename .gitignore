@@ -275,3 +275,5 @@ __pycache__/
 ai_docs/tasks/**/benchmarks/**
 ai_docs/tasks/**/artifacts/**
 packages.lock.json
+
+.workflow/

@@ -39,8 +39,8 @@ public class PublicExtensionCoverageTest
         var publicExtensions = coreMethods;
         var coverage = BuildDirectCallCoverage(publicExtensions);
 
-        Assert.Equal(25, coreMethods.Length);
-        Assert.Equal(25, publicExtensions.Length);
+        Assert.Equal(29, coreMethods.Length);
+        Assert.Equal(29, publicExtensions.Length);
 
         var missing = publicExtensions
             .Where(method => !coverage.ContainsKey(GetSignature(method)))
@@ -71,13 +71,18 @@ public class PublicExtensionCoverageTest
         IExcelExporter exporter = null;
         ExcelEntityLayout<CoverageEntity> layout = null;
         ExcelEntityTemplateOptions template = null;
+        var resourceOptions = new ExcelEntityImportOptions();
         using var source = new MemoryStream();
         using var destination = new MemoryStream();
 
         try { _ = importer.ImportEntity(source, layout); } catch (ArgumentNullException) { }
+        try { _ = importer.ImportEntity(source, layout, resourceOptions); } catch (ArgumentNullException) { }
         try { _ = importer.ImportEntityAsync(source, layout); } catch (ArgumentNullException) { }
+        try { _ = importer.ImportEntityAsync(source, layout, resourceOptions); } catch (ArgumentNullException) { }
         try { _ = importer.ImportForTemplate(source, layout, template); } catch (ArgumentNullException) { }
+        try { _ = importer.ImportForTemplate(source, layout, template, resourceOptions); } catch (ArgumentNullException) { }
         try { _ = importer.ImportForTemplateAsync(source, layout, template); } catch (ArgumentNullException) { }
+        try { _ = importer.ImportForTemplateAsync(source, layout, template, resourceOptions); } catch (ArgumentNullException) { }
         try { exporter.ExportEntity(new CoverageEntity(), layout, destination); } catch (ArgumentNullException) { }
         try { _ = exporter.ExportEntityAsync(new CoverageEntity(), layout, destination); } catch (ArgumentNullException) { }
         try { exporter.ExportEntityToFile(new CoverageEntity(), layout, "coverage.xlsx"); } catch (ArgumentNullException) { }
@@ -314,7 +319,7 @@ public class PublicExtensionCoverageTest
             string.Empty,
             "- Task-ID：`BING-OFFICES-RC-TEST-ARCH-HARDENING-20260917-001`",
             "- Gate：`PublicExtensionCoverageTest.PublicExtensions_ShouldHaveDirectBehaviorTestForEverySignature`",
-            "- 统计：Core `25/25`",
+            "- 统计：Core `29/29`",
             "- 判定：`PASS`（完整签名逐项映射）",
             string.Empty,
             "门禁仅接受真实 `call`/`callvirt`，异步测试通过 `AsyncStateMachineAttribute` 精确定位 `MoveNext`；方法组取址、未执行 lambda 和同名实例方法不会计入覆盖。",
