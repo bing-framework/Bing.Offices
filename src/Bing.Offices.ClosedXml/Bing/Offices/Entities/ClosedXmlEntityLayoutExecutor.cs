@@ -6,6 +6,7 @@ using Bing.Offices.Configurations;
 using Bing.Offices.Conversions;
 using Bing.Offices.Entities;
 using Bing.Offices.Exceptions;
+using Bing.Offices.Exports;
 using Bing.Offices.Imports;
 using Bing.Offices.Providers;
 using Bing.Offices.Validations;
@@ -114,10 +115,12 @@ internal sealed class ClosedXmlEntityLayoutExecutor
     /// <param name="layout">实体布局。</param>
     /// <param name="requireTemplateMerges">是否要求布局声明的合并区域已存在。</param>
     /// <param name="isDate1904">是否使用 1904 日期系统。</param>
+    /// <param name="limits">实体导入资源限制。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>实体、列表区域结果和结构化导入错误。</returns>
     public ExcelEntityImportResult<TEntity> Read<TEntity>(XLWorkbook workbook, ExcelEntityLayout<TEntity> layout,
-        bool requireTemplateMerges, bool isDate1904, CancellationToken cancellationToken)
+        bool requireTemplateMerges, bool isDate1904, ExcelResourceLimits limits,
+        CancellationToken cancellationToken)
         where TEntity : class, new()
     {
         if (workbook == null)
@@ -132,8 +135,10 @@ internal sealed class ClosedXmlEntityLayoutExecutor
             EnsureMerge(sheet, merge.Range, addMissing: false, requireExisting: requireTemplateMerges);
         }
 
+        limits?.Validate();
         var entity = new TEntity();
-        var errors = new List<ExcelImportError>();
+        var errorCollector = new LimitedErrorCollection(limits?.MaxErrors);
+        ICollection<ExcelImportError> errors = errorCollector;
         foreach (var binding in layout.Cells)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -167,13 +172,17 @@ internal sealed class ClosedXmlEntityLayoutExecutor
         }
 
         var sheetResults = new List<ExcelSheetImportResult>();
+        var totalRows = 0;
         foreach (var region in layout.ListRegions)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            sheetResults.Add(ReadRegion(workbook, entity, region, isDate1904, errors, cancellationToken));
+            sheetResults.Add(ReadRegion(workbook, entity, region, isDate1904, errors, limits,
+                ref totalRows, cancellationToken));
         }
-        ClosedXmlRelationCoordinator.Bind(entity, layout.Relations, errors, null, cancellationToken);
-        return new ExcelEntityImportResult<TEntity>(entity, errors, sheetResults);
+        ClosedXmlRelationCoordinator.Bind(entity, layout.Relations, errors, limits?.MaxErrors,
+            cancellationToken);
+        return new ExcelEntityImportResult<TEntity>(entity, errorCollector.Items, sheetResults,
+            errorCollector.IsTruncated, limits?.MaxErrors);
     }
 
     /// <summary>
@@ -192,15 +201,14 @@ internal sealed class ClosedXmlEntityLayoutExecutor
         var sheet = ResolveSheet(workbook, region.SheetName, template);
         var values = (region.Getter(entity) as IEnumerable)?.Cast<object>().ToArray()
             ?? Array.Empty<object>();
-        var columns = CreateColumns(region.ItemType, region.MappingDocument, region.MappingConfiguration,
+        var plan = CreateRegionPlan(region.ItemType, region.MappingDocument, region.MappingConfiguration,
             MappingDirection.Export);
-        ValidateBounds(region, columns.Count, values.Length);
+        ValidateBounds(region, plan.Width, values.Length);
         var row = region.Start.Row;
         if (region.IncludeHeader)
         {
-            for (var index = 0; index < columns.Count; index++)
-                sheet.Cell(row + 1, region.Start.Column + index + 1).Value = columns[index].Column.Title
-                    ?? columns[index].Property.Name;
+            foreach (var column in plan.Columns)
+                sheet.Cell(row + 1, region.Start.Column + column.PhysicalColumnIndex + 1).Value = column.Title;
             row++;
         }
         foreach (var item in values)
@@ -209,16 +217,29 @@ internal sealed class ClosedXmlEntityLayoutExecutor
             if (item == null)
                 throw new BingOfficesConfigurationException("实体列表区域包含 null 项。",
                     stage: BingOfficesStage.Plan);
-            for (var index = 0; index < columns.Count; index++)
+            var dynamicValues = GetDynamicValues(item, plan.DynamicProperty, create: false);
+            foreach (var column in plan.Columns)
             {
-                var column = columns[index];
-                var raw = column.Property.GetValue(item);
-                var converted = ClosedXmlValueAdapter.ConvertTo(raw, column.Column, column.Property,
-                    region.SheetName, row + 1, region.Start.Column + index + 1,
-                    CultureInfo.InvariantCulture);
-                ValidateExport(column, raw, converted, region.SheetName,
-                    ExcelEntityCellReference.Parse(ToAddress(row, region.Start.Column + index)));
-                WriteValue(sheet.Cell(row + 1, region.Start.Column + index + 1), converted);
+                var columnIndex = region.Start.Column + column.PhysicalColumnIndex;
+                object raw = null;
+                object converted;
+                if (column.Dynamic != null)
+                {
+                    dynamicValues?.TryGetValue(column.Key, out raw);
+                    converted = ClosedXmlValueAdapter.ConvertDynamicTo(raw, column.Dynamic,
+                        region.SheetName, row + 1, columnIndex + 1, CultureInfo.InvariantCulture);
+                    ValidateDynamicExport(column.Dynamic, raw, converted, region.SheetName,
+                        ExcelEntityCellReference.Parse(ToAddress(row, columnIndex)));
+                }
+                else
+                {
+                    raw = column.Property.GetValue(item);
+                    converted = ClosedXmlValueAdapter.ConvertTo(raw, column.Fixed, column.Property,
+                        region.SheetName, row + 1, columnIndex + 1, CultureInfo.InvariantCulture);
+                    ValidateExport(new EntityColumn(column.Fixed, column.Property), raw, converted,
+                        region.SheetName, ExcelEntityCellReference.Parse(ToAddress(row, columnIndex)));
+                }
+                WriteValue(sheet.Cell(row + 1, columnIndex + 1), converted);
             }
             row++;
         }
@@ -233,17 +254,20 @@ internal sealed class ClosedXmlEntityLayoutExecutor
     /// <param name="region">列表区域声明。</param>
     /// <param name="isDate1904">是否使用 1904 日期系统。</param>
     /// <param name="errors">共享导入错误集合。</param>
+    /// <param name="limits">实体导入使用的资源限制。</param>
+    /// <param name="totalRows">跨列表区域累计读取的数据行数。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>列表区域导入结果。</returns>
     private ExcelSheetImportResult ReadRegion<TEntity>(XLWorkbook workbook, TEntity entity,
         ExcelEntityListRegion<TEntity> region, bool isDate1904, ICollection<ExcelImportError> errors,
-        CancellationToken cancellationToken) where TEntity : class, new()
+        ExcelResourceLimits limits, ref int totalRows, CancellationToken cancellationToken)
+        where TEntity : class, new()
     {
         var sheet = ResolveSheet(workbook, region.SheetName, template: true);
-        var columns = CreateColumns(region.ItemType, region.MappingDocument, region.MappingConfiguration,
+        var plan = CreateRegionPlan(region.ItemType, region.MappingDocument, region.MappingConfiguration,
             MappingDirection.Import);
-        var maxItems = GetRegionItemCapacity(region, columns.Count, sheet);
-        ValidateBounds(region, columns.Count, maxItems);
+        var maxItems = GetRegionItemCapacity(region, plan.Width, sheet);
+        ValidateBounds(region, plan.Width, maxItems);
         var rows = new List<int>();
         var items = new List<object>();
         var row = region.Start.Row + (region.IncludeHeader ? 1 : 0);
@@ -251,44 +275,71 @@ internal sealed class ClosedXmlEntityLayoutExecutor
         while (row <= lastRow)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (IsEmptyRow(sheet, row, region.Start.Column, columns.Count))
+            if (IsEmptyRow(sheet, row, region.Start.Column, plan.Width))
                 break;
-            var item = Activator.CreateInstance(region.ItemType);
-            var valid = true;
-            for (var index = 0; index < columns.Count; index++)
+            if (limits?.MaxRows.HasValue == true && totalRows >= limits.MaxRows.Value)
             {
-                var column = columns[index];
-                var reference = ExcelEntityCellReference.Parse(ToAddress(row, region.Start.Column + index));
-                var cell = sheet.Cell(row + 1, region.Start.Column + index + 1);
-                var raw = ReadRaw(cell, column.Property.PropertyType);
+                errors.Add(new ExcelImportError(ExcelImportErrorCode.ResourceLimit,
+                    $"Workbook 数据行数超过限制: {limits.MaxRows.Value}", region.SheetName,
+                    row + 1, 0, null));
+                break;
+            }
+            totalRows++;
+            var item = Activator.CreateInstance(region.ItemType);
+            var dynamicValues = GetDynamicValues(item, plan.DynamicProperty, create: true);
+            var valid = true;
+            foreach (var column in plan.Columns)
+            {
+                var columnIndex = region.Start.Column + column.PhysicalColumnIndex;
+                var reference = ExcelEntityCellReference.Parse(ToAddress(row, columnIndex));
+                var cell = sheet.Cell(row + 1, columnIndex + 1);
+                var raw = ReadRaw(cell, column.Property?.PropertyType ?? typeof(object));
                 var text = ClosedXmlValueAdapter.ToText(raw, CultureInfo.InvariantCulture);
                 var cellValue = ClosedXmlValueAdapter.CreateCell(raw, text, isDate1904);
-                if (!ValidateImport(column, raw, null, text, cellValue, region.SheetName,
-                        reference, errors, rawOnly: true))
+                if (column.Dynamic != null && !ValidateDynamicImport(column.Dynamic, raw, null, text,
+                        cellValue, region.SheetName, reference, errors, rawOnly: true))
+                {
+                    valid = false;
+                    continue;
+                }
+                if (column.Fixed != null && !ValidateImport(new EntityColumn(column.Fixed, column.Property),
+                        raw, null, text, cellValue, region.SheetName, reference, errors, rawOnly: true))
                 {
                     valid = false;
                     continue;
                 }
                 try
                 {
-                    var converted = ClosedXmlValueAdapter.ConvertFrom(raw, column.Column, column.Property,
-                        region.SheetName, row + 1, region.Start.Column + index + 1,
-                        CultureInfo.InvariantCulture, isDate1904, cellValue);
-                    if (!ValidateImport(column, raw, converted, text, cellValue, region.SheetName,
-                            reference, errors, rawOnly: false))
+                    var converted = column.Dynamic != null
+                        ? ClosedXmlValueAdapter.ConvertDynamicFrom(raw, column.Dynamic, region.SheetName,
+                            row + 1, columnIndex + 1, CultureInfo.InvariantCulture, isDate1904, cellValue)
+                        : ClosedXmlValueAdapter.ConvertFrom(raw, column.Fixed, column.Property,
+                            region.SheetName, row + 1, columnIndex + 1,
+                            CultureInfo.InvariantCulture, isDate1904, cellValue);
+                    if (column.Dynamic != null && !ValidateDynamicImport(column.Dynamic, raw, converted,
+                            text, cellValue, region.SheetName, reference, errors, rawOnly: false))
                     {
                         valid = false;
                         continue;
                     }
-                    column.Property.SetValue(item, converted);
+                    if (column.Fixed != null && !ValidateImport(new EntityColumn(column.Fixed, column.Property),
+                            raw, converted, text, cellValue, region.SheetName, reference, errors, rawOnly: false))
+                    {
+                        valid = false;
+                        continue;
+                    }
+                    if (column.Dynamic != null)
+                        dynamicValues[column.Key] = converted;
+                    else
+                        column.Property.SetValue(item, converted);
                 }
                 catch (Exception exception) when (exception is not OperationCanceledException
                     && exception is not OutOfMemoryException && exception is not StackOverflowException)
                 {
                     valid = false;
                     errors.Add(new ExcelImportError(ExcelImportErrorCode.ValueConversion,
-                        exception.Message, region.SheetName, row + 1, region.Start.Column + index + 1,
-                        column.Property.Name, rawValue: raw));
+                        exception.Message, region.SheetName, row + 1, columnIndex + 1,
+                        column.Dynamic?.Key ?? column.Property.Name, rawValue: raw));
                 }
             }
             if (valid)
@@ -309,37 +360,38 @@ internal sealed class ClosedXmlEntityLayoutExecutor
     }
 
     /// <summary>
-    /// 为列表项目类型创建固定列映射。
+    /// 为列表项目类型创建固定列和动态列的统一物理布局。
     /// </summary>
     /// <param name="itemType">列表项目类型。</param>
     /// <param name="document">映射文档。</param>
     /// <param name="configuration">映射配置。</param>
     /// <param name="direction">映射方向。</param>
-    /// <returns>可读写的固定实体列。</returns>
-    private IReadOnlyList<EntityColumn> CreateColumns(Type itemType, ExcelMappingDocument document,
+    /// <returns>包含最终物理索引和动态字典属性的区域计划。</returns>
+    private EntityRegionPlan CreateRegionPlan(Type itemType, ExcelMappingDocument document,
         ExcelMappingConfiguration configuration, MappingDirection direction)
     {
         var plan = _planBuilder.Create(itemType, document ?? new ExcelMappingDocument
         {
             UseConventionFallback = true
         }, configuration, direction);
-        if (plan.DynamicColumns.Count > 0)
-            throw new BingOfficesUnsupportedFeatureException(
-                "ClosedXML Entity List Region 暂不支持动态列。", provider: Provider,
-                operation: direction == MappingDirection.Export
-                    ? BingOfficesOperation.Export : BingOfficesOperation.Import,
-                stage: BingOfficesStage.Plan);
-        var columns = new List<EntityColumn>();
-        foreach (var column in plan.Columns.Where(item => !item.Ignored && !item.IsDynamicColumn))
-        {
-            var property = itemType.GetProperty(column.Name, BindingFlags.Instance | BindingFlags.Public);
-            if (property != null && property.CanRead && (direction != MappingDirection.Import || property.CanWrite))
-                columns.Add(new EntityColumn(column, property));
-        }
-        if (columns.Count == 0)
+        var columns = ClosedXmlExportColumnPlanner.Create(itemType, plan,
+                Array.Empty<ExcelDynamicColumnDefinition>(), configuration)
+            .Where(column => column.Dynamic != null || direction != MappingDirection.Import
+                || column.Property.CanWrite)
+            .ToArray();
+        if (columns.Length == 0)
             throw new BingOfficesConfigurationException($"实体列表没有可用映射列: {itemType.FullName}",
                 stage: BingOfficesStage.Plan);
-        return columns;
+        var dynamicPlanColumn = plan.DynamicColumns.Count == 0 ? null
+            : plan.Columns.SingleOrDefault(column => column.IsDynamicColumn && !column.Ignored);
+        var dynamicProperty = dynamicPlanColumn == null ? null : itemType.GetProperty(dynamicPlanColumn.Name,
+            BindingFlags.Instance | BindingFlags.Public);
+        if (plan.DynamicColumns.Count > 0 && (dynamicProperty == null || !dynamicProperty.CanRead
+            || !typeof(IDictionary<string, object>).IsAssignableFrom(dynamicProperty.PropertyType)))
+            throw new BingOfficesConfigurationException(
+                "实体动态列属性必须是可读的 IDictionary<string, object>。", stage: BingOfficesStage.Plan);
+        var width = columns.Max(column => column.PhysicalColumnIndex) + 1;
+        return new EntityRegionPlan(columns, dynamicProperty, width);
     }
 
     /// <summary>
@@ -514,6 +566,41 @@ internal sealed class ClosedXmlEntityLayoutExecutor
     }
 
     /// <summary>
+    /// 获取实体项目的动态列字典，并在导入需要时创建可写实例。
+    /// </summary>
+    /// <param name="item">列表项目。</param>
+    /// <param name="property">标记了动态列的字典属性。</param>
+    /// <param name="create">属性为空时是否创建字典。</param>
+    /// <returns>动态列字典；布局没有动态列时返回 <see langword="null" />。</returns>
+    private static IDictionary<string, object> GetDynamicValues(object item, PropertyInfo property, bool create)
+    {
+        if (property == null)
+            return null;
+        var current = property.GetValue(item);
+        if (current is IDictionary<string, object> values)
+            return values;
+        if (current != null)
+            throw new BingOfficesConfigurationException(
+                $"实体动态列属性类型不受支持: {property.DeclaringType?.FullName}.{property.Name}",
+                stage: BingOfficesStage.Plan);
+        if (!create)
+            return null;
+        if (!property.CanWrite)
+            throw new BingOfficesConfigurationException(
+                $"实体动态列属性为空且不可写: {property.DeclaringType?.FullName}.{property.Name}",
+                stage: BingOfficesStage.Plan);
+        object instance = property.PropertyType.IsInterface || property.PropertyType.IsAbstract
+            ? new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+            : Activator.CreateInstance(property.PropertyType);
+        if (instance is not IDictionary<string, object> created)
+            throw new BingOfficesConfigurationException(
+                $"实体动态列属性无法创建字典实例: {property.DeclaringType?.FullName}.{property.Name}",
+                stage: BingOfficesStage.Plan);
+        property.SetValue(item, created);
+        return created;
+    }
+
+    /// <summary>
     /// 将零基行列索引转换为 A1 地址。
     /// </summary>
     /// <param name="row">零基行号。</param>
@@ -677,9 +764,175 @@ internal sealed class ClosedXmlEntityLayoutExecutor
     }
 
     /// <summary>
+    /// 执行实体动态列的导出校验。
+    /// </summary>
+    /// <param name="column">动态列映射。</param>
+    /// <param name="raw">单元格原始值。</param>
+    /// <param name="converted">转换后的值。</param>
+    /// <param name="sheet">当前工作表名称。</param>
+    /// <param name="reference">单元格位置。</param>
+    private static void ValidateDynamicExport(IExcelDynamicMappingColumn column, object raw,
+        object converted, string sheet, ExcelEntityCellReference reference)
+    {
+        var propertyType = ClosedXmlValueAdapter.ResolveDynamicType(column.DataTypeName);
+        var text = ClosedXmlValueAdapter.ToText(converted, CultureInfo.InvariantCulture);
+        foreach (var binding in column.ValidationBindings ??
+            (IReadOnlyList<IExcelValidationBinding>)Array.Empty<IExcelValidationBinding>())
+        {
+            try
+            {
+                var value = binding.IsRaw ? raw : converted;
+                var context = new ExcelValidationContext(text, sheet, reference.Row + 1,
+                    reference.Column + 1, column.Key, value, propertyType, null,
+                    CultureInfo.InvariantCulture);
+                if (binding.Validate(context))
+                    continue;
+                throw new BingOfficesExportException(binding.ErrorMessage ?? "实体动态列未通过校验。",
+                    provider: Provider, stage: BingOfficesStage.Validate, sheetName: sheet,
+                    rowIndex: reference.Row + 1, columnIndex: reference.Column + 1,
+                    propertyName: column.Key);
+            }
+            catch (BingOfficesException)
+            {
+                throw;
+            }
+            catch (Exception exception) when (exception is not OutOfMemoryException
+                && exception is not StackOverflowException)
+            {
+                throw new BingOfficesExportException("实体动态列校验器执行失败。", exception,
+                    Provider, BingOfficesStage.Validate, sheet, reference.Row + 1,
+                    reference.Column + 1, column.Key, BingOfficesErrorCode.UserExtensionFailed);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 执行实体动态列的导入校验。
+    /// </summary>
+    /// <param name="column">动态列映射。</param>
+    /// <param name="raw">单元格原始值。</param>
+    /// <param name="converted">转换后的值。</param>
+    /// <param name="text">单元格文本。</param>
+    /// <param name="cell">待处理的单元格。</param>
+    /// <param name="sheet">当前工作表名称。</param>
+    /// <param name="reference">单元格位置。</param>
+    /// <param name="errors">结构化导入错误集合。</param>
+    /// <param name="rawOnly">为 true 时仅校验原始值；为 false 时仅校验转换后的值。</param>
+    /// <returns>所有适用规则均通过时返回 true；校验失败时返回 false，并记录错误。</returns>
+    private static bool ValidateDynamicImport(IExcelDynamicMappingColumn column, object raw,
+        object converted, string text, ExcelCellValue cell, string sheet,
+        ExcelEntityCellReference reference, ICollection<ExcelImportError> errors, bool rawOnly)
+    {
+        var propertyType = ClosedXmlValueAdapter.ResolveDynamicType(column.DataTypeName);
+        var bindings = column.ValidationBindings ??
+            (IReadOnlyList<IExcelValidationBinding>)Array.Empty<IExcelValidationBinding>();
+        foreach (var binding in bindings.Where(item => rawOnly ? item.IsRaw : !item.IsRaw))
+        {
+            var value = rawOnly ? raw : converted;
+            var context = new ExcelValidationContext(text, sheet, reference.Row + 1,
+                reference.Column + 1, column.Key, value, propertyType, cell,
+                CultureInfo.InvariantCulture);
+            try
+            {
+                if (binding.Validate(context))
+                    continue;
+                errors.Add(new ExcelImportError(ClosedXmlValueAdapter.GetValidationCode(binding),
+                    binding.ErrorMessage, sheet, reference.Row + 1, reference.Column + 1,
+                    column.Key, rawValue: raw));
+                return false;
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException
+                && exception is not OutOfMemoryException && exception is not StackOverflowException)
+            {
+                errors.Add(new ExcelImportError(ExcelImportErrorCode.Validation, exception.Message,
+                    sheet, reference.Row + 1, reference.Column + 1, column.Key, rawValue: raw));
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// 在 ClosedXML 实体导入路径中共享并限制结构化错误集合。
+    /// </summary>
+    private sealed class LimitedErrorCollection : ICollection<ExcelImportError>
+    {
+        /// <summary>
+        /// 当前导入允许保留的最大错误数；未指定时不限制。
+        /// </summary>
+        private readonly int? _maxErrors;
+        /// <summary>
+        /// 当前导入已收集的结构化错误。
+        /// </summary>
+        private readonly List<ExcelImportError> _items = new List<ExcelImportError>();
+
+        /// <summary>
+        /// 初始化一个 <see cref="LimitedErrorCollection"/> 类型的实例。
+        /// </summary>
+        /// <param name="maxErrors">允许保留的最大错误数。</param>
+        internal LimitedErrorCollection(int? maxErrors)
+        {
+            _maxErrors = maxErrors;
+        }
+
+        /// <summary>
+        /// 获取当前已收集的错误列表。
+        /// </summary>
+        internal IReadOnlyList<ExcelImportError> Items => _items;
+
+        /// <summary>
+        /// 获取是否因达到数量上限而截断。
+        /// </summary>
+        internal bool IsTruncated { get; private set; }
+
+        /// <inheritdoc />
+        public int Count => _items.Count;
+        /// <inheritdoc />
+        public bool IsReadOnly => false;
+
+        /// <inheritdoc />
+        /// <remarks>忽略 null；达到错误数量上限后不再追加，并标记截断状态。</remarks>
+        public void Add(ExcelImportError item)
+        {
+            if (item == null)
+                return;
+            if (_maxErrors.HasValue && _items.Count >= _maxErrors.Value)
+            {
+                IsTruncated = true;
+                return;
+            }
+            _items.Add(item);
+            if (_maxErrors.HasValue && _items.Count >= _maxErrors.Value)
+                IsTruncated = true;
+        }
+
+        /// <inheritdoc />
+        public void Clear() => _items.Clear();
+        /// <inheritdoc />
+        public bool Contains(ExcelImportError item) => _items.Contains(item);
+        /// <inheritdoc />
+        public void CopyTo(ExcelImportError[] array, int arrayIndex) => _items.CopyTo(array, arrayIndex);
+        /// <inheritdoc />
+        public bool Remove(ExcelImportError item) => _items.Remove(item);
+        /// <inheritdoc />
+        public IEnumerator<ExcelImportError> GetEnumerator() => _items.GetEnumerator();
+        /// <inheritdoc />
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+    }
+
+    /// <summary>
     /// 保存实体列映射与对应属性。
     /// </summary>
     /// <param name="Column">实体映射列。</param>
     /// <param name="Property">实体属性。</param>
     private sealed record EntityColumn(IExcelMappingColumn Column, PropertyInfo Property);
+
+    /// <summary>
+    /// 保存实体列表区域的最终物理列布局和动态字典属性。
+    /// </summary>
+    /// <param name="Columns">按布局生成的固定列和动态列。</param>
+    /// <param name="DynamicProperty">动态列字典属性。</param>
+    /// <param name="Width">从区域起点计算的物理列宽度。</param>
+    private sealed record EntityRegionPlan(IReadOnlyList<ClosedXmlExportColumn> Columns,
+        PropertyInfo DynamicProperty, int Width);
 }

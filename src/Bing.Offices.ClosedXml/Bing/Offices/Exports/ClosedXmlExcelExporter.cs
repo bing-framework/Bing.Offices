@@ -19,7 +19,7 @@ namespace Bing.Offices.ClosedXml.Exports;
 /// <summary>
 /// 基于 ClosedXML 的 XLSX 工作簿导出器。
 /// </summary>
-public sealed class ClosedXmlExcelExporter : IExcelExporter, IExcelEntityExporter, IExcelProviderCapabilities
+public sealed class ClosedXmlExcelExporter : IExcelExporter, IExcelEntityExporter, IExcelProviderFeatureDescriptor
 {
     /// <summary>
     /// ClosedXML Provider 名称。
@@ -114,6 +114,34 @@ public sealed class ClosedXmlExcelExporter : IExcelExporter, IExcelEntityExporte
 
     /// <inheritdoc />
     public bool Supports(ExcelProviderCapabilities capabilities) => (Capabilities & capabilities) == capabilities;
+
+    /// <inheritdoc />
+    public IReadOnlyList<ExcelFormat> ReadFormats { get; } = new[] { ExcelFormat.Xlsx };
+    /// <inheritdoc />
+    public IReadOnlyList<ExcelFormat> WriteFormats { get; } = new[] { ExcelFormat.Xlsx };
+    /// <inheritdoc />
+    public bool SupportsCompleteWorkbookImport => false;
+    /// <inheritdoc />
+    public bool SupportsBatchImport => false;
+    /// <inheritdoc />
+    public bool SupportsCompleteWorkbookExport => true;
+    /// <inheritdoc />
+    public bool SupportsTrueAsyncIo => true;
+    /// <inheritdoc />
+    public IReadOnlyList<string> Limitations { get; } = new[]
+    {
+        "XLS、XLSB、XLSM、ODS 和加密工作簿在当前 ClosedXML Provider 中明确拒绝。",
+        "公式重新计算受 ClosedXML 函数矩阵限制。"
+    };
+    /// <inheritdoc />
+    public ExcelProviderFeatures Features => ExcelProviderFeatures.TemplateEditing
+        | ExcelProviderFeatures.WorkbookEditing | ExcelProviderFeatures.Tables
+        | ExcelProviderFeatures.AutoFilter | ExcelProviderFeatures.FreezePanes
+        | ExcelProviderFeatures.ConditionalFormatting | ExcelProviderFeatures.NamedRanges
+        | ExcelProviderFeatures.PrintLayout | ExcelProviderFeatures.FormulaText
+        | ExcelProviderFeatures.FormulaCachedValues;
+    /// <inheritdoc />
+    public bool Supports(ExcelProviderFeatures features) => (Features & features) == features;
 
     /// <inheritdoc />
     public void ExportEntity<TEntity>(TEntity entity, ExcelEntityLayout<TEntity> layout, Stream destination,
@@ -673,6 +701,8 @@ public sealed class ClosedXmlExcelExporter : IExcelExporter, IExcelEntityExporte
         ApplyRowHeights(worksheet, request.RowHeight, headerRow, dataRow, rowNumber - 1,
             request.HeaderRows);
         ApplyColumnWidth(worksheet, columns, request.ColumnWidth);
+        ClosedXmlReportWriter.Apply(workbook, worksheet, request);
+        ClosedXmlSheetContentWriter.Apply(workbook, worksheet, request, cancellationToken);
     }
 
     /// <summary>
@@ -923,8 +953,10 @@ public sealed class ClosedXmlExcelExporter : IExcelExporter, IExcelEntityExporte
     /// <param name="request">Workbook 导出请求。</param>
     private static void ValidateRequest(ExcelWorkbookExportRequest request)
     {
+        ExcelSheetContent.Validate(request);
         if (request.Format != ExcelFormat.Xlsx)
             throw Unsupported("ClosedXML Provider 仅支持 XLSX。", BingOfficesStage.Preflight);
+        ClosedXmlReportWriter.Validate(request);
         if (request.Template != null)
             ClosedXmlTemplatePreflight.Validate(request.Template);
         if (request.Charts().Count > 0)

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -585,6 +586,242 @@ public sealed class ClosedXmlProviderTest
     }
 
     /// <summary>
+    /// 验证实体导入选项在 ClosedXML 加载工作簿前执行输入字节限制。
+    /// </summary>
+    [Fact]
+    public void EntityImportOptions_MaxInputBytes_ShouldRejectBeforeClosedXmlLoad()
+    {
+        var layout = ExcelEntity.Layout<EntityInvoice>(builder => builder
+            .Cell("Invoice", "A1", item => item.Title));
+        using var generated = new MemoryStream();
+        new ClosedXmlExcelExporter().ExportEntity(
+            new EntityInvoice { Title = "Resource limit" }, layout, generated);
+        using var source = new MemoryStream(generated.ToArray());
+        IExcelEntityResourceImporter importer = new ClosedXmlExcelImporter();
+        var options = new ExcelEntityImportOptions(
+            new ExcelResourceLimits { MaxInputBytes = 1 });
+
+        var exception = Assert.Throws<BingOfficesResourceLimitException>(() =>
+            importer.ImportEntity(source, layout, options));
+
+        Assert.Equal(BingOfficesErrorCode.ResourceLimitExceeded, exception.Code);
+        Assert.Equal(BingOfficesOperation.Import, exception.Operation);
+        Assert.Equal("ClosedXML", exception.Provider);
+        Assert.Equal(BingOfficesStage.Preflight, exception.Stage);
+        Assert.True(source.CanRead);
+    }
+
+    /// <summary>
+    /// 验证实体列表区域按 Order、PlacementKey 和 ColumnIndex 导出并导入动态字典列。
+    /// </summary>
+    [Fact]
+    public void EntityLayout_DynamicColumns_ShouldPreserveHeadersValuesAndRoundTrip()
+    {
+        var mapping = new ExcelMappingConfiguration
+        {
+            Columns = new List<ExcelColumnConfiguration>
+            {
+                new() { PropertyName = nameof(EntityDynamicLine.Name), Title = "Item" },
+                new() { PropertyName = nameof(EntityDynamicLine.Quantity), Title = "Qty" }
+            },
+            DynamicColumns = new List<ExcelMappingDynamicColumnConfiguration>
+            {
+                new()
+                {
+                    Key = "zone", Title = "Zone", DataTypeName = "string", Order = 0,
+                    PlacementKey = $"before:{nameof(EntityDynamicLine.Quantity)}"
+                },
+                new() { Key = "early", Title = "Early", DataTypeName = "int32", Order = 10 },
+                new() { Key = "late", Title = "Late", DataTypeName = "string", Order = 20 },
+                new()
+                {
+                    Key = "indexed", Title = "Indexed", DataTypeName = "boolean", Order = 30,
+                    ColumnIndex = 5
+                }
+            }
+        };
+        var layout = ExcelEntity.Layout<EntityDynamicRoot>(builder => builder
+            .ListRegion("Dynamic", "B2", root => root.Lines, region => region.Mapping(mapping)));
+        var source = new EntityDynamicRoot
+        {
+            Lines = new List<EntityDynamicLine>
+            {
+                new()
+                {
+                    Name = "A", Quantity = 2,
+                    CustomFields = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["zone"] = "North", ["early"] = 7, ["late"] = "tail", ["indexed"] = true
+                    }
+                }
+            }
+        };
+        using var exported = new MemoryStream();
+
+        new ClosedXmlExcelExporter().ExportEntity(source, layout, exported);
+
+        exported.Position = 0;
+        using (var workbook = new XLWorkbook(exported))
+        {
+            var sheet = workbook.Worksheet("Dynamic");
+            Assert.Equal(new[] { "Item", "Zone", "Qty", "Early", "Late", "Indexed" },
+                sheet.Range("B2:G2").Cells().Select(cell => cell.GetString()));
+            Assert.Equal("A", sheet.Cell("B3").GetString());
+            Assert.Equal("North", sheet.Cell("C3").GetString());
+            Assert.Equal(2d, sheet.Cell("D3").GetDouble());
+            Assert.Equal(7d, sheet.Cell("E3").GetDouble());
+            Assert.Equal("tail", sheet.Cell("F3").GetString());
+            Assert.True(sheet.Cell("G3").GetBoolean());
+        }
+
+        using var input = new MemoryStream(exported.ToArray(), writable: false);
+        var result = new ClosedXmlExcelImporter().ImportEntity(input, layout);
+
+        Assert.True(result.IsSuccess, string.Join(";", result.Errors.Select(error => error.Message)));
+        var line = Assert.Single(result.Entity.Lines);
+        Assert.Equal("A", line.Name);
+        Assert.Equal(2, line.Quantity);
+        Assert.Equal("North", line.CustomFields["zone"]);
+        Assert.Equal(7, line.CustomFields["early"]);
+        Assert.Equal("tail", line.CustomFields["late"]);
+        Assert.Equal(true, line.CustomFields["indexed"]);
+    }
+
+    /// <summary>
+    /// 验证实体动态列复用命名转换器和内置校验绑定。
+    /// </summary>
+    [Fact]
+    public void EntityLayout_DynamicColumns_ShouldApplyConverterAndValidation()
+    {
+        var mapping = new ExcelMappingConfiguration
+        {
+            Columns = new List<ExcelColumnConfiguration>
+            {
+                new() { PropertyName = nameof(EntityDynamicLine.Name), Title = "Item" }
+            },
+            DynamicColumns = new List<ExcelMappingDynamicColumnConfiguration>
+            {
+                new()
+                {
+                    Key = "zone", Title = "Zone", DataTypeName = "string", ConverterName = "entity-title",
+                    PlacementKey = $"before:{nameof(EntityDynamicLine.Quantity)}",
+                    ValidationRules = new List<ExcelMappingDynamicValidationConfiguration>
+                    {
+                        new() { Name = "maxLength", MaxLength = 20 }
+                    }
+                }
+            }
+        };
+        var layout = ExcelEntity.Layout<EntityDynamicRoot>(builder => builder
+            .ListRegion("Dynamic", "A1", root => root.Lines, region => region.Mapping(mapping)));
+        var source = new EntityDynamicRoot
+        {
+            Lines = new List<EntityDynamicLine>
+            {
+                new()
+                {
+                    Name = "A",
+                    CustomFields = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["zone"] = "North"
+                    }
+                }
+            }
+        };
+        using var exported = new MemoryStream();
+        var converters = new[] { new EntityTitleConverter() };
+        new ClosedXmlExcelExporter(converters).ExportEntity(source, layout, exported);
+
+        exported.Position = 0;
+        using (var workbook = new XLWorkbook(exported))
+            Assert.Equal("entity:North", workbook.Worksheet("Dynamic").Cell("B2").GetString());
+
+        using var input = new MemoryStream(exported.ToArray(), writable: false);
+        var result = new ClosedXmlExcelImporter(valueConverters: converters).ImportEntity(input, layout);
+        Assert.True(result.IsSuccess, string.Join(";", result.Errors.Select(error => error.Message)));
+        Assert.Equal("North", Assert.Single(result.Entity.Lines).CustomFields["zone"]);
+
+        var invalid = new EntityDynamicRoot
+        {
+            Lines = new List<EntityDynamicLine>
+            {
+                new()
+                {
+                    Name = "B",
+                    CustomFields = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["zone"] = new string('x', 21)
+                    }
+                }
+            }
+        };
+        using var invalidOutput = new MemoryStream();
+        Assert.Throws<BingOfficesExportException>(() =>
+            new ClosedXmlExcelExporter(converters).ExportEntity(invalid, layout, invalidOutput));
+        Assert.Empty(invalidOutput.ToArray());
+    }
+
+    /// <summary>
+    /// 验证实体动态列与固定列冲突或超出区域边界时在写入前失败。
+    /// </summary>
+    [Fact]
+    public void EntityLayout_DynamicColumns_ShouldRejectCollisionAndOverflowBeforeWriting()
+    {
+        var collisionMapping = new ExcelMappingConfiguration
+        {
+            Columns = new List<ExcelColumnConfiguration>
+            {
+                new() { PropertyName = nameof(EntityDynamicLine.Name), Title = "Item" },
+                new() { PropertyName = nameof(EntityDynamicLine.Quantity), Title = "Qty" }
+            },
+            DynamicColumns = new List<ExcelMappingDynamicColumnConfiguration>
+            {
+                new() { Key = "zone", Title = "Zone", DataTypeName = "string", ColumnIndex = 1 }
+            }
+        };
+        var entity = new EntityDynamicRoot
+        {
+            Lines = new List<EntityDynamicLine>
+            {
+                new()
+                {
+                    Name = "A", Quantity = 1,
+                    CustomFields = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["zone"] = "North"
+                    }
+                }
+            }
+        };
+        var collisionLayout = ExcelEntity.Layout<EntityDynamicRoot>(builder => builder
+            .ListRegion("Dynamic", "A1", root => root.Lines,
+                region => region.Mapping(collisionMapping)));
+        using var collisionOutput = new MemoryStream();
+        var collision = Assert.Throws<BingOfficesConfigurationException>(() =>
+            new ClosedXmlExcelExporter().ExportEntity(entity, collisionLayout, collisionOutput));
+        Assert.Equal(BingOfficesStage.Plan, collision.Stage);
+        Assert.Empty(collisionOutput.ToArray());
+
+        var overflowMapping = new ExcelMappingConfiguration
+        {
+            Columns = collisionMapping.Columns,
+            DynamicColumns = new List<ExcelMappingDynamicColumnConfiguration>
+            {
+                new() { Key = "zone", Title = "Zone", DataTypeName = "string" }
+            }
+        };
+        var overflowLayout = ExcelEntity.Layout<EntityDynamicRoot>(builder => builder
+            .ListRegion("Dynamic", "A1", root => root.Lines,
+                region => region.End("B2").Mapping(overflowMapping)));
+        using var overflowOutput = new MemoryStream();
+        var overflow = Assert.Throws<BingOfficesConfigurationException>(() =>
+            new ClosedXmlExcelExporter().ExportEntity(entity, overflowLayout, overflowOutput));
+        Assert.Equal(BingOfficesStage.Plan, overflow.Stage);
+        Assert.Contains("列表区域超出声明边界", overflow.Message);
+        Assert.Empty(overflowOutput.ToArray());
+    }
+
+    /// <summary>
     /// 验证实体模板导入前检查合并结构并保留模板流。
     /// </summary>
     [Fact]
@@ -887,6 +1124,22 @@ public sealed class ClosedXmlProviderTest
     }
 
     /// <summary>
+    /// 验证新增 XLSB 枚举在 ClosedXML 中也不会静默降级为 XLSX。
+    /// </summary>
+    [Fact]
+    public void UnsupportedXlsb_ShouldFailBeforeWriting()
+    {
+        var request = ExcelExport.Workbook(workbook => workbook.Format(ExcelFormat.Xlsb)
+            .AddSheet("People", new[] { new Person { Name = "invalid" } }));
+        using var destination = new MemoryStream();
+        var exception = Assert.Throws<BingOfficesUnsupportedFeatureException>(() =>
+            new ClosedXmlExcelExporter().Export(request, destination));
+        Assert.Equal("ClosedXML", exception.Provider);
+        Assert.Equal(BingOfficesStage.Preflight, exception.Stage);
+        Assert.Empty(destination.ToArray());
+    }
+
+    /// <summary>
     /// 验证资源限制在 ClosedXML 加载前拒绝输入。
     /// </summary>
     [Fact]
@@ -959,30 +1212,206 @@ public sealed class ClosedXmlProviderTest
     }
 
     /// <summary>
-    /// 验证 Failure Workbook 策略在 ClosedXML 加载前拒绝请求。
+    /// 验证 AnnotatedOriginal 失败工作簿保留输入内容并写入错误汇总和批注。
     /// </summary>
     [Fact]
-    public void FailureWorkbook_ShouldFailBeforeClosedXmlLoad()
+    public void FailureWorkbook_AnnotatedOriginal_ShouldPreserveInputAndWriteDiagnostics()
     {
-        var export = ExcelExport.Workbook(workbook => workbook.AddSheet("People",
-            new[] { new Person { Name = "input" } }));
         using var source = new MemoryStream();
-        new ClosedXmlExcelExporter().Export(export, source);
+        using (var workbook = new XLWorkbook())
+        {
+            var data = workbook.Worksheets.Add("Data");
+            data.Cell("A1").Value = nameof(ErrorNumberRow.Amount);
+            data.Cell("A2").Value = "invalid";
+            workbook.Worksheets.Add("Preserved").Cell("C3").Value = "keep";
+            workbook.SaveAs(source);
+        }
         source.Position = 0;
         using var failureOutput = new MemoryStream();
-        var request = ExcelImport.Workbook<PeopleWorkbook>(workbook => workbook
+        var request = ExcelImport.Workbook<ErrorNumberWorkbook>(workbook => workbook
             .FailureWorkbook(new ExcelImportFailureOptions
             {
                 Mode = ExcelImportFailureWorkbookMode.AnnotatedOriginal,
                 Destination = failureOutput
             })
-            .Sheet<Person>("People", root => root.People));
+            .Sheet<ErrorNumberRow>("Data", root => root.Rows));
 
-        var exception = Assert.Throws<BingOfficesUnsupportedFeatureException>(() =>
+        var result = new ClosedXmlExcelImporter().Import(source, request);
+
+        Assert.False(result.IsSuccess);
+        failureOutput.Position = 0;
+        using var failureWorkbook = new XLWorkbook(failureOutput);
+        Assert.Equal("invalid", failureWorkbook.Worksheet("Data").Cell("A2").GetString());
+        Assert.Equal("keep", failureWorkbook.Worksheet("Preserved").Cell("C3").GetString());
+        Assert.True(failureWorkbook.Worksheet("Data").Cell("A2").HasComment);
+        Assert.Contains(result.Errors.Single().Message,
+            failureWorkbook.Worksheet("Data").Cell("A2").GetComment().ToString(),
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("Bing.Offices", failureWorkbook.Worksheet("Data").Cell("A2").GetComment().Author);
+        Assert.Equal("Code", failureWorkbook.Worksheet("_ImportErrors").Cell("A1").GetString());
+        Assert.Equal(2, failureWorkbook.Worksheet("_ImportErrors").Cell("D2").GetValue<int>());
+    }
+
+    /// <summary>
+    /// 验证失败批注冲突策略符合公共契约。
+    /// </summary>
+    /// <param name="policy">待验证的冲突或不支持功能处理策略。</param>
+    /// <param name="expectedText">预期保留的批注文本或错误文本标记。</param>
+    /// <param name="expectedAuthor">预期批注作者。</param>
+    /// <param name="shouldThrow">是否预期抛出配置异常。</param>
+    [Theory]
+    [InlineData(ExcelImportCommentConflictPolicy.Preserve, "existing", "source", false)]
+    [InlineData(ExcelImportCommentConflictPolicy.Append, "invalid", "source", false)]
+    [InlineData(ExcelImportCommentConflictPolicy.Replace, "invalid", "Bing.Offices", false)]
+    [InlineData(ExcelImportCommentConflictPolicy.Fail, null, null, true)]
+    public void FailureWorkbook_AnnotatedOriginal_ShouldHonorCommentConflictPolicy(
+        ExcelImportCommentConflictPolicy policy, string expectedText, string expectedAuthor, bool shouldThrow)
+    {
+        using var source = new MemoryStream();
+        using (var workbook = new XLWorkbook())
+        {
+            var sheet = workbook.Worksheets.Add("Data");
+            sheet.Cell("A1").Value = nameof(ErrorNumberRow.Amount);
+            sheet.Cell("A2").Value = "invalid";
+            var comment = sheet.Cell("A2").CreateComment();
+            comment.Author = "source";
+            comment.AddText("existing");
+            workbook.SaveAs(source);
+        }
+        source.Position = 0;
+        using var destination = new MemoryStream();
+        var request = ExcelImport.Workbook<ErrorNumberWorkbook>(workbook => workbook
+            .FailureWorkbook(new ExcelImportFailureOptions
+            {
+                Mode = ExcelImportFailureWorkbookMode.AnnotatedOriginal,
+                Destination = destination,
+                CommentConflictPolicy = policy
+            })
+            .Sheet<ErrorNumberRow>("Data", root => root.Rows));
+
+        ExcelWorkbookImportResult<ErrorNumberWorkbook> result = null;
+        Action action = () => result = new ClosedXmlExcelImporter().Import(source, request);
+
+        if (shouldThrow)
+        {
+            var exception = Assert.Throws<BingOfficesConfigurationException>(action);
+            Assert.Equal(BingOfficesStage.Plan, exception.Stage);
+            Assert.Equal(0, destination.Length);
+            return;
+        }
+        action();
+        destination.Position = 0;
+        using var output = new XLWorkbook(destination);
+        var outputComment = output.Worksheet("Data").Cell("A2").GetComment();
+        Assert.Contains(expectedText == "invalid" ? result.Errors.Single().Message : expectedText,
+            outputComment.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(expectedAuthor, outputComment.Author);
+    }
+
+    /// <summary>
+    /// 验证 ErrorRowsOnly 仅复制表头和失败行，并附加来源与错误列。
+    /// </summary>
+    [Fact]
+    public void FailureWorkbook_ErrorRowsOnly_ShouldCopyOnlyFailureRows()
+    {
+        using var source = new MemoryStream();
+        using (var workbook = new XLWorkbook())
+        {
+            var sheet = workbook.Worksheets.Add("Data");
+            sheet.Cell("A1").Value = nameof(ErrorNumberRow.Amount);
+            sheet.Cell("A2").Value = 42;
+            sheet.Cell("A3").Value = "invalid";
+            workbook.SaveAs(source);
+        }
+        source.Position = 0;
+        using var destination = new MemoryStream();
+        var request = ExcelImport.Workbook<ErrorNumberWorkbook>(workbook => workbook
+            .FailureWorkbook(new ExcelImportFailureOptions
+            {
+                Mode = ExcelImportFailureWorkbookMode.ErrorRowsOnly,
+                Destination = destination
+            })
+            .Sheet<ErrorNumberRow>("Data", root => root.Rows));
+
+        var result = new ClosedXmlExcelImporter().Import(source, request);
+
+        Assert.False(result.IsSuccess);
+        destination.Position = 0;
+        using var output = new XLWorkbook(destination);
+        var outputSheet = output.Worksheet("Data");
+        Assert.Equal(nameof(ErrorNumberRow.Amount), outputSheet.Cell("A1").GetString());
+        Assert.Equal("invalid", outputSheet.Cell("A2").GetString());
+        Assert.Equal("__SourceSheet", outputSheet.Cell("B1").GetString());
+        Assert.Equal(3, outputSheet.Cell("C2").GetValue<int>());
+        Assert.Equal("Data", outputSheet.Cell("B2").GetString());
+        Assert.True(outputSheet.Cell("A3").IsEmpty());
+        Assert.True(output.TryGetWorksheet("_ImportErrors", out _));
+    }
+
+    /// <summary>
+    /// 验证异步导入通过真实异步写入提交失败工作簿，且不关闭调用方流。
+    /// </summary>
+    [Fact]
+    public async Task FailureWorkbook_ImportAsync_ShouldUseAsyncDestinationAndKeepStreamsOpen()
+    {
+        using var source = new MemoryStream();
+        using (var workbook = new XLWorkbook())
+        {
+            var sheet = workbook.Worksheets.Add("Data");
+            sheet.Cell("A1").Value = nameof(ErrorNumberRow.Amount);
+            sheet.Cell("A2").Value = "invalid";
+            workbook.SaveAs(source);
+        }
+        source.Position = 0;
+        await using var destination = new AsyncOnlyWriteStream();
+        var request = ExcelImport.Workbook<ErrorNumberWorkbook>(workbook => workbook
+            .FailureWorkbook(new ExcelImportFailureOptions
+            {
+                Mode = ExcelImportFailureWorkbookMode.AnnotatedOriginal,
+                Destination = destination
+            })
+            .Sheet<ErrorNumberRow>("Data", root => root.Rows));
+
+        var result = await new ClosedXmlExcelImporter().ImportAsync(source, request);
+
+        Assert.False(result.IsSuccess);
+        Assert.True(source.CanRead);
+        Assert.True(destination.CanWrite);
+        using var output = new XLWorkbook(new MemoryStream(destination.ToArray(), writable: false));
+        Assert.True(output.TryGetWorksheet("_ImportErrors", out _));
+    }
+
+    /// <summary>
+    /// 验证失败工作簿序列化超限不会污染调用方目标流。
+    /// </summary>
+    [Fact]
+    public void FailureWorkbook_MaxSerializedBytes_ShouldRejectBeforeDestinationCopy()
+    {
+        using var source = new MemoryStream();
+        using (var workbook = new XLWorkbook())
+        {
+            var sheet = workbook.Worksheets.Add("Data");
+            sheet.Cell("A1").Value = nameof(ErrorNumberRow.Amount);
+            sheet.Cell("A2").Value = "invalid";
+            workbook.SaveAs(source);
+        }
+        source.Position = 0;
+        using var destination = new MemoryStream();
+        var request = ExcelImport.Workbook<ErrorNumberWorkbook>(workbook => workbook
+            .FailureWorkbook(new ExcelImportFailureOptions
+            {
+                Mode = ExcelImportFailureWorkbookMode.AnnotatedOriginal,
+                Destination = destination,
+                MaxSerializedBytes = 1
+            })
+            .Sheet<ErrorNumberRow>("Data", root => root.Rows));
+
+        var exception = Assert.Throws<BingOfficesResourceLimitException>(() =>
             new ClosedXmlExcelImporter().Import(source, request));
 
-        Assert.Equal(BingOfficesStage.Preflight, exception.Stage);
-        Assert.Empty(failureOutput.ToArray());
+        Assert.Equal(BingOfficesStage.Serialize, exception.Stage);
+        Assert.Equal(BingOfficesOperation.Import, exception.Operation);
+        Assert.Equal(0, destination.Length);
     }
 
     /// <summary>
@@ -1024,6 +1453,9 @@ public sealed class ClosedXmlProviderTest
             new[] { new Person { Name = "input" } }));
         using var source = new MemoryStream();
         new ClosedXmlExcelExporter().Export(export, source);
+        source.Position = 0;
+        using (var archive = new ZipArchive(source, ZipArchiveMode.Update, leaveOpen: true))
+            archive.CreateEntry("xl/charts/failure-workbook-chart.xml");
         source.Position = 0;
         using var failureOutput = new MemoryStream();
         var observer = new RecordingObserver(throwOnObserve: true);
@@ -1175,6 +1607,139 @@ public sealed class ClosedXmlProviderTest
         }));
 
         Assert.Equal(new[] { "parallel-0", "parallel-1", "parallel-2", "parallel-3" }, names);
+    }
+
+    /// <summary>
+    /// 验证各原生比较运算符的通过与失败边界。
+    /// </summary>
+    /// <param name="allowedValues">待验证的原生校验类型。</param>
+    [Theory]
+    [InlineData(XLAllowedValues.WholeNumber)]
+    [InlineData(XLAllowedValues.Decimal)]
+    [InlineData(XLAllowedValues.TextLength)]
+    [InlineData(XLAllowedValues.Date)]
+    [InlineData(XLAllowedValues.Time)]
+    public void WorkbookValidationComparisonOperators_ShouldMatchClosedXmlRuleSemantics(
+        XLAllowedValues allowedValues)
+    {
+        foreach (var operation in new[]
+                 {
+                     XLOperator.Between, XLOperator.NotBetween, XLOperator.EqualTo,
+                     XLOperator.NotEqualTo, XLOperator.GreaterThan, XLOperator.LessThan,
+                     XLOperator.EqualOrGreaterThan, XLOperator.EqualOrLessThan
+                 })
+        {
+            using var workbook = new XLWorkbook();
+            var worksheet = workbook.Worksheets.Add("Data");
+            var validation = worksheet.Range("A2").CreateDataValidation();
+            ConfigureValidation(validation, allowedValues, operation);
+            var (validRaw, validText, invalidRaw, invalidText) = GetComparisonValues(allowedValues, operation);
+
+            var valid = ClosedXmlWorkbookValidationPipeline.Validate(worksheet, worksheet.Cell("A2"), validRaw,
+                validText, CultureInfo.InvariantCulture, isDate1904: allowedValues == XLAllowedValues.Date,
+                CancellationToken.None);
+            Assert.True(valid.IsValid, $"{allowedValues}/{operation}: {valid.Message}");
+
+            var invalid = ClosedXmlWorkbookValidationPipeline.Validate(worksheet, worksheet.Cell("A2"), invalidRaw,
+                invalidText, CultureInfo.InvariantCulture, isDate1904: allowedValues == XLAllowedValues.Date,
+                CancellationToken.None);
+            Assert.False(invalid.IsValid, $"{allowedValues}/{operation} must reject its invalid boundary.");
+            Assert.False(invalid.IsUnsupported);
+        }
+    }
+
+    /// <summary>
+    /// 验证空值策略和列表区域解析均使用明确的 Workbook 规则边界。
+    /// </summary>
+    [Fact]
+    public void WorkbookValidationBlankAndListRules_ShouldUseExplicitPolicies()
+    {
+        using var workbook = new XLWorkbook();
+        var worksheet = workbook.Worksheets.Add("Data");
+        var lookup = workbook.Worksheets.Add("Lookup");
+        lookup.Cell("A1").Value = "A";
+        lookup.Cell("A2").Value = "B";
+        worksheet.Cell("C1").Value = "C";
+        worksheet.Cell("C2").Value = "D";
+
+        var blankValidation = worksheet.Range("A2").CreateDataValidation();
+        blankValidation.AllowedValues = XLAllowedValues.WholeNumber;
+        blankValidation.Operator = XLOperator.EqualTo;
+        blankValidation.Value = "1";
+        blankValidation.IgnoreBlanks = true;
+        Assert.True(ClosedXmlWorkbookValidationPipeline.Validate(worksheet, worksheet.Cell("A2"), null,
+            string.Empty, CultureInfo.InvariantCulture, false, CancellationToken.None).IsValid);
+        blankValidation.IgnoreBlanks = false;
+        var blankRejected = ClosedXmlWorkbookValidationPipeline.Validate(worksheet, worksheet.Cell("A2"), null,
+            string.Empty, CultureInfo.InvariantCulture, false, CancellationToken.None);
+        Assert.False(blankRejected.IsValid);
+        Assert.Equal("不允许 Workbook 校验目标为空。", blankRejected.Message);
+
+        blankValidation.ClearRanges();
+        var listValidation = worksheet.Range("A2").CreateDataValidation();
+        listValidation.AllowedValues = XLAllowedValues.List;
+        listValidation.Value = "Lookup!$A$1:$A$2";
+        Assert.True(ClosedXmlWorkbookValidationPipeline.Validate(worksheet, worksheet.Cell("A2"), "B", "B",
+            CultureInfo.InvariantCulture, false, CancellationToken.None).IsValid);
+
+        listValidation.ClearRanges();
+        var localListValidation = worksheet.Range("A2").CreateDataValidation();
+        localListValidation.AllowedValues = XLAllowedValues.List;
+        localListValidation.Value = "$C$1:$C$2";
+        Assert.True(ClosedXmlWorkbookValidationPipeline.Validate(worksheet, worksheet.Cell("A2"), "D", "D",
+            CultureInfo.InvariantCulture, false, CancellationToken.None).IsValid);
+    }
+
+    /// <summary>
+    /// 验证无法解析的引用返回不支持结果。
+    /// </summary>
+    /// <param name="allowedValues">待验证的原生校验类型。</param>
+    /// <param name="expression">待验证的原生引用表达式。</param>
+    [Theory]
+    [InlineData(XLAllowedValues.List, "KnownValues")]
+    [InlineData(XLAllowedValues.List, "[External.xlsx]Lookup!A1:A2")]
+    [InlineData(XLAllowedValues.List, "MissingSheet!A1:A2")]
+    [InlineData(XLAllowedValues.Custom, "MissingName=1")]
+    [InlineData(XLAllowedValues.Custom, "MissingSheet!A2=1")]
+    public void WorkbookValidationUnresolvableReferences_ShouldBeExplicitlyUnsupported(
+        XLAllowedValues allowedValues, string expression)
+    {
+        using var workbook = new XLWorkbook();
+        var worksheet = workbook.Worksheets.Add("Data");
+        var validation = worksheet.Range("A2").CreateDataValidation();
+        validation.AllowedValues = allowedValues;
+        validation.Value = expression;
+
+        var result = ClosedXmlWorkbookValidationPipeline.Validate(worksheet, worksheet.Cell("A2"), "1", "1",
+            CultureInfo.InvariantCulture, false, CancellationToken.None);
+
+        Assert.False(result.IsValid);
+        Assert.True(result.IsUnsupported);
+        Assert.Equal("Workbook Data Validation 规则类型或公式暂不支持。", result.Message);
+    }
+
+    /// <summary>
+    /// 验证单单元格比较公式保留为受支持的 Custom 规则，并且不依赖当前值回退。
+    /// </summary>
+    [Fact]
+    public void WorkbookValidationSimpleCustomComparison_ShouldValidateResolvedCellValue()
+    {
+        using var workbook = new XLWorkbook();
+        var worksheet = workbook.Worksheets.Add("Data");
+        var validation = worksheet.Range("A2").CreateDataValidation();
+        validation.AllowedValues = XLAllowedValues.Custom;
+        validation.Value = "$A$2>=5";
+        worksheet.Cell("A2").Value = "5";
+
+        var valid = ClosedXmlWorkbookValidationPipeline.Validate(worksheet, worksheet.Cell("A2"), "5", "5",
+            CultureInfo.InvariantCulture, false, CancellationToken.None);
+        Assert.True(valid.IsValid, valid.Message);
+
+        worksheet.Cell("A2").Value = "4";
+        var invalid = ClosedXmlWorkbookValidationPipeline.Validate(worksheet, worksheet.Cell("A2"), "4", "4",
+            CultureInfo.InvariantCulture, false, CancellationToken.None);
+        Assert.False(invalid.IsValid);
+        Assert.False(invalid.IsUnsupported);
     }
 
     /// <summary>
@@ -2118,6 +2683,58 @@ public sealed class ClosedXmlProviderTest
     }
 
     /// <summary>
+    /// 验证实体关系绑定不会丢失子项动态列值。
+    /// </summary>
+    [Fact]
+    public void EntityRelationsWithDynamicColumns_ShouldRoundTripDynamicValues()
+    {
+        var childMapping = new ExcelMappingConfiguration
+        {
+            Columns = new List<ExcelColumnConfiguration>
+            {
+                new() { PropertyName = nameof(EntityRelationChild.ParentId), Title = "ParentId" },
+                new() { PropertyName = nameof(EntityRelationChild.Name), Title = "Name" }
+            },
+            DynamicColumns = new List<ExcelMappingDynamicColumnConfiguration>
+            {
+                new() { Key = "zone", Title = "Zone", DataTypeName = "string" }
+            }
+        };
+        var layout = ExcelEntity.Layout<EntityRelationRoot>(builder => builder
+            .ListRegion("Parents", "A1", root => root.Parents)
+            .ListRegion("Children", "A1", root => root.Children,
+                region => region.Mapping(childMapping))
+            .HasMany(root => root.Parents, root => root.Children,
+                parent => parent.Id, child => child.ParentId,
+                parent => parent.Children, StringComparer.OrdinalIgnoreCase));
+        var entity = new EntityRelationRoot
+        {
+            Parents = new List<EntityRelationParent> { new() { Id = "P-1" } },
+            Children = new List<EntityRelationChild>
+            {
+                new()
+                {
+                    ParentId = "P-1", Name = "child",
+                    CustomFields = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["zone"] = "North"
+                    }
+                }
+            }
+        };
+        using var output = new MemoryStream();
+        new ClosedXmlExcelExporter().ExportEntity(entity, layout, output);
+        using var input = new MemoryStream(output.ToArray(), writable: false);
+
+        var result = new ClosedXmlExcelImporter().ImportEntity(input, layout);
+
+        Assert.True(result.IsSuccess, string.Join(";", result.Errors.Select(error => error.Message)));
+        var child = Assert.Single(Assert.Single(result.Entity.Parents).Children);
+        Assert.Equal("child", child.Name);
+        Assert.Equal("North", child.CustomFields["zone"]);
+    }
+
+    /// <summary>
     /// 验证关系缺失父项报告结构化错误并遵守异步取消。
     /// </summary>
     [Fact]
@@ -2405,6 +3022,39 @@ public sealed class ClosedXmlProviderTest
     }
 
     /// <summary>
+    /// 表示动态列表区域测试的根模型。
+    /// </summary>
+    private sealed class EntityDynamicRoot
+    {
+        /// <summary>
+        /// 获取或设置动态明细行集合。
+        /// </summary>
+        public List<EntityDynamicLine> Lines { get; set; } = new();
+    }
+
+    /// <summary>
+    /// 表示包含固定列和动态字典列的实体明细行。
+    /// </summary>
+    private sealed class EntityDynamicLine
+    {
+        /// <summary>
+        /// 获取或设置项目名称。
+        /// </summary>
+        public string Name { get; set; }
+
+        /// <summary>
+        /// 获取或设置数量。
+        /// </summary>
+        public int Quantity { get; set; }
+
+        /// <summary>
+        /// 获取或设置动态列值。
+        /// </summary>
+        [DynamicColumn]
+        public IDictionary<string, object> CustomFields { get; set; }
+    }
+
+    /// <summary>
     /// 表示实体关系测试的根模型。
     /// </summary>
     private sealed class EntityRelationRoot
@@ -2450,6 +3100,13 @@ public sealed class ClosedXmlProviderTest
         /// 获取或设置子项名称。
         /// </summary>
         public string Name { get; set; }
+
+        /// <summary>
+        /// 获取或设置子项动态列字典。
+        /// </summary>
+        [DynamicColumn]
+        public IDictionary<string, object> CustomFields { get; set; } =
+            new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -2519,7 +3176,7 @@ public sealed class ClosedXmlProviderTest
         private readonly bool _throwOnObserve;
 
         /// <summary>
-        /// 初始化异常通知记录器。
+        /// 初始化一个 <see cref="RecordingObserver"/> 类型的实例。
         /// </summary>
         /// <param name="throwOnObserve">是否在通知后故意抛出异常。</param>
         public RecordingObserver(bool throwOnObserve = false) => _throwOnObserve = throwOnObserve;
@@ -2555,7 +3212,7 @@ public sealed class ClosedXmlProviderTest
         private readonly BingOfficesFileCommitException _exception;
 
         /// <summary>
-        /// 初始化失败提交器。
+        /// 初始化一个 <see cref="ThrowingCommitter"/> 类型的实例。
         /// </summary>
         /// <param name="exception">提交时要抛出的异常。</param>
         public ThrowingCommitter(BingOfficesFileCommitException exception) => _exception = exception;
@@ -2580,7 +3237,7 @@ public sealed class ClosedXmlProviderTest
         private readonly IExcelMappingPlanFactory _inner;
 
         /// <summary>
-        /// 初始化计数映射计划工厂。
+        /// 初始化一个 <see cref="CountingMappingPlanFactory"/> 类型的实例。
         /// </summary>
         /// <param name="inner">实际映射计划工厂。</param>
         public CountingMappingPlanFactory(IExcelMappingPlanFactory inner) =>
@@ -2631,7 +3288,7 @@ public sealed class ClosedXmlProviderTest
         private readonly MemoryStream _inner;
 
         /// <summary>
-        /// 初始化不可定位读取流。
+        /// 初始化一个 <see cref="TrackingNonSeekableReadStream"/> 类型的实例。
         /// </summary>
         /// <param name="bytes">要读取的输入字节。</param>
         public TrackingNonSeekableReadStream(byte[] bytes) => _inner = new MemoryStream(bytes, writable: false);
@@ -2685,6 +3342,79 @@ public sealed class ClosedXmlProviderTest
         public override void Flush() { }
         /// <inheritdoc />
         public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
+    /// <summary>
+    /// 只允许异步写入的内存流，用于拒绝异步 API 内的同步写入回退。
+    /// </summary>
+    private sealed class AsyncOnlyWriteStream : Stream
+    {
+        /// <summary>
+        /// 保存异步写入内容的内存流，由测试包装流负责释放。
+        /// </summary>
+        private readonly MemoryStream _inner = new();
+
+        /// <summary>
+        /// 获取已写入内容的字节副本。
+        /// </summary>
+        /// <returns>当前写入内容的独立字节数组。</returns>
+        internal byte[] ToArray() => _inner.ToArray();
+
+        /// <inheritdoc />
+        public override bool CanRead => false;
+        /// <inheritdoc />
+        public override bool CanSeek => false;
+        /// <inheritdoc />
+        public override bool CanWrite => true;
+        /// <inheritdoc />
+        public override long Length => _inner.Length;
+        /// <inheritdoc />
+        public override long Position
+        {
+            get => _inner.Position;
+            set => throw new NotSupportedException();
+        }
+
+        /// <inheritdoc />
+        public override void Flush() => throw new NotSupportedException();
+
+        /// <inheritdoc />
+        public override Task FlushAsync(CancellationToken cancellationToken)
+            => _inner.FlushAsync(cancellationToken);
+
+        /// <inheritdoc />
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer,
+            CancellationToken cancellationToken = default)
+            => _inner.WriteAsync(buffer, cancellationToken);
+
+        /// <inheritdoc />
+        public override Task WriteAsync(byte[] buffer, int offset, int count,
+            CancellationToken cancellationToken)
+            => _inner.WriteAsync(buffer, offset, count, cancellationToken);
+
+        /// <inheritdoc />
+        public override void Write(byte[] buffer, int offset, int count)
+            => throw new NotSupportedException("不允许同步写入。");
+
+        /// <inheritdoc />
+        public override int Read(byte[] buffer, int offset, int count)
+            => throw new NotSupportedException();
+
+        /// <inheritdoc />
+        public override long Seek(long offset, SeekOrigin origin)
+            => throw new NotSupportedException();
+
+        /// <inheritdoc />
+        public override void SetLength(long value)
+            => throw new NotSupportedException();
+
+        /// <inheritdoc />
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+                _inner.Dispose();
+            base.Dispose(disposing);
+        }
     }
 
     /// <summary>
@@ -2803,6 +3533,68 @@ public sealed class ClosedXmlProviderTest
             document.Save(writer, System.Xml.Linq.SaveOptions.DisableFormatting);
         }
         stream.Position = 0;
+    }
+
+    /// <summary>
+    /// 为管线直接测试配置与 ClosedXML 保存格式一致的原生比较规则。
+    /// </summary>
+    /// <param name="validation">待配置的原生校验规则。</param>
+    /// <param name="allowedValues">待验证的原生校验类型。</param>
+    /// <param name="operation">待验证的比较运算符。</param>
+    private static void ConfigureValidation(IXLDataValidation validation, XLAllowedValues allowedValues,
+        XLOperator operation)
+    {
+        validation.AllowedValues = allowedValues;
+        validation.Operator = operation;
+        validation.MinValue = allowedValues == XLAllowedValues.Time ? "0.5" : "5";
+        validation.MaxValue = allowedValues == XLAllowedValues.Time ? "0.75" : "10";
+        validation.Value = validation.MinValue;
+        validation.IgnoreBlanks = false;
+    }
+
+    /// <summary>
+    /// 创建指定比较规则的通过值和失败值。
+    /// </summary>
+    /// <param name="allowedValues">待验证的原生校验类型。</param>
+    /// <param name="operation">待验证的比较运算符。</param>
+    /// <returns>分别用于通过与失败场景的原始值及文本表示。</returns>
+    private static (object ValidRaw, string ValidText, object InvalidRaw, string InvalidText) GetComparisonValues(
+        XLAllowedValues allowedValues, XLOperator operation)
+    {
+        var (valid, invalid) = operation switch
+        {
+            XLOperator.Between => (5m, 11m),
+            XLOperator.NotBetween => (11m, 5m),
+            XLOperator.EqualTo => (5m, 6m),
+            XLOperator.NotEqualTo => (6m, 5m),
+            XLOperator.GreaterThan => (6m, 5m),
+            XLOperator.LessThan => (4m, 5m),
+            XLOperator.EqualOrGreaterThan => (5m, 4m),
+            XLOperator.EqualOrLessThan => (5m, 6m),
+            _ => throw new ArgumentOutOfRangeException(nameof(operation), operation, null)
+        };
+        if (allowedValues == XLAllowedValues.Time)
+        {
+            var timeValid = DateTime.MinValue.Add(TimeSpan.FromDays((double)(valid / 10m)));
+            var timeInvalid = DateTime.MinValue.Add(TimeSpan.FromDays((double)(invalid / 10m)));
+            return (timeValid, timeValid.ToString("HH:mm:ss", CultureInfo.InvariantCulture), timeInvalid,
+                timeInvalid.ToString("HH:mm:ss", CultureInfo.InvariantCulture));
+        }
+        if (allowedValues == XLAllowedValues.Date)
+        {
+            var dateValid = new DateTime(1904, 1, 1).AddDays((double)valid);
+            var dateInvalid = new DateTime(1904, 1, 1).AddDays((double)invalid);
+            return (dateValid, dateValid.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), dateInvalid,
+                dateInvalid.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        }
+        if (allowedValues == XLAllowedValues.TextLength)
+        {
+            var validText = new string('a', (int)valid);
+            var invalidText = new string('a', (int)invalid);
+            return (validText, validText, invalidText, invalidText);
+        }
+        return (valid, valid.ToString(CultureInfo.InvariantCulture), invalid,
+            invalid.ToString(CultureInfo.InvariantCulture));
     }
 
     /// <summary>

@@ -7,6 +7,11 @@
 
   <Import Project="..\..\framework.props" />
 
+  <ItemGroup>
+    <Compile Include="..\provider-shared\ExcelSheetContent.cs"
+             Link="Bing\Offices\Exports\ExcelSheetContent.cs" />
+  </ItemGroup>
+
   <PropertyGroup>
     <PackageTags>bing;dotnetcore;excel;closedxml;</PackageTags>
   </PropertyGroup>
@@ -17,6 +22,7 @@
 
   <ItemGroup>
     <Compile Include="..\provider-shared\ExcelXlsxZipPreflight.cs" Link="Bing\Offices\Internals\ExcelXlsxZipPreflight.cs" />
+    <Compile Include="..\provider-shared\ExcelReportPreflight.cs" Link="Bing\Offices\Internals\ExcelReportPreflight.cs" />
     <PackageReference Include="ClosedXML" Version="$(ClosedXmlPackageVersion)" />
   </ItemGroup>
 
