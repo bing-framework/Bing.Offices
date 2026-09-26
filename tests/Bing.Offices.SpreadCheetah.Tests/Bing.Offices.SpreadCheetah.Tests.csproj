@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="..\..\common.tests.props" />
+
+  <PropertyGroup>
+    <TargetFrameworks>net6.0;net8.0</TargetFrameworks>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NPOI" Version="2.7.4" PrivateAssets="all" />
+    <ProjectReference Include="..\..\src\Bing.Offices.SpreadCheetah\Bing.Offices.SpreadCheetah.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>Bing.Offices.SpreadCheetah</AssemblyName>
+    <PackageId>Bing.Offices.SpreadCheetah</PackageId>
+    <Description>Bing.Offices 的 SpreadCheetah 流式 XLSX Provider。</Description>
+  </PropertyGroup>
+
+  <Import Project="..\..\framework.props" />
+
+  <ItemGroup>
+    <Compile Include="..\provider-shared\ExcelReportPreflight.cs"
+             Link="Bing\Offices\Internals\ExcelReportPreflight.cs" />
+    <Compile Include="..\provider-shared\ExcelSheetContent.cs"
+             Link="Bing\Offices\Exports\ExcelSheetContent.cs" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <PackageTags>bing;dotnetcore;aspnetcore;excel;xlsx;streaming;</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Bing.Offices.Core\Bing.Offices.Core.csproj" />
+    <PackageReference Include="SpreadCheetah" Version="1.28.0" />
+  </ItemGroup>
+
+  <ItemGroup Condition=" '$(TargetFramework)' == 'net6.0' ">
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="6.0.0" />
+  </ItemGroup>
+
+  <ItemGroup Condition=" '$(TargetFramework)' == 'net8.0' ">
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.0" />
+  </ItemGroup>
+</Project>
