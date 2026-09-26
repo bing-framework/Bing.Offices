@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="..\..\common.tests.props" />
+  <PropertyGroup>
+    <TargetFrameworks>net6.0;net8.0</TargetFrameworks>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Bing.Offices.Abstractions\Bing.Offices.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\Bing.Offices.Core\Bing.Offices.Core.csproj" />
+    <ProjectReference Include="..\..\src\Bing.Offices.Npoi\Bing.Offices.Npoi.csproj" />
+    <ProjectReference Include="..\..\src\Bing.Offices.ExcelDataReader\Bing.Offices.ExcelDataReader.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition=" '$(TargetFramework)' == 'net6.0' ">
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="6.0.0" />
+  </ItemGroup>
+  <ItemGroup Condition=" '$(TargetFramework)' == 'net8.0' ">
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\Bing.Offices.Testing\Resources\Golden\date\date1900.xlsx"
+          Link="Resources\Golden\date\date1900.xlsx"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Bing.Offices.Testing\Resources\Golden\date\date1904.xlsx"
+          Link="Resources\Golden\date\date1904.xlsx"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Bing.Offices.Testing\Resources\Golden\formula\cached-number.xlsx"
+          Link="Resources\Golden\formula\cached-number.xlsx"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Bing.Offices.Testing\Resources\Golden\xlsb\Issue635.xlsb"
+          Link="Resources\Golden\xlsb\Issue635.xlsb"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
