@@ -1,0 +1,23 @@
+# Test Migration Matrix
+
+Each common legacy method was replaced only after the shared ProviderContract method passed on both `net6.0` and `net8.0`. Provider-native methods remain in the integration project and are listed explicitly.
+
+| Legacy method(s) removed | Shared scenario | Replacement evidence | Provider-specific remainder | Status |
+| --- | --- | --- | --- | --- |
+| Mini `CommonScalarAndDynamicContract_ShouldMatchAcrossProviders`; Closed `BasicScalarContract_ShouldMatchNpoiAndMiniExcel` | Scalar round trip, null/blank/culture | `ScalarContractTest.ScalarContract_ShouldMatchIndependentSnapshot` | Native serialization/parser checks | MIGRATED_AND_DELETED |
+| Mini mapping portion of `ValueMapConverterAndValidationContract_ShouldMatchAcrossProviders`; Closed `MappingContract_ShouldMatchAcrossAllXlsxProviders` | Mapping and value-map output | `MappingContractTest.MappingContract_ShouldMatchIndependentSnapshot`; `ConverterContractTest.NamedConverterContract_ShouldMatchIndependentSnapshot` | Mapping-plan cache and adapter tests | MIGRATED_AND_DELETED |
+| Mini dynamic portion of `CommonScalarAndDynamicContract_ShouldMatchAcrossProviders`; Closed `DynamicColumnContract_ShouldMatchAcrossProviders` | Fixed/dynamic columns and physical placement | `DynamicColumnContractTest.DynamicColumnContract_ShouldMatchIndependentSnapshot` | Provider planner/index tests | MIGRATED_AND_DELETED |
+| Mini `ValueMapConverterAndValidationContract_ShouldMatchAcrossProviders`; Closed `ValidationContract_ShouldMatchAcrossAllXlsxProviders` | Configured validation and typed errors | `ValidationContractTest.ValidationContract_ShouldReturnStableErrorSnapshot` | Provider validation adapters | MIGRATED_AND_DELETED |
+| Mini `StructuredErrorContract_ShouldMatchAcrossProviders` | Stable structured error fields | `ValidationContractTest.ValidationContract_ShouldReturnStableErrorSnapshot`; `WorkbookValidationContractTest` error assertions | Native exception translation tests | MIGRATED_AND_DELETED |
+| Mini `RelationContract_ShouldMatchAcrossProviders`; Closed `RelationContract_ShouldMatchAcrossProvidersIncludingClosedXml` | HasMany and comparer behavior | `RelationContractTest.RelationContract_ShouldMatchIndependentSnapshot` | Provider-native relation coordinator tests | MIGRATED_AND_DELETED |
+| Closed `FormulaCachedValueContract_ShouldMatchNpoiAndClosedXml` | Formula text/cache profile | `FormulaGoldenContractTest.FormulaGolden_ShouldMatchIndependentProviderProfile` (12 cases/TFM) | Formula/parser-specific tests | MIGRATED_AND_DELETED |
+| Closed `ValidationContract_ShouldMatchAcrossAllXlsxProviders` | Workbook validation rules | `WorkbookValidationContractTest` (16 frozen Golden cases/TFM) | ClosedXML rule adapter tests | MIGRATED_AND_DELETED |
+| Rich baseline (new) | Public style output | `RichLayoutContractTest.StyleContract_ShouldMatchProfileAndOoxml` (3 providers/TFM) | Native style-unit IDs | VERIFIED |
+| Rich baseline (new) | Public merge output | `RichLayoutContractTest.MergeContract_ShouldMatchProfileAndOoxml` (3 providers/TFM) | Native merge planner/DOM tests | VERIFIED |
+| Rich baseline (new) | Template style preservation and unsupported policy | `RichLayoutContractTest.TemplateContract_ShouldPreserveDeclaredStyles` (3 providers/TFM) | Rich template parts outside declared subset | VERIFIED |
+| Rich baseline (new) | Entity fixed/list/merge round trip | `RichLayoutContractTest.EntityContract_ShouldMatchProfileAndRoundTrip` (3 providers/TFM; MiniExcel `NotApplicable`) | Provider-native entity planner tests | VERIFIED |
+| Mini `UnsupportedFeatureContract_ShouldFailFastWithoutOutput` | MiniExcel unsupported preflight and zero output | Same method retained in `MiniExcelProviderContractTest` | N/A | RETAINED_NATIVE |
+| Mini DI registration methods | First registration wins and public DI round trip | `ProviderRegistrationOrder_ShouldPreserveFirstRegistration`; `ProviderRegistrationOrder_ShouldRunPublicRoundTripWithFirstProvider` | N/A | RETAINED_NATIVE |
+| Closed row-height/resource/API-isolation methods | ClosedXML DOM/resource and public-surface boundaries | `RowHeightContract_ShouldMatchNpoiAndClosedXml`; `SheetResourceLimitContract_ShouldRejectBeforeDomForNpoiAndClosedXml`; `ColumnAndCellResourceContract_ShouldRejectBeforeDomAcrossAllXlsxProviders`; `ClosedXmlPublicProviderTypes_ShouldNotExposeClosedXmlDomTypes` | N/A | RETAINED_NATIVE |
+
+The removed common helpers (`RoundTripAsync`, string snapshot helpers, and duplicate common models) no longer compile in either legacy class. The shared `ProviderContractRunner`, typed snapshots, and `Bing.Offices.Testing` models are the single common implementation.

@@ -47,8 +47,6 @@ internal sealed class NpoiImportSheetExecutor
             throw new NpoiSheetStructureException($"导入表头超过最大列长度: {options.MaxReadColumns}");
 
         var columns = CreateColumns<T>(header, options);
-        if (runtime.RowLimitReached)
-            return;
         IReadOnlyDictionary<(int Row, int Column), IReadOnlyList<PictureInfo>> imageIndex = null;
         HashSet<int> imageRows = null;
         if (columns.Values.Any(NpoiImportRowMaterializer.IsImageColumn))

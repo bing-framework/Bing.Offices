@@ -36,6 +36,34 @@ public static class ExcelEntityExtensions
     }
 
     /// <summary>
+    /// 从工作簿流导入单个实体。
+    /// </summary>
+    /// <typeparam name="TEntity">实体类型。</typeparam>
+    /// <param name="importer">Excel 导入器。</param>
+    /// <param name="source">包含工作簿内容的可读流。</param>
+    /// <param name="layout">实体与工作簿之间的布局定义。</param>
+    /// <param name="options">实体导入资源限制选项。</param>
+    /// <param name="cancellationToken">用于取消操作的令牌。</param>
+    /// <returns>实体导入结果。</returns>
+    public static ExcelEntityImportResult<TEntity> ImportEntity<TEntity>(this IExcelImporter importer,
+        Stream source, ExcelEntityLayout<TEntity> layout, ExcelEntityImportOptions options,
+        CancellationToken cancellationToken = default) where TEntity : class, new()
+    {
+        if (importer == null)
+            throw new ArgumentNullException(nameof(importer));
+        if (options == null)
+            throw new ArgumentNullException(nameof(options));
+        if (importer is IExcelEntityResourceImporter resourceImporter)
+        {
+            EnsureCapability(importer, ExcelProviderCapabilities.Entity | RequiredLayoutCapabilities(layout),
+                BingOfficesOperation.Import);
+            return resourceImporter.ImportEntity(source, layout, options, cancellationToken);
+        }
+        throw Unsupported(importer, BingOfficesOperation.Import,
+            "Provider 未声明资源限制实体导入扩展接口。");
+    }
+
+    /// <summary>
     /// 异步从工作簿流导入单个实体。
     /// </summary>
     /// <typeparam name="TEntity">实体类型。</typeparam>
@@ -57,6 +85,34 @@ public static class ExcelEntityExtensions
             return entityImporter.ImportEntityAsync(source, layout, cancellationToken);
         }
         throw Unsupported(importer, BingOfficesOperation.Import);
+    }
+
+    /// <summary>
+    /// 异步从工作簿流导入单个实体。
+    /// </summary>
+    /// <typeparam name="TEntity">实体类型。</typeparam>
+    /// <param name="importer">Excel 导入器。</param>
+    /// <param name="source">包含工作簿内容的可读流。</param>
+    /// <param name="layout">实体与工作簿之间的布局定义。</param>
+    /// <param name="options">实体导入资源限制选项。</param>
+    /// <param name="cancellationToken">用于取消操作的令牌。</param>
+    /// <returns>表示异步操作的任务，任务结果为实体导入结果。</returns>
+    public static Task<ExcelEntityImportResult<TEntity>> ImportEntityAsync<TEntity>(this IExcelImporter importer,
+        Stream source, ExcelEntityLayout<TEntity> layout, ExcelEntityImportOptions options,
+        CancellationToken cancellationToken = default) where TEntity : class, new()
+    {
+        if (importer == null)
+            throw new ArgumentNullException(nameof(importer));
+        if (options == null)
+            throw new ArgumentNullException(nameof(options));
+        if (importer is IExcelEntityResourceImporter resourceImporter)
+        {
+            EnsureCapability(importer, ExcelProviderCapabilities.Entity | ExcelProviderCapabilities.Async
+                | RequiredLayoutCapabilities(layout), BingOfficesOperation.Import);
+            return resourceImporter.ImportEntityAsync(source, layout, options, cancellationToken);
+        }
+        throw Unsupported(importer, BingOfficesOperation.Import,
+            "Provider 未声明资源限制实体导入扩展接口。");
     }
 
     /// <summary>
@@ -85,6 +141,36 @@ public static class ExcelEntityExtensions
     }
 
     /// <summary>
+    /// 按模板约束从工作簿流导入单个实体。
+    /// </summary>
+    /// <typeparam name="TEntity">实体类型。</typeparam>
+    /// <param name="importer">Excel 导入器。</param>
+    /// <param name="source">包含工作簿内容的可读流。</param>
+    /// <param name="layout">实体与工作簿之间的布局定义。</param>
+    /// <param name="template">实体模板选项。</param>
+    /// <param name="options">实体导入资源限制选项。</param>
+    /// <param name="cancellationToken">用于取消操作的令牌。</param>
+    /// <returns>实体导入结果。</returns>
+    public static ExcelEntityImportResult<TEntity> ImportForTemplate<TEntity>(this IExcelImporter importer,
+        Stream source, ExcelEntityLayout<TEntity> layout, ExcelEntityTemplateOptions template,
+        ExcelEntityImportOptions options, CancellationToken cancellationToken = default)
+        where TEntity : class, new()
+    {
+        if (importer == null)
+            throw new ArgumentNullException(nameof(importer));
+        if (options == null)
+            throw new ArgumentNullException(nameof(options));
+        if (importer is IExcelEntityResourceImporter resourceImporter)
+        {
+            EnsureCapability(importer, ExcelProviderCapabilities.Entity | ExcelProviderCapabilities.Template
+                | RequiredLayoutCapabilities(layout), BingOfficesOperation.Import);
+            return resourceImporter.ImportForTemplate(source, layout, template, options, cancellationToken);
+        }
+        throw Unsupported(importer, BingOfficesOperation.Import,
+            "Provider 未声明资源限制实体导入扩展接口。");
+    }
+
+    /// <summary>
     /// 异步按模板约束从工作簿流导入单个实体。
     /// </summary>
     /// <typeparam name="TEntity">实体类型。</typeparam>
@@ -107,6 +193,37 @@ public static class ExcelEntityExtensions
             return entityImporter.ImportForTemplateAsync(source, layout, template, cancellationToken);
         }
         throw Unsupported(importer, BingOfficesOperation.Import);
+    }
+
+    /// <summary>
+    /// 异步按模板约束从工作簿流导入单个实体。
+    /// </summary>
+    /// <typeparam name="TEntity">实体类型。</typeparam>
+    /// <param name="importer">Excel 导入器。</param>
+    /// <param name="source">包含工作簿内容的可读流。</param>
+    /// <param name="layout">实体与工作簿之间的布局定义。</param>
+    /// <param name="template">实体模板选项。</param>
+    /// <param name="options">实体导入资源限制选项。</param>
+    /// <param name="cancellationToken">用于取消操作的令牌。</param>
+    /// <returns>表示异步操作的任务，任务结果为实体导入结果。</returns>
+    public static Task<ExcelEntityImportResult<TEntity>> ImportForTemplateAsync<TEntity>(this IExcelImporter importer,
+        Stream source, ExcelEntityLayout<TEntity> layout, ExcelEntityTemplateOptions template,
+        ExcelEntityImportOptions options, CancellationToken cancellationToken = default)
+        where TEntity : class, new()
+    {
+        if (importer == null)
+            throw new ArgumentNullException(nameof(importer));
+        if (options == null)
+            throw new ArgumentNullException(nameof(options));
+        if (importer is IExcelEntityResourceImporter resourceImporter)
+        {
+            EnsureCapability(importer, ExcelProviderCapabilities.Entity | ExcelProviderCapabilities.Template
+                | ExcelProviderCapabilities.Async | RequiredLayoutCapabilities(layout),
+                BingOfficesOperation.Import);
+            return resourceImporter.ImportForTemplateAsync(source, layout, template, options, cancellationToken);
+        }
+        throw Unsupported(importer, BingOfficesOperation.Import,
+            "Provider 未声明资源限制实体导入扩展接口。");
     }
 
     /// <summary>
@@ -263,14 +380,15 @@ public static class ExcelEntityExtensions
     /// </summary>
     /// <param name="provider">被调用的 Provider 实例。</param>
     /// <param name="operation">当前执行的 Office 操作。</param>
+    /// <param name="message">可选的具体不支持原因。</param>
     /// <returns>包含 Provider 和处理阶段上下文的不支持功能异常。</returns>
     private static BingOfficesUnsupportedFeatureException Unsupported(object provider,
-        BingOfficesOperation operation)
+        BingOfficesOperation operation, string message = null)
     {
         var name = provider is IExcelProviderCapabilities capabilities
             ? capabilities.ProviderName : provider.GetType().Name;
         return new BingOfficesUnsupportedFeatureException(
-            $"Provider {name} 不支持 Entity/Template 操作。", provider: name, operation: operation,
+            message ?? $"Provider {name} 不支持 Entity/Template 操作。", provider: name, operation: operation,
             stage: BingOfficesStage.Preflight);
     }
 

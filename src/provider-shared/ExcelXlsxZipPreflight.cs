@@ -73,11 +73,15 @@ internal static class ExcelXlsxZipPreflight
     /// <param name="requireZip">是否要求输入具有 XLSX ZIP 文件头；为 false 时非 ZIP 流直接跳过 ZIP 检查。</param>
     /// <param name="cancellationToken">用于取消预检的令牌。</param>
     /// <param name="includePictures">是否扫描并应用图片数量与大小限制；仅由支持图片资源 admission 的 Provider 开启。</param>
+    /// <param name="enforceSheetLimit">是否在 ZIP 预检阶段执行工作表数量限制。</param>
+    /// <param name="enforceCellLimits">是否在 ZIP 预检阶段执行物理列数和单元格数量限制。</param>
+    /// <param name="requireWorkbookXml">是否要求 OOXML 工作簿部件；XLSB 等 ZIP 容器可关闭该要求。</param>
     /// <remarks>
     /// 检查 ZIP 条目数量、路径、重复项、解压大小、压缩比、指定 XML 部件大小以及 XML 字符数和嵌套深度；进入检查后可定位流会在结束时置于文件头。
     /// </remarks>
     internal static void Validate(Stream source, ExcelResourceLimits limits, string provider,
-        bool requireZip, CancellationToken cancellationToken = default, bool includePictures = false)
+        bool requireZip, CancellationToken cancellationToken = default, bool includePictures = false,
+        bool enforceSheetLimit = true, bool enforceCellLimits = true, bool requireWorkbookXml = true)
     {
         if (source == null)
             throw new ArgumentNullException(nameof(source));
@@ -98,7 +102,7 @@ internal static class ExcelXlsxZipPreflight
             using var archive = new ZipArchive(source, ZipArchiveMode.Read, leaveOpen: true);
             if (limits.MaxZipEntries.HasValue && archive.Entries.Count > limits.MaxZipEntries.Value)
                 Resource($"XLSX ZIP entry 数量超过限制: {limits.MaxZipEntries.Value}", provider);
-            if (archive.GetEntry("xl/workbook.xml") == null)
+            if (requireWorkbookXml && archive.GetEntry("xl/workbook.xml") == null)
                 throw new BingOfficesImportException("XLSX ZIP 缺少 xl/workbook.xml。", null,
                     provider, BingOfficesStage.Preflight);
 
@@ -137,7 +141,8 @@ internal static class ExcelXlsxZipPreflight
                 else if (string.Equals(entry.FullName, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase))
                 {
                     logicalSheetCount = CountWorkbookSheets(entry, cancellationToken, provider);
-                    if (limits.MaxSheets.HasValue && logicalSheetCount > limits.MaxSheets.Value)
+                    if (enforceSheetLimit && limits.MaxSheets.HasValue
+                        && logicalSheetCount > limits.MaxSheets.Value)
                         Resource($"XLSX Sheet 数量超过限制: {limits.MaxSheets.Value}", provider);
                 }
                 else if (IsWorksheet(entry.FullName))
@@ -147,7 +152,7 @@ internal static class ExcelXlsxZipPreflight
                         && uncompressed > limits.MaxTotalWorksheetBytes.Value - totalWorksheetBytes)
                         Resource($"XLSX worksheet XML 总大小超过限制: {limits.MaxTotalWorksheetBytes.Value}", provider);
                     totalWorksheetBytes += uncompressed;
-                    if (limits.MaxColumnsPerSheet.HasValue || limits.MaxCells.HasValue)
+                    if (enforceCellLimits && (limits.MaxColumnsPerSheet.HasValue || limits.MaxCells.HasValue))
                     {
                         var structure = ScanWorksheetStructure(entry, cancellationToken, provider,
                             limits.MaxColumnsPerSheet, limits.MaxCells, totalPhysicalCells);
@@ -224,7 +229,7 @@ internal static class ExcelXlsxZipPreflight
     /// 判断 ZIP 条目是否为工作簿图片部件。
     /// </summary>
     /// <param name="name">待判断的 ZIP 条目名称。</param>
-    /// <returns>名称位于 xl/media/ 下时返回 true。</returns>
+    /// <returns>名称位于 xl/media/ 下时返回 <see langword="true"/>，否则返回 <see langword="false"/>。</returns>
     private static bool IsPicture(string name) => name.StartsWith("xl/media/",
         StringComparison.OrdinalIgnoreCase) && !name.EndsWith("/", StringComparison.Ordinal);
 

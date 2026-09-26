@@ -16,6 +16,14 @@ public sealed class ExcelImportFailureOptions
     public Stream Destination { get; init; }
 
     /// <summary>
+    /// 获取或初始化失败工作簿的原子文件输出路径。设置该属性时由导入器负责创建和替换目标文件。
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Destination" /> 与本属性互斥；路径输出在写入完成前不会替换已有目标文件。
+    /// </remarks>
+    public string DestinationPath { get; init; }
+
+    /// <summary>
     /// 获取或初始化失败工作簿序列化输出允许的最大字节数。
     /// </summary>
     public long? MaxSerializedBytes { get; init; }
@@ -78,8 +86,13 @@ public sealed class ExcelImportFailureOptions
             throw new ArgumentOutOfRangeException(nameof(MaxCopiedPictureBytes));
         if (MaxEstimatedTargetObjects <= 0)
             throw new ArgumentOutOfRangeException(nameof(MaxEstimatedTargetObjects));
-        if (Mode != ExcelImportFailureWorkbookMode.None && Destination == null)
-            throw new ArgumentException("启用失败工作簿输出时必须提供目标流。", nameof(Destination));
+        var hasDestination = Destination != null;
+        var hasDestinationPath = !string.IsNullOrWhiteSpace(DestinationPath);
+        if (Mode != ExcelImportFailureWorkbookMode.None && hasDestination == hasDestinationPath)
+            throw new ArgumentException("启用失败工作簿输出时必须且只能提供目标流或目标路径。",
+                nameof(Destination));
+        if (DestinationPath != null && !hasDestinationPath)
+            throw new ArgumentException("失败工作簿目标路径不能为空白字符串。", nameof(DestinationPath));
         if (Destination != null && !Destination.CanWrite)
             throw new ArgumentException("失败工作簿目标流不可写入。", nameof(Destination));
         if (TemporaryDirectory != null && string.IsNullOrWhiteSpace(TemporaryDirectory))

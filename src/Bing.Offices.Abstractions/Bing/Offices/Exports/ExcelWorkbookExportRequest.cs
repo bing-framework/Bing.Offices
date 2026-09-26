@@ -102,6 +102,14 @@ public sealed class ExcelSheetExportRequest
     /// <param name="rowHeight">行高应用选项。</param>
     /// <param name="commentConflictPolicy">批注冲突处理策略。</param>
     /// <param name="templateCellOverwritePolicy">模板单元格被覆盖时的处理策略。</param>
+    /// <param name="tables">公共表格定义。</param>
+    /// <param name="autoFilters">公共自动筛选定义。</param>
+    /// <param name="freezePane">公共冻结窗格定义。</param>
+    /// <param name="conditionalFormats">公共条件格式定义。</param>
+    /// <param name="namedRanges">公共名称范围定义。</param>
+    /// <param name="printLayout">公共打印布局定义。</param>
+    /// <param name="images">嵌入图片定义。</param>
+    /// <param name="dataValidations">原生数据校验定义。</param>
     internal ExcelSheetExportRequest(string name, Type itemType, System.Collections.IEnumerable data,
         int headerRowIndex, int dataRowStartIndex, IReadOnlyList<ExcelDynamicColumnDefinition> dynamicColumns,
         bool failOnUnknownDynamicValues, Func<object, IDictionary<string, object>> dynamicGetter,
@@ -112,7 +120,15 @@ public sealed class ExcelSheetExportRequest
         System.Globalization.CultureInfo culture, ExcelColumnWidthOptions columnWidth,
         ExcelRowHeightOptions rowHeight,
         ExcelCommentConflictPolicy commentConflictPolicy,
-        ExcelTemplateCellOverwritePolicy templateCellOverwritePolicy)
+        ExcelTemplateCellOverwritePolicy templateCellOverwritePolicy,
+        IReadOnlyList<ExcelTableDefinition> tables,
+        IReadOnlyList<ExcelAutoFilterDefinition> autoFilters,
+        ExcelFreezePaneDefinition freezePane,
+        IReadOnlyList<ExcelConditionalFormatDefinition> conditionalFormats,
+        IReadOnlyList<ExcelNamedRangeDefinition> namedRanges,
+        ExcelPrintLayoutOptions printLayout,
+        IReadOnlyList<ExcelSheetImageDefinition> images,
+        IReadOnlyList<ExcelDataValidationDefinition> dataValidations)
     {
         Name = name;
         ItemType = itemType;
@@ -153,6 +169,25 @@ public sealed class ExcelSheetExportRequest
         RowHeight = rowHeight;
         CommentConflictPolicy = commentConflictPolicy;
         TemplateCellOverwritePolicy = templateCellOverwritePolicy;
+        Tables = CloneTables(tables);
+        AutoFilters = CloneAutoFilters(autoFilters);
+        FreezePane = CloneFreezePane(freezePane);
+        ConditionalFormats = CloneConditionalFormats(conditionalFormats);
+        NamedRanges = CloneNamedRanges(namedRanges);
+        PrintLayout = ClonePrintLayout(printLayout);
+        Images = images.Select(image => new ExcelSheetImageDefinition
+        {
+            Content = image.Content?.ToArray(), Row = image.Row, Column = image.Column,
+            Width = image.Width, Height = image.Height, OffsetX = image.OffsetX, OffsetY = image.OffsetY
+        }).ToArray();
+        DataValidations = dataValidations.Select(rule => new ExcelDataValidationDefinition
+        {
+            Range = CloneRange(rule.Range), Type = rule.Type, Operator = rule.Operator,
+            Value1 = rule.Value1, Value2 = rule.Value2, Date1 = rule.Date1, Date2 = rule.Date2,
+            Values = rule.Values?.ToArray(), IgnoreBlanks = rule.IgnoreBlanks,
+            ShowErrorMessage = rule.ShowErrorMessage, InputTitle = rule.InputTitle,
+            InputMessage = rule.InputMessage, ErrorTitle = rule.ErrorTitle, ErrorMessage = rule.ErrorMessage
+        }).ToArray();
     }
 
     /// <summary>
@@ -270,4 +305,127 @@ public sealed class ExcelSheetExportRequest
     /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public ExcelTemplateCellOverwritePolicy TemplateCellOverwritePolicy { get; }
+
+    /// <summary>
+    /// 获取表格定义。
+    /// </summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public IReadOnlyList<ExcelTableDefinition> Tables { get; }
+    /// <summary>
+    /// 获取自动筛选定义。
+    /// </summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public IReadOnlyList<ExcelAutoFilterDefinition> AutoFilters { get; }
+    /// <summary>
+    /// 获取冻结窗格定义。
+    /// </summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public ExcelFreezePaneDefinition FreezePane { get; }
+    /// <summary>
+    /// 获取条件格式定义。
+    /// </summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public IReadOnlyList<ExcelConditionalFormatDefinition> ConditionalFormats { get; }
+    /// <summary>
+    /// 获取名称范围定义。
+    /// </summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public IReadOnlyList<ExcelNamedRangeDefinition> NamedRanges { get; }
+    /// <summary>
+    /// 获取打印布局定义。
+    /// </summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public ExcelPrintLayoutOptions PrintLayout { get; }
+
+    /// <summary>
+    /// 获取嵌入图片定义。
+    /// </summary>
+    public IReadOnlyList<ExcelSheetImageDefinition> Images { get; }
+    /// <summary>
+    /// 获取 Excel 原生数据校验定义。
+    /// </summary>
+    public IReadOnlyList<ExcelDataValidationDefinition> DataValidations { get; }
+
+    /// <summary>
+    /// 复制表格定义及其区域。
+    /// </summary>
+    /// <param name="values">待复制的表格定义；允许为空。</param>
+    /// <returns>独立的定义数组；输入为空时返回空数组。</returns>
+    private static IReadOnlyList<ExcelTableDefinition> CloneTables(IReadOnlyList<ExcelTableDefinition> values) =>
+        (values ?? Array.Empty<ExcelTableDefinition>()).Select(value => new ExcelTableDefinition
+        {
+            Name = value.Name, HasHeaders = value.HasHeaders, ShowTotals = value.ShowTotals,
+            StyleName = value.StyleName, Range = CloneRange(value.Range)
+        }).ToArray();
+
+    /// <summary>
+    /// 复制自动筛选定义及其区域。
+    /// </summary>
+    /// <param name="values">待复制的筛选定义；允许为空。</param>
+    /// <returns>独立的定义数组；输入为空时返回空数组。</returns>
+    private static IReadOnlyList<ExcelAutoFilterDefinition> CloneAutoFilters(IReadOnlyList<ExcelAutoFilterDefinition> values) =>
+        (values ?? Array.Empty<ExcelAutoFilterDefinition>()).Select(value => new ExcelAutoFilterDefinition
+        {
+            Range = CloneRange(value.Range)
+        }).ToArray();
+
+    /// <summary>
+    /// 复制冻结窗格定义。
+    /// </summary>
+    /// <param name="value">待复制的定义；允许为空。</param>
+    /// <returns>独立的定义；输入为空时返回 <see langword="null"/>。</returns>
+    private static ExcelFreezePaneDefinition CloneFreezePane(ExcelFreezePaneDefinition value) => value == null ? null : new ExcelFreezePaneDefinition
+    {
+        Rows = value.Rows, Columns = value.Columns, TopRow = value.TopRow, LeftColumn = value.LeftColumn
+    };
+
+    /// <summary>
+    /// 复制条件格式定义及其区域。
+    /// </summary>
+    /// <param name="values">待复制的条件格式定义；允许为空。</param>
+    /// <returns>独立的定义数组；输入为空时返回空数组。</returns>
+    private static IReadOnlyList<ExcelConditionalFormatDefinition> CloneConditionalFormats(
+        IReadOnlyList<ExcelConditionalFormatDefinition> values) =>
+        (values ?? Array.Empty<ExcelConditionalFormatDefinition>()).Select(value => new ExcelConditionalFormatDefinition
+        {
+            Type = value.Type, Range = CloneRange(value.Range), Operator = value.Operator,
+            Formula1 = value.Formula1, Formula2 = value.Formula2,
+            ForegroundColor = value.ForegroundColor, BackgroundColor = value.BackgroundColor
+        }).ToArray();
+
+    /// <summary>
+    /// 复制名称范围定义。
+    /// </summary>
+    /// <param name="values">待复制的名称范围定义；允许为空。</param>
+    /// <returns>独立的定义数组；输入为空时返回空数组。</returns>
+    private static IReadOnlyList<ExcelNamedRangeDefinition> CloneNamedRanges(IReadOnlyList<ExcelNamedRangeDefinition> values) =>
+        (values ?? Array.Empty<ExcelNamedRangeDefinition>()).Select(value => new ExcelNamedRangeDefinition
+        {
+            Name = value.Name, SheetName = value.SheetName, Address = value.Address
+        }).ToArray();
+
+    /// <summary>
+    /// 复制打印布局选项。
+    /// </summary>
+    /// <param name="value">待复制的选项；允许为空。</param>
+    /// <returns>独立的选项；输入为空时返回 <see langword="null"/>。</returns>
+    private static ExcelPrintLayoutOptions ClonePrintLayout(ExcelPrintLayoutOptions value) => value == null ? null : new ExcelPrintLayoutOptions
+    {
+        PaperSize = value.PaperSize, Orientation = value.Orientation,
+        TopMargin = value.TopMargin, BottomMargin = value.BottomMargin,
+        LeftMargin = value.LeftMargin, RightMargin = value.RightMargin,
+        ScalePercent = value.ScalePercent, FitToWidth = value.FitToWidth, FitToHeight = value.FitToHeight,
+        PrintArea = value.PrintArea, RepeatRows = value.RepeatRows, RepeatColumns = value.RepeatColumns,
+        Header = value.Header, Footer = value.Footer
+    };
+
+    /// <summary>
+    /// 复制工作表区域定义。
+    /// </summary>
+    /// <param name="value">待复制的区域；允许为空。</param>
+    /// <returns>独立的区域定义；输入为空时返回 <see langword="null"/>。</returns>
+    private static ExcelRangeDefinition CloneRange(ExcelRangeDefinition value) => value == null ? null : new ExcelRangeDefinition
+    {
+        StartRow = value.StartRow, StartColumn = value.StartColumn, EndRow = value.EndRow, EndColumn = value.EndColumn
+    };
 }

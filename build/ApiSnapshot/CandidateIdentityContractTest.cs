@@ -70,7 +70,11 @@ internal static class CandidateIdentityContractTest
                 ["net6.0/Bing.Offices.ClosedXml.dll"] =
                     Path.Combine(assemblyRoot, "net6.0", "Bing.Offices.ClosedXml.dll"),
                 ["net8.0/Bing.Offices.ClosedXml.dll"] =
-                    Path.Combine(assemblyRoot, "net8.0", "Bing.Offices.ClosedXml.dll")
+                    Path.Combine(assemblyRoot, "net8.0", "Bing.Offices.ClosedXml.dll"),
+                ["net6.0/Bing.Offices.ExcelDataReader.dll"] =
+                    Path.Combine(assemblyRoot, "net6.0", "Bing.Offices.ExcelDataReader.dll"),
+                ["net8.0/Bing.Offices.ExcelDataReader.dll"] =
+                    Path.Combine(assemblyRoot, "net8.0", "Bing.Offices.ExcelDataReader.dll")
             };
             var managedAssemblyPath = typeof(CandidateIdentityContractTest).Assembly.Location;
             foreach (var path in assemblyPaths.Values)
@@ -83,7 +87,8 @@ internal static class CandidateIdentityContractTest
                 "Bing.Offices.Core.2.0.0.nupkg",
                 "Bing.Offices.Npoi.2.0.0.nupkg",
                 "Bing.Offices.MiniExcel.2.0.0.nupkg",
-                "Bing.Offices.ClosedXml.2.0.0.nupkg"
+                "Bing.Offices.ClosedXml.2.0.0.nupkg",
+                "Bing.Offices.ExcelDataReader.2.0.0.nupkg"
             };
             foreach (var packageName in packageNames)
                 CreatePackage(Path.Combine(packageRoot, packageName), packageName, assemblyPaths);
@@ -537,6 +542,14 @@ internal static class CandidateIdentityContractTest
                     assemblyPaths["net6.0/Bing.Offices.ClosedXml.dll"],
                 ["net8.0/Bing.Offices.ClosedXml.dll"] =
                     assemblyPaths["net8.0/Bing.Offices.ClosedXml.dll"]
+            };
+        if (packageName.StartsWith("Bing.Offices.ExcelDataReader.", StringComparison.Ordinal))
+            return new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["net6.0/Bing.Offices.ExcelDataReader.dll"] =
+                    assemblyPaths["net6.0/Bing.Offices.ExcelDataReader.dll"],
+                ["net8.0/Bing.Offices.ExcelDataReader.dll"] =
+                    assemblyPaths["net8.0/Bing.Offices.ExcelDataReader.dll"]
             };
 
         return new Dictionary<string, string>(StringComparer.Ordinal)

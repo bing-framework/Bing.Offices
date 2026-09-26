@@ -14,7 +14,13 @@ NPOI 导入会先把输入复制到受 `MaxInputBytes` 约束的内存流，再�
 
 MiniExcel 与 ClosedXML 都是与 NPOI 并列的独立 XLSX Provider。它们复用同一套 Workbook Request、Mapping Plan、Converter、Validation、错误结果和文件提交契约，不引入第二套 Provider-specific Request、Mapping Profile 或业务 Attribute。通过 `services.AddBingOfficesMiniExcel()` 或 `services.AddBingOfficesClosedXml()` 注册后，业务代码仍只依赖 `IExcelImporter` 与 `IExcelExporter`。应用启动时应选择一个 Provider；注册扩展都使用 `TryAdd`，同时注册时先注册的实现会保留，不能把这种顺序行为当作按请求动态切换 Provider 的 API。
 
-ClosedXML 适合富 XLSX 报表、模板样式、合并、公式保存和 Entity Layout（固定 Cell、多个 List Region、Merge、Relations）。它支持显式行高和 Sheet/Column/Cell 资源限制；Entity List Region 动态列仍显式不支持。第一版明确不支持 XLS、Chart、PivotTable、XLSM 宏保留和完整 Excel Formula Engine，详见 [Provider 能力矩阵](09-providers.md)。
+`Bing.Offices.ExcelDataReader` 是独立的只读 Provider，支持 XLS、XLSX、XLSB 固定列导入和单 Sheet 的 `IExcelBatchImporter`。它只注册导入服务，不提供导出器；需要导出、模板、图片或 Workbook 原生校验时选择其他 Provider。批量导入使用串行回调，已交付批次不回滚，完整边界见 [Provider 能力矩阵](09-providers.md)。
+
+`Bing.Offices.SpreadCheetah` 是独立的只写前向 Provider，注册后只提供 `IExcelStreamingExporter`。它创建新的 XLSX，按请求中的数据序列前向写入并保持串行背压，不打开已有 Workbook、不编辑模板，也不自动降级到 DOM Provider。大数据规模需要结合容器资源和实际批次探针评估。
+
+`Bing.Offices.AsposeCells` 是独立的可选商业扩展包。它不进入 Core 依赖图，宿主通过 `AddBingOfficesAsposeCells` 配置许可证和字体目录后，才可使用 PDF/页面图片渲染、公式处理、XLSM/ODS/加密转换。缺少许可证、字体严格模式不满足或请求超出格式边界时，Provider 在预检阶段返回结构化 `UnsupportedFeature`；密码不进入日志和诊断。
+
+ClosedXML 适合富 XLSX 报表、模板样式、合并、公式保存和 Entity Layout（固定 Cell、多个 List Region、Merge、Relations）。它支持显式行高和 Sheet/Column/Cell 资源限制；Entity List Region 动态列仍显式不支持。第一版明确不支持 XLS、Chart、PivotTable、XLSM 宏保留和完整 Excel Formula Engine；公式读取通过独立 `IExcelFormulaProcessor` 暴露，详见 [Provider 能力矩阵](09-providers.md)。
 
 下方完整 Workbook 能力列表以 NPOI Provider 为基准；MiniExcel 只承诺 [Provider 能力矩阵](09-providers.md) 中已验证的常规 XLSX、映射、转换、校验、动态列和关系能力，其余请求必须按结构化 `UnsupportedFeature` fail-fast。
 
@@ -47,7 +53,8 @@ exporter.Export(request, stream);
 - [dates.md](dates.md)：日期、DateTimeOffset 与跨时区合同
 - [npoi-extensions.md](npoi-extensions.md)：七个 NPOI 用户扩展容器和 Try/Throw 行为
 - [async-io.md](async-io.md)：Sync/Async API、流所有权、取消和 NPOI 同步边界
-- [09-providers.md](09-providers.md)：NPOI 与 MiniExcel Provider 的能力矩阵、选择和资源边界
+- [09-providers.md](09-providers.md)：Provider 的能力矩阵、选择和资源边界
+- [10-third-party-components.md](10-third-party-components.md)：第三方引擎和授权边界
 - [nuget-migration.md](nuget-migration.md)：包身份、当前兼容边界和迁移注意事项
 
 迁移与使用：

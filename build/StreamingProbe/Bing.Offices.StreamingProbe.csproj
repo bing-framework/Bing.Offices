@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <IsPackable>false</IsPackable>
+    <AssemblyName>Bing.Offices.StreamingProbe</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/Bing.Offices.Npoi/Bing.Offices.Npoi.csproj" />
+    <ProjectReference Include="../../src/Bing.Offices.SpreadCheetah/Bing.Offices.SpreadCheetah.csproj" />
+  </ItemGroup>
+</Project>

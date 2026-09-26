@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using Bing.Offices.Exceptions;
+using Bing.Offices.IO;
 using NPOI.SS.UserModel;
 
 namespace Bing.Offices.Imports;
@@ -186,8 +187,17 @@ internal static class NpoiFailureWorkbookWriter
                     }
                     try
                     {
-                        NpoiFailureWorkbookSerialization.WriteStream(destinationOverride ?? options.Destination, output,
-                            cancellationToken);
+                        if (destinationOverride == null && options.DestinationPath != null)
+                        {
+                            AtomicFileCommitter.Commit(options.DestinationPath,
+                                destination => NpoiFailureWorkbookSerialization.WriteStream(destination, output,
+                                    cancellationToken), cancellationToken, "FailureWorkbook");
+                        }
+                        else
+                        {
+                            NpoiFailureWorkbookSerialization.WriteStream(destinationOverride ?? options.Destination,
+                                output, cancellationToken);
+                        }
                     }
                     catch (OperationCanceledException)
                     {

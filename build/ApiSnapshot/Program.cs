@@ -64,7 +64,10 @@ foreach (var tfm in targetFrameworks)
         Path.Combine(root, "netstandard2.0", "Bing.Offices.Core.dll"),
         Path.Combine(root, tfm, "Bing.Offices.Npoi.dll"),
         Path.Combine(root, tfm, "Bing.Offices.MiniExcel.dll"),
-        Path.Combine(root, tfm, "Bing.Offices.ClosedXml.dll")
+        Path.Combine(root, tfm, "Bing.Offices.ClosedXml.dll"),
+        Path.Combine(root, tfm, "Bing.Offices.ExcelDataReader.dll"),
+        Path.Combine(root, tfm, "Bing.Offices.SpreadCheetah.dll"),
+        Path.Combine(root, tfm, "Bing.Offices.AsposeCells.dll")
     };
     if (paths.Any(path => !File.Exists(path)))
     {
@@ -189,7 +192,19 @@ static Dictionary<string, string> GetCandidateAssemblyPaths(string root) =>
         ["net6.0/Bing.Offices.ClosedXml.dll"] =
             Path.Combine(root, "net6.0", "Bing.Offices.ClosedXml.dll"),
         ["net8.0/Bing.Offices.ClosedXml.dll"] =
-            Path.Combine(root, "net8.0", "Bing.Offices.ClosedXml.dll")
+            Path.Combine(root, "net8.0", "Bing.Offices.ClosedXml.dll"),
+        ["net6.0/Bing.Offices.ExcelDataReader.dll"] =
+            Path.Combine(root, "net6.0", "Bing.Offices.ExcelDataReader.dll"),
+        ["net8.0/Bing.Offices.ExcelDataReader.dll"] =
+            Path.Combine(root, "net8.0", "Bing.Offices.ExcelDataReader.dll"),
+        ["net6.0/Bing.Offices.SpreadCheetah.dll"] =
+            Path.Combine(root, "net6.0", "Bing.Offices.SpreadCheetah.dll"),
+        ["net8.0/Bing.Offices.SpreadCheetah.dll"] =
+            Path.Combine(root, "net8.0", "Bing.Offices.SpreadCheetah.dll"),
+        ["net6.0/Bing.Offices.AsposeCells.dll"] =
+            Path.Combine(root, "net6.0", "Bing.Offices.AsposeCells.dll"),
+        ["net8.0/Bing.Offices.AsposeCells.dll"] =
+            Path.Combine(root, "net8.0", "Bing.Offices.AsposeCells.dll")
     };
 
 /// <summary>
@@ -313,7 +328,7 @@ internal static class CandidateIdentityVerifier
     /// 默认 Breaking Change 审批文件的仓库相对路径。
     /// </summary>
     internal const string BreakingApprovalPath =
-        "ai_docs/tasks/BO-RC-20260908-002/api-breaking-approval.md";
+        "ai_docs/tasks/BING-OFFICES-ADVANCED-EXCEL-ROADMAP-20260926-001/api-approval.md";
 
     /// <summary>
     /// 候选身份必须覆盖的生产 NuGet 包标识。
@@ -324,7 +339,10 @@ internal static class CandidateIdentityVerifier
         "Bing.Offices.Core",
         "Bing.Offices.Npoi",
         "Bing.Offices.MiniExcel",
-        "Bing.Offices.ClosedXml"
+        "Bing.Offices.ClosedXml",
+        "Bing.Offices.ExcelDataReader",
+        "Bing.Offices.SpreadCheetah",
+        "Bing.Offices.AsposeCells"
     };
 
     /// <summary>
@@ -516,7 +534,7 @@ internal static class CandidateIdentityVerifier
     {
         var recorded = NormalizeHashMap(recordedFiles, "nupkg", failures);
         if (recorded.Count < RequiredPackageIds.Length)
-            failures.Add("candidate identity must contain hashes for the five production nupkg files");
+            failures.Add($"candidate identity must contain hashes for the {RequiredPackageIds.Length} production nupkg files");
         if (string.IsNullOrWhiteSpace(packagesRoot))
         {
             failures.Add("nupkg hash verification requires --packages <directory>");
@@ -922,7 +940,7 @@ internal static class CandidateIdentityVerifier
     /// 判断包内路径是否属于 XML 资产。
     /// </summary>
     /// <param name="relativePath">包内相对路径。</param>
-    /// <returns>扩展名为 XML、NUSPEC 或 RELS 时返回 <see langword="true" />。</returns>
+    /// <returns>扩展名为 XML、NUSPEC 或 RELS 时返回 <see langword="true" />，否则返回 <see langword="false" />。</returns>
     private static bool IsXmlPackageEntry(string relativePath) =>
         Path.GetExtension(relativePath).ToLowerInvariant() is ".xml" or ".nuspec" or ".rels";
 
@@ -930,7 +948,7 @@ internal static class CandidateIdentityVerifier
     /// 判断包内路径是否应按规范化文本处理。
     /// </summary>
     /// <param name="relativePath">包内相对路径。</param>
-    /// <returns>路径属于受支持的文本资产时返回 <see langword="true" />。</returns>
+    /// <returns>路径属于受支持的文本资产时返回 <see langword="true" />，否则返回 <see langword="false" />。</returns>
     private static bool IsCanonicalTextPackageEntry(string relativePath)
     {
         var fileName = Path.GetFileName(relativePath);

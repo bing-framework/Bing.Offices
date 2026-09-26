@@ -24,7 +24,7 @@ namespace Bing.Offices.Imports;
 /// <remarks>
 /// 由 MiniExcel 逐行读取，并由 Core 映射计划负责转换和校验。
 /// </remarks>
-public sealed class MiniExcelExcelImporter : IExcelImporter, IExcelProviderCapabilities
+public sealed class MiniExcelExcelImporter : IExcelImporter, IExcelProviderFeatureDescriptor
 {
     /// <inheritdoc />
     public string ProviderName => "MiniExcel";
@@ -35,6 +35,28 @@ public sealed class MiniExcelExcelImporter : IExcelImporter, IExcelProviderCapab
 
     /// <inheritdoc />
     public bool Supports(ExcelProviderCapabilities capabilities) => (Capabilities & capabilities) == capabilities;
+
+    /// <inheritdoc />
+    public IReadOnlyList<ExcelFormat> ReadFormats { get; } = new[] { ExcelFormat.Xlsx };
+    /// <inheritdoc />
+    public IReadOnlyList<ExcelFormat> WriteFormats { get; } = Array.Empty<ExcelFormat>();
+    /// <inheritdoc />
+    public bool SupportsCompleteWorkbookImport => true;
+    /// <inheritdoc />
+    public bool SupportsBatchImport => false;
+    /// <inheritdoc />
+    public bool SupportsCompleteWorkbookExport => false;
+    /// <inheritdoc />
+    public bool SupportsTrueAsyncIo => true;
+    /// <inheritdoc />
+    public IReadOnlyList<string> Limitations { get; } = new[]
+    {
+        "XLS、XLSB、XLSM、ODS 和加密工作簿在当前 MiniExcel Provider 中明确拒绝。"
+    };
+    /// <inheritdoc />
+    public ExcelProviderFeatures Features => ExcelProviderFeatures.FormulaCachedValues;
+    /// <inheritdoc />
+    public bool Supports(ExcelProviderFeatures features) => (Features & features) == features;
     /// <summary>
     /// 表示按实体类型异步导入工作表的反射委托。
     /// </summary>
@@ -50,11 +72,12 @@ public sealed class MiniExcelExcelImporter : IExcelImporter, IExcelProviderCapab
     /// <param name="cancellationToken">用于取消导入的令牌。</param>
     /// <param name="mappingPlan">当前工作表的映射计划。</param>
     /// <param name="isDate1904">当前工作簿是否使用 1904 日期系统。</param>
+    /// <param name="rowBudget">整个 Workbook 共享的数据行预算。</param>
     private delegate Task ImportSheetInvoker<TWorkbook>(MiniExcelExcelImporter target, Stream source,
         string physicalName, ExcelSheetImportRequest request, TWorkbook root,
         ICollection<ExcelSheetImportResult> sheetResults, ICollection<ExcelImportError> errors,
         ExcelWorkbookImportRequest<TWorkbook> workbookRequest, CancellationToken cancellationToken,
-        IExcelMappingPlan mappingPlan, bool isDate1904) where TWorkbook : class, new();
+        IExcelMappingPlan mappingPlan, bool isDate1904, WorkbookRowBudget rowBudget) where TWorkbook : class, new();
 
     /// <summary>
     /// 表示按实体类型同步导入工作表的反射委托。
@@ -71,11 +94,54 @@ public sealed class MiniExcelExcelImporter : IExcelImporter, IExcelProviderCapab
     /// <param name="cancellationToken">用于取消导入的令牌。</param>
     /// <param name="mappingPlan">当前工作表的映射计划。</param>
     /// <param name="isDate1904">当前工作簿是否使用 1904 日期系统。</param>
+    /// <param name="rowBudget">整个 Workbook 共享的数据行预算。</param>
     private delegate void ImportSheetSyncInvoker<TWorkbook>(MiniExcelExcelImporter target, Stream source,
         string physicalName, ExcelSheetImportRequest request, TWorkbook root,
         ICollection<ExcelSheetImportResult> sheetResults, ICollection<ExcelImportError> errors,
         ExcelWorkbookImportRequest<TWorkbook> workbookRequest, CancellationToken cancellationToken,
-        IExcelMappingPlan mappingPlan, bool isDate1904) where TWorkbook : class, new();
+        IExcelMappingPlan mappingPlan, bool isDate1904, WorkbookRowBudget rowBudget) where TWorkbook : class, new();
+
+    /// <summary>
+    /// 工作簿共享的数据行预算。
+    /// </summary>
+    /// <remarks>所有工作表共用计数，避免按工作表重复分配预算。</remarks>
+    private sealed class WorkbookRowBudget
+    {
+        /// <summary>
+        /// 整个工作簿允许导入的最大数据行数；未指定时不限制。
+        /// </summary>
+        private readonly int? _maximum;
+
+        /// <summary>
+        /// 初始化一个 <see cref="WorkbookRowBudget"/> 类型的实例。
+        /// </summary>
+        /// <param name="maximum">工作簿最大数据行数；null 表示不限制。</param>
+        internal WorkbookRowBudget(int? maximum) => _maximum = maximum;
+        /// <summary>
+        /// 获取数据行预算是否已超出。
+        /// </summary>
+        internal bool IsExceeded { get; private set; }
+
+        /// <summary>
+        /// 尝试消耗一行数据预算。
+        /// </summary>
+        /// <returns>成功消耗一行预算时返回 true；已达到上限时返回 false。</returns>
+        internal bool TryConsume()
+        {
+            if (_maximum.HasValue && Count >= _maximum.Value)
+            {
+                IsExceeded = true;
+                return false;
+            }
+            Count++;
+            return true;
+        }
+
+        /// <summary>
+        /// 获取或设置已消耗的数据行数。
+        /// </summary>
+        private int Count { get; set; }
+    }
 
     /// <summary>
     /// 按工作簿根实体类型缓存异步工作表导入委托。
@@ -238,6 +304,7 @@ public sealed class MiniExcelExcelImporter : IExcelImporter, IExcelProviderCapab
         var root = new TWorkbook();
         var errors = new List<ExcelImportError>();
         var results = new List<ExcelSheetImportResult>();
+        var rowBudget = new WorkbookRowBudget(limits.MaxRows);
         var names = GetSheetNames(source, cancellationToken);
         var plans = BuildPlans(request);
         foreach (var sheet in request.Sheets)
@@ -257,7 +324,7 @@ public sealed class MiniExcelExcelImporter : IExcelImporter, IExcelProviderCapab
             try
             {
                 ImportSheetSync(source, resolvedName, sheet, root, results, errors, request,
-                    cancellationToken, plan, isDate1904);
+                    cancellationToken, plan, isDate1904, rowBudget);
             }
             catch (MiniExcelSheetException exception)
             {
@@ -267,7 +334,12 @@ public sealed class MiniExcelExcelImporter : IExcelImporter, IExcelProviderCapab
                 results.Add(new ExcelSheetImportResult(resolvedName, sheet.ItemType,
                     Array.Empty<int>(), new[] { error }));
             }
+            if (rowBudget.IsExceeded)
+                break;
         }
+        if (rowBudget.IsExceeded)
+            return new ExcelWorkbookImportResult<TWorkbook>(new TWorkbook(), results, errors,
+                IsErrorLimitReached(errors, request), request.ResourceLimits?.MaxErrors);
         BindRelations(root, request.Relations, errors, request, cancellationToken);
         return new ExcelWorkbookImportResult<TWorkbook>(root, results, errors,
             IsErrorLimitReached(errors, request), request.ResourceLimits?.MaxErrors);
@@ -293,6 +365,7 @@ public sealed class MiniExcelExcelImporter : IExcelImporter, IExcelProviderCapab
         var root = new TWorkbook();
         var errors = new List<ExcelImportError>();
         var results = new List<ExcelSheetImportResult>();
+        var rowBudget = new WorkbookRowBudget(limits.MaxRows);
         var names = GetSheetNames(source, cancellationToken);
         var plans = BuildPlans(request);
         foreach (var sheet in request.Sheets)
@@ -312,7 +385,7 @@ public sealed class MiniExcelExcelImporter : IExcelImporter, IExcelProviderCapab
             try
             {
                 await ImportSheetAsync(source, resolvedName, sheet, root, results, errors, request,
-                    cancellationToken, plan, isDate1904).ConfigureAwait(false);
+                    cancellationToken, plan, isDate1904, rowBudget).ConfigureAwait(false);
             }
             catch (MiniExcelSheetException exception)
             {
@@ -322,7 +395,12 @@ public sealed class MiniExcelExcelImporter : IExcelImporter, IExcelProviderCapab
                 results.Add(new ExcelSheetImportResult(resolvedName, sheet.ItemType,
                     Array.Empty<int>(), new[] { error }));
             }
+            if (rowBudget.IsExceeded)
+                break;
         }
+        if (rowBudget.IsExceeded)
+            return new ExcelWorkbookImportResult<TWorkbook>(new TWorkbook(), results, errors,
+                IsErrorLimitReached(errors, request), request.ResourceLimits?.MaxErrors);
         BindRelations(root, request.Relations, errors, request, cancellationToken);
         return new ExcelWorkbookImportResult<TWorkbook>(root, results, errors,
             IsErrorLimitReached(errors, request), request.ResourceLimits?.MaxErrors);
@@ -342,14 +420,15 @@ public sealed class MiniExcelExcelImporter : IExcelImporter, IExcelProviderCapab
     /// <param name="cancellationToken">用于取消导入的令牌。</param>
     /// <param name="plan">当前工作表的映射计划。</param>
     /// <param name="isDate1904">当前工作簿是否使用 1904 日期系统。</param>
+    /// <param name="rowBudget">整个 Workbook 共享的数据行预算。</param>
     private void ImportSheetSync<TWorkbook>(Stream source, string physicalName,
         ExcelSheetImportRequest request, TWorkbook root, ICollection<ExcelSheetImportResult> results,
         ICollection<ExcelImportError> errors, ExcelWorkbookImportRequest<TWorkbook> workbookRequest,
-        CancellationToken cancellationToken, IExcelMappingPlan plan, bool isDate1904) where TWorkbook : class, new()
+        CancellationToken cancellationToken, IExcelMappingPlan plan, bool isDate1904, WorkbookRowBudget rowBudget) where TWorkbook : class, new()
     {
         SyncInvokerCache<TWorkbook>.Values.GetOrAdd(request.ItemType, CreateSyncInvoker<TWorkbook>)(this,
             source, physicalName, request, root, results, errors, workbookRequest, cancellationToken, plan,
-            isDate1904);
+            isDate1904, rowBudget);
     }
 
     /// <summary>
@@ -366,13 +445,15 @@ public sealed class MiniExcelExcelImporter : IExcelImporter, IExcelProviderCapab
     /// <param name="cancellationToken">用于取消导入的令牌。</param>
     /// <param name="plan">当前工作表的映射计划。</param>
     /// <param name="isDate1904">当前工作簿是否使用 1904 日期系统。</param>
+    /// <param name="rowBudget">整个 Workbook 共享的数据行预算。</param>
     private Task ImportSheetAsync<TWorkbook>(Stream source, string physicalName,
         ExcelSheetImportRequest request, TWorkbook root, ICollection<ExcelSheetImportResult> results,
         ICollection<ExcelImportError> errors, ExcelWorkbookImportRequest<TWorkbook> workbookRequest,
-        CancellationToken cancellationToken, IExcelMappingPlan plan, bool isDate1904) where TWorkbook : class, new()
+        CancellationToken cancellationToken, IExcelMappingPlan plan, bool isDate1904, WorkbookRowBudget rowBudget) where TWorkbook : class, new()
     {
         return InvokerCache<TWorkbook>.Values.GetOrAdd(request.ItemType, CreateInvoker<TWorkbook>)(this, source,
-            physicalName, request, root, results, errors, workbookRequest, cancellationToken, plan, isDate1904);
+            physicalName, request, root, results, errors, workbookRequest, cancellationToken, plan, isDate1904,
+            rowBudget);
     }
 
     /// <summary>
@@ -418,10 +499,11 @@ public sealed class MiniExcelExcelImporter : IExcelImporter, IExcelProviderCapab
     /// <param name="cancellationToken">用于取消读取和物化的令牌。</param>
     /// <param name="plan">当前行类型的映射计划。</param>
     /// <param name="isDate1904">当前工作簿是否使用 1904 日期系统。</param>
+    /// <param name="rowBudget">整个 Workbook 共享的数据行预算。</param>
     private async Task ImportTypedSheet<TWorkbook, TItem>(Stream source, string physicalName,
         ExcelSheetImportRequest request, TWorkbook root, ICollection<ExcelSheetImportResult> results,
         ICollection<ExcelImportError> errors, ExcelWorkbookImportRequest<TWorkbook> workbookRequest,
-        CancellationToken cancellationToken, IExcelMappingPlan plan, bool isDate1904)
+        CancellationToken cancellationToken, IExcelMappingPlan plan, bool isDate1904, WorkbookRowBudget rowBudget)
         where TWorkbook : class, new()
         where TItem : class, new()
     {
@@ -429,14 +511,13 @@ public sealed class MiniExcelExcelImporter : IExcelImporter, IExcelProviderCapab
         var dateColumns = MiniExcelSheetPlanBuilder.ResolveDateColumns<TItem>(plan, request);
         var rawDateSerials = MiniExcelRawDateSerialReader.Read(source, physicalName, dateColumns,
             request.DataRowStartIndex + 1,
-            workbookRequest.ResourceLimits?.MaxRows is int maximumRows
-                ? request.DataRowStartIndex + maximumRows : (int?)null,
+            null,
             cancellationToken);
         source.Position = 0;
         var rowObjects = await MiniExcelApi.QueryAsync(source, true, physicalName, ExcelType.XLSX,
             MiniExcelSheetPlanBuilder.CreateStartCell(request), configuration, cancellationToken).ConfigureAwait(false);
         ImportTypedSheetRows<TWorkbook, TItem>((IEnumerable)rowObjects, physicalName, request, root, results, errors,
-            workbookRequest, cancellationToken, plan, isDate1904, rawDateSerials);
+            workbookRequest, cancellationToken, plan, isDate1904, rawDateSerials, rowBudget);
     }
 
     /// <summary>
@@ -454,10 +535,11 @@ public sealed class MiniExcelExcelImporter : IExcelImporter, IExcelProviderCapab
     /// <param name="cancellationToken">用于取消读取和物化的令牌。</param>
     /// <param name="plan">当前行类型的映射计划。</param>
     /// <param name="isDate1904">当前工作簿是否使用 1904 日期系统。</param>
+    /// <param name="rowBudget">整个 Workbook 共享的数据行预算。</param>
     private void ImportTypedSheetSync<TWorkbook, TItem>(Stream source, string physicalName,
         ExcelSheetImportRequest request, TWorkbook root, ICollection<ExcelSheetImportResult> results,
         ICollection<ExcelImportError> errors, ExcelWorkbookImportRequest<TWorkbook> workbookRequest,
-        CancellationToken cancellationToken, IExcelMappingPlan plan, bool isDate1904)
+        CancellationToken cancellationToken, IExcelMappingPlan plan, bool isDate1904, WorkbookRowBudget rowBudget)
         where TWorkbook : class, new()
         where TItem : class, new()
     {
@@ -465,14 +547,13 @@ public sealed class MiniExcelExcelImporter : IExcelImporter, IExcelProviderCapab
         var dateColumns = MiniExcelSheetPlanBuilder.ResolveDateColumns<TItem>(plan, request);
         var rawDateSerials = MiniExcelRawDateSerialReader.Read(source, physicalName, dateColumns,
             request.DataRowStartIndex + 1,
-            workbookRequest.ResourceLimits?.MaxRows is int maximumRows
-                ? request.DataRowStartIndex + maximumRows : (int?)null,
+            null,
             cancellationToken);
         source.Position = 0;
         var rowObjects = MiniExcelApi.Query(source, true, physicalName, ExcelType.XLSX,
             MiniExcelSheetPlanBuilder.CreateStartCell(request), configuration);
         ImportTypedSheetRows<TWorkbook, TItem>((IEnumerable)rowObjects, physicalName, request, root, results, errors,
-            workbookRequest, cancellationToken, plan, isDate1904, rawDateSerials);
+            workbookRequest, cancellationToken, plan, isDate1904, rawDateSerials, rowBudget);
     }
 
     /// <summary>
@@ -494,11 +575,12 @@ public sealed class MiniExcelExcelImporter : IExcelImporter, IExcelProviderCapab
     /// <param name="plan">当前行类型的映射计划。</param>
     /// <param name="isDate1904">当前工作簿是否使用 1904 日期系统。</param>
     /// <param name="rawDateSerials">按物理行列索引的原始日期 serial 集合。</param>
+    /// <param name="rowBudget">整个 Workbook 共享的数据行预算。</param>
     private void ImportTypedSheetRows<TWorkbook, TItem>(IEnumerable rowObjects, string physicalName,
         ExcelSheetImportRequest request, TWorkbook root, ICollection<ExcelSheetImportResult> results,
         ICollection<ExcelImportError> errors, ExcelWorkbookImportRequest<TWorkbook> workbookRequest,
         CancellationToken cancellationToken, IExcelMappingPlan plan, bool isDate1904,
-        IReadOnlyDictionary<long, double> rawDateSerials)
+        IReadOnlyDictionary<long, double> rawDateSerials, WorkbookRowBudget rowBudget)
         where TWorkbook : class, new()
         where TItem : class, new()
     {
@@ -527,9 +609,19 @@ public sealed class MiniExcelExcelImporter : IExcelImporter, IExcelProviderCapab
             if (skipped > 0)
                 skipped--;
             else
+            {
+                if (!rowBudget.TryConsume())
+                {
+                    sheetErrors.Add(new ExcelImportError(
+                        ExcelImportErrorCode.ResourceLimit,
+                        $"Workbook 数据行数超过限制: {workbookRequest.ResourceLimits?.MaxRows}", physicalName, physicalRow, 0,
+                        propertyName: null));
+                    break;
+                }
                 MaterializeRow(current, headers, physicalName, request, plan, bindings, physicalRow, items, rows,
                     sheetErrors, unique, workbookRequest, cancellationToken, typeof(TItem), isDate1904,
                     rawDateSerials);
+            }
             if (IsErrorLimitReached(errors, workbookRequest) || IsErrorLimitReached(sheetErrors, workbookRequest))
                 break;
             physicalRow++;

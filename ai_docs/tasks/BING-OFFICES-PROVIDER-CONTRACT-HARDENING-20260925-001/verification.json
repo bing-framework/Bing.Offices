@@ -1,0 +1,86 @@
+[
+  {
+    "id": "VERIFY-L0-DIFF",
+    "command": "git",
+    "args": ["diff", "--check"],
+    "cwd": ".",
+    "required": true,
+    "status": "PASS",
+    "observed": "No task-introduced whitespace errors; the only reported line-ending warning is the pre-existing ProfileFixtures XML normalization notice.",
+    "timeoutMs": 120000
+  },
+  {
+    "id": "VERIFY-SOLUTION-BUILD",
+    "command": "dotnet",
+    "args": ["build", "Bing.Offices.sln", "--no-restore", "-c", "Release", "-v:minimal"],
+    "cwd": ".",
+    "required": false,
+    "timeoutMs": 600000,
+    "status": "PASS",
+    "observed": "Full solution Release build passed with 0 warnings and 0 errors after excluding the independent build/GoldenFixtures project tree from BuildScript default source discovery."
+  },
+  {
+    "id": "VERIFY-SOLUTION-TEST",
+    "command": "dotnet",
+    "args": ["test", "Bing.Offices.sln", "--no-restore", "-c", "Release", "-v:minimal", "-m:1"],
+    "cwd": ".",
+    "required": true,
+    "timeoutMs": 1200000,
+    "status": "PASS",
+    "observed": "Follow-up final exit code 0: 2378 passed, 0 failed, 0 skipped in 19 TRX runs. Per TFM: Core 204, NPOI Unit 571, MiniExcel Unit 43, ClosedXML Unit 101, ProviderContract 192, shared Integration 30, NPOI Integration 30, MiniExcel Integration 9, ClosedXML Integration 4; Docs net8 10. Evidence: artifacts/provider-followup-final/solution-test.log, solution-test.exitcode, trx/."
+  },
+  {
+    "id": "VERIFY-PUBLIC-API-GATE-NET6",
+    "command": "dotnet",
+    "args": ["test", "tests/Bing.Offices.Tests.Integration/Bing.Offices.Tests.Integration.csproj", "--no-restore", "-c", "Release", "-f", "net6.0", "--filter", "FullyQualifiedName~PublicApiContractTest"],
+    "cwd": ".",
+    "required": true,
+    "status": "PASS",
+    "observed": "net6.0: approved baseline member and hash comparison passed for Abstractions, Core, NPOI, MiniExcel, and ClosedXML; fresh package identity also verified."
+  },
+  {
+    "id": "VERIFY-PUBLIC-API-GATE-NET8",
+    "command": "dotnet",
+    "args": ["test", "tests/Bing.Offices.Tests.Integration/Bing.Offices.Tests.Integration.csproj", "--no-restore", "-c", "Release", "-f", "net8.0", "--filter", "FullyQualifiedName~PublicApiContractTest"],
+    "cwd": ".",
+    "required": true,
+    "status": "PASS",
+    "observed": "net8.0: approved baseline member and hash comparison passed for Abstractions, Core, NPOI, MiniExcel, and ClosedXML; fresh package identity also verified."
+  },
+  {
+    "id": "VERIFY-PACKAGE-CONSUMER-NET6",
+    "command": "dotnet",
+    "args": ["run", "--project", "tests/Bing.Offices.Consumer.Net6/Bing.Offices.Consumer.Net6.csproj", "--no-restore", "-c", "Release", "-p:BingOfficesPackageVersion=2.0.0"],
+    "cwd": ".",
+    "required": true,
+    "status": "PASS",
+    "observed": "Current api-candidate feed with isolated cache-provider-followup: .NET 6.0.36 package-consumer-ok, exit 0; all five product nupkg hashes match the feed. Runtime BING_OFFICES_PACKAGE_VERSION=2.0.0. Build emitted expected NETSDK1138."
+  },
+  {
+    "id": "VERIFY-PACKAGE-CONSUMER-NET8",
+    "command": "dotnet",
+    "args": ["run", "--project", "tests/Bing.Offices.Consumer.Net8/Bing.Offices.Consumer.Net8.csproj", "--no-restore", "-c", "Release", "-p:BingOfficesPackageVersion=2.0.0"],
+    "cwd": ".",
+    "required": true,
+    "status": "PASS",
+    "observed": "Current api-candidate feed with isolated cache-provider-followup: .NET 8.0.30 package-consumer-ok, exit 0; all five product nupkg hashes match the feed. Runtime BING_OFFICES_PACKAGE_VERSION=2.0.0. Build had no warnings/errors."
+  },
+  {
+    "id": "VERIFY-THIRD-PARTY-CONSUMER-NET6",
+    "command": "dotnet",
+    "args": ["run", "--project", "tests/Bing.Offices.ThirdPartyProvider.Consumer/Bing.Offices.ThirdPartyProvider.Consumer.csproj", "--no-restore", "-c", "Release", "-f", "net6.0", "-p:BingOfficesPackageVersion=2.0.0"],
+    "cwd": ".",
+    "required": true,
+    "status": "PASS",
+    "observed": "Current api-candidate feed with isolated cache-provider-followup: third-party-public-only-provider-ok, exit 0; no Testing or ProviderContract reference. Build emitted expected NETSDK1138."
+  },
+  {
+    "id": "VERIFY-THIRD-PARTY-CONSUMER-NET8",
+    "command": "dotnet",
+    "args": ["run", "--project", "tests/Bing.Offices.ThirdPartyProvider.Consumer/Bing.Offices.ThirdPartyProvider.Consumer.csproj", "--no-restore", "-c", "Release", "-f", "net8.0", "-p:BingOfficesPackageVersion=2.0.0"],
+    "cwd": ".",
+    "required": true,
+    "status": "PASS",
+    "observed": "Current api-candidate feed with isolated cache-provider-followup: third-party-public-only-provider-ok, exit 0; no Testing or ProviderContract reference. Build had no warnings/errors."
+  }
+]

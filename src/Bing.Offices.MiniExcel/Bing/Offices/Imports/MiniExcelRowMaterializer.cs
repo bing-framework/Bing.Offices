@@ -249,12 +249,23 @@ internal static class MiniExcelRowMaterializer
                     rowNumber, columnNumber, propertyName, rawValue: raw));
             }
         }
-        if (!rawOnly && isUnique && !unique.TryReserve(propertyName, text, false, ignoreEmpty, rowNumber))
+        if (!rawOnly && isUnique)
         {
-            unique.TryGetFirstRowNumber(propertyName, text, out var firstRow);
-            throw new MiniExcelExcelImporter.MiniExcelRowException(new ExcelImportError(
-                ExcelImportErrorCode.Validation, "重复数据。", sheetName, rowNumber, columnNumber,
-                propertyName, rawValue: raw, firstRowNumber: firstRow == 0 ? null : firstRow));
+            try
+            {
+                if (unique.TryReserve(propertyName, text, false, ignoreEmpty, rowNumber))
+                    return;
+                unique.TryGetFirstRowNumber(propertyName, text, out var firstRow);
+                throw new MiniExcelExcelImporter.MiniExcelRowException(new ExcelImportError(
+                    ExcelImportErrorCode.Validation, "重复数据。", sheetName, rowNumber, columnNumber,
+                    propertyName, rawValue: raw, firstRowNumber: firstRow == 0 ? null : firstRow));
+            }
+            catch (InvalidOperationException exception)
+            {
+                throw new MiniExcelExcelImporter.MiniExcelRowException(new ExcelImportError(
+                    ExcelImportErrorCode.ResourceLimit, exception.Message, sheetName, rowNumber, columnNumber,
+                    propertyName, rawValue: raw));
+            }
         }
     }
 

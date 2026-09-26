@@ -1,0 +1,226 @@
+{
+  "Generator": "golden-fixtures-v1",
+  "GeneratedOn": "2026-09-24",
+  "Files": [
+    {
+      "Path": "formula/cached-number.xlsx",
+      "Purpose": "formula text with numeric cached value",
+      "Expected": "Formula!A2 has 1\u002B1 and cached value 2",
+      "UpdateReason": "Initial provider-neutral contract fixture baseline",
+      "Provenance": "Manually authored Open XML by GoldenFixtures",
+      "Generator": "golden-fixtures-v1",
+      "Sha256": "65b28df72e6df09ba5ce92301790b10feb40ed08f645c821753fd59309a5c49e",
+      "ContractVersion": "1"
+    },
+    {
+      "Path": "formula/cached-bool.xlsx",
+      "Purpose": "formula text with boolean cached value",
+      "Expected": "Formula!A2 has TRUE and cached value 1",
+      "UpdateReason": "Initial provider-neutral contract fixture baseline",
+      "Provenance": "Manually authored Open XML by GoldenFixtures",
+      "Generator": "golden-fixtures-v1",
+      "Sha256": "ac0f163d5f087fb2a6e40d7fb19ad073645a67114932a55ccc27ddbc94407977",
+      "ContractVersion": "1"
+    },
+    {
+      "Path": "formula/cached-string.xlsx",
+      "Purpose": "formula text with string cached value",
+      "Expected": "Formula!A2 has CONCAT and cached value text",
+      "UpdateReason": "Initial provider-neutral contract fixture baseline",
+      "Provenance": "Manually authored Open XML by GoldenFixtures",
+      "Generator": "golden-fixtures-v1",
+      "Sha256": "91aa8e38892b7a36111f7cb98cd86ed4c9dac01b8a375d78151d2b8d2ad1c3f2",
+      "ContractVersion": "1"
+    },
+    {
+      "Path": "formula/no-cache.xlsx",
+      "Purpose": "formula without cached value",
+      "Expected": "Formula!A2 has formula text and an empty cached result",
+      "UpdateReason": "Initial provider-neutral contract fixture baseline",
+      "Provenance": "Manually authored Open XML by GoldenFixtures",
+      "Generator": "golden-fixtures-v1",
+      "Sha256": "ebf9ff39db43884c997174957e3060e9441e41ad6a52eb3cf7974d83ba0b3684",
+      "ContractVersion": "1"
+    },
+    {
+      "Path": "date/date1900.xlsx",
+      "Purpose": "1900 date-system serial",
+      "Expected": "Data!A2 uses a date style and 1900-system serial",
+      "UpdateReason": "Initial provider-neutral contract fixture baseline",
+      "Provenance": "Manually authored Open XML by GoldenFixtures",
+      "Generator": "golden-fixtures-v1",
+      "Sha256": "035be526c67daef68b903b869d205332ecf2733ca0f8d4a26416ccaf74a3282b",
+      "ContractVersion": "1"
+    },
+    {
+      "Path": "date/date1904.xlsx",
+      "Purpose": "1904 date-system serial",
+      "Expected": "Data!A2 uses a date style and workbookPr date1904",
+      "UpdateReason": "Initial provider-neutral contract fixture baseline",
+      "Provenance": "Manually authored Open XML by GoldenFixtures",
+      "Generator": "golden-fixtures-v1",
+      "Sha256": "5f56a7a052af173b9844247fb7851eb1fe368b1e3302f33aef3bcc5b1f16062e",
+      "ContractVersion": "1"
+    },
+    {
+      "Path": "validation/list-invalid.xlsx",
+      "Purpose": "invalid explicit list value",
+      "Expected": "Data!A2 violates east/west list",
+      "UpdateReason": "Initial provider-neutral contract fixture baseline",
+      "Provenance": "Manually authored Open XML by GoldenFixtures",
+      "Generator": "golden-fixtures-v1",
+      "Sha256": "b0d33af11aab010cb49812c3f39909b9ef99718d5b13314f9b80cde645170325",
+      "ContractVersion": "1"
+    },
+    {
+      "Path": "validation/whole-between-valid.xlsx",
+      "Purpose": "valid whole-number between rule",
+      "Expected": "Data!B2 is 5 and must be between 1 and 10",
+      "UpdateReason": "Initial provider-neutral contract fixture baseline",
+      "Provenance": "Manually authored Open XML by GoldenFixtures",
+      "Generator": "golden-fixtures-v1",
+      "Sha256": "c2513a0539fbc415002bd7e132f197c283f48af85ee6ea891428e81237ba73e3",
+      "ContractVersion": "1"
+    },
+    {
+      "Path": "validation/whole-less-than-invalid.xlsx",
+      "Purpose": "invalid whole-number comparison",
+      "Expected": "Data!B2 is 5 and must be less than 5",
+      "UpdateReason": "Initial provider-neutral contract fixture baseline",
+      "Provenance": "Manually authored Open XML by GoldenFixtures",
+      "Generator": "golden-fixtures-v1",
+      "Sha256": "24530b88754059237f150d4a658f23aaa8cd9cf284ae6e811446070d8d809db5",
+      "ContractVersion": "1"
+    },
+    {
+      "Path": "validation/decimal-between-valid.xlsx",
+      "Purpose": "valid decimal between rule",
+      "Expected": "Data!A2 is 5.5 and must be between 1 and 10",
+      "UpdateReason": "Initial provider-neutral contract fixture baseline",
+      "Provenance": "Manually authored Open XML by GoldenFixtures",
+      "Generator": "golden-fixtures-v1",
+      "Sha256": "28e6ef8e833b5032d081a640bade934a9268f83dd1bdde90e96de0f5f1d8d345",
+      "ContractVersion": "1"
+    },
+    {
+      "Path": "validation/date-between-valid.xlsx",
+      "Purpose": "valid date between rule",
+      "Expected": "Data!A2 is 2026-09-04 and has a date validation",
+      "UpdateReason": "Initial provider-neutral contract fixture baseline",
+      "Provenance": "Manually authored Open XML by GoldenFixtures",
+      "Generator": "golden-fixtures-v1",
+      "Sha256": "b074985fb5eaf8dbcd532cfd12d2e4775337ec47f7d9b953213a79923b4bd8f1",
+      "ContractVersion": "1"
+    },
+    {
+      "Path": "validation/time-between-valid.xlsx",
+      "Purpose": "valid time between rule",
+      "Expected": "Data!A2 is 12:00 and has a time validation",
+      "UpdateReason": "Initial provider-neutral contract fixture baseline",
+      "Provenance": "Manually authored Open XML by GoldenFixtures",
+      "Generator": "golden-fixtures-v1",
+      "Sha256": "76823a2d466ec57a5557dbd2f21df641117b012a26a2a27f57c0ce0fa0084252",
+      "ContractVersion": "1"
+    },
+    {
+      "Path": "validation/text-length-invalid.xlsx",
+      "Purpose": "invalid text length rule",
+      "Expected": "Data!A2 has six characters and must be shorter than five",
+      "UpdateReason": "Initial provider-neutral contract fixture baseline",
+      "Provenance": "Manually authored Open XML by GoldenFixtures",
+      "Generator": "golden-fixtures-v1",
+      "Sha256": "2a984c3ff96ddec97c096fb732a82599c278c229187023ebd139f820d4862f15",
+      "ContractVersion": "1"
+    },
+    {
+      "Path": "validation/custom-unsupported.xlsx",
+      "Purpose": "unsupported custom formula",
+      "Expected": "Data!A2 uses INDIRECT and must follow explicit unsupported policy",
+      "UpdateReason": "Initial provider-neutral contract fixture baseline",
+      "Provenance": "Manually authored Open XML by GoldenFixtures",
+      "Generator": "golden-fixtures-v1",
+      "Sha256": "dcc1617c9bd78e6edcb38ece029862bea82d66de4c134cfa5921f8286d19a86a",
+      "ContractVersion": "1"
+    },
+    {
+      "Path": "relations/parent-child.xlsx",
+      "Purpose": "parent-child relation input",
+      "Expected": "Parents and Children sheets share OrderNo keys",
+      "UpdateReason": "Initial provider-neutral contract fixture baseline",
+      "Provenance": "Manually authored Open XML by GoldenFixtures",
+      "Generator": "golden-fixtures-v1",
+      "Sha256": "cacd46ab2754e5d697d0ae4481e7b502cff5c559e2b8de8f9a0d8dc514319613",
+      "ContractVersion": "1"
+    },
+    {
+      "Path": "template/styles.xlsx",
+      "Purpose": "basic style template",
+      "Expected": "Data!A1 is bold and B2 uses a date number format",
+      "UpdateReason": "Initial provider-neutral contract fixture baseline",
+      "Provenance": "Manually authored Open XML by GoldenFixtures",
+      "Generator": "golden-fixtures-v1",
+      "Sha256": "36c676513cfe70e7bb2534771c3901b67d7f794e08d0c3670606e1bec843f718",
+      "ContractVersion": "1"
+    },
+    {
+      "Path": "template/comments.xlsx",
+      "Purpose": "basic comment part",
+      "Expected": "Data!A1 has a source comment authored by GoldenFixtures",
+      "UpdateReason": "Initial provider-neutral contract fixture baseline",
+      "Provenance": "Manually authored Open XML by GoldenFixtures",
+      "Generator": "golden-fixtures-v1",
+      "Sha256": "2e80af2bd70fd95efc002e50b124106a0a276babb7563ed47493412d9f29565b",
+      "ContractVersion": "1"
+    },
+    {
+      "Path": "template/conditional-formatting.xlsx",
+      "Purpose": "basic conditional formatting",
+      "Expected": "Data!A2:A3 has a positive-value expression rule",
+      "UpdateReason": "Initial provider-neutral contract fixture baseline",
+      "Provenance": "Manually authored Open XML by GoldenFixtures",
+      "Generator": "golden-fixtures-v1",
+      "Sha256": "b2064516f79ca39e0ca81842203149b38a208903ce8ddfaa51ed8375b6babe02",
+      "ContractVersion": "1"
+    },
+    {
+      "Path": "template/merged-cells.xlsx",
+      "Purpose": "basic merged-cell template",
+      "Expected": "Data!A1:B1 is a merged range",
+      "UpdateReason": "Initial provider-neutral contract fixture baseline",
+      "Provenance": "Manually authored Open XML by GoldenFixtures",
+      "Generator": "golden-fixtures-v1",
+      "Sha256": "1dc1ae80ef78dc254d354a87e2c366e15448bc6fb8a5fc018346f6d817aa9371",
+      "ContractVersion": "1"
+    },
+    {
+      "Path": "security/malformed.zip",
+      "Purpose": "malformed ZIP preflight input",
+      "Expected": "Input is intentionally not a ZIP package",
+      "UpdateReason": "Initial provider-neutral contract fixture baseline",
+      "Provenance": "Manually authored Open XML by GoldenFixtures",
+      "Generator": "golden-fixtures-v1",
+      "Sha256": "a90877b716582c036052f8b70ed0e9a60464ad21daa00ed4c77d2f478ca16239",
+      "ContractVersion": "1"
+    },
+    {
+      "Path": "security/oversized-entry.xlsx",
+      "Purpose": "oversized ZIP entry preflight input",
+      "Expected": "Package includes xl/media/oversized.bin for resource admission checks",
+      "UpdateReason": "Initial provider-neutral contract fixture baseline",
+      "Provenance": "Manually authored Open XML by GoldenFixtures",
+      "Generator": "golden-fixtures-v1",
+      "Sha256": "728749f1251ec1491e596d9ab1c286601e18535a29583213a8bb2d2f7abf7a90",
+      "ContractVersion": "1"
+    },
+    {
+      "Path": "xlsb/Issue635.xlsb",
+      "Purpose": "real XLSB fixed-column and batch import input",
+      "Expected": "Лист2!A1:F2 provides scalar, boolean, date, text and empty values",
+      "UpdateReason": "ExcelDataReader XLSB capability extension",
+      "Provenance": "ExcelDataReader upstream TestData/Issue635.xlsb at dc860de020d1cd40af587c3636c766e2ea829d86",
+      "Generator": "ExcelDataReader upstream",
+      "Sha256": "1d2932ed8424d5278bc7500eb5a3c195ff81bb8403ed4cec5bfc46ae90f5842f",
+      "ContractVersion": "1"
+    }
+  ]
+}

@@ -12,9 +12,15 @@
   </Target>
 
   <ItemGroup>
+    <Compile Remove="artifacts/**" />
+    <EmbeddedResource Remove="artifacts/**" />
+    <None Remove="artifacts/**" />
     <PackageReference Include="Bing.Offices.Npoi" Version="$(BingOfficesPackageVersion)" />
     <PackageReference Include="Bing.Offices.MiniExcel" Version="$(BingOfficesPackageVersion)" />
     <PackageReference Include="Bing.Offices.ClosedXml" Version="$(BingOfficesPackageVersion)" />
+    <PackageReference Include="Bing.Offices.ExcelDataReader" Version="$(BingOfficesPackageVersion)" />
+    <PackageReference Include="Bing.Offices.SpreadCheetah" Version="$(BingOfficesPackageVersion)" />
+    <PackageReference Include="Bing.Offices.AsposeCells" Version="$(BingOfficesPackageVersion)" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="6.0.0" />
   </ItemGroup>
 </Project>

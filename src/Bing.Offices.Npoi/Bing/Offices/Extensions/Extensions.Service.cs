@@ -4,6 +4,8 @@ using Bing.Offices.Imports;
 using Bing.Offices.IO;
 using Bing.Offices.Conversions;
 using Bing.Offices.Providers;
+using Bing.Offices.Formula;
+using Bing.Offices.Npoi.Formula;
 using Bing.Offices.Validations;
 using Bing.Offices.Mappings;
 using Microsoft.Extensions.DependencyInjection;
@@ -39,6 +41,7 @@ public static class ExcelNpoiServiceCollectionExtensions
             provider.GetService<IExcelMappingPlanFactory>(),
             provider.GetServices<IBingOfficesExceptionObserver>(),
             provider.GetRequiredService<IFileExportCommitter>()));
+        services.TryAddTransient<IExcelFormulaProcessor, NpoiExcelFormulaProcessor>();
         return services;
     }
 }

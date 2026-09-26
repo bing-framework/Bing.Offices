@@ -35,6 +35,11 @@ internal sealed class ExcelImportRuntime
     internal bool RowLimitReached => MaxRows.HasValue && _rowCount >= MaxRows.Value;
 
     /// <summary>
+    /// 获取是否已发现超出工作簿行数预算的数据行。
+    /// </summary>
+    internal bool RowLimitExceeded => _rowLimitReported;
+
+    /// <summary>
     /// 获取跟踪工作簿图片数量和字节数的资源限制器。
     /// </summary>
     internal ExcelImageResourceTracker ImageResources { get; }

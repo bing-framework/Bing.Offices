@@ -9,12 +9,19 @@ Bing是一个.net core平台下的应用框架，旨在于提升小型团队的�
   <Import Project="..\..\framework.props" />
 
   <ItemGroup>
+    <Compile Include="..\provider-shared\ExcelSheetContent.cs"
+             Link="Bing\Offices\Exports\ExcelSheetContent.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Bing.Offices.Core\Bing.Offices.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <Compile Include="..\provider-shared\ExcelXlsxZipPreflight.cs"
              Link="Bing\Offices\Imports\ExcelXlsxZipPreflight.cs" />
+    <Compile Include="..\provider-shared\ExcelReportPreflight.cs"
+             Link="Bing\Offices\Internals\ExcelReportPreflight.cs" />
   </ItemGroup>
 
   <ItemGroup>

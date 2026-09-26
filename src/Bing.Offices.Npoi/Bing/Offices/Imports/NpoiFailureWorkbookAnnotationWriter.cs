@@ -60,9 +60,10 @@ internal static class NpoiFailureWorkbookAnnotationWriter
         foreach (var error in errors.Where(error => error.RowIndex > 0 && error.ColumnIndex > 0))
         {
             var sheet = workbook.GetSheet(error.SheetName);
-            var cell = sheet?.GetRow(error.RowIndex - 1)?.GetCell(error.ColumnIndex - 1);
-            if (cell == null)
+            if (sheet == null)
                 continue;
+            var row = sheet.GetRow(error.RowIndex - 1) ?? sheet.CreateRow(error.RowIndex - 1);
+            var cell = row.GetCell(error.ColumnIndex - 1) ?? row.CreateCell(error.ColumnIndex - 1);
             var existing = cell.CellComment;
             if (existing != null && conflictPolicy == ExcelImportCommentConflictPolicy.Preserve)
                 continue;

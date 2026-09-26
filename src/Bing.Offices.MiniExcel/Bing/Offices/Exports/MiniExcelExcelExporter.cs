@@ -22,7 +22,7 @@ namespace Bing.Offices.Exports;
 /// <remarks>
 /// 将行数据以延迟字典序列交给 MiniExcel，避免预先构建完整 DOM。
 /// </remarks>
-public sealed class MiniExcelExcelExporter : IExcelExporter, IExcelProviderCapabilities
+public sealed class MiniExcelExcelExporter : IExcelExporter, IExcelProviderFeatureDescriptor
 {
     /// <inheritdoc />
     public string ProviderName => "MiniExcel";
@@ -33,6 +33,28 @@ public sealed class MiniExcelExcelExporter : IExcelExporter, IExcelProviderCapab
 
     /// <inheritdoc />
     public bool Supports(ExcelProviderCapabilities capabilities) => (Capabilities & capabilities) == capabilities;
+
+    /// <inheritdoc />
+    public IReadOnlyList<ExcelFormat> ReadFormats { get; } = Array.Empty<ExcelFormat>();
+    /// <inheritdoc />
+    public IReadOnlyList<ExcelFormat> WriteFormats { get; } = new[] { ExcelFormat.Xlsx };
+    /// <inheritdoc />
+    public bool SupportsCompleteWorkbookImport => false;
+    /// <inheritdoc />
+    public bool SupportsBatchImport => false;
+    /// <inheritdoc />
+    public bool SupportsCompleteWorkbookExport => true;
+    /// <inheritdoc />
+    public bool SupportsTrueAsyncIo => true;
+    /// <inheritdoc />
+    public IReadOnlyList<string> Limitations { get; } = new[]
+    {
+        "模板编辑、Workbook 原生规则、宏、ODS、XLSB 和加密请求明确拒绝。"
+    };
+    /// <inheritdoc />
+    public ExcelProviderFeatures Features => ExcelProviderFeatures.StreamingWorkbookCreation;
+    /// <inheritdoc />
+    public bool Supports(ExcelProviderFeatures features) => (Features & features) == features;
     /// <summary>
     /// 用于创建默认映射计划的值转换器集合。
     /// </summary>
@@ -356,6 +378,9 @@ public sealed class MiniExcelExcelExporter : IExcelExporter, IExcelProviderCapab
     /// <param name="request">待校验的工作簿导出请求。</param>
     private static void ValidateRequest(ExcelWorkbookExportRequest request)
     {
+        if (request.Sheets.Any(sheet => sheet.Images.Count > 0 || sheet.DataValidations.Count > 0))
+            throw new BingOfficesUnsupportedFeatureException("MiniExcel 不支持公共图片或原生数据校验导出。",
+                provider: "MiniExcel", operation: BingOfficesOperation.Export, stage: BingOfficesStage.Preflight);
         if (request.Format != ExcelFormat.Xlsx)
             throw new BingOfficesUnsupportedFeatureException("MiniExcel Provider 仅支持 XLSX。",
                 provider: "MiniExcel", operation: BingOfficesOperation.Export,

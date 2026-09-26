@@ -75,6 +75,79 @@ public sealed class NpoiFailureWorkbookPreflightTest
     }
 
     /// <summary>
+    /// 验证同一工作表行的多个错误只消耗一个 ErrorRowsOnly 候选行预算。
+    /// </summary>
+    [Fact]
+    public void Validate_CandidateErrorRowBudget_ShouldDeduplicateErrorsOnSameRow()
+    {
+        using var workbook = new XSSFWorkbook();
+        workbook.CreateSheet("Data");
+        var errors = new[]
+        {
+            new ExcelImportError(ExcelImportErrorCode.InvalidInput, "invalid", "Data", 2, 1, "First"),
+            new ExcelImportError(ExcelImportErrorCode.InvalidInput, "invalid", "Data", 2, 2, "Second")
+        };
+        var options = new ExcelImportFailureOptions
+        {
+            Mode = ExcelImportFailureWorkbookMode.ErrorRowsOnly,
+            MaxCandidateErrorRows = 1
+        };
+
+        NpoiFailureWorkbookPreflight.Validate(workbook, errors,
+            new Dictionary<string, ExcelSheetImportRequest>(), options);
+    }
+
+    /// <summary>
+    /// 验证相同 RowIndex 位于不同 Sheet 时必须消耗两个候选行预算。
+    /// </summary>
+    [Fact]
+    public void Validate_CandidateErrorRowBudget_ShouldCountDifferentSheetsSeparately()
+    {
+        using var workbook = new XSSFWorkbook();
+        workbook.CreateSheet("Data");
+        workbook.CreateSheet("Other");
+        var errors = new[]
+        {
+            new ExcelImportError(ExcelImportErrorCode.InvalidInput, "invalid", "Data", 2, 1, "Value"),
+            new ExcelImportError(ExcelImportErrorCode.InvalidInput, "invalid", "Other", 2, 1, "Value")
+        };
+        var options = new ExcelImportFailureOptions
+        {
+            Mode = ExcelImportFailureWorkbookMode.ErrorRowsOnly,
+            MaxCandidateErrorRows = 1
+        };
+
+        var exception = Assert.Throws<BingOfficesResourceLimitException>(() =>
+            NpoiFailureWorkbookPreflight.Validate(workbook, errors,
+                new Dictionary<string, ExcelSheetImportRequest>(), options));
+
+        Assert.Equal(BingOfficesStage.Preflight, exception.Stage);
+    }
+
+    /// <summary>
+    /// 验证候选错误行预算不限制 AnnotatedOriginal 输出。
+    /// </summary>
+    [Fact]
+    public void Validate_CandidateErrorRowBudget_ShouldNotApplyToAnnotatedOriginal()
+    {
+        using var workbook = new XSSFWorkbook();
+        workbook.CreateSheet("Data");
+        var errors = new[]
+        {
+            new ExcelImportError(ExcelImportErrorCode.InvalidInput, "invalid", "Data", 2, 1, "First"),
+            new ExcelImportError(ExcelImportErrorCode.InvalidInput, "invalid", "Data", 3, 1, "Second")
+        };
+        var options = new ExcelImportFailureOptions
+        {
+            Mode = ExcelImportFailureWorkbookMode.AnnotatedOriginal,
+            MaxCandidateErrorRows = 1
+        };
+
+        NpoiFailureWorkbookPreflight.Validate(workbook, errors,
+            new Dictionary<string, ExcelSheetImportRequest>(), options);
+    }
+
+    /// <summary>
     /// 验证复制单元格预算会拒绝估算行数超限值。
     /// </summary>
     [Fact]

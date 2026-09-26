@@ -52,6 +52,7 @@
 *.exe  binary -eol
 *.xls  binary -eol
 *.xlsx binary -eol
+*.xlsb binary -eol
 *.doc  binary -eol
 *.docx binary -eol
 *.ppt  binary -eol

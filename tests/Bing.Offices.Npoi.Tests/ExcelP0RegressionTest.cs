@@ -1556,7 +1556,7 @@ public sealed class ExcelP0RegressionTest
         Assert.Equal(1, result.Errors.Count);
         Assert.False(result.ErrorsTruncated);
         Assert.Equal(2, result.MaxErrors);
-        Assert.Equal(1, Assert.Single(result.Workbook.Rows).Count);
+        Assert.Empty(result.Workbook.Rows);
     }
 
     /// <summary>
@@ -2280,7 +2280,7 @@ public sealed class ExcelP0RegressionTest
         /// </summary>
         public long PeakWorkingSet { get; }
         /// <summary>
-         /// 获取探测进程退出代码。
+        /// 获取探测进程退出代码。
         /// </summary>
         public int ExitCode { get; }
         /// <summary>
@@ -2601,9 +2601,6 @@ public sealed class ExcelP0RegressionTest
         /// 获取或设置金额。
         /// </summary>
         [ExcelMaxValue(10)]
-        /// <summary>
-        /// 获取或设置金额。
-        /// </summary>
         public string Amount { get; set; }
     }
 
@@ -2617,7 +2614,7 @@ public sealed class ExcelP0RegressionTest
         /// </summary>
         public string Amount { get; set; }
         /// <summary>
-         /// 获取或设置第二个字段值。
+        /// 获取或设置第二个字段值。
         /// </summary>
         public string Second { get; set; }
     }
@@ -2650,7 +2647,7 @@ public sealed class ExcelP0RegressionTest
     private sealed class FailingDeleteFileSystem : IFailureWorkbookFileSystem
     {
         /// <summary>
-         /// 获取或设置已创建文件的路径。
+        /// 获取或设置已创建文件的路径。
         /// </summary>
         public string CreatedPath { get; private set; }
 
@@ -2713,7 +2710,7 @@ public sealed class ExcelP0RegressionTest
     private sealed class FileCreationFailingFileSystem : IFailureWorkbookFileSystem
     {
         /// <summary>
-         /// 获取或设置已创建文件的路径。
+        /// 获取或设置已创建文件的路径。
         /// </summary>
         public string CreatedPath { get; private set; }
         /// <summary>
@@ -2741,7 +2738,7 @@ public sealed class ExcelP0RegressionTest
     private sealed class TrackingFileSystem : IFailureWorkbookFileSystem
     {
         /// <summary>
-         /// 获取或设置已创建文件的路径。
+        /// 获取或设置已创建文件的路径。
         /// </summary>
         public string CreatedPath { get; private set; }
         /// <summary>

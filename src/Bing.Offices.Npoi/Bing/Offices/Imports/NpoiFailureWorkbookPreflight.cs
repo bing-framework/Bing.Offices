@@ -22,11 +22,15 @@ internal static class NpoiFailureWorkbookPreflight
         IReadOnlyDictionary<string, ExcelSheetImportRequest> resolvedSheetRequests,
         ExcelImportFailureOptions options)
     {
-        if (options.MaxCandidateErrorRows.HasValue && errors.Count > options.MaxCandidateErrorRows.Value)
-            throw CreateLimitException($"失败工作簿候选错误行超过限制: {options.MaxCandidateErrorRows.Value}");
-
         if (options.Mode != ExcelImportFailureWorkbookMode.ErrorRowsOnly)
             return;
+
+        var candidateRows = errors.Where(error => error.RowIndex > 1)
+            .Select(error => (error.SheetName, error.RowIndex))
+            .Distinct(new ErrorRowComparer())
+            .Count();
+        if (options.MaxCandidateErrorRows.HasValue && candidateRows > options.MaxCandidateErrorRows.Value)
+            throw CreateLimitException($"失败工作簿候选错误行超过限制: {options.MaxCandidateErrorRows.Value}");
 
         var pictureEstimate = options.MaxCopiedPictures.HasValue
             || options.MaxCopiedPictureBytes.HasValue
@@ -146,5 +150,20 @@ internal static class NpoiFailureWorkbookPreflight
         /// 获取预计处理的图片数据大小（字节）。
         /// </summary>
         internal long Bytes { get; }
+    }
+
+    /// <summary>
+    /// 按 Sheet 名称（忽略大小写）和物理行号标识失败工作簿候选行。
+    /// </summary>
+    private sealed class ErrorRowComparer : IEqualityComparer<(string SheetName, int RowIndex)>
+    {
+        /// <inheritdoc />
+        public bool Equals((string SheetName, int RowIndex) left, (string SheetName, int RowIndex) right) =>
+            left.RowIndex == right.RowIndex
+            && string.Equals(left.SheetName, right.SheetName, StringComparison.OrdinalIgnoreCase);
+
+        /// <inheritdoc />
+        public int GetHashCode((string SheetName, int RowIndex) value) =>
+            HashCode.Combine(StringComparer.OrdinalIgnoreCase.GetHashCode(value.SheetName ?? string.Empty), value.RowIndex);
     }
 }

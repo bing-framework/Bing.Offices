@@ -144,6 +144,26 @@ public sealed class MiniExcelProviderTest
     }
 
     /// <summary>
+    /// 验证新增 XLSB 枚举不会被 MiniExcel 静默降级为 XLSX。
+    /// </summary>
+    [Fact]
+    public void Xlsb_ShouldBeRejectedAsUnsupported()
+    {
+        var request = ExcelExport.Workbook(workbook => workbook
+            .Format(ExcelFormat.Xlsb)
+            .AddSheet("People", new[] { new Person { Name = "XLSB" } }));
+        using var stream = new MemoryStream();
+
+        var exception = Assert.Throws<BingOfficesUnsupportedFeatureException>(() =>
+            new MiniExcelExcelExporter().Export(request, stream));
+
+        Assert.Equal("MiniExcel", exception.Provider);
+        Assert.Equal(BingOfficesOperation.Export, exception.Operation);
+        Assert.Equal(BingOfficesStage.Preflight, exception.Stage);
+        Assert.Equal(0, stream.Length);
+    }
+
+    /// <summary>
     /// 验证不支持呈现选项应失败之前写入。
     /// </summary>
     [Fact]
@@ -1823,7 +1843,7 @@ public sealed class MiniExcelProviderTest
     }
 
     /// <summary>
-    /// 提供测试场景使用的值转换器。
+    /// 记录固定列导入行列位置的测试转换器。
     /// </summary>
     private sealed class FixedColumnContextConverter : INamedExcelValueConverter
     {
@@ -1854,7 +1874,7 @@ public sealed class MiniExcelProviderTest
     }
 
     /// <summary>
-    /// 提供测试场景使用的校验规则。
+    /// 记录固定列校验行列位置并始终通过的规则。
     /// </summary>
     private sealed class FixedColumnContextValidationRule : INamedExcelValidationRule
     {
@@ -1887,7 +1907,7 @@ public sealed class MiniExcelProviderTest
     }
 
     /// <summary>
-    /// 提供测试场景使用的值转换器。
+    /// 记录动态列导入行列位置的测试转换器。
     /// </summary>
     private sealed class DynamicColumnContextConverter : INamedExcelValueConverter
     {
@@ -1918,7 +1938,7 @@ public sealed class MiniExcelProviderTest
     }
 
     /// <summary>
-    /// 提供测试场景使用的校验规则。
+    /// 记录动态列校验位置并拒绝指定无效文本的规则。
     /// </summary>
     private sealed class DynamicColumnContextValidationRule : INamedExcelValidationRule
     {
@@ -1940,7 +1960,7 @@ public sealed class MiniExcelProviderTest
     }
 
     /// <summary>
-    /// 提供测试场景使用的流替身。
+    /// 首次异步写入时触发取消的测试流。
     /// </summary>
     private sealed class CancelOnFirstAsyncWriteStream : Stream
     {
@@ -2029,7 +2049,7 @@ public sealed class MiniExcelProviderTest
     }
 
     /// <summary>
-    /// 提供测试场景使用的流替身。
+    /// 首次异步读取时触发取消的测试流。
     /// </summary>
     private sealed class CancelOnFirstAsyncReadStream : Stream
     {

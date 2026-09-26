@@ -61,6 +61,38 @@ public sealed class ExcelSheetExportBuilder<T> where T : class, new()
     /// </summary>
     private readonly List<ExcelChartDefinition> _charts = new List<ExcelChartDefinition>();
     /// <summary>
+    /// 表格定义。
+    /// </summary>
+    private readonly List<ExcelTableDefinition> _tables = new List<ExcelTableDefinition>();
+    /// <summary>
+    /// 自动筛选定义。
+    /// </summary>
+    private readonly List<ExcelAutoFilterDefinition> _autoFilters = new List<ExcelAutoFilterDefinition>();
+    /// <summary>
+    /// 冻结窗格定义。
+    /// </summary>
+    private ExcelFreezePaneDefinition _freezePane;
+    /// <summary>
+    /// 条件格式定义。
+    /// </summary>
+    private readonly List<ExcelConditionalFormatDefinition> _conditionalFormats = new List<ExcelConditionalFormatDefinition>();
+    /// <summary>
+    /// 名称范围定义。
+    /// </summary>
+    private readonly List<ExcelNamedRangeDefinition> _namedRanges = new List<ExcelNamedRangeDefinition>();
+    /// <summary>
+    /// 打印布局。
+    /// </summary>
+    private ExcelPrintLayoutOptions _printLayout;
+    /// <summary>
+    /// 当前工作表待嵌入的图片定义。
+    /// </summary>
+    private readonly List<ExcelSheetImageDefinition> _images = new();
+    /// <summary>
+    /// 当前工作表待写入的原生数据校验规则。
+    /// </summary>
+    private readonly List<ExcelDataValidationDefinition> _dataValidations = new();
+    /// <summary>
     /// 多行表头定义；未设置时使用单行表头。
     /// </summary>
     private IReadOnlyList<ExcelHeaderRow> _headerRows = Array.Empty<ExcelHeaderRow>();
@@ -217,7 +249,7 @@ public sealed class ExcelSheetExportBuilder<T> where T : class, new()
     }
 
     /// <summary>
-    /// 设置规范化映射文档的导出方向配置。
+    /// 设置请求级映射配置。
     /// </summary>
     /// <param name="document">包含导出方向配置的规范化映射文档。</param>
     /// <returns>当前 Sheet 构建器，用于继续配置。</returns>
@@ -321,6 +353,110 @@ public sealed class ExcelSheetExportBuilder<T> where T : class, new()
     }
 
     /// <summary>
+    /// 添加一个嵌入图片定义。
+    /// </summary>
+    /// <param name="image">待添加的图片定义。</param>
+    /// <returns>当前构建器。</returns>
+    public ExcelSheetExportBuilder<T> Image(ExcelSheetImageDefinition image)
+    {
+        if (image == null) throw new ArgumentNullException(nameof(image));
+        image.Validate();
+        _images.Add(image);
+        return this;
+    }
+
+    /// <summary>
+    /// 添加一个 Excel 原生数据校验定义。
+    /// </summary>
+    /// <param name="validation">待添加的原生数据校验规则。</param>
+    /// <returns>当前构建器。</returns>
+    public ExcelSheetExportBuilder<T> DataValidation(ExcelDataValidationDefinition validation)
+    {
+        if (validation == null) throw new ArgumentNullException(nameof(validation));
+        validation.Validate();
+        _dataValidations.Add(validation);
+        return this;
+    }
+
+    /// <summary>
+    /// 添加一个表格定义。
+    /// </summary>
+    /// <param name="table">待添加的表格定义。</param>
+    /// <returns>当前构建器。</returns>
+    public ExcelSheetExportBuilder<T> Table(ExcelTableDefinition table)
+    {
+        if (table == null) throw new ArgumentNullException(nameof(table));
+        table.Validate();
+        _tables.Add(table);
+        return this;
+    }
+
+    /// <summary>
+    /// 添加当前工作表的自动筛选定义。
+    /// </summary>
+    /// <param name="autoFilter">待添加的自动筛选定义。</param>
+    /// <returns>当前构建器。</returns>
+    public ExcelSheetExportBuilder<T> AutoFilter(ExcelAutoFilterDefinition autoFilter)
+    {
+        if (autoFilter == null) throw new ArgumentNullException(nameof(autoFilter));
+        autoFilter.Validate();
+        _autoFilters.Add(autoFilter);
+        return this;
+    }
+
+    /// <summary>
+    /// 设置当前 Sheet 的冻结窗格。
+    /// </summary>
+    /// <param name="freezePane">替换当前配置的冻结窗格定义。</param>
+    /// <returns>当前构建器。</returns>
+    public ExcelSheetExportBuilder<T> FreezePane(ExcelFreezePaneDefinition freezePane)
+    {
+        if (freezePane == null) throw new ArgumentNullException(nameof(freezePane));
+        freezePane.Validate();
+        _freezePane = freezePane;
+        return this;
+    }
+
+    /// <summary>
+    /// 添加一个条件格式定义。
+    /// </summary>
+    /// <param name="conditionalFormat">待添加的条件格式定义。</param>
+    /// <returns>当前构建器。</returns>
+    public ExcelSheetExportBuilder<T> ConditionalFormat(ExcelConditionalFormatDefinition conditionalFormat)
+    {
+        if (conditionalFormat == null) throw new ArgumentNullException(nameof(conditionalFormat));
+        conditionalFormat.Validate();
+        _conditionalFormats.Add(conditionalFormat);
+        return this;
+    }
+
+    /// <summary>
+    /// 添加一个名称范围定义。
+    /// </summary>
+    /// <param name="namedRange">待添加的名称范围定义。</param>
+    /// <returns>当前构建器。</returns>
+    public ExcelSheetExportBuilder<T> NamedRange(ExcelNamedRangeDefinition namedRange)
+    {
+        if (namedRange == null) throw new ArgumentNullException(nameof(namedRange));
+        namedRange.Validate();
+        _namedRanges.Add(namedRange);
+        return this;
+    }
+
+    /// <summary>
+    /// 设置当前 Sheet 的打印布局。
+    /// </summary>
+    /// <param name="printLayout">替换当前配置的打印布局选项。</param>
+    /// <returns>当前构建器。</returns>
+    public ExcelSheetExportBuilder<T> PrintLayout(ExcelPrintLayoutOptions printLayout)
+    {
+        if (printLayout == null) throw new ArgumentNullException(nameof(printLayout));
+        printLayout.Validate();
+        _printLayout = printLayout;
+        return this;
+    }
+
+    /// <summary>
     /// 验证并生成不可变 Sheet 导出请求。
     /// </summary>
     /// <returns>已完成校验的 Sheet 导出请求。</returns>
@@ -348,13 +484,22 @@ public sealed class ExcelSheetExportBuilder<T> where T : class, new()
                 throw new ArgumentException($"动态列 {definition.Key} 不能重复指定物理索引。",
                     nameof(_dynamicColumns));
         }
+        foreach (var definition in _tables) definition.Validate();
+        foreach (var definition in _autoFilters) definition.Validate();
+        _freezePane?.Validate();
+        foreach (var definition in _conditionalFormats) definition.Validate();
+        foreach (var definition in _namedRanges) definition.Validate();
+        _printLayout?.Validate();
         var requestConfiguration = ExcelDynamicColumnCloner.MergeIntoConfiguration(
             _requestMappingConfiguration, _dynamicColumns);
         return new ExcelSheetExportRequest(_name, typeof(T), _data, _headerRowIndex, _dataRowStartIndex,
             CloneDynamicColumns(_dynamicColumns), _failOnUnknownDynamicValues, _dynamicGetter, _sheetStyle, _headerStyle, _bodyStyle,
             _templateRegion, _hidden, _charts.AsReadOnly(), _headerRows,
             requestConfiguration, _mappingDocument,
-            _culture, _columnWidth, _rowHeight, _commentConflictPolicy, _templateCellOverwritePolicy);
+            _culture, _columnWidth, _rowHeight, _commentConflictPolicy, _templateCellOverwritePolicy,
+            _tables.AsReadOnly(), _autoFilters.AsReadOnly(), _freezePane,
+            _conditionalFormats.AsReadOnly(), _namedRanges.AsReadOnly(), _printLayout,
+            _images.AsReadOnly(), _dataValidations.AsReadOnly());
     }
 
     /// <summary>

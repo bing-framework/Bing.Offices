@@ -19,7 +19,8 @@ namespace Bing.Offices.Imports;
 /// <remarks>
 /// 输入会先复制，并由 NPOI 建立内存中的 Workbook DOM。
 /// </remarks>
-public sealed class NpoiExcelImporter : IExcelImporter, IExcelEntityImporter, IExcelProviderCapabilities
+public sealed class NpoiExcelImporter : IExcelImporter, IExcelEntityImporter,
+    IExcelEntityResourceImporter, IExcelProviderFeatureDescriptor
 {
     /// <inheritdoc />
     public string ProviderName => "NPOI";
@@ -33,6 +34,30 @@ public sealed class NpoiExcelImporter : IExcelImporter, IExcelEntityImporter, IE
 
     /// <inheritdoc />
     public bool Supports(ExcelProviderCapabilities capabilities) => (Capabilities & capabilities) == capabilities;
+
+    /// <inheritdoc />
+    public IReadOnlyList<ExcelFormat> ReadFormats { get; } = new[] { ExcelFormat.Xls, ExcelFormat.Xlsx };
+    /// <inheritdoc />
+    public IReadOnlyList<ExcelFormat> WriteFormats { get; } = Array.Empty<ExcelFormat>();
+    /// <inheritdoc />
+    public bool SupportsCompleteWorkbookImport => true;
+    /// <inheritdoc />
+    public bool SupportsBatchImport => false;
+    /// <inheritdoc />
+    public bool SupportsCompleteWorkbookExport => false;
+    /// <inheritdoc />
+    public bool SupportsTrueAsyncIo => true;
+    /// <inheritdoc />
+    public IReadOnlyList<string> Limitations { get; } = new[]
+    {
+        "XLSM、XLSB 和 ODS 在当前 NPOI Provider 中明确拒绝。"
+    };
+    /// <inheritdoc />
+    public ExcelProviderFeatures Features => ExcelProviderFeatures.TemplateEditing
+        | ExcelProviderFeatures.WorkbookEditing | ExcelProviderFeatures.FormulaText
+        | ExcelProviderFeatures.FormulaCachedValues;
+    /// <inheritdoc />
+    public bool Supports(ExcelProviderFeatures features) => (Features & features) == features;
     /// <summary>
     /// 调用指定工作簿根类型的泛型工作表导入逻辑。
     /// </summary>
@@ -173,13 +198,21 @@ public sealed class NpoiExcelImporter : IExcelImporter, IExcelEntityImporter, IE
     public ExcelEntityImportResult<TEntity> ImportEntity<TEntity>(Stream source,
         ExcelEntityLayout<TEntity> layout, CancellationToken cancellationToken = default)
         where TEntity : class, new()
+        => ImportEntity(source, layout, new ExcelEntityImportOptions(), cancellationToken);
+
+    /// <inheritdoc />
+    public ExcelEntityImportResult<TEntity> ImportEntity<TEntity>(Stream source,
+        ExcelEntityLayout<TEntity> layout, ExcelEntityImportOptions options,
+        CancellationToken cancellationToken = default)
+        where TEntity : class, new()
     {
         ValidateEntitySource(source, layout);
+        var limits = ValidateEntityOptions(options);
         try
         {
             using var buffered = new MemoryStream();
-            NpoiStreamCopier.Copy(source, buffered, cancellationToken);
-            return ImportEntityBuffered(buffered, layout, false, cancellationToken);
+            NpoiStreamCopier.Copy(source, buffered, cancellationToken, limits.MaxInputBytes);
+            return ImportEntityBuffered(buffered, layout, false, limits, cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -204,13 +237,23 @@ public sealed class NpoiExcelImporter : IExcelImporter, IExcelEntityImporter, IE
     public async Task<ExcelEntityImportResult<TEntity>> ImportEntityAsync<TEntity>(Stream source,
         ExcelEntityLayout<TEntity> layout, CancellationToken cancellationToken = default)
         where TEntity : class, new()
+        => await ImportEntityAsync(source, layout, new ExcelEntityImportOptions(), cancellationToken)
+            .ConfigureAwait(false);
+
+    /// <inheritdoc />
+    public async Task<ExcelEntityImportResult<TEntity>> ImportEntityAsync<TEntity>(Stream source,
+        ExcelEntityLayout<TEntity> layout, ExcelEntityImportOptions options,
+        CancellationToken cancellationToken = default)
+        where TEntity : class, new()
     {
         ValidateEntitySource(source, layout);
+        var limits = ValidateEntityOptions(options);
         try
         {
             using var buffered = new MemoryStream();
-            await NpoiStreamCopier.CopyAsync(source, buffered, cancellationToken).ConfigureAwait(false);
-            return ImportEntityBuffered(buffered, layout, false, cancellationToken);
+            await NpoiStreamCopier.CopyAsync(source, buffered, cancellationToken, limits.MaxInputBytes)
+                .ConfigureAwait(false);
+            return ImportEntityBuffered(buffered, layout, false, limits, cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -235,19 +278,27 @@ public sealed class NpoiExcelImporter : IExcelImporter, IExcelEntityImporter, IE
     public ExcelEntityImportResult<TEntity> ImportForTemplate<TEntity>(Stream source,
         ExcelEntityLayout<TEntity> layout, ExcelEntityTemplateOptions template,
         CancellationToken cancellationToken = default) where TEntity : class, new()
+        => ImportForTemplate(source, layout, template, new ExcelEntityImportOptions(), cancellationToken);
+
+    /// <inheritdoc />
+    public ExcelEntityImportResult<TEntity> ImportForTemplate<TEntity>(Stream source,
+        ExcelEntityLayout<TEntity> layout, ExcelEntityTemplateOptions template,
+        ExcelEntityImportOptions options, CancellationToken cancellationToken = default)
+        where TEntity : class, new()
     {
         ValidateEntitySource(source, layout);
         if (template == null)
             throw new ArgumentNullException(nameof(template));
+        var limits = ValidateEntityOptions(options);
         try
         {
             using var templateBuffer = new MemoryStream();
-            NpoiStreamCopier.Copy(template.Template, templateBuffer, cancellationToken);
-            using var templateWorkbook = OpenEntityWorkbook(templateBuffer, cancellationToken);
+            NpoiStreamCopier.Copy(template.Template, templateBuffer, cancellationToken, limits.MaxInputBytes);
+            using var templateWorkbook = OpenEntityWorkbook(templateBuffer, limits, cancellationToken);
             ValidateEntityTemplate(templateWorkbook, layout);
             using var buffered = new MemoryStream();
-            NpoiStreamCopier.Copy(source, buffered, cancellationToken);
-            return ImportEntityBuffered(buffered, layout, false, cancellationToken);
+            NpoiStreamCopier.Copy(source, buffered, cancellationToken, limits.MaxInputBytes);
+            return ImportEntityBuffered(buffered, layout, false, limits, cancellationToken);
         }
         finally
         {
@@ -260,19 +311,30 @@ public sealed class NpoiExcelImporter : IExcelImporter, IExcelEntityImporter, IE
     public async Task<ExcelEntityImportResult<TEntity>> ImportForTemplateAsync<TEntity>(Stream source,
         ExcelEntityLayout<TEntity> layout, ExcelEntityTemplateOptions template,
         CancellationToken cancellationToken = default) where TEntity : class, new()
+        => await ImportForTemplateAsync(source, layout, template, new ExcelEntityImportOptions(), cancellationToken)
+            .ConfigureAwait(false);
+
+    /// <inheritdoc />
+    public async Task<ExcelEntityImportResult<TEntity>> ImportForTemplateAsync<TEntity>(Stream source,
+        ExcelEntityLayout<TEntity> layout, ExcelEntityTemplateOptions template,
+        ExcelEntityImportOptions options, CancellationToken cancellationToken = default)
+        where TEntity : class, new()
     {
         ValidateEntitySource(source, layout);
         if (template == null)
             throw new ArgumentNullException(nameof(template));
+        var limits = ValidateEntityOptions(options);
         try
         {
             using var templateBuffer = new MemoryStream();
-            await NpoiStreamCopier.CopyAsync(template.Template, templateBuffer, cancellationToken).ConfigureAwait(false);
-            using var templateWorkbook = OpenEntityWorkbook(templateBuffer, cancellationToken);
+            await NpoiStreamCopier.CopyAsync(template.Template, templateBuffer, cancellationToken,
+                limits.MaxInputBytes).ConfigureAwait(false);
+            using var templateWorkbook = OpenEntityWorkbook(templateBuffer, limits, cancellationToken);
             ValidateEntityTemplate(templateWorkbook, layout);
             using var buffered = new MemoryStream();
-            await NpoiStreamCopier.CopyAsync(source, buffered, cancellationToken).ConfigureAwait(false);
-            return ImportEntityBuffered(buffered, layout, false, cancellationToken);
+            await NpoiStreamCopier.CopyAsync(source, buffered, cancellationToken, limits.MaxInputBytes)
+                .ConfigureAwait(false);
+            return ImportEntityBuffered(buffered, layout, false, limits, cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -305,33 +367,51 @@ public sealed class NpoiExcelImporter : IExcelImporter, IExcelEntityImporter, IE
     /// <param name="buffered">已定位到内存中的工作簿流。</param>
     /// <param name="layout">实体布局。</param>
     /// <param name="requireTemplateMerges">是否要求模板中的合并区域已存在。</param>
+    /// <param name="limits">实体导入使用的资源限制。</param>
     /// <param name="cancellationToken">用于取消导入的令牌。</param>
     /// <returns>实体导入结果。</returns>
     private ExcelEntityImportResult<TEntity> ImportEntityBuffered<TEntity>(MemoryStream buffered,
-        ExcelEntityLayout<TEntity> layout, bool requireTemplateMerges, CancellationToken cancellationToken)
+        ExcelEntityLayout<TEntity> layout, bool requireTemplateMerges, ExcelResourceLimits limits,
+        CancellationToken cancellationToken)
         where TEntity : class, new()
     {
         cancellationToken.ThrowIfCancellationRequested();
         buffered.Position = 0;
-        NpoiXlsxZipPreflight.Validate(buffered, new ExcelResourceLimits(), cancellationToken);
+        NpoiXlsxZipPreflight.Validate(buffered, limits, cancellationToken);
         buffered.Position = 0;
         using var workbook = WorkbookFactory.Create(buffered);
-        return _entityExecutor.Read(workbook, new TEntity(), layout, requireTemplateMerges, cancellationToken);
+        return _entityExecutor.Read(workbook, new TEntity(), layout, requireTemplateMerges, limits,
+            cancellationToken);
     }
 
     /// <summary>
     /// 对已缓冲的实体输入执行预检并打开 NPOI 工作簿。
     /// </summary>
     /// <param name="buffered">已缓冲的工作簿流。</param>
+    /// <param name="limits">实体导入使用的资源限制。</param>
     /// <param name="cancellationToken">用于取消预检和打开操作的令牌。</param>
     /// <returns>已打开的 NPOI 工作簿。</returns>
-    private static IWorkbook OpenEntityWorkbook(MemoryStream buffered, CancellationToken cancellationToken)
+    private static IWorkbook OpenEntityWorkbook(MemoryStream buffered, ExcelResourceLimits limits,
+        CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         buffered.Position = 0;
-        NpoiXlsxZipPreflight.Validate(buffered, new ExcelResourceLimits(), cancellationToken);
+        NpoiXlsxZipPreflight.Validate(buffered, limits, cancellationToken);
         buffered.Position = 0;
         return WorkbookFactory.Create(buffered);
+    }
+
+    /// <summary>
+    /// 校验并提取实体导入选项中的资源限制。
+    /// </summary>
+    /// <param name="options">实体导入选项。</param>
+    /// <returns>已验证的资源限制。</returns>
+    private static ExcelResourceLimits ValidateEntityOptions(ExcelEntityImportOptions options)
+    {
+        if (options == null)
+            throw new ArgumentNullException(nameof(options));
+        options.ResourceLimits.Validate();
+        return options.ResourceLimits;
     }
 
     /// <summary>
@@ -476,15 +556,22 @@ public sealed class NpoiExcelImporter : IExcelImporter, IExcelEntityImporter, IE
         bufferedSource.Position = 0;
         try
         {
-            var failureDestination = request.FailureOptions?.Destination;
-            if (failureDestination != null && request.FailureOptions.Mode != ExcelImportFailureWorkbookMode.None)
+            var failureOptions = request.FailureOptions;
+            var failureDestination = failureOptions?.Destination;
+            if (failureOptions != null && failureOptions.Mode != ExcelImportFailureWorkbookMode.None
+                && (failureDestination != null || failureOptions.DestinationPath != null))
                 failureStaging = _asyncStagingFactory.Create("bing-offices-failure-async-");
             var result = ImportBufferedCore(bufferedSource, request, cancellationToken,
                 failureStaging?.WriteStream);
-            if (failureStaging != null)
+            if (failureStaging != null && result.Errors.Count > 0)
             {
                 await failureStaging.FlushAsync(cancellationToken).ConfigureAwait(false);
-                await failureStaging.CopyToAsync(failureDestination, cancellationToken).ConfigureAwait(false);
+                if (failureOptions.DestinationPath != null)
+                    await AtomicFileCommitter.CommitAsync(failureOptions.DestinationPath,
+                        (destination, token) => failureStaging.CopyToAsync(destination, token),
+                        cancellationToken, "FailureWorkbook").ConfigureAwait(false);
+                else
+                    await failureStaging.CopyToAsync(failureDestination, cancellationToken).ConfigureAwait(false);
             }
             return result;
         }
@@ -635,7 +722,7 @@ public sealed class NpoiExcelImporter : IExcelImporter, IExcelEntityImporter, IE
         foreach (var resolvedSheet in resolvedSheets)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (errors.IsLimitReached || runtime.RowLimitReached)
+            if (errors.IsLimitReached)
                 break;
             var sheetRequest = resolvedSheet.Request;
             if (!resolvedSheet.Exists)
@@ -669,19 +756,23 @@ public sealed class NpoiExcelImporter : IExcelImporter, IExcelEntityImporter, IE
             }
         }
 
-        foreach (var relation in request.Relations)
+        if (!runtime.RowLimitExceeded)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (errors.IsLimitReached)
+            foreach (var relation in request.Relations)
             {
-                errors.MarkTruncated();
-                break;
+                cancellationToken.ThrowIfCancellationRequested();
+                if (errors.IsLimitReached)
+                {
+                    errors.MarkTruncated();
+                    break;
+                }
+                NpoiRelationBinder.Bind(root, relation, errors, sourceLocations, cancellationToken);
             }
-            NpoiRelationBinder.Bind(root, relation, errors, sourceLocations, cancellationToken);
         }
         NpoiFailureWorkbookWriter.Write(workbook, request.FailureOptions, errors.Errors, resolvedSheetRequests,
             cancellationToken, new SystemFailureWorkbookFileSystem(), failureDestinationOverride);
-        return new ExcelWorkbookImportResult<TWorkbook>(root, sheetResults, errors.Errors,
+        return new ExcelWorkbookImportResult<TWorkbook>(runtime.RowLimitExceeded ? new TWorkbook() : root,
+            sheetResults, errors.Errors,
             errors.IsTruncated, errors.MaxErrors);
     }
 

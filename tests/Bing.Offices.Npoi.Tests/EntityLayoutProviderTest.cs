@@ -75,6 +75,31 @@ public sealed class EntityLayoutProviderTest
     }
 
     /// <summary>
+    /// 测试 - 实体导入选项应在 NPOI 打开工作簿前执行输入字节限制。
+    /// </summary>
+    [Fact]
+    public void Npoi_EntityImportOptions_MaxInputBytes_ShouldRejectBeforeWorkbookOpen()
+    {
+        var layout = ExcelEntity.Layout<Invoice>(builder => builder
+            .Cell("单据", "A1", item => item.Title));
+        using var generated = new MemoryStream();
+        new NpoiExcelExporter().ExportEntity(new Invoice { Title = "资源限制" }, layout, generated);
+        using var source = new MemoryStream(generated.ToArray());
+        IExcelEntityResourceImporter importer = new NpoiExcelImporter();
+        var options = new ExcelEntityImportOptions(
+            new ExcelResourceLimits { MaxInputBytes = 1 });
+
+        var exception = Assert.Throws<BingOfficesResourceLimitException>(() =>
+            importer.ImportEntity(source, layout, options));
+
+        Assert.Equal(BingOfficesErrorCode.ResourceLimitExceeded, exception.Code);
+        Assert.Equal(BingOfficesOperation.Import, exception.Operation);
+        Assert.Equal("NPOI", exception.Provider);
+        Assert.Equal(BingOfficesStage.Open, exception.Stage);
+        Assert.True(source.CanRead);
+    }
+
+    /// <summary>
     /// 测试 - 布局构建后应与构建器后续修改隔离。
     /// </summary>
     [Fact]
@@ -844,7 +869,7 @@ public sealed class EntityLayoutProviderTest
         private int _calls;
 
         /// <summary>
-        /// 初始化会在首次转换后取消的转换器。
+        /// 初始化一个 <see cref="CancelAfterFirstEntityConverter"/> 类型的实例。
         /// </summary>
         /// <param name="cancellation">用于发出取消信号的令牌源。</param>
         public CancelAfterFirstEntityConverter(CancellationTokenSource cancellation)

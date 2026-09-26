@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="..\..\common.tests.props" />
+  <PropertyGroup>
+    <TargetFrameworks>net6.0;net8.0</TargetFrameworks>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Bing.Offices.Testing\Bing.Offices.Testing.csproj" />
+    <ProjectReference Include="..\..\src\Bing.Offices.Npoi\Bing.Offices.Npoi.csproj" />
+    <ProjectReference Include="..\..\src\Bing.Offices.MiniExcel\Bing.Offices.MiniExcel.csproj" />
+    <ProjectReference Include="..\..\src\Bing.Offices.ClosedXml\Bing.Offices.ClosedXml.csproj" />
+    <ProjectReference Include="..\..\src\Bing.Offices.ExcelDataReader\Bing.Offices.ExcelDataReader.csproj" />
+    <ProjectReference Include="..\..\src\Bing.Offices.SpreadCheetah\Bing.Offices.SpreadCheetah.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\Bing.Offices.Testing\Resources\Golden\**\*"
+          Link="Resources\Golden\%(RecursiveDir)%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="ExcelDataReader" Version="3.9.0" />
+    <PackageReference Include="System.Text.Encoding.CodePages" Version="6.0.0" />
+  </ItemGroup>
+</Project>

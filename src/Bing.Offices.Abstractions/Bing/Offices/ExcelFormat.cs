@@ -16,5 +16,20 @@ public enum ExcelFormat
     /// Excel 2007 及更高版本的 Open XML 工作簿格式。
     /// </summary>
     [Description("Excel2007+")]
-    Xlsx = 1
+    Xlsx = 1,
+    /// <summary>
+    /// Excel 二进制工作簿格式。
+    /// </summary>
+    [Description("ExcelBinary")]
+    Xlsb = 2,
+    /// <summary>
+    /// 含 VBA 项目的 Open XML 工作簿格式。
+    /// </summary>
+    [Description("ExcelMacroEnabled")]
+    Xlsm = 3,
+    /// <summary>
+    /// OpenDocument 表格格式。
+    /// </summary>
+    [Description("OpenDocumentSpreadsheet")]
+    Ods = 4
 }

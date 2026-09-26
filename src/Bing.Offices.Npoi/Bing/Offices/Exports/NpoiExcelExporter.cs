@@ -20,7 +20,7 @@ namespace Bing.Offices.Exports;
 /// <remarks>
 /// NPOI 工作簿在内存中构建后写入目标流。
 /// </remarks>
-public sealed class NpoiExcelExporter : IExcelExporter, IExcelEntityExporter, IExcelProviderCapabilities
+public sealed class NpoiExcelExporter : IExcelExporter, IExcelEntityExporter, IExcelProviderFeatureDescriptor
 {
     /// <summary>
     /// 进入 SXSSF 流式路径所需的最小列表行数。
@@ -39,6 +39,34 @@ public sealed class NpoiExcelExporter : IExcelExporter, IExcelEntityExporter, IE
 
     /// <inheritdoc />
     public bool Supports(ExcelProviderCapabilities capabilities) => (Capabilities & capabilities) == capabilities;
+
+    /// <inheritdoc />
+    public IReadOnlyList<ExcelFormat> ReadFormats { get; } = new[] { ExcelFormat.Xls, ExcelFormat.Xlsx };
+    /// <inheritdoc />
+    public IReadOnlyList<ExcelFormat> WriteFormats { get; } = new[] { ExcelFormat.Xls, ExcelFormat.Xlsx };
+    /// <inheritdoc />
+    public bool SupportsCompleteWorkbookImport => false;
+    /// <inheritdoc />
+    public bool SupportsBatchImport => false;
+    /// <inheritdoc />
+    public bool SupportsCompleteWorkbookExport => true;
+    /// <inheritdoc />
+    public bool SupportsTrueAsyncIo => true;
+    /// <inheritdoc />
+    public IReadOnlyList<string> Limitations { get; } = new[]
+    {
+        "XLSM、XLSB 和 ODS 在当前 NPOI Provider 中明确拒绝。",
+        "公式重新计算只覆盖 NPOI 实际支持的函数集合。"
+    };
+    /// <inheritdoc />
+    public ExcelProviderFeatures Features => ExcelProviderFeatures.TemplateEditing
+        | ExcelProviderFeatures.WorkbookEditing | ExcelProviderFeatures.Tables
+        | ExcelProviderFeatures.AutoFilter | ExcelProviderFeatures.FreezePanes
+        | ExcelProviderFeatures.ConditionalFormatting | ExcelProviderFeatures.NamedRanges
+        | ExcelProviderFeatures.PrintLayout | ExcelProviderFeatures.FormulaText
+        | ExcelProviderFeatures.FormulaCachedValues;
+    /// <inheritdoc />
+    public bool Supports(ExcelProviderFeatures features) => (Features & features) == features;
     /// <summary>
     /// 调用指定实体类型的工作表写入逻辑。
     /// </summary>
@@ -407,6 +435,9 @@ public sealed class NpoiExcelExporter : IExcelExporter, IExcelEntityExporter, IE
     {
         if (request == null)
             throw new ArgumentNullException(nameof(request));
+        ValidateExportFormat(request.Format);
+        ExcelSheetContent.Validate(request);
+        NpoiReportWriter.Validate(request);
         if (destination == null)
             throw new ArgumentNullException(nameof(destination));
         if (!destination.CanWrite)
@@ -453,7 +484,7 @@ public sealed class NpoiExcelExporter : IExcelExporter, IExcelEntityExporter, IE
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                workbook.Write(new NpoiNonDisposingStream(destination, cancellationToken), false);
+                NpoiSheetContentWriter.Write(workbook, request, new NpoiNonDisposingStream(destination, cancellationToken), cancellationToken);
             }
             catch (Exception exception) when (cancellationToken.IsCancellationRequested
                 && exception.GetBaseException() is OperationCanceledException)
@@ -505,6 +536,8 @@ public sealed class NpoiExcelExporter : IExcelExporter, IExcelEntityExporter, IE
             throw new ArgumentNullException(nameof(request));
         if (string.IsNullOrWhiteSpace(path))
             throw new ArgumentException("目标文件路径不能为空。", nameof(path));
+        ValidateExportFormat(request.Format);
+        NpoiReportWriter.Validate(request);
 
         try
         {
@@ -525,6 +558,8 @@ public sealed class NpoiExcelExporter : IExcelExporter, IExcelEntityExporter, IE
     {
         if (request == null)
             throw new ArgumentNullException(nameof(request));
+        ValidateExportFormat(request.Format);
+        NpoiReportWriter.Validate(request);
         if (destination == null)
             throw new ArgumentNullException(nameof(destination));
         if (!destination.CanWrite)
@@ -599,6 +634,8 @@ public sealed class NpoiExcelExporter : IExcelExporter, IExcelEntityExporter, IE
             throw new ArgumentNullException(nameof(request));
         if (string.IsNullOrWhiteSpace(path))
             throw new ArgumentException("目标文件路径不能为空。", nameof(path));
+        ValidateExportFormat(request.Format);
+        NpoiReportWriter.Validate(request);
 
         try
         {
@@ -640,6 +677,20 @@ public sealed class NpoiExcelExporter : IExcelExporter, IExcelEntityExporter, IE
     }
 
     /// <summary>
+    /// 校验导出工作簿格式是否受支持。
+    /// </summary>
+    /// <param name="format">工作簿格式。</param>
+    private static void ValidateExportFormat(ExcelFormat format)
+    {
+        if (format == ExcelFormat.Xlsb)
+            throw new BingOfficesUnsupportedFeatureException("NPOI 不支持 XLSB 写入。",
+                provider: "NPOI", operation: BingOfficesOperation.Export,
+                stage: BingOfficesStage.Preflight);
+        if (format != ExcelFormat.Xls && format != ExcelFormat.Xlsx)
+            throw new ArgumentOutOfRangeException(nameof(format));
+    }
+
+    /// <summary>
     /// 判断请求是否满足大型纯列表的 SXSSF 行刷新约束。
     /// </summary>
     /// <param name="request">待执行的导出请求。</param>
@@ -656,6 +707,10 @@ public sealed class NpoiExcelExporter : IExcelExporter, IExcelEntityExporter, IE
             if (!TryGetCollectionCount(sheet.Data, out var count) || count < StreamingRowThreshold
                 || (sheet.HeaderRows?.Count ?? 0) != 0 || (sheet.Charts?.Count ?? 0) != 0
                 || sheet.ColumnWidth != null
+                || sheet.Images.Count != 0 || sheet.DataValidations.Count != 0
+                || sheet.Tables.Count != 0 || sheet.AutoFilters.Count != 0
+                || sheet.FreezePane != null || sheet.ConditionalFormats.Count != 0
+                || sheet.NamedRanges.Count != 0 || sheet.PrintLayout != null
                 || sheet.DynamicColumns.Count != 0 || sheet.TemplateRegion != null)
                 return false;
             if (!plans.TryGetValue(sheet, out var plan)
@@ -788,6 +843,8 @@ public sealed class NpoiExcelExporter : IExcelExporter, IExcelEntityExporter, IE
         else
             _sheetWriter.Write<T>(workbook, request, cancellationToken, map, columns, templateOrigin.Row,
                 firstColumnIndex);
+        NpoiReportWriter.Apply(workbook, sheet, request);
+        NpoiSheetContentWriter.Apply(workbook, sheet, request, cancellationToken);
     }
 
     /// <summary>

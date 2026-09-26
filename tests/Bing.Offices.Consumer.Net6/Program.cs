@@ -2,6 +2,7 @@
 using Bing.Offices;
 using Bing.Offices.ClosedXml.Extensions;
 using Bing.Offices.Csv;
+using Bing.Offices.ExcelDataReader.Extensions;
 using Bing.Offices.Exports;
 using Bing.Offices.Extensions;
 using Bing.Offices.Imports;
@@ -86,6 +87,21 @@ try
     var closedXmlResult = await ExcelStreamExtensions.ImportFromBytesAsync(
         closedXmlImporter, closedXmlBytes, importRequest);
 
+    using var readOnlyProvider = new ServiceCollection()
+        .AddBingOfficesExcelDataReader()
+        .BuildServiceProvider();
+    var readOnlyImporter = readOnlyProvider.GetRequiredService<IExcelImporter>();
+    var readOnlyResult = await ExcelStreamExtensions.ImportFromBytesAsync(
+        readOnlyImporter, excelAsyncBytes, importRequest);
+
+    using var streamingOutput = new MemoryStream();
+    await new SpreadCheetahStreamingExcelExporter().ExportBatchesAsync(workbookRequest, streamingOutput);
+    using var streamedWorkbook = new XSSFWorkbook(new MemoryStream(streamingOutput.ToArray()));
+    Ensure(streamedWorkbook.NumberOfSheets == 1
+        && streamedWorkbook.GetSheetAt(0).GetRow(1).GetCell(0).StringCellValue == rows[0].Code
+        && streamedWorkbook.GetSheetAt(0).GetRow(1).GetCell(1).NumericCellValue == rows[0].Count,
+        "SpreadCheetah packaged output content verification failed.");
+
     using var extensionWorkbook = new XSSFWorkbook();
     var extensionSheet = extensionWorkbook.CreateSheet("Extensions");
     extensionSheet.CreateRow(0).Value(0, "extension");
@@ -104,11 +120,13 @@ try
         "MiniExcel provider verification failed.");
     Ensure(closedXmlResult.Workbook.Rows.Count == 1 && closedXmlBytes.Length > 0,
         "ClosedXML provider verification failed.");
+    Ensure(readOnlyResult.Workbook.Rows.Count == 1,
+        "ExcelDataReader provider verification failed.");
     Ensure(extensionWorkbook.GetExcelFormat() == ExcelFormat.Xlsx
         && extensionSheet.GetRow(0).GetCell(0).GetStringValue() == "extension",
         "NPOI extension verification failed.");
 
-    Console.WriteLine($"package-consumer-ok tfm={System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription} packages=Bing.Offices.Npoi+Bing.Offices.MiniExcel+Bing.Offices.ClosedXml/{packageVersion} csvBytes={csvAsyncBytes.Length} excelBytes={excelAsyncBytes.Length} miniExcelBytes={miniBytes.Length} closedXmlBytes={closedXmlBytes.Length} npoiExtensions=ok");
+    Console.WriteLine($"package-consumer-ok tfm={System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription} packages=Bing.Offices.Npoi+Bing.Offices.MiniExcel+Bing.Offices.ClosedXml+Bing.Offices.ExcelDataReader+Bing.Offices.SpreadCheetah+Bing.Offices.AsposeCells/{packageVersion} csvBytes={csvAsyncBytes.Length} excelBytes={excelAsyncBytes.Length} miniExcelBytes={miniBytes.Length} closedXmlBytes={closedXmlBytes.Length} excelDataReaderRows={readOnlyResult.Workbook.Rows.Count} npoiExtensions=ok");
 }
 finally
 {

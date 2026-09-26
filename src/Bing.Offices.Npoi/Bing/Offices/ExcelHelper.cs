@@ -1,4 +1,5 @@
 ﻿using Bing.Offices.Exports;
+using Bing.Offices.Exceptions;
 using Bing.Text;
 using NPOI.HPSF;
 using Bing.Offices.Internals;
@@ -72,7 +73,7 @@ internal static class ExcelHelper
     /// <param name="metadata">Workbook 元数据</param>
     /// <returns>新建的 NPOI 工作簿。</returns>
     public static NPOI.SS.UserModel.IWorkbook PrepareWorkbook(ExcelFormat format, ExcelWorkbookMetadataOptions metadata) =>
-        PrepareWorkbook(format == ExcelFormat.Xlsx, metadata);
+        PrepareWorkbook(ValidateFormat(format) == ExcelFormat.Xlsx, metadata);
 
     /// <summary>
     /// 创建 NPOI 工作簿。
@@ -88,7 +89,24 @@ internal static class ExcelHelper
     /// </summary>
     /// <param name="format">Excel格式</param>
     /// <returns>新建的 NPOI 工作簿。</returns>
-    public static NPOI.SS.UserModel.IWorkbook PrepareWorkbook(ExcelFormat format) => PrepareWorkbook(format == ExcelFormat.Xlsx);
+    public static NPOI.SS.UserModel.IWorkbook PrepareWorkbook(ExcelFormat format) =>
+        PrepareWorkbook(ValidateFormat(format) == ExcelFormat.Xlsx);
+
+    /// <summary>
+    /// 校验工作簿格式是否受支持。
+    /// </summary>
+    /// <param name="format">工作簿格式。</param>
+    /// <returns>已验证的工作簿格式。</returns>
+    private static ExcelFormat ValidateFormat(ExcelFormat format)
+    {
+        if (format == ExcelFormat.Xlsb)
+            throw new BingOfficesUnsupportedFeatureException("NPOI 不支持 XLSB 写入。",
+                provider: "NPOI", operation: BingOfficesOperation.Export,
+                stage: BingOfficesStage.Preflight);
+        if (format != ExcelFormat.Xls && format != ExcelFormat.Xlsx)
+            throw new ArgumentOutOfRangeException(nameof(format));
+        return format;
+    }
 
     /// <summary>
     /// 创建 NPOI 工作簿。

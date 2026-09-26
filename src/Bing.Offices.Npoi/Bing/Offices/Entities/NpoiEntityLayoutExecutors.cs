@@ -806,15 +806,18 @@ internal sealed class NpoiEntityImportExecutor
     /// <param name="entity">接收导入值的实体。</param>
     /// <param name="layout">实体布局定义。</param>
     /// <param name="requireTemplateMerges">是否要求声明的合并区域已存在。</param>
+    /// <param name="limits">实体导入资源限制。</param>
     /// <param name="cancellationToken">用于取消操作的令牌。</param>
     /// <returns>包含实体、工作表结果和结构化错误的导入结果。</returns>
     internal ExcelEntityImportResult<TEntity> Read<TEntity>(IWorkbook workbook, TEntity entity,
-        ExcelEntityLayout<TEntity> layout, bool requireTemplateMerges, CancellationToken cancellationToken)
+        ExcelEntityLayout<TEntity> layout, bool requireTemplateMerges, ExcelResourceLimits limits,
+        CancellationToken cancellationToken)
         where TEntity : class, new()
     {
-        var errors = new ExcelImportErrorCollector(null);
+        limits?.Validate();
+        var errors = new ExcelImportErrorCollector(limits?.MaxErrors);
         var sheetResults = new List<ExcelSheetImportResult>();
-        var runtime = new ExcelImportRuntime(null);
+        var runtime = new ExcelImportRuntime(limits);
         foreach (var name in layout.Cells.Select(item => item.SheetName)
                      .Concat(layout.ListRegions.Select(item => item.SheetName))
                      .Concat(layout.Merges.Select(item => item.SheetName))
