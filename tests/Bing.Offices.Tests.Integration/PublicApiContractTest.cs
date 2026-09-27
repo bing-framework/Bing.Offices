@@ -762,7 +762,9 @@ public class PublicApiContractTest
             typeof(NpoiExcelImporter).Assembly,
             typeof(MiniExcelExcelImporter).Assembly,
             typeof(ClosedXmlExcelImporter).Assembly,
-            typeof(ExcelDataReaderExcelImporter).Assembly
+            typeof(ExcelDataReaderExcelImporter).Assembly,
+            typeof(SpreadCheetahStreamingExcelExporter).Assembly,
+            typeof(AsposeCellsEngine).Assembly
         };
 
         // Act
@@ -771,11 +773,7 @@ public class PublicApiContractTest
             [typeof(IExcelImporter).Assembly.GetName().Name] = new HashSet<string>(
                 new[] { "Bing.Offices.Tests", "Bing.Offices.Npoi.Tests" }, StringComparer.Ordinal),
             [typeof(ExcelMappingConfigurationLoader).Assembly.GetName().Name] = new HashSet<string>(
-                new[]
-                {
-                    "Bing.Offices.Tests", "Bing.Offices.Npoi.Tests", "Bing.Offices.Npoi",
-                    "Bing.Offices.ClosedXml"
-                }, StringComparer.Ordinal),
+                new[] { "Bing.Offices.Tests", "Bing.Offices.Npoi.Tests" }, StringComparer.Ordinal),
             [typeof(NpoiExcelImporter).Assembly.GetName().Name] = new HashSet<string>(
                 new[] { "Bing.Offices.Npoi.Tests", "Bing.Offices.Npoi.Tests.Integration" }, StringComparer.Ordinal),
             [typeof(MiniExcelExcelImporter).Assembly.GetName().Name] = new HashSet<string>(
@@ -783,11 +781,17 @@ public class PublicApiContractTest
             [typeof(ClosedXmlExcelImporter).Assembly.GetName().Name] = new HashSet<string>(
                 new[] { "Bing.Offices.ClosedXml.Tests", "Bing.Offices.ClosedXml.Tests.Integration" }, StringComparer.Ordinal),
             [typeof(ExcelDataReaderExcelImporter).Assembly.GetName().Name] = new HashSet<string>(
-                new[] { "Bing.Offices.ExcelDataReader.Tests" }, StringComparer.Ordinal)
+                new[] { "Bing.Offices.ExcelDataReader.Tests" }, StringComparer.Ordinal),
+            [typeof(SpreadCheetahStreamingExcelExporter).Assembly.GetName().Name] = new HashSet<string>(StringComparer.Ordinal),
+            [typeof(AsposeCellsEngine).Assembly.GetName().Name] = new HashSet<string>(StringComparer.Ordinal)
         };
 
         // Assert
         Assert.Equal(assemblies.Length, approvedFriendsByAssembly.Count);
+        var testAssemblies = Directory.EnumerateFiles(Path.Combine(FindRepositoryRoot(), "tests"),
+                "*.csproj", SearchOption.AllDirectories)
+            .Where(path => File.ReadAllText(path, System.Text.Encoding.UTF8).Contains("common.tests.props", StringComparison.Ordinal))
+            .Select(Path.GetFileNameWithoutExtension).ToHashSet(StringComparer.Ordinal);
         foreach (var assembly in assemblies)
         {
             var actual = assembly.GetCustomAttributes<InternalsVisibleToAttribute>()
@@ -795,8 +799,35 @@ public class PublicApiContractTest
                 .ToHashSet(StringComparer.Ordinal);
             Assert.True(approvedFriendsByAssembly[assembly.GetName().Name].SetEquals(actual),
                 $"{assembly.GetName().Name} 的 IVT 与逐程序集批准列表不一致。实际：{string.Join(",", actual)}");
-            Assert.DoesNotContain(actual, friend => friend.EndsWith(".Tests.Fake", StringComparison.Ordinal));
+            // 白名单本身也必须对应真实测试项目，不能通过新增生产名称来放宽规则。
+            Assert.All(approvedFriendsByAssembly[assembly.GetName().Name], friend => Assert.Contains(friend, testAssemblies));
+            Assert.All(actual, friend => Assert.Contains(friend, testAssemblies));
+            Assert.DoesNotContain(actual, friend => assemblies.Any(production => production.GetName().Name == friend));
         }
+    }
+
+    /// <summary>
+    /// 新提交器构造重载必须保持旧签名，并避免可选参数造成源码调用歧义。
+    /// </summary>
+    [Theory]
+    [InlineData(typeof(NpoiExcelImporter))]
+    [InlineData(typeof(ClosedXmlExcelImporter))]
+    public void PublicApi_ImporterConstructors_ShouldPreserveCompatibility(Type importerType)
+    {
+        var constructors = importerType.GetConstructors();
+        Assert.Equal(2, constructors.Length);
+        var original = Assert.Single(constructors.Where(constructor => constructor.GetParameters().Length == 5));
+        var added = Assert.Single(constructors.Where(constructor => constructor.GetParameters().Length == 6));
+        Assert.All(original.GetParameters(), parameter =>
+        {
+            Assert.True(parameter.IsOptional);
+            Assert.Null(parameter.DefaultValue);
+        });
+        Assert.All(added.GetParameters(), parameter => Assert.False(parameter.IsOptional));
+        Assert.Equal(original.GetParameters().Select(parameter => (parameter.Name, parameter.ParameterType)),
+            added.GetParameters().Take(5).Select(parameter => (parameter.Name, parameter.ParameterType)));
+        Assert.Equal(typeof(Bing.Offices.IO.IFileExportCommitter), added.GetParameters()[5].ParameterType);
+        Assert.Equal("fileExportCommitter", added.GetParameters()[5].Name);
     }
 
     /// <summary>

@@ -1,0 +1,30 @@
+{
+  "net6.0": {
+    "Bing.Offices.Npoi": {
+      "added": [
+        "constructor|Bing.Offices.Imports.NpoiExcelImporter|visibility=public|modifiers=instance,hidebysig|params=validationRules:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Validations.IExcelValidationRule]]|attributes=,valueConverters:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Conversions.IExcelValueConverter]]|attributes=,namedValidationRules:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Validations.INamedExcelValidationRule]]|attributes=,mappingPlanFactory:value:Bing.Offices.Providers.IExcelMappingPlanFactory|attributes=,exceptionObservers:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Exceptions.IBingOfficesExceptionObserver]]|attributes=,fileExportCommitter:value:Bing.Offices.IO.IFileExportCommitter|attributes=|attributes="
+      ],
+      "removed": []
+    },
+    "Bing.Offices.ClosedXml": {
+      "added": [
+        "constructor|Bing.Offices.ClosedXml.Imports.ClosedXmlExcelImporter|visibility=public|modifiers=instance,hidebysig|params=validationRules:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Validations.IExcelValidationRule]]|attributes=,valueConverters:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Conversions.IExcelValueConverter]]|attributes=,namedValidationRules:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Validations.INamedExcelValidationRule]]|attributes=,mappingPlanFactory:value:Bing.Offices.Providers.IExcelMappingPlanFactory|attributes=,exceptionObservers:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Exceptions.IBingOfficesExceptionObserver]]|attributes=,fileExportCommitter:value:Bing.Offices.IO.IFileExportCommitter|attributes=|attributes="
+      ],
+      "removed": []
+    }
+  },
+  "net8.0": {
+    "Bing.Offices.Npoi": {
+      "added": [
+        "constructor|Bing.Offices.Imports.NpoiExcelImporter|visibility=public|modifiers=instance,hidebysig|params=validationRules:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Validations.IExcelValidationRule]]|attributes=,valueConverters:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Conversions.IExcelValueConverter]]|attributes=,namedValidationRules:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Validations.INamedExcelValidationRule]]|attributes=,mappingPlanFactory:value:Bing.Offices.Providers.IExcelMappingPlanFactory|attributes=,exceptionObservers:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Exceptions.IBingOfficesExceptionObserver]]|attributes=,fileExportCommitter:value:Bing.Offices.IO.IFileExportCommitter|attributes=|attributes="
+      ],
+      "removed": []
+    },
+    "Bing.Offices.ClosedXml": {
+      "added": [
+        "constructor|Bing.Offices.ClosedXml.Imports.ClosedXmlExcelImporter|visibility=public|modifiers=instance,hidebysig|params=validationRules:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Validations.IExcelValidationRule]]|attributes=,valueConverters:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Conversions.IExcelValueConverter]]|attributes=,namedValidationRules:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Validations.INamedExcelValidationRule]]|attributes=,mappingPlanFactory:value:Bing.Offices.Providers.IExcelMappingPlanFactory|attributes=,exceptionObservers:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Exceptions.IBingOfficesExceptionObserver]]|attributes=,fileExportCommitter:value:Bing.Offices.IO.IFileExportCommitter|attributes=|attributes="
+      ],
+      "removed": []
+    }
+  }
+}

@@ -458,6 +458,17 @@ jobs:
           grep -q "Bing.Offices.Npoi+Bing.Offices.MiniExcel+Bing.Offices.ClosedXml+Bing.Offices.ExcelDataReader+Bing.Offices.SpreadCheetah+Bing.Offices.AsposeCells/$BING_OFFICES_PACKAGE_VERSION" artifacts/consumers/results/net6-run.log
           grep -q "Bing.Offices.Npoi+Bing.Offices.MiniExcel+Bing.Offices.ClosedXml+Bing.Offices.ExcelDataReader+Bing.Offices.SpreadCheetah+Bing.Offices.AsposeCells/$BING_OFFICES_PACKAGE_VERSION" artifacts/consumers/results/net8-run.log
 
+      - name: Third-party public-only Provider consumer
+        shell: bash
+        run: |
+          set -o pipefail
+          dotnet restore tests/Bing.Offices.ThirdPartyProvider.Consumer/Bing.Offices.ThirdPartyProvider.Consumer.csproj --configfile tests/Bing.Offices.Consumer.Net6/NuGet.Config --packages artifacts/consumers/cache/third-party -p:BingOfficesPackageVersion="$BING_OFFICES_PACKAGE_VERSION"
+          dotnet build tests/Bing.Offices.ThirdPartyProvider.Consumer/Bing.Offices.ThirdPartyProvider.Consumer.csproj -c Release --no-restore -p:BingOfficesPackageVersion="$BING_OFFICES_PACKAGE_VERSION" | tee artifacts/consumers/results/third-party-build.log
+          for tfm in net6.0 net8.0; do
+            dotnet run --project tests/Bing.Offices.ThirdPartyProvider.Consumer/Bing.Offices.ThirdPartyProvider.Consumer.csproj -c Release -f "$tfm" --no-build --no-restore -p:BingOfficesPackageVersion="$BING_OFFICES_PACKAGE_VERSION" | tee "artifacts/consumers/results/third-party-$tfm.log"
+            grep -q 'third-party-public-only-provider-ok' "artifacts/consumers/results/third-party-$tfm.log"
+          done
+
       - name: Upload release evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -503,7 +514,7 @@ jobs:
         run: |
           mkdir -p artifacts/api
           dotnet run --project build/ApiSnapshot/ApiSnapshot.csproj -c Release --no-build --no-restore -- --identity-self-test true | tee artifacts/api/identity-self-test.log
-          dotnet run --project build/ApiSnapshot/ApiSnapshot.csproj -c Release --no-build --no-restore -- --root output/release --baseline build/api-snapshot-baseline.json --packages artifacts/packages --repository . --approval ai_docs/tasks/BING-OFFICES-ADVANCED-EXCEL-ROADMAP-20260926-001/api-approval.md --output artifacts/api/compare | tee artifacts/api/compare.log
+          dotnet run --project build/ApiSnapshot/ApiSnapshot.csproj -c Release --no-build --no-restore -- --root output/release --baseline build/api-snapshot-baseline.json --packages artifacts/packages --repository . --approval ai_docs/tasks/BING-OFFICES-PUBLIC-PROVIDER-BOUNDARY-20260927-001/api-approval.md --output artifacts/api/compare | tee artifacts/api/compare.log
           test "$(sha256sum version.props | cut -d' ' -f1 | tr '[:lower:]' '[:upper:]')" = "$BING_VERSION_PROPS_SHA"
           test "$(sha256sum version.dev.props | cut -d' ' -f1 | tr '[:lower:]' '[:upper:]')" = "$BING_VERSION_DEV_PROPS_SHA"
           test -z "$(find src tests benchmarks -type d \( -name artifacts -o -name TestResults -o -name BenchmarkDotNet.Artifacts \) -print -quit)"

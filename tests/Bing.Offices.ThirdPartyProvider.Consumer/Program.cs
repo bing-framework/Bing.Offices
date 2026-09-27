@@ -4,6 +4,9 @@ using Bing.Offices.Exports;
 using Bing.Offices.Extensions;
 using Bing.Offices.Imports;
 using Bing.Offices.Providers;
+using Bing.Offices.Attributes;
+using Bing.Offices.IO;
+using Bing.Offices.ClosedXml.Imports;
 
 namespace Bing.Offices.ThirdPartyProvider.Consumer;
 
@@ -13,11 +16,12 @@ namespace Bing.Offices.ThirdPartyProvider.Consumer;
 internal static class Program
 {
     /// <summary>
-    /// 执行公开 Entity/Template/SPI 分派验证。
+    /// 执行公开 Provider 与文件提交契约验证。
     /// </summary>
-    /// <returns>验证成功时返回零。</returns>
+    /// <returns>异步操作；完成后返回验证成功时的进程退出码 0。</returns>
     public static async Task<int> Main()
     {
+        await VerifyPublicFileCommitters();
         var layout = ExcelEntity.Layout<FixtureEntity>(builder =>
             builder.Cell("Data", "A1", entity => entity.Value));
         var provider = new FixtureProvider();
@@ -144,6 +148,139 @@ internal static class Program
             "第三方 Provider capability 组合判断失败。");
         Console.WriteLine("third-party-public-only-provider-ok");
         return 0;
+    }
+
+    /// <summary>
+    /// 使用包内公开契约验证文件提交器和导入器扩展入口。
+    /// </summary>
+    /// <remarks>
+    /// 同时覆盖默认提交器、构造注入和同步、异步失败工作簿输出。
+    /// </remarks>
+    private static async Task VerifyPublicFileCommitters()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "bing-public-committer-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var path = Path.Combine(directory, "default.bin");
+            var expected = new byte[] { 1, 2, 3, 4 };
+            var defaultCommitter = new DefaultFileExportCommitter();
+            defaultCommitter.Commit(path, stream => stream.Write(expected, 0, expected.Length), default, "Consumer");
+            Ensure(File.ReadAllBytes(path).SequenceEqual(expected), "默认同步提交器未写入完整内容。");
+            await defaultCommitter.CommitAsync(path, (stream, token) => stream.WriteAsync(expected, 0, expected.Length, token), default, "Consumer");
+            Ensure((await File.ReadAllBytesAsync(path)).SequenceEqual(expected), "默认异步提交器未写入完整内容。");
+            File.Delete(path);
+
+            var committer = new ConsumerFileCommitter();
+            IExcelImporter[] importers =
+            {
+                new NpoiExcelImporter(null, null, null, null, null, committer),
+                new ClosedXmlExcelImporter(null, null, null, null, null, committer)
+            };
+            using var source = new MemoryStream();
+            new NpoiExcelExporter().Export(ExcelExport.Workbook(builder => builder
+                .AddSheet("Data", new[] { new InvalidRow { Code = "", Quantity = 1 } })), source);
+            var request = ExcelImport.Workbook<InvalidWorkbook>(builder => builder
+                .FailureWorkbook(new ExcelImportFailureOptions
+                {
+                    Mode = ExcelImportFailureWorkbookMode.AnnotatedOriginal,
+                    DestinationPath = Path.Combine(directory, "failure.xlsx"),
+                    TemporaryDirectory = directory
+                })
+                .Sheet<InvalidRow>("Data", workbook => workbook.Rows,
+                    sheet => sheet.Validate(ExcelValidationFailureMode.Continue)));
+            foreach (var importer in importers)
+            foreach (var asynchronous in new[] { false, true })
+            {
+                source.Position = 0;
+                var beforeSync = committer.SyncCalls;
+                var beforeAsync = committer.AsyncCalls;
+                var result = asynchronous ? await importer.ImportAsync(source, request) : importer.Import(source, request);
+                Ensure(!result.IsSuccess && result.Errors.Count == 1, "包内导入器未生成预期校验错误。");
+                Ensure(committer.SyncCalls - beforeSync == (asynchronous ? 0 : 1)
+                    && committer.AsyncCalls - beforeAsync == (asynchronous ? 1 : 0), "失败工作簿未使用指定提交器或重复提交。");
+                // 再次通过公开导入入口读取完整失败产物，验证其不是空文件或损坏文件。
+                using var output = File.OpenRead(request.FailureOptions.DestinationPath);
+                var reread = importer.Import(output, ExcelImport.Workbook<InvalidWorkbook>(builder => builder
+                    .Sheet<InvalidRow>("Data", workbook => workbook.Rows,
+                        sheet => sheet.Validate(ExcelValidationFailureMode.Continue))));
+                Ensure(reread.Errors.Count == 1
+                    && reread.Errors[0].Code == result.Errors[0].Code
+                    && reread.Errors[0].SheetName == "Data"
+                    && reread.Errors[0].RowIndex == 2
+                    && reread.Errors[0].ColumnIndex == 1
+                    && reread.Errors[0].PropertyName == "Code", "失败工作簿重读后的完整错误位置不一致。");
+            }
+            Ensure(Directory.GetFiles(directory).SequenceEqual(new[] { request.FailureOptions.DestinationPath }),
+                "公开提交器遗留临时文件。");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// 通过公开接口装饰默认文件提交器。
+    /// </summary>
+    private sealed class ConsumerFileCommitter : IFileExportCommitter
+    {
+        /// <summary>
+        /// 默认文件提交实现。
+        /// </summary>
+        private readonly DefaultFileExportCommitter _inner = new();
+
+        /// <summary>
+        /// 获取同步提交调用次数。
+        /// </summary>
+        public int SyncCalls { get; private set; }
+
+        /// <summary>
+        /// 获取异步提交调用次数。
+        /// </summary>
+        public int AsyncCalls { get; private set; }
+
+        /// <inheritdoc />
+        public void Commit(string path, Action<Stream> write, CancellationToken cancellationToken, string format)
+        {
+            SyncCalls++;
+            _inner.Commit(path, write, cancellationToken, format);
+        }
+        /// <inheritdoc />
+        public Task CommitAsync(string path, Func<Stream, CancellationToken, Task> writeAsync,
+            CancellationToken cancellationToken, string format)
+        {
+            AsyncCalls++;
+            return _inner.CommitAsync(path, writeAsync, cancellationToken, format);
+        }
+    }
+
+    /// <summary>
+    /// 失败工作簿验证使用的行模型。
+    /// </summary>
+    private sealed class InvalidRow
+    {
+        /// <summary>
+        /// 获取或设置必填编码。
+        /// </summary>
+        [ExcelRequired]
+        public string Code { get; set; }
+
+        /// <summary>
+        /// 获取或设置数量。
+        /// </summary>
+        public int Quantity { get; set; }
+    }
+
+    /// <summary>
+    /// 失败工作簿验证使用的根模型。
+    /// </summary>
+    private sealed class InvalidWorkbook
+    {
+        /// <summary>
+        /// 获取或设置数据行集合。
+        /// </summary>
+        public List<InvalidRow> Rows { get; set; } = new();
     }
 
     /// <summary>

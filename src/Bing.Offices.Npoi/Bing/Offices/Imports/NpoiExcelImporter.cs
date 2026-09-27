@@ -134,6 +134,10 @@ public sealed class NpoiExcelImporter : IExcelImporter, IExcelEntityImporter,
     /// </summary>
     private readonly INpoiAsyncStagingFactory _asyncStagingFactory;
     /// <summary>
+    /// 失败工作簿的文件提交服务。
+    /// </summary>
+    private readonly IFileExportCommitter _fileExportCommitter;
+    /// <summary>
     /// 单个实体布局执行器。
     /// </summary>
     private readonly NpoiEntityImportExecutor _entityExecutor;
@@ -152,7 +156,30 @@ public sealed class NpoiExcelImporter : IExcelImporter, IExcelEntityImporter,
         IExcelMappingPlanFactory mappingPlanFactory = null,
         IEnumerable<IBingOfficesExceptionObserver> exceptionObservers = null)
         : this(validationRules, valueConverters, namedValidationRules, mappingPlanFactory, exceptionObservers,
-            new NpoiAsyncStagingFactory(NpoiAsyncStagingStrategy.TempFile))
+            null, new NpoiAsyncStagingFactory(NpoiAsyncStagingStrategy.TempFile))
+    {
+    }
+
+    /// <summary>
+    /// 初始化一个 <see cref="NpoiExcelImporter" /> 类型的实例。
+    /// </summary>
+    /// <remarks>
+    /// 使用指定的文件提交服务输出失败工作簿文件；为空时使用默认实现。
+    /// </remarks>
+    /// <param name="validationRules">校验规则集合。</param>
+    /// <param name="valueConverters">值转换器集合。</param>
+    /// <param name="namedValidationRules">命名配置校验规则集合。</param>
+    /// <param name="mappingPlanFactory">方向化映射计划工厂。</param>
+    /// <param name="exceptionObservers">接收公共运行异常的观察器集合。</param>
+    /// <param name="fileExportCommitter">文件提交服务；为空时使用默认原子提交实现。</param>
+    public NpoiExcelImporter(IEnumerable<IExcelValidationRule> validationRules,
+        IEnumerable<IExcelValueConverter> valueConverters,
+        IEnumerable<INamedExcelValidationRule> namedValidationRules,
+        IExcelMappingPlanFactory mappingPlanFactory,
+        IEnumerable<IBingOfficesExceptionObserver> exceptionObservers,
+        IFileExportCommitter fileExportCommitter)
+        : this(validationRules, valueConverters, namedValidationRules, mappingPlanFactory, exceptionObservers,
+            fileExportCommitter, new NpoiAsyncStagingFactory(NpoiAsyncStagingStrategy.TempFile))
     {
     }
 
@@ -171,6 +198,31 @@ public sealed class NpoiExcelImporter : IExcelImporter, IExcelEntityImporter,
         IExcelMappingPlanFactory mappingPlanFactory,
         IEnumerable<IBingOfficesExceptionObserver> exceptionObservers,
         INpoiAsyncStagingFactory asyncStagingFactory)
+        : this(validationRules, valueConverters, namedValidationRules, mappingPlanFactory, exceptionObservers,
+            null, asyncStagingFactory)
+    {
+    }
+
+    /// <summary>
+    /// 初始化一个 <see cref="NpoiExcelImporter" /> 类型的实例。
+    /// </summary>
+    /// <remarks>
+    /// 同时配置文件提交服务与内部异步暂存策略。
+    /// </remarks>
+    /// <param name="validationRules">校验规则集合。</param>
+    /// <param name="valueConverters">值转换器集合。</param>
+    /// <param name="namedValidationRules">命名配置校验规则集合。</param>
+    /// <param name="mappingPlanFactory">方向化映射计划工厂。</param>
+    /// <param name="exceptionObservers">接收公共运行异常的观察器集合。</param>
+    /// <param name="fileExportCommitter">文件提交服务；为空时使用默认实现。</param>
+    /// <param name="asyncStagingFactory">失败工作簿外围异步输出的暂存工厂。</param>
+    internal NpoiExcelImporter(IEnumerable<IExcelValidationRule> validationRules,
+        IEnumerable<IExcelValueConverter> valueConverters,
+        IEnumerable<INamedExcelValidationRule> namedValidationRules,
+        IExcelMappingPlanFactory mappingPlanFactory,
+        IEnumerable<IBingOfficesExceptionObserver> exceptionObservers,
+        IFileExportCommitter fileExportCommitter,
+        INpoiAsyncStagingFactory asyncStagingFactory)
     {
         _validationRules = validationRules?.ToArray() ?? ExcelValidationRules.CreateDefault();
         _valueConverters = valueConverters?.ToArray() ?? Array.Empty<IExcelValueConverter>();
@@ -182,6 +234,7 @@ public sealed class NpoiExcelImporter : IExcelImporter, IExcelEntityImporter,
         _sheetExecutor = new NpoiImportSheetExecutor(_rowMaterializer);
         _exceptionDispatcher = new BingOfficesExceptionDispatcher(exceptionObservers);
         _asyncStagingFactory = asyncStagingFactory ?? throw new ArgumentNullException(nameof(asyncStagingFactory));
+        _fileExportCommitter = fileExportCommitter ?? new DefaultFileExportCommitter();
         _entityExecutor = new NpoiEntityImportExecutor(_mappingPlanFactory, _valueConverters);
     }
 
@@ -567,7 +620,7 @@ public sealed class NpoiExcelImporter : IExcelImporter, IExcelEntityImporter,
             {
                 await failureStaging.FlushAsync(cancellationToken).ConfigureAwait(false);
                 if (failureOptions.DestinationPath != null)
-                    await AtomicFileCommitter.CommitAsync(failureOptions.DestinationPath,
+                    await _fileExportCommitter.CommitAsync(failureOptions.DestinationPath,
                         (destination, token) => failureStaging.CopyToAsync(destination, token),
                         cancellationToken, "FailureWorkbook").ConfigureAwait(false);
                 else
@@ -770,7 +823,7 @@ public sealed class NpoiExcelImporter : IExcelImporter, IExcelEntityImporter,
             }
         }
         NpoiFailureWorkbookWriter.Write(workbook, request.FailureOptions, errors.Errors, resolvedSheetRequests,
-            cancellationToken, new SystemFailureWorkbookFileSystem(), failureDestinationOverride);
+            cancellationToken, new SystemFailureWorkbookFileSystem(), failureDestinationOverride, _fileExportCommitter);
         return new ExcelWorkbookImportResult<TWorkbook>(runtime.RowLimitExceeded ? new TWorkbook() : root,
             sheetResults, errors.Errors,
             errors.IsTruncated, errors.MaxErrors);

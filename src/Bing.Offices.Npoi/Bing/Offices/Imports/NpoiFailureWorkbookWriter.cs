@@ -35,11 +35,12 @@ internal static class NpoiFailureWorkbookWriter
     /// <param name="cancellationToken">取消令牌。</param>
     /// <param name="fileSystem">临时文件系统适配器。</param>
     /// <param name="destinationOverride">可选的异步 staging 目标流。</param>
+    /// <param name="fileExportCommitter">文件路径输出使用的提交服务；为空时使用默认实现。</param>
     internal static void Write(IWorkbook workbook, ExcelImportFailureOptions options,
         IReadOnlyCollection<ExcelImportError> errors,
         IReadOnlyDictionary<string, ExcelSheetImportRequest> resolvedSheetRequests,
         CancellationToken cancellationToken, IFailureWorkbookFileSystem fileSystem,
-        Stream destinationOverride = null)
+        Stream destinationOverride = null, IFileExportCommitter fileExportCommitter = null)
     {
         if (options == null || options.Mode == ExcelImportFailureWorkbookMode.None || errors.Count == 0)
             return;
@@ -189,7 +190,7 @@ internal static class NpoiFailureWorkbookWriter
                     {
                         if (destinationOverride == null && options.DestinationPath != null)
                         {
-                            AtomicFileCommitter.Commit(options.DestinationPath,
+                            (fileExportCommitter ?? new DefaultFileExportCommitter()).Commit(options.DestinationPath,
                                 destination => NpoiFailureWorkbookSerialization.WriteStream(destination, output,
                                     cancellationToken), cancellationToken, "FailureWorkbook");
                         }

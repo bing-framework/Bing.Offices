@@ -58,6 +58,7 @@ public static class ExcelClosedXmlServiceCollectionExtensions
             provider.GetServices<INamedExcelValidationRule>(),
             provider.GetService<IExcelMappingPlanFactory>(),
             provider.GetServices<IBingOfficesExceptionObserver>(),
+            provider.GetRequiredService<IFileExportCommitter>(),
             provider.GetRequiredService<IClosedXmlWorkbookAdmission>()));
         services.TryAddTransient<IExcelExporter>(provider => new ClosedXmlExcelExporter(
             provider.GetServices<IExcelValueConverter>(),

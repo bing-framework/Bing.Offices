@@ -49,6 +49,11 @@ public sealed class ClosedXmlExcelImporter : IExcelImporter, IExcelEntityImporte
     private readonly IClosedXmlWorkbookAdmission _admission;
 
     /// <summary>
+    /// 失败工作簿的文件提交服务。
+    /// </summary>
+    private readonly IFileExportCommitter _fileExportCommitter;
+
+    /// <summary>
     /// 初始化一个 <see cref="ClosedXmlExcelImporter" /> 类型的实例。
     /// </summary>
     /// <remarks>
@@ -65,7 +70,30 @@ public sealed class ClosedXmlExcelImporter : IExcelImporter, IExcelEntityImporte
         IExcelMappingPlanFactory mappingPlanFactory = null,
         IEnumerable<IBingOfficesExceptionObserver> exceptionObservers = null)
         : this(validationRules, valueConverters, namedValidationRules, mappingPlanFactory,
-            exceptionObservers, ClosedXmlWorkbookAdmission.SharedDefault)
+            exceptionObservers, null, ClosedXmlWorkbookAdmission.SharedDefault)
+    {
+    }
+
+    /// <summary>
+    /// 初始化一个 <see cref="ClosedXmlExcelImporter" /> 类型的实例。
+    /// </summary>
+    /// <remarks>
+    /// 使用指定的文件提交服务输出失败工作簿文件；为空时使用默认实现。
+    /// </remarks>
+    /// <param name="validationRules">校验规则集合。</param>
+    /// <param name="valueConverters">值转换器集合。</param>
+    /// <param name="namedValidationRules">命名校验规则集合。</param>
+    /// <param name="mappingPlanFactory">公共映射计划工厂。</param>
+    /// <param name="exceptionObservers">异常观察器集合。</param>
+    /// <param name="fileExportCommitter">文件提交服务；为空时使用默认原子提交实现。</param>
+    public ClosedXmlExcelImporter(IEnumerable<IExcelValidationRule> validationRules,
+        IEnumerable<IExcelValueConverter> valueConverters,
+        IEnumerable<INamedExcelValidationRule> namedValidationRules,
+        IExcelMappingPlanFactory mappingPlanFactory,
+        IEnumerable<IBingOfficesExceptionObserver> exceptionObservers,
+        IFileExportCommitter fileExportCommitter)
+        : this(validationRules, valueConverters, namedValidationRules, mappingPlanFactory,
+            exceptionObservers, fileExportCommitter, ClosedXmlWorkbookAdmission.SharedDefault)
     {
     }
 
@@ -87,6 +115,31 @@ public sealed class ClosedXmlExcelImporter : IExcelImporter, IExcelEntityImporte
         IExcelMappingPlanFactory mappingPlanFactory,
         IEnumerable<IBingOfficesExceptionObserver> exceptionObservers,
         IClosedXmlWorkbookAdmission admission)
+        : this(validationRules, valueConverters, namedValidationRules, mappingPlanFactory,
+            exceptionObservers, null, admission)
+    {
+    }
+
+    /// <summary>
+    /// 初始化一个 <see cref="ClosedXmlExcelImporter" /> 类型的实例。
+    /// </summary>
+    /// <remarks>
+    /// 同时配置文件提交服务与内部 Workbook DOM 准入器。
+    /// </remarks>
+    /// <param name="validationRules">校验规则集合。</param>
+    /// <param name="valueConverters">值转换器集合。</param>
+    /// <param name="namedValidationRules">命名校验规则集合。</param>
+    /// <param name="mappingPlanFactory">公共映射计划工厂。</param>
+    /// <param name="exceptionObservers">异常观察器集合。</param>
+    /// <param name="fileExportCommitter">文件提交服务；为空时使用默认原子提交实现。</param>
+    /// <param name="admission">Workbook DOM 准入器。</param>
+    internal ClosedXmlExcelImporter(IEnumerable<IExcelValidationRule> validationRules,
+        IEnumerable<IExcelValueConverter> valueConverters,
+        IEnumerable<INamedExcelValidationRule> namedValidationRules,
+        IExcelMappingPlanFactory mappingPlanFactory,
+        IEnumerable<IBingOfficesExceptionObserver> exceptionObservers,
+        IFileExportCommitter fileExportCommitter,
+        IClosedXmlWorkbookAdmission admission)
     {
         var converters = valueConverters?.ToArray() ?? Array.Empty<IExcelValueConverter>();
         var factory = mappingPlanFactory ??
@@ -95,6 +148,7 @@ public sealed class ClosedXmlExcelImporter : IExcelImporter, IExcelEntityImporte
         _planBuilder = new ClosedXmlMappingPlanBuilder(factory);
         _exceptionDispatcher = new BingOfficesExceptionDispatcher(exceptionObservers);
         _entityExecutor = new ClosedXmlEntityLayoutExecutor(factory);
+        _fileExportCommitter = fileExportCommitter ?? new DefaultFileExportCommitter();
         _admission = admission ?? throw new ArgumentNullException(nameof(admission));
     }
 
@@ -363,7 +417,7 @@ public sealed class ClosedXmlExcelImporter : IExcelImporter, IExcelEntityImporte
                 {
                     var failureOptions = request.FailureOptions;
                     if (failureOptions.DestinationPath != null)
-                        AtomicFileCommitter.Commit(failureOptions.DestinationPath,
+                        _fileExportCommitter.Commit(failureOptions.DestinationPath,
                             destination => failureArtifact.CopyTo(destination, cancellationToken), cancellationToken,
                             "FailureWorkbook");
                     else
@@ -433,7 +487,7 @@ public sealed class ClosedXmlExcelImporter : IExcelImporter, IExcelEntityImporte
                 {
                     var failureOptions = request.FailureOptions;
                     if (failureOptions.DestinationPath != null)
-                        await AtomicFileCommitter.CommitAsync(failureOptions.DestinationPath,
+                        await _fileExportCommitter.CommitAsync(failureOptions.DestinationPath,
                             (destination, token) => failureArtifact.CopyToAsync(destination, token),
                             cancellationToken, "FailureWorkbook").ConfigureAwait(false);
                     else

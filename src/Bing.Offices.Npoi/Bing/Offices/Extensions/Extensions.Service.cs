@@ -35,7 +35,8 @@ public static class ExcelNpoiServiceCollectionExtensions
             provider.GetServices<IExcelValueConverter>(),
             provider.GetServices<INamedExcelValidationRule>(),
             provider.GetService<IExcelMappingPlanFactory>(),
-            provider.GetServices<IBingOfficesExceptionObserver>()));
+            provider.GetServices<IBingOfficesExceptionObserver>(),
+            provider.GetRequiredService<IFileExportCommitter>()));
         services.TryAddTransient<IExcelExporter>(provider => new NpoiExcelExporter(
             provider.GetServices<IExcelValueConverter>(),
             provider.GetService<IExcelMappingPlanFactory>(),

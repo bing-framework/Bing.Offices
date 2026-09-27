@@ -1,0 +1,207 @@
+{
+  "runs": [
+    {
+      "project": "Bing.Offices.Tests",
+      "tfm": "net6.0",
+      "passed": 204,
+      "failed": 0,
+      "skipped": 0,
+      "trx": "artifacts/public-provider-boundary/final-tests/final_net6.0_20260927011725.trx"
+    },
+    {
+      "project": "Bing.Offices.Tests.Integration",
+      "tfm": "net6.0",
+      "passed": 32,
+      "failed": 0,
+      "skipped": 0,
+      "trx": "artifacts/public-provider-boundary/final-tests/final_net6.0_20260927011733.trx"
+    },
+    {
+      "project": "Bing.Offices.Npoi.Tests",
+      "tfm": "net6.0",
+      "passed": 634,
+      "failed": 0,
+      "skipped": 0,
+      "trx": "artifacts/public-provider-boundary/final-tests/final_net6.0_20260927011804.trx"
+    },
+    {
+      "project": "Bing.Offices.MiniExcel.Tests",
+      "tfm": "net6.0",
+      "passed": 44,
+      "failed": 0,
+      "skipped": 0,
+      "trx": "artifacts/public-provider-boundary/final-tests/final_net6.0_20260927011823.trx"
+    },
+    {
+      "project": "Bing.Offices.Npoi.Tests.Integration",
+      "tfm": "net6.0",
+      "passed": 28,
+      "failed": 0,
+      "skipped": 0,
+      "trx": "artifacts/public-provider-boundary/final-tests/final_net6.0_20260927011829.trx"
+    },
+    {
+      "project": "Bing.Offices.MiniExcel.Tests.Integration",
+      "tfm": "net6.0",
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0,
+      "trx": "artifacts/public-provider-boundary/final-tests/final_net6.0_20260927011834.trx"
+    },
+    {
+      "project": "Bing.Offices.ClosedXml.Tests",
+      "tfm": "net6.0",
+      "passed": 157,
+      "failed": 0,
+      "skipped": 0,
+      "trx": "artifacts/public-provider-boundary/final-tests/final_net6.0_20260927011843.trx"
+    },
+    {
+      "project": "Bing.Offices.ClosedXml.Tests.Integration",
+      "tfm": "net6.0",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "trx": "artifacts/public-provider-boundary/final-tests/final_net6.0_20260927011858.trx"
+    },
+    {
+      "project": "Bing.Offices.ProviderContract.Tests",
+      "tfm": "net6.0",
+      "passed": 276,
+      "failed": 0,
+      "skipped": 0,
+      "trx": "artifacts/public-provider-boundary/final-tests/final_net6.0_20260927011912.trx"
+    },
+    {
+      "project": "Bing.Offices.ExcelDataReader.Tests",
+      "tfm": "net6.0",
+      "passed": 32,
+      "failed": 0,
+      "skipped": 0,
+      "trx": "artifacts/public-provider-boundary/final-tests/final_net6.0_20260927011927.trx"
+    },
+    {
+      "project": "Bing.Offices.SpreadCheetah.Tests",
+      "tfm": "net6.0",
+      "passed": 57,
+      "failed": 0,
+      "skipped": 0,
+      "trx": "artifacts/public-provider-boundary/final-tests/final_net6.0_20260927011935.trx"
+    },
+    {
+      "project": "Bing.Offices.AsposeCells.Tests",
+      "tfm": "net6.0",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "trx": "artifacts/public-provider-boundary/final-tests/final_net6.0_20260927011943.trx"
+    },
+    {
+      "project": "Bing.Offices.Tests",
+      "tfm": "net8.0",
+      "passed": 204,
+      "failed": 0,
+      "skipped": 0,
+      "trx": "artifacts/public-provider-boundary/final-tests/final_net8.0_20260927011729.trx"
+    },
+    {
+      "project": "Bing.Offices.Tests.Integration",
+      "tfm": "net8.0",
+      "passed": 32,
+      "failed": 0,
+      "skipped": 0,
+      "trx": "artifacts/public-provider-boundary/final-tests/final_net8.0_20260927011737.trx"
+    },
+    {
+      "project": "Bing.Offices.Docs.Tests",
+      "tfm": "net8.0",
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0,
+      "trx": "artifacts/public-provider-boundary/final-tests/final_net8.0_20260927011748.trx"
+    },
+    {
+      "project": "Bing.Offices.Npoi.Tests",
+      "tfm": "net8.0",
+      "passed": 634,
+      "failed": 0,
+      "skipped": 0,
+      "trx": "artifacts/public-provider-boundary/final-tests/final_net8.0_20260927011820.trx"
+    },
+    {
+      "project": "Bing.Offices.MiniExcel.Tests",
+      "tfm": "net8.0",
+      "passed": 44,
+      "failed": 0,
+      "skipped": 0,
+      "trx": "artifacts/public-provider-boundary/final-tests/final_net8.0_20260927011825.trx"
+    },
+    {
+      "project": "Bing.Offices.Npoi.Tests.Integration",
+      "tfm": "net8.0",
+      "passed": 28,
+      "failed": 0,
+      "skipped": 0,
+      "trx": "artifacts/public-provider-boundary/final-tests/final_net8.0_20260927011832.trx"
+    },
+    {
+      "project": "Bing.Offices.MiniExcel.Tests.Integration",
+      "tfm": "net8.0",
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0,
+      "trx": "artifacts/public-provider-boundary/final-tests/final_net8.0_20260927011836.trx"
+    },
+    {
+      "project": "Bing.Offices.ClosedXml.Tests",
+      "tfm": "net8.0",
+      "passed": 157,
+      "failed": 0,
+      "skipped": 0,
+      "trx": "artifacts/public-provider-boundary/final-tests/final_net8.0_20260927011852.trx"
+    },
+    {
+      "project": "Bing.Offices.ClosedXml.Tests.Integration",
+      "tfm": "net8.0",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "trx": "artifacts/public-provider-boundary/final-tests/final_net8.0_20260927011903.trx"
+    },
+    {
+      "project": "Bing.Offices.ProviderContract.Tests",
+      "tfm": "net8.0",
+      "passed": 276,
+      "failed": 0,
+      "skipped": 0,
+      "trx": "artifacts/public-provider-boundary/final-tests/final_net8.0_20260927011923.trx"
+    },
+    {
+      "project": "Bing.Offices.ExcelDataReader.Tests",
+      "tfm": "net8.0",
+      "passed": 32,
+      "failed": 0,
+      "skipped": 0,
+      "trx": "artifacts/public-provider-boundary/final-tests/final_net8.0_20260927011931.trx"
+    },
+    {
+      "project": "Bing.Offices.SpreadCheetah.Tests",
+      "tfm": "net8.0",
+      "passed": 57,
+      "failed": 0,
+      "skipped": 0,
+      "trx": "artifacts/public-provider-boundary/final-tests/final_net8.0_20260927011939.trx"
+    },
+    {
+      "project": "Bing.Offices.AsposeCells.Tests",
+      "tfm": "net8.0",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "trx": "artifacts/public-provider-boundary/final-tests/final_net8.0_20260927011945.trx"
+    }
+  ],
+  "passed": 2964,
+  "failed": 0,
+  "skipped": 0
+}

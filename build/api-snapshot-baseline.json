@@ -1,25 +1,25 @@
 {
   "schema": "bing.offices.public-api.v2",
   "generatorVersion": "2.7.0",
-  "baselineCommit": "159e6a9fd1f2bf2da9e679f3c9b6fb3a87edddc1",
-  "approvedBy": "user:2026-09-26",
-  "approvedAt": "2026-09-26T00:00:00+08:00",
+  "baselineCommit": "0a24df8c6e3bdc76136a13e21c98ac9a3f1eb53b",
+  "approvedBy": "user:implementation-plan-2026-09-27",
+  "approvedAt": "2026-09-27T00:00:00+08:00",
   "candidateIdentity": {
     "artifactIdentityFormat": "logical-v3",
-    "baseCommit": "159e6a9fd1f2bf2da9e679f3c9b6fb3a87edddc1",
+    "baseCommit": "0a24df8c6e3bdc76136a13e21c98ac9a3f1eb53b",
     "worktreeState": "dirty",
-    "candidateSourceManifestSha256": "2F0BDDFEFF9019E16A3C5D85A0CB5742487F12DC306429066CDCAF23E01CFA03",
-    "breakingApprovalArtifact": "ai_docs/tasks/BING-OFFICES-ADVANCED-EXCEL-ROADMAP-20260926-001/api-approval.md",
-    "breakingApprovalSha256": "84AD079E224A806532FB9D7B9E604B4F77CDE7E920D010EDD520CA76A5056138",
+    "candidateSourceManifestSha256": "0959DB0D19D5B6A100E0E4A95E0E2DBB1D9D21126C18797EC50F468549B5EA39",
+    "breakingApprovalArtifact": "ai_docs/tasks/BING-OFFICES-PUBLIC-PROVIDER-BOUNDARY-20260927-001/api-approval.md",
+    "breakingApprovalSha256": "BEAB756D9C9F126C8AB565CB7026C7985555FD24C5F3E61D0760A3BAD8BCE160",
     "assemblyFiles": {
       "netstandard2.0/Bing.Offices.Abstractions.dll": "669FF4136511314700E7E34871936D3D088AA4DA358B42A6AE340716D7229836",
       "netstandard2.0/Bing.Offices.Core.dll": "E7A13FAB81F45B05BBF0D2CC7CB35FCFB02AA41A3DC66DE968BEEEE5BB789BEB",
-      "net6.0/Bing.Offices.Npoi.dll": "7E059472B76CE583D4F1F45950494BDE6AF96CFE52EA10CDF16FD431A9F556AC",
-      "net8.0/Bing.Offices.Npoi.dll": "7E059472B76CE583D4F1F45950494BDE6AF96CFE52EA10CDF16FD431A9F556AC",
+      "net6.0/Bing.Offices.Npoi.dll": "54104A265CB323C45BE0418B061C2C15D28E7B97C07A1965B103B941C6D861BA",
+      "net8.0/Bing.Offices.Npoi.dll": "54104A265CB323C45BE0418B061C2C15D28E7B97C07A1965B103B941C6D861BA",
       "net6.0/Bing.Offices.MiniExcel.dll": "91F956FA7F4B5F28BDF4EEE4F06C6C6C8DB32BDC703DCCBFC0D57856802A42DC",
       "net8.0/Bing.Offices.MiniExcel.dll": "91F956FA7F4B5F28BDF4EEE4F06C6C6C8DB32BDC703DCCBFC0D57856802A42DC",
-      "net6.0/Bing.Offices.ClosedXml.dll": "48B030D37053D897051F9DE303F4496668AB98831BF9AE02D84D7311B5D414A4",
-      "net8.0/Bing.Offices.ClosedXml.dll": "48B030D37053D897051F9DE303F4496668AB98831BF9AE02D84D7311B5D414A4",
+      "net6.0/Bing.Offices.ClosedXml.dll": "E5651EFA661B7C97A7874F67D20F88C0A59A5CA2D571E3F4B12E8A2CE6CF04CE",
+      "net8.0/Bing.Offices.ClosedXml.dll": "E5651EFA661B7C97A7874F67D20F88C0A59A5CA2D571E3F4B12E8A2CE6CF04CE",
       "net6.0/Bing.Offices.ExcelDataReader.dll": "9E29879179BE61339C22169FAD00AD6F12E9C28458870DA01ECEDBF69790C705",
       "net8.0/Bing.Offices.ExcelDataReader.dll": "9E29879179BE61339C22169FAD00AD6F12E9C28458870DA01ECEDBF69790C705",
       "net6.0/Bing.Offices.SpreadCheetah.dll": "215C51D3E85C59B4CA185BC8912C13878271C0BFFFEAE7D612386D864B343431",
@@ -28,14 +28,14 @@
       "net8.0/Bing.Offices.AsposeCells.dll": "585FD947FC5D2F6AB221D58BF0E4C94455D19CD6070CF189761ED9A2EE35DA9F"
     },
     "nupkgFiles": {
-      "Bing.Offices.Abstractions.2.0.0.nupkg": "C2FF0FF9EA14EBFADED8ACBE72D314A68C2548D8E74DE6EBEC1AB64193952B34",
-      "Bing.Offices.Core.2.0.0.nupkg": "4FB3E1ADF5FC16E3B8FE4E0E1AE226D65914705997EBAFCE7139E8AEDD6C5F9D",
-      "Bing.Offices.Npoi.2.0.0.nupkg": "282211EB28E0D7C9B92F9559A1FA93E049FE74A98D0BEAE72D70D8A2D056CE73",
-      "Bing.Offices.MiniExcel.2.0.0.nupkg": "D2E6782964E24D9F5EE4EB214F1F8BBB7983F71C59FFC792205ECC8B2BA04C06",
-      "Bing.Offices.ClosedXml.2.0.0.nupkg": "CB9C5E679C2F735E3DB3E25D541E8F7CABDBDB69ACFC36634AA24645E3249EED",
-      "Bing.Offices.ExcelDataReader.2.0.0.nupkg": "95389CEF04E78B2E4F441A39E8556344236507BB316B978EFF06EB90051B4396",
-      "Bing.Offices.SpreadCheetah.2.0.0.nupkg": "605A30BFFE4C1ABF227EA2308A26EAF90B7D96F29D5C193FA5A4CFCBFE518B72",
-      "Bing.Offices.AsposeCells.2.0.0.nupkg": "115108492BB1F25AF3EEB98D854F4E932EE8799BE86C9493A67418B357DC686A"
+      "Bing.Offices.Abstractions.2.0.0.nupkg": "4B9B0AFD095EE0F3FEA08BFF672D7A502B7D7473AB846EE42C7B5DEE5FCC3A2B",
+      "Bing.Offices.Core.2.0.0.nupkg": "CFE8EB2FA85B857A4D10942692EBF3E1E3B1D1422E0C3863763F2CD61FDDA1BA",
+      "Bing.Offices.Npoi.2.0.0.nupkg": "3551ED159E9629934AFD0DFA2A70B9DA3DA9DB8C8C39C3BBB781C193BFE59AD2",
+      "Bing.Offices.MiniExcel.2.0.0.nupkg": "5990D9F2A5D64DB35A31059CA5B1C5991F36D4C102B631EF2D922147636951D6",
+      "Bing.Offices.ClosedXml.2.0.0.nupkg": "E3DFBF5B03FB82D2BF3DCB349846E7E399B39D61FC81A2EA8B8D5D3F4E3E06E8",
+      "Bing.Offices.ExcelDataReader.2.0.0.nupkg": "FB724C7DA0ED7B39CFE68B50B6201B9F27E948BE8ACC43576C0EE38301F95A71",
+      "Bing.Offices.SpreadCheetah.2.0.0.nupkg": "724A0F68B6E93A8869F4991C3B36370F1F3A8614D1E5319AB1D6DB8B777CA8FC",
+      "Bing.Offices.AsposeCells.2.0.0.nupkg": "ACEEB647EF72C3B0628A8A935E3AECEAE2A48888148B45AF7AE7CD296D5C4835"
     }
   },
   "assemblies": {
@@ -1607,11 +1607,12 @@
         ]
       },
       "Bing.Offices.Npoi": {
-        "memberCount": 115,
-        "hash": "7F90AB51ED405310A3645CD674F0569A621B9D5DF2A38A1DDB6957C7AF52F67B",
+        "memberCount": 116,
+        "hash": "92504712FB73BE1F1EA8731C74640CB18C9D2C76B7B3658DEC67EBEFBA31F3C1",
         "lines": [
           "constructor|Bing.Offices.Exports.NpoiExcelExporter|visibility=public|modifiers=instance,hidebysig|params=valueConverters:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Conversions.IExcelValueConverter]]?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;),mappingPlanFactory:value:Bing.Offices.Providers.IExcelMappingPlanFactory?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;),exceptionObservers:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Exceptions.IBingOfficesExceptionObserver]]?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;),fileExportCommitter:value:Bing.Offices.IO.IFileExportCommitter?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;)|attributes=",
           "constructor|Bing.Offices.Imports.NpoiExcelImporter|visibility=public|modifiers=instance,hidebysig|params=validationRules:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Validations.IExcelValidationRule]]?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;),valueConverters:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Conversions.IExcelValueConverter]]?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;),namedValidationRules:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Validations.INamedExcelValidationRule]]?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;),mappingPlanFactory:value:Bing.Offices.Providers.IExcelMappingPlanFactory?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;),exceptionObservers:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Exceptions.IBingOfficesExceptionObserver]]?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;)|attributes=",
+          "constructor|Bing.Offices.Imports.NpoiExcelImporter|visibility=public|modifiers=instance,hidebysig|params=validationRules:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Validations.IExcelValidationRule]]|attributes=,valueConverters:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Conversions.IExcelValueConverter]]|attributes=,namedValidationRules:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Validations.INamedExcelValidationRule]]|attributes=,mappingPlanFactory:value:Bing.Offices.Providers.IExcelMappingPlanFactory|attributes=,exceptionObservers:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Exceptions.IBingOfficesExceptionObserver]]|attributes=,fileExportCommitter:value:Bing.Offices.IO.IFileExportCommitter|attributes=|attributes=",
           "constructor|Bing.Offices.Npoi.Formula.NpoiExcelFormulaProcessor|visibility=public|modifiers=instance,hidebysig|params=|attributes=",
           "method|Bing.Offices.Exports.NpoiExcelExporter.ExportAsync|visibility=public|modifiers=instance,sealed-virtual,hidebysig|return=System.Threading.Tasks.Task|returnAttributes=|params=request:value:Bing.Offices.Exports.ExcelWorkbookExportRequest|attributes=,destination:value:System.IO.Stream|attributes=,cancellationToken:value:System.Threading.CancellationToken?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;)|generic=|attributes=",
           "method|Bing.Offices.Exports.NpoiExcelExporter.ExportEntityAsync|visibility=public|modifiers=instance,sealed-virtual,hidebysig|return=System.Threading.Tasks.Task|returnAttributes=|params=entity:value:TEntity|attributes=,layout:value:Bing.Offices.Entities.ExcelEntityLayout`1[[TEntity]]|attributes=,destination:value:System.IO.Stream|attributes=,cancellationToken:value:System.Threading.CancellationToken?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;)|generic=TEntity:class,new():constraints=|attributes=|attributes=",
@@ -1780,13 +1781,14 @@
         ]
       },
       "Bing.Offices.ClosedXml": {
-        "memberCount": 54,
-        "hash": "CA6530D3D937F3FA31E9E1DAF181E24C9236ACDED404E95836B6584F0F4B8F79",
+        "memberCount": 55,
+        "hash": "2A9339B5B8623693B5E41A8DFB1246E39867A5ADE4E45C329E60BFA43258834F",
         "lines": [
           "constructor|Bing.Offices.ClosedXml.ClosedXmlProviderOptions|visibility=public|modifiers=instance,hidebysig|params=|attributes=",
           "constructor|Bing.Offices.ClosedXml.Exports.ClosedXmlExcelExporter|visibility=public|modifiers=instance,hidebysig|params=valueConverters:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Conversions.IExcelValueConverter]]?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;),mappingPlanFactory:value:Bing.Offices.Providers.IExcelMappingPlanFactory?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;),exceptionObservers:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Exceptions.IBingOfficesExceptionObserver]]?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;),fileExportCommitter:value:Bing.Offices.IO.IFileExportCommitter?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;)|attributes=",
           "constructor|Bing.Offices.ClosedXml.Formula.ClosedXmlExcelFormulaProcessor|visibility=public|modifiers=instance,hidebysig|params=|attributes=",
           "constructor|Bing.Offices.ClosedXml.Imports.ClosedXmlExcelImporter|visibility=public|modifiers=instance,hidebysig|params=validationRules:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Validations.IExcelValidationRule]]?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;),valueConverters:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Conversions.IExcelValueConverter]]?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;),namedValidationRules:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Validations.INamedExcelValidationRule]]?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;),mappingPlanFactory:value:Bing.Offices.Providers.IExcelMappingPlanFactory?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;),exceptionObservers:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Exceptions.IBingOfficesExceptionObserver]]?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;)|attributes=",
+          "constructor|Bing.Offices.ClosedXml.Imports.ClosedXmlExcelImporter|visibility=public|modifiers=instance,hidebysig|params=validationRules:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Validations.IExcelValidationRule]]|attributes=,valueConverters:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Conversions.IExcelValueConverter]]|attributes=,namedValidationRules:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Validations.INamedExcelValidationRule]]|attributes=,mappingPlanFactory:value:Bing.Offices.Providers.IExcelMappingPlanFactory|attributes=,exceptionObservers:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Exceptions.IBingOfficesExceptionObserver]]|attributes=,fileExportCommitter:value:Bing.Offices.IO.IFileExportCommitter|attributes=|attributes=",
           "method|Bing.Offices.ClosedXml.Exports.ClosedXmlExcelExporter.ExportAsync|visibility=public|modifiers=instance,sealed-virtual,hidebysig|return=System.Threading.Tasks.Task|returnAttributes=|params=request:value:Bing.Offices.Exports.ExcelWorkbookExportRequest|attributes=,destination:value:System.IO.Stream|attributes=,cancellationToken:value:System.Threading.CancellationToken?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;)|generic=|attributes=",
           "method|Bing.Offices.ClosedXml.Exports.ClosedXmlExcelExporter.ExportEntityAsync|visibility=public|modifiers=instance,sealed-virtual,hidebysig|return=System.Threading.Tasks.Task|returnAttributes=|params=entity:value:TEntity|attributes=,layout:value:Bing.Offices.Entities.ExcelEntityLayout`1[[TEntity]]|attributes=,destination:value:System.IO.Stream|attributes=,cancellationToken:value:System.Threading.CancellationToken?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;)|generic=TEntity:class,new():constraints=|attributes=|attributes=",
           "method|Bing.Offices.ClosedXml.Exports.ClosedXmlExcelExporter.ExportEntityToFileAsync|visibility=public|modifiers=instance,sealed-virtual,hidebysig|return=System.Threading.Tasks.Task|returnAttributes=|params=entity:value:TEntity|attributes=,layout:value:Bing.Offices.Entities.ExcelEntityLayout`1[[TEntity]]|attributes=,path:value:System.String|attributes=,cancellationToken:value:System.Threading.CancellationToken?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;)|generic=TEntity:class,new():constraints=|attributes=|attributes=",
@@ -3505,11 +3507,12 @@
         ]
       },
       "Bing.Offices.Npoi": {
-        "memberCount": 115,
-        "hash": "7F90AB51ED405310A3645CD674F0569A621B9D5DF2A38A1DDB6957C7AF52F67B",
+        "memberCount": 116,
+        "hash": "92504712FB73BE1F1EA8731C74640CB18C9D2C76B7B3658DEC67EBEFBA31F3C1",
         "lines": [
           "constructor|Bing.Offices.Exports.NpoiExcelExporter|visibility=public|modifiers=instance,hidebysig|params=valueConverters:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Conversions.IExcelValueConverter]]?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;),mappingPlanFactory:value:Bing.Offices.Providers.IExcelMappingPlanFactory?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;),exceptionObservers:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Exceptions.IBingOfficesExceptionObserver]]?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;),fileExportCommitter:value:Bing.Offices.IO.IFileExportCommitter?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;)|attributes=",
           "constructor|Bing.Offices.Imports.NpoiExcelImporter|visibility=public|modifiers=instance,hidebysig|params=validationRules:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Validations.IExcelValidationRule]]?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;),valueConverters:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Conversions.IExcelValueConverter]]?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;),namedValidationRules:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Validations.INamedExcelValidationRule]]?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;),mappingPlanFactory:value:Bing.Offices.Providers.IExcelMappingPlanFactory?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;),exceptionObservers:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Exceptions.IBingOfficesExceptionObserver]]?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;)|attributes=",
+          "constructor|Bing.Offices.Imports.NpoiExcelImporter|visibility=public|modifiers=instance,hidebysig|params=validationRules:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Validations.IExcelValidationRule]]|attributes=,valueConverters:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Conversions.IExcelValueConverter]]|attributes=,namedValidationRules:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Validations.INamedExcelValidationRule]]|attributes=,mappingPlanFactory:value:Bing.Offices.Providers.IExcelMappingPlanFactory|attributes=,exceptionObservers:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Exceptions.IBingOfficesExceptionObserver]]|attributes=,fileExportCommitter:value:Bing.Offices.IO.IFileExportCommitter|attributes=|attributes=",
           "constructor|Bing.Offices.Npoi.Formula.NpoiExcelFormulaProcessor|visibility=public|modifiers=instance,hidebysig|params=|attributes=",
           "method|Bing.Offices.Exports.NpoiExcelExporter.ExportAsync|visibility=public|modifiers=instance,sealed-virtual,hidebysig|return=System.Threading.Tasks.Task|returnAttributes=|params=request:value:Bing.Offices.Exports.ExcelWorkbookExportRequest|attributes=,destination:value:System.IO.Stream|attributes=,cancellationToken:value:System.Threading.CancellationToken?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;)|generic=|attributes=",
           "method|Bing.Offices.Exports.NpoiExcelExporter.ExportEntityAsync|visibility=public|modifiers=instance,sealed-virtual,hidebysig|return=System.Threading.Tasks.Task|returnAttributes=|params=entity:value:TEntity|attributes=,layout:value:Bing.Offices.Entities.ExcelEntityLayout`1[[TEntity]]|attributes=,destination:value:System.IO.Stream|attributes=,cancellationToken:value:System.Threading.CancellationToken?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;)|generic=TEntity:class,new():constraints=|attributes=|attributes=",
@@ -3678,13 +3681,14 @@
         ]
       },
       "Bing.Offices.ClosedXml": {
-        "memberCount": 54,
-        "hash": "CA6530D3D937F3FA31E9E1DAF181E24C9236ACDED404E95836B6584F0F4B8F79",
+        "memberCount": 55,
+        "hash": "2A9339B5B8623693B5E41A8DFB1246E39867A5ADE4E45C329E60BFA43258834F",
         "lines": [
           "constructor|Bing.Offices.ClosedXml.ClosedXmlProviderOptions|visibility=public|modifiers=instance,hidebysig|params=|attributes=",
           "constructor|Bing.Offices.ClosedXml.Exports.ClosedXmlExcelExporter|visibility=public|modifiers=instance,hidebysig|params=valueConverters:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Conversions.IExcelValueConverter]]?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;),mappingPlanFactory:value:Bing.Offices.Providers.IExcelMappingPlanFactory?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;),exceptionObservers:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Exceptions.IBingOfficesExceptionObserver]]?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;),fileExportCommitter:value:Bing.Offices.IO.IFileExportCommitter?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;)|attributes=",
           "constructor|Bing.Offices.ClosedXml.Formula.ClosedXmlExcelFormulaProcessor|visibility=public|modifiers=instance,hidebysig|params=|attributes=",
           "constructor|Bing.Offices.ClosedXml.Imports.ClosedXmlExcelImporter|visibility=public|modifiers=instance,hidebysig|params=validationRules:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Validations.IExcelValidationRule]]?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;),valueConverters:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Conversions.IExcelValueConverter]]?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;),namedValidationRules:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Validations.INamedExcelValidationRule]]?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;),mappingPlanFactory:value:Bing.Offices.Providers.IExcelMappingPlanFactory?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;),exceptionObservers:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Exceptions.IBingOfficesExceptionObserver]]?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;)|attributes=",
+          "constructor|Bing.Offices.ClosedXml.Imports.ClosedXmlExcelImporter|visibility=public|modifiers=instance,hidebysig|params=validationRules:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Validations.IExcelValidationRule]]|attributes=,valueConverters:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Conversions.IExcelValueConverter]]|attributes=,namedValidationRules:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Validations.INamedExcelValidationRule]]|attributes=,mappingPlanFactory:value:Bing.Offices.Providers.IExcelMappingPlanFactory|attributes=,exceptionObservers:value:System.Collections.Generic.IEnumerable`1[[Bing.Offices.Exceptions.IBingOfficesExceptionObserver]]|attributes=,fileExportCommitter:value:Bing.Offices.IO.IFileExportCommitter|attributes=|attributes=",
           "method|Bing.Offices.ClosedXml.Exports.ClosedXmlExcelExporter.ExportAsync|visibility=public|modifiers=instance,sealed-virtual,hidebysig|return=System.Threading.Tasks.Task|returnAttributes=|params=request:value:Bing.Offices.Exports.ExcelWorkbookExportRequest|attributes=,destination:value:System.IO.Stream|attributes=,cancellationToken:value:System.Threading.CancellationToken?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;)|generic=|attributes=",
           "method|Bing.Offices.ClosedXml.Exports.ClosedXmlExcelExporter.ExportEntityAsync|visibility=public|modifiers=instance,sealed-virtual,hidebysig|return=System.Threading.Tasks.Task|returnAttributes=|params=entity:value:TEntity|attributes=,layout:value:Bing.Offices.Entities.ExcelEntityLayout`1[[TEntity]]|attributes=,destination:value:System.IO.Stream|attributes=,cancellationToken:value:System.Threading.CancellationToken?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;)|generic=TEntity:class,new():constraints=|attributes=|attributes=",
           "method|Bing.Offices.ClosedXml.Exports.ClosedXmlExcelExporter.ExportEntityToFileAsync|visibility=public|modifiers=instance,sealed-virtual,hidebysig|return=System.Threading.Tasks.Task|returnAttributes=|params=entity:value:TEntity|attributes=,layout:value:Bing.Offices.Entities.ExcelEntityLayout`1[[TEntity]]|attributes=,path:value:System.String|attributes=,cancellationToken:value:System.Threading.CancellationToken?=null|attributes=System.Runtime.InteropServices.OptionalAttribute(;)|generic=TEntity:class,new():constraints=|attributes=|attributes=",

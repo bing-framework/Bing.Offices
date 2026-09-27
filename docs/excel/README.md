@@ -53,6 +53,7 @@ exporter.Export(request, stream);
 - [dates.md](dates.md)：日期、DateTimeOffset 与跨时区合同
 - [npoi-extensions.md](npoi-extensions.md)：七个 NPOI 用户扩展容器和 Try/Throw 行为
 - [async-io.md](async-io.md)：Sync/Async API、流所有权、取消和 NPOI 同步边界
+- [file-committers.md](file-committers.md)：自定义文件提交器、失败工作簿扩展点及 Provider 配套升级
 - [09-providers.md](09-providers.md)：Provider 的能力矩阵、选择和资源边界
 - [10-third-party-components.md](10-third-party-components.md)：第三方引擎和授权边界
 - [nuget-migration.md](nuget-migration.md)：包身份、当前兼容边界和迁移注意事项
