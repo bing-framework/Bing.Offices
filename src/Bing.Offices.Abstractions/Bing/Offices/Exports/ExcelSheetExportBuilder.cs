@@ -524,8 +524,30 @@ public sealed class ExcelSheetExportBuilder<T> where T : class, new()
             ConverterName = column.ConverterName,
             ValidatorName = column.ValidatorName,
             ValidationRuleNames = (column.ValidationRuleNames ?? Array.Empty<string>()).ToArray(),
+            ValidationRules = (column.ValidationRules ?? Array.Empty<Configurations.ExcelMappingDynamicValidationConfiguration>())
+                .Select(CloneDynamicValidation).ToArray(),
             ImageMultiplicity = column.ImageMultiplicity
         }).ToArray();
+
+    /// <summary>
+    /// 复制动态列校验配置。
+    /// </summary>
+    /// <param name="source">待复制的校验配置。</param>
+    /// <returns>独立的校验配置；输入为 <see langword="null" /> 时返回 <see langword="null" />。</returns>
+    private static Configurations.ExcelMappingDynamicValidationConfiguration CloneDynamicValidation(
+        Configurations.ExcelMappingDynamicValidationConfiguration source) => source == null ? null :
+        new Configurations.ExcelMappingDynamicValidationConfiguration
+        {
+            Name = source.Name,
+            Pattern = source.Pattern,
+            Format = source.Format,
+            CultureName = source.CultureName,
+            Min = source.Min,
+            Max = source.Max,
+            MaxValue = source.MaxValue,
+            MaxLength = source.MaxLength,
+            IgnoreEmpty = source.IgnoreEmpty
+        };
 
     /// <summary>
     /// 验证自定义多行表头的范围和单元格重叠。

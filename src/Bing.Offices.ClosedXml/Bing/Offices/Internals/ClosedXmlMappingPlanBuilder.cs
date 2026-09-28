@@ -105,6 +105,8 @@ internal sealed class ClosedXmlMappingPlanBuilder
                 ConverterName = definition.ConverterName,
                 ValidatorName = definition.ValidatorName,
                 ValidationRuleNames = (definition.ValidationRuleNames ?? Array.Empty<string>()).ToList(),
+                ValidationRules = (definition.ValidationRules ?? Array.Empty<ExcelMappingDynamicValidationConfiguration>())
+                    .Select(CloneDynamicValidation).ToList(),
                 NumberFormat = definition.NumberFormat,
                 ColumnIndex = definition.PhysicalColumnIndex ?? definition.Placement?.PhysicalColumnIndex,
                 PlacementKey = GetPlacementKey(definition.Placement),
@@ -113,6 +115,26 @@ internal sealed class ClosedXmlMappingPlanBuilder
         };
         return MappingConfigurationMerger.Merge(configuration, overlay, MappingSourceKind.Request);
     }
+
+    /// <summary>
+    /// 复制动态验证配置，避免与调用方共享可变实例。
+    /// </summary>
+    /// <param name="source">待复制的动态验证配置。</param>
+    /// <returns>配置副本；源配置为 <see langword="null" /> 时返回 <see langword="null" />。</returns>
+    private static ExcelMappingDynamicValidationConfiguration CloneDynamicValidation(
+        ExcelMappingDynamicValidationConfiguration source) => source == null ? null :
+        new ExcelMappingDynamicValidationConfiguration
+        {
+            Name = source.Name,
+            Pattern = source.Pattern,
+            Format = source.Format,
+            CultureName = source.CultureName,
+            Min = source.Min,
+            Max = source.Max,
+            MaxValue = source.MaxValue,
+            MaxLength = source.MaxLength,
+            IgnoreEmpty = source.IgnoreEmpty
+        };
 
     /// <summary>
     /// 将动态列相对位置转换为配置使用的键。

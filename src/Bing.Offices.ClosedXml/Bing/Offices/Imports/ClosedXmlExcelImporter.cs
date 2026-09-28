@@ -212,7 +212,7 @@ public sealed class ClosedXmlExcelImporter : IExcelImporter, IExcelEntityImporte
             using var admission = _admission.Acquire(cancellationToken, BingOfficesOperation.Import);
             using var workbook = new XLWorkbook(buffered);
             return _entityExecutor.Read(workbook, layout, requireTemplateMerges: false,
-                isDate1904, limits, cancellationToken);
+                isDate1904, limits, options.ValidationFailureMode, cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -260,7 +260,7 @@ public sealed class ClosedXmlExcelImporter : IExcelImporter, IExcelEntityImporte
                 .ConfigureAwait(false);
             using var workbook = new XLWorkbook(buffer);
             return _entityExecutor.Read(workbook, layout, requireTemplateMerges: false,
-                isDate1904, limits, cancellationToken);
+                isDate1904, limits, options.ValidationFailureMode, cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -307,7 +307,7 @@ public sealed class ClosedXmlExcelImporter : IExcelImporter, IExcelEntityImporte
             using var admission = _admission.Acquire(cancellationToken, BingOfficesOperation.Import);
             using var workbook = new XLWorkbook(buffered);
             return _entityExecutor.Read(workbook, layout, requireTemplateMerges: false,
-                isDate1904, limits, cancellationToken);
+                isDate1904, limits, options.ValidationFailureMode, cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -363,7 +363,7 @@ public sealed class ClosedXmlExcelImporter : IExcelImporter, IExcelEntityImporte
                 .ConfigureAwait(false);
             using var workbook = new XLWorkbook(buffer);
             return _entityExecutor.Read(workbook, layout, requireTemplateMerges: false,
-                isDate1904, limits, cancellationToken);
+                isDate1904, limits, options.ValidationFailureMode, cancellationToken);
         }
         catch (OperationCanceledException)
         {

@@ -39,6 +39,8 @@ public sealed class ProfileCompletenessTest
         var mini = ProviderContractProfiles.Get("MiniExcel");
         var driver = ProviderDrivers.Get("MiniExcel");
         Assert.Equal(ContractExpectation.NotApplicable, mini.For(ContractScenario.Entity));
+        Assert.Equal(ContractExpectation.NotApplicable, mini.For(ContractScenario.EntityGroupSubtotals));
+        Assert.Equal(ContractExpectation.NotApplicable, mini.For(ContractScenario.EntityPageSubtotals));
         Assert.False(driver.DeclaredCapabilities.Supports(Bing.Offices.Providers.ExcelProviderCapabilities.Entity));
     }
 }

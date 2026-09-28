@@ -1,5 +1,7 @@
 ﻿using Bing.Offices.Imports;
 
+using Bing.Offices.Configurations;
+
 namespace Bing.Offices.Exports;
 
 /// <summary>
@@ -46,7 +48,7 @@ public sealed class ExcelDynamicColumnDefinition
     public int? PhysicalColumnIndex { get; init; }
 
     /// <summary>
-    /// 获取或初始化Excel 数字格式。
+    /// 获取或初始化 Excel 数字格式。
     /// </summary>
     public string NumberFormat { get; init; }
 
@@ -74,6 +76,15 @@ public sealed class ExcelDynamicColumnDefinition
     /// 获取或初始化按顺序执行的注册校验规则名称。
     /// </summary>
     public IReadOnlyList<string> ValidationRuleNames { get; init; } = Array.Empty<string>();
+
+    /// <summary>
+    /// 获取或初始化按顺序执行的内置校验规则描述。
+    /// </summary>
+    /// <remarks>
+    /// 支持 required、regex、date、maxValue、range、maxLength 和 unique；规则由公共 Mapping Plan 统一执行。
+    /// </remarks>
+    public IReadOnlyList<ExcelMappingDynamicValidationConfiguration> ValidationRules { get; init; } =
+        Array.Empty<ExcelMappingDynamicValidationConfiguration>();
 
     /// <summary>
     /// 获取或初始化图片列出现多个图片时的处理策略。

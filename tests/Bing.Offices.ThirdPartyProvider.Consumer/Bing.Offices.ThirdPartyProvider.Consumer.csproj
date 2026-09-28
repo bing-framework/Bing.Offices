@@ -5,6 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>disable</Nullable>
     <BingOfficesPackageVersion Condition="'$(BingOfficesPackageVersion)' == ''"></BingOfficesPackageVersion>
+    <RestoreAdditionalProjectSources Condition="Exists('$(MSBuildThisFileDirectory)..\..\artifacts\packages-contracts')">$(RestoreAdditionalProjectSources);$(MSBuildThisFileDirectory)..\..\artifacts\packages-contracts</RestoreAdditionalProjectSources>
   </PropertyGroup>
 
   <Target Name="ValidateBingOfficesPackageVersion" BeforeTargets="Restore;Build">
@@ -18,5 +19,7 @@
     <PackageReference Include="Bing.Offices.MiniExcel" Version="$(BingOfficesPackageVersion)" />
     <PackageReference Include="Bing.Offices.Npoi" Version="$(BingOfficesPackageVersion)" />
     <PackageReference Include="Bing.Offices.ClosedXml" Version="$(BingOfficesPackageVersion)" />
+    <PackageReference Include="Bing.Offices.SpreadCheetah" Version="$(BingOfficesPackageVersion)" />
+    <PackageReference Include="Bing.Offices.EntityProviderContracts" Version="$(BingOfficesPackageVersion)" />
   </ItemGroup>
 </Project>

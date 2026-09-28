@@ -1,0 +1,9 @@
+<Project>
+  <PropertyGroup>
+    <TargetFrameworks>net6.0;net8.0</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <BingOfficesPackageVersion Condition="'$(BingOfficesPackageVersion)' == ''">2.0.0</BingOfficesPackageVersion>
+  </PropertyGroup>
+</Project>

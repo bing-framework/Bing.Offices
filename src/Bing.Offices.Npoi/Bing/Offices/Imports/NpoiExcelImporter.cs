@@ -265,7 +265,8 @@ public sealed class NpoiExcelImporter : IExcelImporter, IExcelEntityImporter,
         {
             using var buffered = new MemoryStream();
             NpoiStreamCopier.Copy(source, buffered, cancellationToken, limits.MaxInputBytes);
-            return ImportEntityBuffered(buffered, layout, false, limits, cancellationToken);
+            return ImportEntityBuffered(buffered, layout, false, limits,
+                options.ValidationFailureMode, cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -306,7 +307,8 @@ public sealed class NpoiExcelImporter : IExcelImporter, IExcelEntityImporter,
             using var buffered = new MemoryStream();
             await NpoiStreamCopier.CopyAsync(source, buffered, cancellationToken, limits.MaxInputBytes)
                 .ConfigureAwait(false);
-            return ImportEntityBuffered(buffered, layout, false, limits, cancellationToken);
+            return ImportEntityBuffered(buffered, layout, false, limits,
+                options.ValidationFailureMode, cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -351,7 +353,8 @@ public sealed class NpoiExcelImporter : IExcelImporter, IExcelEntityImporter,
             ValidateEntityTemplate(templateWorkbook, layout);
             using var buffered = new MemoryStream();
             NpoiStreamCopier.Copy(source, buffered, cancellationToken, limits.MaxInputBytes);
-            return ImportEntityBuffered(buffered, layout, false, limits, cancellationToken);
+            return ImportEntityBuffered(buffered, layout, false, limits,
+                options.ValidationFailureMode, cancellationToken);
         }
         finally
         {
@@ -387,7 +390,8 @@ public sealed class NpoiExcelImporter : IExcelImporter, IExcelEntityImporter,
             using var buffered = new MemoryStream();
             await NpoiStreamCopier.CopyAsync(source, buffered, cancellationToken, limits.MaxInputBytes)
                 .ConfigureAwait(false);
-            return ImportEntityBuffered(buffered, layout, false, limits, cancellationToken);
+            return ImportEntityBuffered(buffered, layout, false, limits,
+                options.ValidationFailureMode, cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -421,10 +425,12 @@ public sealed class NpoiExcelImporter : IExcelImporter, IExcelEntityImporter,
     /// <param name="layout">实体布局。</param>
     /// <param name="requireTemplateMerges">是否要求模板中的合并区域已存在。</param>
     /// <param name="limits">实体导入使用的资源限制。</param>
+    /// <param name="validationFailureMode">当前行校验失败后的继续策略。</param>
     /// <param name="cancellationToken">用于取消导入的令牌。</param>
     /// <returns>实体导入结果。</returns>
     private ExcelEntityImportResult<TEntity> ImportEntityBuffered<TEntity>(MemoryStream buffered,
         ExcelEntityLayout<TEntity> layout, bool requireTemplateMerges, ExcelResourceLimits limits,
+        ExcelValidationFailureMode validationFailureMode,
         CancellationToken cancellationToken)
         where TEntity : class, new()
     {
@@ -434,7 +440,7 @@ public sealed class NpoiExcelImporter : IExcelImporter, IExcelEntityImporter,
         buffered.Position = 0;
         using var workbook = WorkbookFactory.Create(buffered);
         return _entityExecutor.Read(workbook, new TEntity(), layout, requireTemplateMerges, limits,
-            cancellationToken);
+            validationFailureMode, cancellationToken);
     }
 
     /// <summary>
@@ -486,6 +492,12 @@ public sealed class NpoiExcelImporter : IExcelImporter, IExcelEntityImporter,
                 throw new BingOfficesConfigurationException($"模板缺少请求的 Sheet: {name}", stage: BingOfficesStage.Plan);
             NpoiEntityLayoutSupport.PreflightMerges(sheet, layout.Merges, false, true);
         }
+        foreach (var binding in layout.Cells.Where(item => item.AnchorName != null))
+            NpoiEntityLayoutSupport.ResolveNamedAnchor(workbook, binding.SheetName,
+                binding.AnchorName);
+        foreach (var region in layout.ListRegions.Where(item => item.AnchorName != null))
+            NpoiEntityLayoutSupport.ResolveNamedAnchor(workbook, region.SheetName,
+                region.AnchorName);
     }
 
     /// <summary>

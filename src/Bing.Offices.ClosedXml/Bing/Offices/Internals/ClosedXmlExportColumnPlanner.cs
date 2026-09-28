@@ -1,5 +1,6 @@
 ﻿using System.Reflection;
 using Bing.Offices.Configurations;
+using Bing.Offices.Entities;
 using Bing.Offices.Exceptions;
 using Bing.Offices.Providers;
 using Bing.Offices.Styles;
@@ -19,10 +20,12 @@ internal static class ClosedXmlExportColumnPlanner
     /// <param name="plan">Core 映射计划。</param>
     /// <param name="requestDefinitions">请求中的动态列定义。</param>
     /// <param name="mappingConfiguration">用于读取固定列物理索引的配置。</param>
+    /// <param name="calculatedColumns">实体布局声明的计算列。</param>
     /// <returns>按物理列索引排列的导出列。</returns>
     internal static IReadOnlyList<ClosedXmlExportColumn> Create(Type itemType,
         IExcelMappingPlan plan, IReadOnlyList<ExcelDynamicColumnDefinition> requestDefinitions,
-        ExcelMappingConfiguration mappingConfiguration = null)
+        ExcelMappingConfiguration mappingConfiguration = null,
+        IReadOnlyList<IExcelEntityCalculatedColumn> calculatedColumns = null)
     {
         if (itemType == null)
             throw new ArgumentNullException(nameof(itemType));
@@ -177,6 +180,8 @@ internal static class ClosedXmlExportColumnPlanner
             columns[index] = dynamic.Column;
         }
 
+        AppendCalculatedColumns(columns, calculatedColumns);
+
         var result = new List<ClosedXmlExportColumn>();
         for (var index = 0; index < columns.Count; index++)
         {
@@ -187,6 +192,88 @@ internal static class ClosedXmlExportColumnPlanner
             result.Add(column);
         }
         return result;
+    }
+
+    /// <summary>
+    /// 将实体布局计算列加入统一物理布局。
+    /// </summary>
+    /// <param name="columns">固定列和动态列布局。</param>
+    /// <param name="calculatedColumns">计算列定义。</param>
+    private static void AppendCalculatedColumns(IList<ClosedXmlExportColumn> columns,
+        IReadOnlyList<IExcelEntityCalculatedColumn> calculatedColumns)
+    {
+        var definitions = (calculatedColumns ?? Array.Empty<IExcelEntityCalculatedColumn>())
+            .Where(column => column != null)
+            .OrderBy(column => column.Order)
+            .ThenBy(column => column.Key, StringComparer.Ordinal)
+            .ToArray();
+        if (definitions.Length == 0)
+            return;
+
+        var keys = new HashSet<string>(columns.Where(column => column != null).Select(column => column.Key),
+            StringComparer.OrdinalIgnoreCase);
+        var titles = new HashSet<string>(columns.Where(column => column != null).Select(column => column.Title),
+            StringComparer.OrdinalIgnoreCase);
+        foreach (var definition in definitions)
+        {
+            if (string.IsNullOrWhiteSpace(definition.Key) || string.IsNullOrWhiteSpace(definition.Title))
+                throw new ArgumentException("计算列 Key 和 Title 不能为空。", nameof(calculatedColumns));
+            if (!keys.Add(definition.Key) || !titles.Add(definition.Title))
+                throw new ArgumentException($"计算列 Key 或标题重复: {definition.Key}",
+                    nameof(calculatedColumns));
+            var column = new ClosedXmlExportColumn(definition.Key, definition.Title, null, null, null,
+                definition.HeaderStyle, definition.BodyStyle, null, definition.NumberFormat, null,
+                definition);
+            InsertCalculatedColumn(columns, column, definition);
+        }
+    }
+
+    /// <summary>
+    /// 按计算列位置声明插入列计划。
+    /// </summary>
+    /// <param name="columns">当前物理列计划。</param>
+    /// <param name="column">待插入的计算列。</param>
+    /// <param name="definition">计算列定义。</param>
+    private static void InsertCalculatedColumn(IList<ClosedXmlExportColumn> columns,
+        ClosedXmlExportColumn column, IExcelEntityCalculatedColumn definition)
+    {
+        var placement = definition.Placement;
+        var physicalIndex = definition.PhysicalColumnIndex ?? placement?.PhysicalColumnIndex;
+        if (physicalIndex.HasValue)
+        {
+            if (physicalIndex.Value < 0 || physicalIndex.Value > columns.Count)
+                throw new ArgumentOutOfRangeException(nameof(definition),
+                    $"计算列 {definition.Key} 的物理索引超出当前列计划。");
+            while (columns.Count <= physicalIndex.Value)
+                columns.Add(null);
+            if (columns[physicalIndex.Value] != null)
+                throw new BingOfficesConfigurationException(
+                    $"计算列 {definition.Key} 的物理索引与已有列冲突: {physicalIndex.Value}",
+                    stage: BingOfficesStage.Plan);
+            columns[physicalIndex.Value] = column;
+            return;
+        }
+        if (placement != null && !string.IsNullOrWhiteSpace(placement.BeforeKey))
+        {
+            var index = FindKey(columns, placement.BeforeKey);
+            if (index < 0)
+                throw new BingOfficesConfigurationException(
+                    $"计算列 {definition.Key} 的 Before 目标不存在: {placement.BeforeKey}",
+                    stage: BingOfficesStage.Plan);
+            columns.Insert(index, column);
+            return;
+        }
+        if (placement != null && !string.IsNullOrWhiteSpace(placement.AfterKey))
+        {
+            var index = FindKey(columns, placement.AfterKey);
+            if (index < 0)
+                throw new BingOfficesConfigurationException(
+                    $"计算列 {definition.Key} 的 After 目标不存在: {placement.AfterKey}",
+                    stage: BingOfficesStage.Plan);
+            columns.Insert(index + 1, column);
+            return;
+        }
+        columns.Add(column);
     }
 
     /// <summary>
@@ -215,7 +302,7 @@ internal static class ClosedXmlExportColumnPlanner
     /// <param name="columns">当前物理布局。</param>
     /// <param name="key">待查找的列键或标题。</param>
     /// <returns>列索引；未找到时返回 -1。</returns>
-    private static int FindKey(IReadOnlyList<ClosedXmlExportColumn> columns, string key)
+    private static int FindKey(IList<ClosedXmlExportColumn> columns, string key)
     {
         for (var index = 0; index < columns.Count; index++)
         {
@@ -357,10 +444,11 @@ internal sealed class ClosedXmlExportColumn
     /// <param name="mappingNumberFormat">映射数字格式。</param>
     /// <param name="numberFormat">列级数字格式。</param>
     /// <param name="physicalColumnIndex">初始物理列索引。</param>
+    /// <param name="calculated">实体布局计算列；普通列时为空。</param>
     internal ClosedXmlExportColumn(string key, string title, IExcelMappingColumn fixedColumn,
         IExcelDynamicMappingColumn dynamicColumn, PropertyInfo property, ExcelCellStyle headerStyle,
         ExcelCellStyle bodyStyle, string mappingNumberFormat, string numberFormat,
-        int? physicalColumnIndex)
+        int? physicalColumnIndex, IExcelEntityCalculatedColumn calculated = null)
     {
         Key = key;
         Title = title;
@@ -372,6 +460,7 @@ internal sealed class ClosedXmlExportColumn
         MappingNumberFormat = mappingNumberFormat;
         NumberFormat = numberFormat;
         PhysicalColumnIndex = physicalColumnIndex ?? 0;
+        Calculated = calculated;
     }
 
     /// <summary>
@@ -393,6 +482,11 @@ internal sealed class ClosedXmlExportColumn
     /// 获取动态映射列；固定列时返回 <see langword="null" />。
     /// </summary>
     internal IExcelDynamicMappingColumn Dynamic { get; }
+
+    /// <summary>
+    /// 获取实体布局计算列；普通固定列和动态列时返回 <see langword="null" />。
+    /// </summary>
+    internal IExcelEntityCalculatedColumn Calculated { get; }
 
     /// <summary>
     /// 获取固定列对应的实体属性。

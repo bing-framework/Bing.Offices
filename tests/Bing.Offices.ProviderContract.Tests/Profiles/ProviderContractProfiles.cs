@@ -53,6 +53,14 @@ public enum ContractScenario
     /// </summary>
     EntityDynamicColumns,
     /// <summary>
+    /// 实体列表连续分组小计场景。
+    /// </summary>
+    EntityGroupSubtotals,
+    /// <summary>
+    /// 实体列表分页小计场景。
+    /// </summary>
+    EntityPageSubtotals,
+    /// <summary>
     /// 公式文本和缓存值场景。
     /// </summary>
     Formula
@@ -128,10 +136,12 @@ public static class ProviderContractProfiles
     /// </summary>
     public static IReadOnlyList<ProviderContractProfile> All { get; } = new[]
     {
-        Create("NPOI", entityDynamic: ContractExpectation.UnsupportedExpected),
+        Create("NPOI"),
         Create("MiniExcel", rich: ContractExpectation.UnsupportedExpected,
             entity: ContractExpectation.NotApplicable,
-            entityDynamic: ContractExpectation.NotApplicable),
+            entityDynamic: ContractExpectation.NotApplicable,
+            entityGroupSubtotals: ContractExpectation.NotApplicable,
+            entityPageSubtotals: ContractExpectation.NotApplicable),
         Create("ClosedXML")
     };
 
@@ -155,11 +165,15 @@ public static class ProviderContractProfiles
     /// <param name="rich">样式、合并和模板场景的预期结果。</param>
     /// <param name="entity">实体场景的预期结果。</param>
     /// <param name="entityDynamic">实体动态列场景的预期结果。</param>
+    /// <param name="entityGroupSubtotals">实体列表连续分组小计场景的预期结果。</param>
+    /// <param name="entityPageSubtotals">实体列表分页小计场景的预期结果。</param>
     /// <returns>包含全部合同场景预期的档案。</returns>
     private static ProviderContractProfile Create(string provider,
         ContractExpectation rich = ContractExpectation.Supported,
         ContractExpectation entity = ContractExpectation.Supported,
-        ContractExpectation entityDynamic = ContractExpectation.Supported)
+        ContractExpectation entityDynamic = ContractExpectation.Supported,
+        ContractExpectation entityGroupSubtotals = ContractExpectation.Supported,
+        ContractExpectation entityPageSubtotals = ContractExpectation.Supported)
     {
         return new ProviderContractProfile(provider, new Dictionary<ContractScenario, ContractExpectation>
         {
@@ -174,6 +188,8 @@ public static class ProviderContractProfiles
             [ContractScenario.Template] = rich,
             [ContractScenario.Entity] = entity,
             [ContractScenario.EntityDynamicColumns] = entityDynamic,
+            [ContractScenario.EntityGroupSubtotals] = entityGroupSubtotals,
+            [ContractScenario.EntityPageSubtotals] = entityPageSubtotals,
             [ContractScenario.Formula] = string.Equals(provider, "ClosedXML", StringComparison.Ordinal)
                 ? ContractExpectation.Supported
                 : ContractExpectation.Partial

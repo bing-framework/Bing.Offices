@@ -12,6 +12,7 @@ using Bing.Offices.Imports;
 using Bing.Offices.Providers;
 using Bing.Offices.Styles;
 using Bing.Offices.Validations;
+using Bing.Offices.Entities;
 using NPOI.SS.UserModel;
 
 namespace Bing.Offices;
@@ -74,6 +75,44 @@ internal sealed class ExcelColumnPlan
         BodyStyle = dynamicDefinition?.BodyStyle;
         ValueConverters = valueConverters ?? Array.Empty<IExcelValueConverter>();
         ValidationBindings = validationBindings ?? Array.Empty<IExcelValidationBinding>();
+        Calculated = null;
+    }
+
+    /// <summary>
+    /// 初始化一个 <see cref="ExcelColumnPlan" /> 类型的实例。
+    /// </summary>
+    /// <param name="calculated">计算列定义。</param>
+    /// <remarks>此重载创建不绑定实体属性的导出计算列计划。</remarks>
+    internal ExcelColumnPlan(IExcelEntityCalculatedColumn calculated)
+    {
+        Calculated = calculated ?? throw new ArgumentNullException(nameof(calculated));
+        HeaderName = calculated.Title;
+        Title = calculated.Title;
+        Property = null;
+        ReflectionProperty = null;
+        IsDynamic = false;
+        ColumnIndex = -1;
+        DynamicDefinition = null;
+        Key = calculated.Key;
+        Getter = null;
+        Setter = null;
+        ConverterName = null;
+        ValidationRuleNames = Array.Empty<string>();
+        ValidatorName = null;
+        ValueType = calculated.ValueType;
+        Formatter = calculated.NumberFormat;
+        DecimalScale = null;
+        ValueMap = new Dictionary<string, string>(StringComparer.Ordinal);
+        Ignored = false;
+        IsUnique = false;
+        UniqueIgnoreEmpty = true;
+        IsMerged = false;
+        ImageMultiplicity = ExcelImageMultiplicityPolicy.First;
+        HeaderStyle = calculated.HeaderStyle;
+        BodyStyle = calculated.BodyStyle;
+        ValueConverters = Array.Empty<IExcelValueConverter>();
+        ValidationBindings = Array.Empty<IExcelValidationBinding>();
+        DateAttribute = null;
     }
 
     /// <summary>
@@ -97,6 +136,10 @@ internal sealed class ExcelColumnPlan
     /// </summary>
     internal bool IsDynamic { get; }
     /// <summary>
+    /// 获取是否为实体布局导出计算列。
+    /// </summary>
+    internal bool IsCalculated => Calculated != null;
+    /// <summary>
     /// 获取工作表中的零基列索引。
     /// </summary>
     internal int ColumnIndex { get; }
@@ -104,6 +147,10 @@ internal sealed class ExcelColumnPlan
     /// 获取动态列的请求级定义；固定列时为 null。
     /// </summary>
     internal ExcelDynamicColumnDefinition DynamicDefinition { get; }
+    /// <summary>
+    /// 获取实体布局导出计算列定义。
+    /// </summary>
+    internal IExcelEntityCalculatedColumn Calculated { get; }
     /// <summary>
     /// 获取用于错误定位和动态字典访问的稳定列键。
     /// </summary>

@@ -272,7 +272,7 @@ public sealed class DocsConsumerTest
         var fences = System.Linq.Enumerable.SelectMany(documents, document => ExtractFences(document)).ToArray();
 
         // Act / Assert
-        Assert.Equal(10, fences.Length);
+        Assert.Equal(19, fences.Length);
         foreach (var fence in fences)
         {
             var source = BuildFenceSource(fence.FileName, fence.Index, fence.Code);
@@ -348,6 +348,19 @@ public sealed class DocsConsumerTest
             declarations = code;
             statements = "_ = new OrderRow();";
         }
+        else if (fileName == "nuget-migration.md"
+            && code.Contains("public static class PurchaseOrderMigrationExample", StringComparison.Ordinal))
+        {
+            declarations = code;
+            statements = "PurchaseOrderMigrationExample.Main();";
+        }
+        else if (fileName == "nuget-migration.md"
+            && code.Contains("ExcelEntity.LayoutFromAttributes", StringComparison.Ordinal))
+        {
+            var separator = code.IndexOf("var order", StringComparison.Ordinal);
+            declarations = separator < 0 ? code : code.Substring(0, separator);
+            statements = separator < 0 ? "_ = new PurchaseOrder();" : code.Substring(separator);
+        }
 
         var prelude = string.Empty;
         if (fileName == "README.md")
@@ -360,7 +373,8 @@ public sealed class DocsConsumerTest
             prelude = "var document = new ExcelMappingDocument(); ";
         else if (fileName == "mapping-profile.md" && index == 2)
             prelude = "var services = new ServiceCollection(); ";
-        else if (fileName == "nuget-migration.md")
+        else if (fileName == "nuget-migration.md"
+            && !code.Contains("ExcelEntity.LayoutFromAttributes", StringComparison.Ordinal))
         {
             declarations = "public sealed class OrderWorkbook { public List<OrderRow> Rows { get; } = new List<OrderRow>(); }";
             prelude = "var services = new ServiceCollection(); ";
@@ -391,10 +405,14 @@ using System.Text;
 using Bing.Offices.Attributes;
 using Bing.Offices.Configurations;
 using Bing.Offices.Csv;
+using Bing.Offices.Entities;
 using Bing.Offices.Exports;
 using Bing.Offices.Imports;
 using Bing.Offices.Extensions;
 using Bing.Offices.Npoi.Extensions;
+using NPOI.HSSF.UserModel;
+using NPOI.SS.UserModel;
+using NPOI.XSSF.UserModel;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 namespace FenceConsumer;
@@ -423,13 +441,30 @@ public static class FenceEntry
         var profile = code.Contains("public sealed class OrderProfile", StringComparison.Ordinal)
             ? string.Empty
             : "public sealed class OrderProfile : IMappingProfile<OrderImport, OrderExport> { public void Configure(FluentSetting<OrderImport, OrderExport> setting) { } }";
+        var hasPurchaseOrderDeclaration = code.Contains("public sealed class PurchaseOrder", StringComparison.Ordinal);
+        var hasPurchaseLineDeclaration = code.Contains("public sealed class PurchaseLine", StringComparison.Ordinal);
+        var entityLayout = code.Contains("ExcelEntity.LayoutFromAttributes", StringComparison.Ordinal)
+            || code.Contains("CellNamed", StringComparison.Ordinal)
+            || code.Contains("ListRegionNamed", StringComparison.Ordinal)
+            || code.Contains("CalculatedColumn", StringComparison.Ordinal)
+            || code.Contains("GroupSubtotal", StringComparison.Ordinal)
+            || code.Contains("PageBreak", StringComparison.Ordinal)
+            || code.Contains(".Formula(", StringComparison.Ordinal)
+            || code.Contains("FormulaSumContiguousRowsAbove", StringComparison.Ordinal)
+                ? (hasPurchaseOrderDeclaration && hasPurchaseLineDeclaration
+                ? string.Empty
+                : hasPurchaseOrderDeclaration
+                ? "public sealed class PurchaseLine { public string Name { get; set; } public string Warehouse { get; set; } public int Quantity { get; set; } public decimal UnitPrice { get; set; } public decimal Amount { get; set; } public IDictionary<string, object> Goods { get; set; } = new Dictionary<string, object>(); public IDictionary<string, object> Product { get; set; } = new Dictionary<string, object>(); }"
+                : "public sealed class PurchaseOrder { [ExcelEntityCell(\"采购单\", \"B2\")] public string Code { get; set; } public string Status { get; set; } public List<PurchaseLine> Lines { get; set; } = new List<PurchaseLine>(); } public sealed class PurchaseLine { public string Name { get; set; } public string Warehouse { get; set; } public int Quantity { get; set; } public decimal UnitPrice { get; set; } public decimal Amount { get; set; } public IDictionary<string, object> Goods { get; set; } = new Dictionary<string, object>(); public IDictionary<string, object> Product { get; set; } = new Dictionary<string, object>(); }")
+            : string.Empty;
         return $@"
 public sealed class OrderImport {{ public string Code {{ get; set; }} }}
 public sealed class OrderExport {{ public string DisplayName {{ get; set; }} public string Code {{ get; set; }} }}
 public sealed class OrdersWorkbook {{ public List<OrderRow> Items {{ get; }} = new List<OrderRow>(); }}
 public sealed class UploadWorkbook {{ public List<OrderRow> Rows {{ get; }} = new List<OrderRow>(); }}
 {orderRow}
-{profile}";
+{profile}
+{entityLayout}";
     }
 
     /// <summary>

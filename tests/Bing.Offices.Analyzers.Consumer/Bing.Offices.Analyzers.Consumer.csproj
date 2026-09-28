@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../../version.props" />
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <RestoreAdditionalProjectSources>$(MSBuildThisFileDirectory)../../artifacts/packages-analyzers</RestoreAdditionalProjectSources>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Bing.Offices.Analyzers" Version="$(VersionPrefix)" PrivateAssets="all" />
+    <ProjectReference Include="../../src/Bing.Offices.Abstractions/Bing.Offices.Abstractions.csproj" />
+  </ItemGroup>
+</Project>

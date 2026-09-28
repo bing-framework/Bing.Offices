@@ -355,7 +355,7 @@ internal static class ClosedXmlWorkbookValidationPipeline
     /// <param name="name">命名范围名称。</param>
     /// <param name="range">解析得到的区域；失败时为 null。</param>
     /// <returns>找到并解析命名范围时返回 true；否则返回 false。</returns>
-    private static bool TryResolveNamedRange(IXLWorksheet worksheet, string name, out IXLRange range)
+    internal static bool TryResolveNamedRange(IXLWorksheet worksheet, string name, out IXLRange range)
     {
         range = null;
         IXLDefinedName definedName;

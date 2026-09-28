@@ -444,6 +444,18 @@ jobs:
           fi
           echo "BING_OFFICES_PACKAGE_VERSION=$package_version" >> "$GITHUB_ENV"
 
+      - name: Pack Entity Provider contracts
+        shell: bash
+        run: |
+          mkdir -p artifacts/packages-contracts
+          dotnet restore tests/Bing.Offices.EntityProviderContracts/Bing.Offices.EntityProviderContracts.csproj
+          dotnet pack tests/Bing.Offices.EntityProviderContracts/Bing.Offices.EntityProviderContracts.csproj -c Release --no-restore -o artifacts/packages-contracts
+          contract_package="artifacts/packages-contracts/Bing.Offices.EntityProviderContracts.${BING_OFFICES_PACKAGE_VERSION}.nupkg"
+          test -f "$contract_package"
+          unzip -l "$contract_package" | grep -q 'lib/net6.0/Bing.Offices.EntityProviderContracts.dll'
+          unzip -l "$contract_package" | grep -q 'lib/net8.0/Bing.Offices.EntityProviderContracts.dll'
+          unzip -p "$contract_package" '*.nuspec' | grep -q 'Bing.Offices.Abstractions'
+
       - name: Package consumers
         shell: bash
         run: |
@@ -462,12 +474,43 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          dotnet restore tests/Bing.Offices.ThirdPartyProvider.Consumer/Bing.Offices.ThirdPartyProvider.Consumer.csproj --configfile tests/Bing.Offices.Consumer.Net6/NuGet.Config --packages artifacts/consumers/cache/third-party -p:BingOfficesPackageVersion="$BING_OFFICES_PACKAGE_VERSION"
+          dotnet restore tests/Bing.Offices.ThirdPartyProvider.Consumer/Bing.Offices.ThirdPartyProvider.Consumer.csproj --configfile tests/Bing.Offices.ThirdPartyProvider.Consumer/NuGet.Config --packages artifacts/consumers/cache/third-party -p:BingOfficesPackageVersion="$BING_OFFICES_PACKAGE_VERSION"
           dotnet build tests/Bing.Offices.ThirdPartyProvider.Consumer/Bing.Offices.ThirdPartyProvider.Consumer.csproj -c Release --no-restore -p:BingOfficesPackageVersion="$BING_OFFICES_PACKAGE_VERSION" | tee artifacts/consumers/results/third-party-build.log
           for tfm in net6.0 net8.0; do
             dotnet run --project tests/Bing.Offices.ThirdPartyProvider.Consumer/Bing.Offices.ThirdPartyProvider.Consumer.csproj -c Release -f "$tfm" --no-build --no-restore -p:BingOfficesPackageVersion="$BING_OFFICES_PACKAGE_VERSION" | tee "artifacts/consumers/results/third-party-$tfm.log"
             grep -q 'third-party-public-only-provider-ok' "artifacts/consumers/results/third-party-$tfm.log"
           done
+
+      - name: Excel Provider starter
+        shell: bash
+        run: |
+          set -o pipefail
+          dotnet restore templates/excel-provider-starter/Starter.Provider.Tests/Starter.Provider.Tests.csproj --configfile templates/excel-provider-starter/NuGet.Config --packages artifacts/consumers/cache/provider-starter -p:BingOfficesPackageVersion="$BING_OFFICES_PACKAGE_VERSION"
+          for tfm in net6.0 net8.0; do
+            dotnet test templates/excel-provider-starter/Starter.Provider.Tests/Starter.Provider.Tests.csproj -c Release -f "$tfm" --no-restore -p:BingOfficesPackageVersion="$BING_OFFICES_PACKAGE_VERSION" -p:RestorePackagesPath=artifacts/consumers/cache/provider-starter --logger "console;verbosity=minimal" | tee "artifacts/consumers/results/provider-starter-$tfm.log"
+          done
+
+      - name: Analyzer package consumer
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p artifacts/packages-analyzers artifacts/consumers/results
+          dotnet pack src/Bing.Offices.Analyzers/Bing.Offices.Analyzers.csproj -c Release --no-restore -o artifacts/packages-analyzers
+          dotnet restore tests/Bing.Offices.Analyzers.Consumer/Bing.Offices.Analyzers.Consumer.csproj
+          dotnet build tests/Bing.Offices.Analyzers.Consumer/Bing.Offices.Analyzers.Consumer.csproj -c Release --no-restore | tee artifacts/consumers/results/analyzer-positive.log
+          if dotnet build tests/Bing.Offices.Analyzers.Consumer/Bing.Offices.Analyzers.Consumer.csproj -c Release --no-restore -p:DefineConstants=BOE_NEGATIVE > artifacts/consumers/results/analyzer-negative.log 2>&1; then
+            echo 'The analyzer did not reject the invalid address.' >&2
+            exit 1
+          fi
+          grep -q 'error BOE001' artifacts/consumers/results/analyzer-negative.log
+          if dotnet build tests/Bing.Offices.Analyzers.Consumer/Bing.Offices.Analyzers.Consumer.csproj -c Release --no-restore -p:DefineConstants=BOE_AREA_NEGATIVE > artifacts/consumers/results/analyzer-area-negative.log 2>&1; then
+            echo 'The analyzer did not reject the overlapping areas.' >&2
+            exit 1
+          fi
+          grep -q 'error BOE005' artifacts/consumers/results/analyzer-area-negative.log
+          dotnet build tests/Bing.Offices.Analyzers.Consumer/Bing.Offices.Analyzers.Consumer.csproj -c Release --no-restore -p:DefineConstants=BOM_MIGRATION | tee artifacts/consumers/results/analyzer-migration.log
+          grep -q 'warning BOM001' artifacts/consumers/results/analyzer-migration.log
+          grep -q 'warning BOM002' artifacts/consumers/results/analyzer-migration.log
 
       - name: Upload release evidence
         if: always()
@@ -476,6 +519,7 @@ jobs:
           name: bing-offices-release-evidence
           path: |
             artifacts/packages
+            artifacts/packages-contracts
             artifacts/consumers/results
             artifacts/ci-contracts
 

@@ -41,6 +41,7 @@ internal sealed class NpoiImportSheetExecutor
         ExcelImportErrorCollector errors, ExcelImportRuntime runtime, CancellationToken cancellationToken,
         ICollection<int> sourceRows = null) where T : class, new()
     {
+        var errorSheetName = options.ErrorSheetName ?? sheet.SheetName;
         var header = sheet.GetRow(options.HeaderRowIndex)
             ?? throw new NpoiSheetStructureException("导入的模板不正确，未匹配表头。");
         if (header.LastCellNum > options.MaxReadColumns)
@@ -59,7 +60,7 @@ internal sealed class NpoiImportSheetExecutor
             catch (ImageResourceLimitException exception)
             {
                 errors.Add(new ExcelImportError(ExcelImportErrorCode.ResourceLimit, exception.Message,
-                    sheet.SheetName, options.HeaderRowIndex + 1, 0, null));
+                    errorSheetName, options.HeaderRowIndex + 1, 0, null));
                 return;
             }
         }
@@ -85,7 +86,7 @@ internal sealed class NpoiImportSheetExecutor
             {
                 if (runtime.TryMarkRowLimitReported())
                     errors.Add(new ExcelImportError(ExcelImportErrorCode.ResourceLimit,
-                        $"Workbook 数据行数超过限制: {runtime.MaxRows}", sheet.SheetName, rowIndex + 1, 0, null));
+                        $"Workbook 数据行数超过限制: {runtime.MaxRows}", errorSheetName, rowIndex + 1, 0, null));
                 break;
             }
             var row = sheet.GetRow(rowIndex);
@@ -95,7 +96,7 @@ internal sealed class NpoiImportSheetExecutor
                     break;
                 if (options.ReportEmptyRows)
                 {
-                    errors.Add(new ExcelImportError(ExcelImportErrorCode.InvalidInput, "导入数据存在空行", sheet.SheetName,
+                    errors.Add(new ExcelImportError(ExcelImportErrorCode.InvalidInput, "导入数据存在空行", errorSheetName,
                         rowIndex + 1, 0, null));
                     if (errors.IsLimitReached)
                     {
@@ -108,7 +109,7 @@ internal sealed class NpoiImportSheetExecutor
             if (configuredValidationEnabled)
                 uniqueTracker.BeginRow();
             var workbookValid = NpoiWorkbookValidationPipeline.Validate(row, columns, validationIndex, sheet,
-                sheet.SheetName, rowIndex, options.BodyWhitespace, options.ValidationFailureMode,
+                errorSheetName, rowIndex, options.BodyWhitespace, options.ValidationFailureMode,
                 options.UnsupportedFeaturePolicy, errors, options.IsDate1904);
             if (!workbookValid)
             {
@@ -122,7 +123,7 @@ internal sealed class NpoiImportSheetExecutor
                 continue;
             }
             if (configuredValidationEnabled && !_rowMaterializer.ValidateRawValues(row, columns, duplicateValues,
-                    sheet.SheetName, rowIndex, options.ValidationFailureMode, options.Culture, options.BodyWhitespace, errors,
+                    errorSheetName, rowIndex, options.ValidationFailureMode, options.Culture, options.BodyWhitespace, errors,
                     options.IsDate1904))
             {
                 uniqueTracker.RollbackRow();
@@ -133,7 +134,7 @@ internal sealed class NpoiImportSheetExecutor
                 }
                 continue;
             }
-            if (_rowMaterializer.TryCreateItem(row, columns, duplicateValues, uniqueTracker, sheet.SheetName,
+            if (_rowMaterializer.TryCreateItem(row, columns, duplicateValues, uniqueTracker, errorSheetName,
                     rowIndex, options.ValidationFailureMode, configuredValidationEnabled, errors, options.Culture,
                     options.BodyWhitespace, options.DynamicTargetGetter, imageIndex, options.IsDate1904,
                     out T item))
@@ -176,12 +177,16 @@ internal sealed class NpoiImportSheetExecutor
         if (map == null)
             throw new BingOfficesConfigurationException("工作表导入计划不可用。",
                 stage: BingOfficesStage.Plan);
-        var dynamicProperties = map.Columns.Where(property => property.IsDynamicColumn).ToList();
+        var dynamicPropertyNames = options.DynamicPropertyNames ??
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var dynamicProperties = map.Columns.Where(property => property.IsDynamicColumn
+            || dynamicPropertyNames.Contains(property.Name)).ToList();
         var dynamicPlans = map.DynamicColumns;
-        if (dynamicProperties.Count > 1)
+        if (dynamicPropertyNames.Count == 0 && dynamicProperties.Count > 1)
             throw new BingOfficesConfigurationException(
                 $"导入模板 {typeof(T).FullName} 只能声明一个动态列属性。", stage: BingOfficesStage.Plan);
         var fixedProperties = map.Columns.Where(property => !property.Ignored && !property.IsDynamicColumn
+            && !dynamicPropertyNames.Contains(property.Name)
             && !IsNavigationOrDynamicContainer<T>(property)).ToList();
         var headerNames = new HashSet<string>(options.HeaderComparison == ExcelNameComparison.Ordinal
             ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase);
@@ -199,7 +204,7 @@ internal sealed class NpoiImportSheetExecutor
             var property = FindProperty(fixedProperties, headerName, options.HeaderComparison);
             ExcelDynamicColumnDefinition dynamicDefinition = null;
             IExcelDynamicMappingColumn dynamicPlan = null;
-            if (property == null && dynamicProperties.Count == 1)
+            if (property == null && dynamicProperties.Count > 0)
             {
                 dynamicPlan = FindDynamicDefinition(headerName, dynamicPlans, options.HeaderComparison);
                 dynamicDefinition = dynamicPlan == null ? null : CreateDynamicDefinition(dynamicPlan);
@@ -209,26 +214,34 @@ internal sealed class NpoiImportSheetExecutor
                         throw new NpoiSheetStructureException($"导入包含未知动态列: {headerName}");
                     continue;
                 }
-                property = dynamicProperties[0];
+                var dynamicPropertyName = dynamicPlan == null ? null :
+                    options.DynamicColumnPropertyNames != null
+                    && options.DynamicColumnPropertyNames.TryGetValue(dynamicPlan.Key, out var mappedName)
+                        ? mappedName : null;
+                property = dynamicPropertyName == null
+                    ? dynamicProperties[0]
+                    : dynamicProperties.FirstOrDefault(item => string.Equals(item.Name, dynamicPropertyName,
+                        StringComparison.OrdinalIgnoreCase)) ?? dynamicProperties[0];
             }
             if (property == null)
                 continue;
-            var isUnspecifiedDynamicColumn = property.IsDynamicColumn && dynamicDefinition == null;
+            var isDynamic = property.IsDynamicColumn || dynamicPropertyNames.Contains(property.Name);
+            var isUnspecifiedDynamicColumn = isDynamic && dynamicDefinition == null;
             var reflectionProperty = typeof(T).GetProperty(property.Name, BindingFlags.Instance | BindingFlags.Public);
             if (reflectionProperty == null)
                 throw new BingOfficesConfigurationException($"无法解析映射属性: {property.Name}",
                     stage: BingOfficesStage.Plan);
-            if (!property.IsDynamicColumn && !reflectionProperty.CanWrite)
+            if (!isDynamic && !reflectionProperty.CanWrite)
             {
                 var cause = new InvalidOperationException($"属性不可写入: {property.Name}");
                 throw new BingOfficesConfigurationException(cause.Message, cause, BingOfficesStage.Plan);
             }
             var valueConverters = isUnspecifiedDynamicColumn
                 ? (IReadOnlyList<Conversions.IExcelValueConverter>)Array.Empty<Conversions.IExcelValueConverter>()
-                : property.IsDynamicColumn ? dynamicPlan.ValueConverters : property.ValueConverters;
-            var validationBindings = property.IsDynamicColumn && dynamicPlan != null
+                : isDynamic ? dynamicPlan.ValueConverters : property.ValueConverters;
+            var validationBindings = isDynamic && dynamicPlan != null
                 ? dynamicPlan.ValidationBindings : property.ValidationBindings;
-            columns[headerCell.ColumnIndex] = new ExcelColumnPlan(headerName, property, property.IsDynamicColumn,
+            columns[headerCell.ColumnIndex] = new ExcelColumnPlan(headerName, property, isDynamic,
                 headerCell.ColumnIndex, dynamicDefinition, null, valueConverters, validationBindings,
                 reflectionProperty: reflectionProperty, isUnique: dynamicPlan?.IsUnique,
                 uniqueIgnoreEmpty: dynamicPlan?.UniqueIgnoreEmpty ?? true);

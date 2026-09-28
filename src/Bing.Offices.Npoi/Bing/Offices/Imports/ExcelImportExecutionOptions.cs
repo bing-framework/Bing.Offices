@@ -19,6 +19,13 @@ internal sealed class ExcelImportExecutionOptions<T> where T : class, new()
     /// </summary>
     internal int SheetIndex { get; set; }
     /// <summary>
+    /// 获取或设置错误和校验上下文使用的外部工作表名称。
+    /// </summary>
+    /// <remarks>
+    /// 实体布局使用临时投影工作表时，通过此名称保留调用方布局中的原始 Sheet 名称。
+    /// </remarks>
+    internal string ErrorSheetName { get; set; }
+    /// <summary>
     /// 获取或设置当前导入是否属于多工作表请求。
     /// </summary>
     internal bool MultiSheet { get; set; }
@@ -62,6 +69,14 @@ internal sealed class ExcelImportExecutionOptions<T> where T : class, new()
     /// 获取或设置从导入实体取得动态列字典的委托。
     /// </summary>
     internal Func<object, object> DynamicTargetGetter { get; set; }
+    /// <summary>
+    /// 获取或设置实体布局显式动态列组使用的属性名称集合。
+    /// </summary>
+    internal IReadOnlySet<string> DynamicPropertyNames { get; set; }
+    /// <summary>
+    /// 获取或设置动态列键到实体动态字典属性名称的映射。
+    /// </summary>
+    internal IReadOnlyDictionary<string, string> DynamicColumnPropertyNames { get; set; }
     /// <summary>
     /// 获取或设置是否要求全部固定映射列均出现在表头中。
     /// </summary>

@@ -19,7 +19,7 @@ namespace Bing.Offices.ProviderContract.Tests.Contracts;
 public sealed class EntityDynamicColumnContractTest
 {
     /// <summary>
-    /// ClosedXML 执行动态列合同，NPOI 显式 Unsupported，MiniExcel 不适用。
+    /// NPOI 和 ClosedXML 执行动态列合同，MiniExcel 不适用。
     /// </summary>
     /// <param name="provider">待验证的 Provider 名称。</param>
     [Theory]

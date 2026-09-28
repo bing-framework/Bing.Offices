@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="..\..\common.props" />
+  <PropertyGroup>
+    <TargetFrameworks>net6.0;net8.0</TargetFrameworks>
+    <IsPackable>true</IsPackable>
+    <PackageId>Bing.Offices.EntityProviderContracts</PackageId>
+    <Description>Reusable Entity Layout provider contract suite for Bing.Offices.</Description>
+    <PackageTags>bing;entity-layout;provider-contracts;testing</PackageTags>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\Bing.Offices.Testing\Entities\EntityLayoutProviderContractSuite.cs"
+             Link="Entities\EntityLayoutProviderContractSuite.cs" />
+    <ProjectReference Include="..\..\src\Bing.Offices.Abstractions\Bing.Offices.Abstractions.csproj" />
+  </ItemGroup>
+</Project>

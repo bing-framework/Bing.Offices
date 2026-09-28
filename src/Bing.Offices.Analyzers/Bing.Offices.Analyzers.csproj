@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+    <IsPackable>true</IsPackable>
+    <PackageId>Bing.Offices.Analyzers</PackageId>
+    <Description>Bing.Offices Entity Layout 编译期配置诊断。</Description>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+  <Import Project="../../version.props" />
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.7.0" PrivateAssets="all" />
+    <AdditionalFiles Include="AnalyzerReleases.Unshipped.md" />
+    <None Remove="D:\Bing_Framework\Bing.Offices\src\Bing.Offices.Analyzers\bin\Debug\netstandard2.0\Bing.Offices.Analyzers.dll" />
+    <None Include="$(TargetPath)" Pack="true" PackagePath="analyzers/dotnet/cs/" Visible="false" />
+    <None Include="_._" Pack="true" PackagePath="lib/netstandard2.0/" Visible="false" />
+  </ItemGroup>
+</Project>

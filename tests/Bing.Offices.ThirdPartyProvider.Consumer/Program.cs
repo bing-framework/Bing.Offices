@@ -6,7 +6,9 @@ using Bing.Offices.Imports;
 using Bing.Offices.Providers;
 using Bing.Offices.Attributes;
 using Bing.Offices.IO;
+using Bing.Offices.ClosedXml.Exports;
 using Bing.Offices.ClosedXml.Imports;
+using Bing.Offices.Testing.Entities;
 
 namespace Bing.Offices.ThirdPartyProvider.Consumer;
 
@@ -22,6 +24,8 @@ internal static class Program
     public static async Task<int> Main()
     {
         await VerifyPublicFileCommitters();
+        await VerifyWorkbookExportStrategy();
+        await VerifyEntityLayoutPublicSurface();
         var layout = ExcelEntity.Layout<FixtureEntity>(builder =>
             builder.Cell("Data", "A1", entity => entity.Value));
         var provider = new FixtureProvider();
@@ -148,6 +152,169 @@ internal static class Program
             "第三方 Provider capability 组合判断失败。");
         Console.WriteLine("third-party-public-only-provider-ok");
         return 0;
+    }
+
+    /// <summary>
+    /// 验证包消费者可显式选择完整与前向流式导出。
+    /// </summary>
+    private static async Task VerifyWorkbookExportStrategy()
+    {
+        var strategy = new ExcelWorkbookExportStrategy(new ClosedXmlExcelExporter(),
+            new SpreadCheetahStreamingExcelExporter());
+        var request = ExcelExport.Workbook(book => book.AddSheet("Rows",
+            new[] { new FixtureEntity { Value = "strategy" } }));
+        using var output = new MemoryStream();
+        strategy.Export(request, output, ExcelWorkbookExportMode.CompleteWorkbook);
+        Ensure(output.Length > 0 && output.CanWrite, "完整工作簿策略未写入目标流。");
+
+        output.SetLength(0);
+        await strategy.ExportAsync(request, output, ExcelWorkbookExportMode.ForwardStreaming,
+            new ExcelStreamingExportOptions { BatchSize = 1 });
+        Ensure(output.Length > 0 && output.CanWrite, "前向流式策略未写入目标流。");
+
+        output.SetLength(0);
+        using var template = new MemoryStream(new byte[] { 1, 2, 3 });
+        var templateRequest = ExcelExport.Workbook(book => book.UseTemplate(template, leaveOpen: true)
+            .AddSheet("Rows", new[] { new FixtureEntity { Value = "strategy" } }));
+        var unsupported = Expect<BingOfficesUnsupportedFeatureException>(() =>
+            strategy.Export(templateRequest, output, ExcelWorkbookExportMode.ForwardStreaming),
+            "前向流式策略必须在写入前拒绝模板。");
+        Ensure(unsupported.Stage == BingOfficesStage.Preflight && output.Length == 0 && template.CanRead,
+            "前向流式预检或流所有权合同失败。");
+    }
+
+    /// <summary>
+    /// 通过包公开 API 验证属性布局、动态列分组、分组小计、分页小计、尾部聚合和分页符。
+    /// </summary>
+    private static async Task VerifyEntityLayoutPublicSurface()
+    {
+        var layout = ExcelEntity.LayoutFromAttributes<ConsumerEntity>(builder => builder
+            .ListRegion("Order", "A4", entity => entity.Lines, region => region
+                .DynamicColumnGroup("商品组", item => item.Goods, new[]
+                {
+                    new ExcelDynamicColumnDefinition
+                    {
+                        Key = "goods-color",
+                        Title = "商品颜色",
+                        DataType = typeof(string)
+                    }
+                })
+                .DynamicColumnGroup("产品组", item => item.Product, new[]
+                {
+                    new ExcelDynamicColumnDefinition
+                    {
+                        Key = "product-weight",
+                        Title = "产品重量",
+                        DataType = typeof(decimal)
+                    }
+                })
+                .Footer("TOTAL", footer => footer
+                    .Cell("B1", items => items.Sum(item => item.Quantity)))
+                .GroupSubtotal(item => item.Name, "SUBTOTAL", footer => footer
+                    .Cell("B1", items => items.Sum(item => item.Quantity)))));
+        var pageBreakLayout = ExcelEntity.Layout<ConsumerEntity>(builder => builder
+            .ListRegion("Order", "A4", entity => entity.Lines, region => region
+                .DynamicColumnGroup("商品组", item => item.Goods, new[]
+                {
+                    new ExcelDynamicColumnDefinition
+                    {
+                        Key = "goods-color",
+                        Title = "商品颜色",
+                        DataType = typeof(string)
+                    }
+                })
+                .DynamicColumnGroup("产品组", item => item.Product, new[]
+                {
+                    new ExcelDynamicColumnDefinition
+                    {
+                        Key = "product-weight",
+                        Title = "产品重量",
+                        DataType = typeof(decimal)
+                    }
+                })
+                .PageBreak(1)));
+        var pageSubtotalLayout = ExcelEntity.Layout<ConsumerEntity>(builder => builder
+            .ListRegion("Order", "A4", entity => entity.Lines, region => region
+                .PageBreak(1)
+                .PageSubtotal("PAGE", footer => footer
+                    .Cell("B1", items => items.Sum(item => item.Quantity)))
+                .FooterNamed("OrderTotal", "TOTAL", footer => footer
+                    .Cell("B1", items => items.Sum(item => item.Quantity))
+                    .Formula("C1", "=1+1", numberFormat: "0.00")
+                    .FormulaSumDetailRowsAbove("C2", "B", numberFormat: "0.00"))));
+        var contiguousSumLayout = ExcelEntity.Layout<ConsumerEntity>(builder => builder
+            .ListRegion("Order", "A4", entity => entity.Lines, region => region
+                .Footer("TOTAL", footer => footer
+                    .FormulaSumContiguousRowsAbove("C2", "B", numberFormat: "0.00")
+                    .GapRows(1))));
+        var source = new ConsumerEntity
+        {
+            Code = "consumer-order",
+            Lines = new List<ConsumerLine>
+            {
+                new ConsumerLine
+                {
+                    Name = "A",
+                    Quantity = 2,
+                    Goods = new Dictionary<string, object> { ["goods-color"] = "red" },
+                    Product = new Dictionary<string, object> { ["product-weight"] = 1.5m }
+                },
+                new ConsumerLine
+                {
+                    Name = "B",
+                    Quantity = 3,
+                    Goods = new Dictionary<string, object> { ["goods-color"] = "blue" },
+                    Product = new Dictionary<string, object> { ["product-weight"] = 2.5m }
+                }
+            }
+        };
+        var providers = new (IExcelExporter Exporter, IExcelImporter Importer)[]
+        {
+            (new NpoiExcelExporter(), new NpoiExcelImporter()),
+            (new ClosedXmlExcelExporter(), new ClosedXmlExcelImporter())
+        };
+        foreach (var provider in providers)
+        {
+            var entityExporter = (IExcelEntityExporter)provider.Exporter;
+            var entityImporter = (IExcelEntityImporter)provider.Importer;
+            EntityLayoutProviderContractSuite.VerifyCore(entityExporter, entityImporter);
+            EntityLayoutProviderContractSuite.VerifyPageSubtotal(entityExporter, entityImporter);
+            EntityLayoutProviderContractSuite.VerifyGroupSubtotal(entityExporter, entityImporter);
+            EntityLayoutProviderContractSuite.VerifyFooterFormulas(entityExporter, entityImporter);
+            await EntityLayoutProviderContractSuite.VerifyAsync(entityExporter, entityImporter);
+            EntityLayoutProviderContractSuite.VerifyAttributeAndNamedAnchors(entityExporter, entityImporter);
+            EntityLayoutProviderContractSuite.VerifyNamedListFixedCellCollision(entityExporter, entityImporter);
+            using var output = new MemoryStream();
+            provider.Exporter.ExportEntity(source, layout, output);
+            using var input = new MemoryStream(output.ToArray(), writable: false);
+            var result = provider.Importer.ImportEntity(input, layout);
+            Ensure(result.IsSuccess && result.Entity.Code == source.Code
+                && result.Entity.Lines.Count == 2
+                && (string)result.Entity.Lines[0].Goods["goods-color"] == "red"
+                && Convert.ToDecimal(result.Entity.Lines[1].Product["product-weight"]) == 2.5m,
+                "包公开 Entity Layout API 往返验证失败。");
+
+            using var pageBreakOutput = new MemoryStream();
+            provider.Exporter.ExportEntity(source, pageBreakLayout, pageBreakOutput);
+            Ensure(pageBreakOutput.Length > 0,
+                "包公开 Entity Layout 分页符配置未能完成导出。");
+
+            using var pageSubtotalOutput = new MemoryStream();
+            provider.Exporter.ExportEntity(source, pageSubtotalLayout, pageSubtotalOutput);
+            using var pageSubtotalInput = new MemoryStream(pageSubtotalOutput.ToArray(), writable: false);
+            var pageSubtotalResult = provider.Importer.ImportEntity(pageSubtotalInput, pageSubtotalLayout);
+            Ensure(pageSubtotalResult.IsSuccess && pageSubtotalResult.Entity.Lines.Count == source.Lines.Count,
+                "包公开 Entity Layout 分页小计往返或导入边界验证失败。");
+            Ensure(pageSubtotalLayout.ListRegions[0].FooterAnchorName == "OrderTotal",
+                "包公开 Entity Layout 最终尾部命名锚点未保留。");
+
+            using var contiguousSumOutput = new MemoryStream();
+            provider.Exporter.ExportEntity(source, contiguousSumLayout, contiguousSumOutput);
+            using var contiguousSumInput = new MemoryStream(contiguousSumOutput.ToArray(), writable: false);
+            var contiguousSumResult = provider.Importer.ImportEntity(contiguousSumInput, contiguousSumLayout);
+            Ensure(contiguousSumResult.IsSuccess && contiguousSumResult.Entity.Lines.Count == source.Lines.Count,
+                "包公开 Entity Layout 连续明细求和公式未正确导出或导入。");
+        }
     }
 
     /// <summary>
@@ -332,7 +499,7 @@ internal static class Program
         IExcelEntityImporter, IExcelEntityExporter, IExcelProviderCapabilities
     {
         /// <summary>
-        /// 使用完整或指定能力集合创建 fixture Provider。
+        /// 初始化一个 <see cref="FixtureProvider" /> 类型的实例。
         /// </summary>
         /// <param name="capabilities">Provider 声明的能力。</param>
         public FixtureProvider(ExcelProviderCapabilities? capabilities = null)
@@ -542,4 +709,47 @@ internal static class Program
             where TEntity : class, new() => new ExcelEntityImportResult<TEntity>(new TEntity(),
                 Array.Empty<ExcelImportError>(), Array.Empty<ExcelSheetImportResult>());
     }
+}
+
+/// <summary>
+/// 包消费者用于验证属性式单据布局的根实体。
+/// </summary>
+public sealed class ConsumerEntity
+{
+    /// <summary>
+    /// 获取或设置单据编号。
+    /// </summary>
+    [ExcelEntityCell("Order", "B2")]
+    public string Code { get; set; }
+
+    /// <summary>
+    /// 获取或设置单据明细集合。
+    /// </summary>
+    public List<ConsumerLine> Lines { get; set; } = new();
+}
+
+/// <summary>
+/// 包消费者用于验证多个动态字段字典的明细实体。
+/// </summary>
+public sealed class ConsumerLine
+{
+    /// <summary>
+    /// 获取或设置明细名称。
+    /// </summary>
+    public string Name { get; set; }
+
+    /// <summary>
+    /// 获取或设置明细数量。
+    /// </summary>
+    public int Quantity { get; set; }
+
+    /// <summary>
+    /// 获取或设置商品动态字段。
+    /// </summary>
+    public IDictionary<string, object> Goods { get; set; }
+
+    /// <summary>
+    /// 获取或设置产品动态字段。
+    /// </summary>
+    public IDictionary<string, object> Product { get; set; }
 }

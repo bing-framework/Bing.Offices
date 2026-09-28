@@ -41,6 +41,13 @@ internal sealed class NpoiExportSheetWriter
             ? new HashSet<string>(columns.Where(column => column.IsDynamic).Select(column => column.Key),
                 StringComparer.Ordinal)
             : null;
+        var calculatedItems = columns.Any(column => column.IsCalculated)
+            ? request.Data.Cast<object>().ToArray()
+            : null;
+        var calculatedEvaluators = columns.Where(column => column.IsCalculated)
+            .ToDictionary(column => column.Key,
+                column => column.Calculated.CreateEvaluator(calculatedItems, sheet?.SheetName ?? request.Name),
+                StringComparer.OrdinalIgnoreCase);
         WriteCustomHeaders(sheet, request.HeaderRows, originRow, originColumn,
             request.CommentConflictPolicy, request.TemplateCellOverwritePolicy);
         for (var index = 0; index < columns.Count; index++)
@@ -51,6 +58,7 @@ internal sealed class NpoiExportSheetWriter
         }
 
         var rowIndex = originRow + request.DataRowStartIndex;
+        var itemIndex = 0;
         foreach (var item in request.Data.Cast<T>())
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -83,9 +91,12 @@ internal sealed class NpoiExportSheetWriter
                 var cell = row.GetCell(physicalColumnIndex) ?? row.CreateCell(physicalColumnIndex);
                 PrepareTemplateCell(workbook, cell, request.TemplateCellOverwritePolicy);
                 WriteCell(cell, item, columns[columnIndex], dynamicValues, sheet.SheetName,
-                    rowIndex + 1, physicalColumnIndex + 1, request.Culture);
+                    rowIndex + 1, physicalColumnIndex + 1, request.Culture, itemIndex,
+                    calculatedEvaluators.TryGetValue(columns[columnIndex].Key, out var evaluator)
+                        ? evaluator : null);
             }
             rowIndex++;
+            itemIndex++;
         }
 
         ApplyRequestStyles(workbook, sheet, header, columns, request, mapping, originColumn,
@@ -213,7 +224,7 @@ internal sealed class NpoiExportSheetWriter
         var index = columns.ToList().FindIndex(column => string.Equals(column.Key, key,
             StringComparison.OrdinalIgnoreCase)
             || string.Equals(column.Title, key, StringComparison.OrdinalIgnoreCase)
-            || string.Equals(column.Property.Name, key, StringComparison.OrdinalIgnoreCase));
+            || string.Equals(column.Property?.Name, key, StringComparison.OrdinalIgnoreCase));
         if (index < 0)
             throw new ArgumentException($"图表引用的列不存在: {key}", nameof(key));
         return index;
@@ -578,7 +589,7 @@ internal sealed class NpoiExportSheetWriter
     }
 
     /// <summary>
-    /// 转换并写入一个固定列或动态列的值。
+    /// 转换并写入列计划对应的单元格值。
     /// </summary>
     /// <typeparam name="T">工作表数据项类型。</typeparam>
     /// <param name="cell">待写入的 NPOI 单元格。</param>
@@ -589,14 +600,23 @@ internal sealed class NpoiExportSheetWriter
     /// <param name="rowIndex">错误定位使用的工作表行号。</param>
     /// <param name="columnIndex">错误定位使用的工作表列号。</param>
     /// <param name="culture">值转换和格式化使用的区域性。</param>
+    /// <param name="itemIndex">当前明细项在本次导出快照中的零基索引。</param>
+    /// <param name="calculatedEvaluator">计算列执行委托；普通列为空。</param>
     internal static void WriteCell<T>(ICell cell, T item, ExcelColumnPlan column,
         IDictionary<string, object> dynamicValues, string sheetName, int rowIndex, int columnIndex,
-        CultureInfo culture) where T : class, new()
+        CultureInfo culture, int itemIndex = 0,
+        Func<object, int, int, int, object> calculatedEvaluator = null) where T : class, new()
     {
         object value;
         try
         {
-            if (column.IsDynamic)
+            if (column.IsCalculated)
+            {
+                if (calculatedEvaluator == null)
+                    throw new InvalidOperationException($"计算列缺少执行委托: {column.Key}");
+                value = calculatedEvaluator(item, itemIndex, rowIndex, columnIndex);
+            }
+            else if (column.IsDynamic)
             {
                 var values = dynamicValues ?? column.Getter(item) as IDictionary<string, object>;
                 value = values != null && values.TryGetValue(column.Key, out var dynamicValue)
@@ -617,8 +637,10 @@ internal sealed class NpoiExportSheetWriter
         catch (Exception exception) when (exception is not OutOfMemoryException
             && exception is not StackOverflowException)
         {
-            throw new BingOfficesExportException("Excel 属性读取器执行失败。", exception, "NPOI",
-                BingOfficesStage.Validate, sheetName, rowIndex, columnIndex, column.Property.Name,
+            throw new BingOfficesExportException(column.IsCalculated
+                ? "Excel 实体计算列执行失败。" : "Excel 属性读取器执行失败。", exception, "NPOI",
+                BingOfficesStage.Validate, sheetName, rowIndex, columnIndex,
+                column.Property?.Name ?? column.Key,
                 BingOfficesErrorCode.UserExtensionFailed);
         }
         value = column.ConvertTo(value, sheetName, rowIndex, columnIndex, culture);
@@ -642,7 +664,8 @@ internal sealed class NpoiExportSheetWriter
             && exception is not StackOverflowException)
         {
             throw new BingOfficesExportException("Excel 值格式化写入失败。", exception, "NPOI",
-                BingOfficesStage.Write, sheetName, rowIndex, columnIndex, column.Property.Name,
+                BingOfficesStage.Write, sheetName, rowIndex, columnIndex,
+                column.Property?.Name ?? column.Key,
                 BingOfficesErrorCode.UserExtensionFailed);
         }
     }
