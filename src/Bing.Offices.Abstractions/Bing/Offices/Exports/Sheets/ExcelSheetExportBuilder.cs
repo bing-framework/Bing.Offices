@@ -1,5 +1,7 @@
 ﻿using System.Linq.Expressions;
 
+using Bing.Offices.Exports.DynamicColumns;
+
 namespace Bing.Offices.Exports;
 
 /// <summary>

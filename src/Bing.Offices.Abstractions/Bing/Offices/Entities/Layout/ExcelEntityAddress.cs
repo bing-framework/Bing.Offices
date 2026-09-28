@@ -5,7 +5,7 @@ using Bing.Offices.Configurations;
 using Bing.Offices.Exports;
 using Bing.Offices.Imports;
 
-namespace Bing.Offices.Entities;
+namespace Bing.Offices.Entities.Layout;
 
 /// <summary>
 /// 提供 Excel A1 单元格和矩形区域地址的解析与格式化。

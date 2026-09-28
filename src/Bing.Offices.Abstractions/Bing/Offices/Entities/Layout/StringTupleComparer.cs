@@ -5,7 +5,7 @@ using Bing.Offices.Configurations;
 using Bing.Offices.Exports;
 using Bing.Offices.Imports;
 
-namespace Bing.Offices.Entities;
+namespace Bing.Offices.Entities.Layout;
 
 /// <summary>
 /// 为包含工作表名称和整数坐标的元组提供忽略大小写的相等性。

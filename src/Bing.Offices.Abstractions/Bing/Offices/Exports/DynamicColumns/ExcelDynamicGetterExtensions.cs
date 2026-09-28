@@ -1,6 +1,6 @@
 ﻿using System.Linq.Expressions;
 
-namespace Bing.Offices.Exports;
+namespace Bing.Offices.Exports.DynamicColumns;
 
 /// <summary>
 /// 将泛型动态值读取器转换为对象字典读取器的扩展类。

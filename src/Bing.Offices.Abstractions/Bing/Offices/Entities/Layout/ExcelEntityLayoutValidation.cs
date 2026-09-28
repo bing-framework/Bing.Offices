@@ -5,7 +5,7 @@ using Bing.Offices.Configurations;
 using Bing.Offices.Exports;
 using Bing.Offices.Imports;
 
-namespace Bing.Offices.Entities;
+namespace Bing.Offices.Entities.Layout;
 
 /// <summary>
 /// 提供实体布局名称、包含关系和区域重叠的验证操作。

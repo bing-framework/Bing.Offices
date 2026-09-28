@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Text;
+using Bing.Offices.Entities.Layout;
 using Bing.Offices.Exports;
 using Bing.Offices.Styles;
 

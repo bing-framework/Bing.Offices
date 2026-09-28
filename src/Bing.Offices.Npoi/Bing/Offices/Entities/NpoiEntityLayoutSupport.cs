@@ -19,7 +19,7 @@ using Bing.Offices.Validations;
 using NPOI.SS.UserModel;
 using NPOI.SS.Util;
 
-namespace Bing.Offices.Entities;
+namespace Bing.Offices.Npoi.Entities;
 
 /// <summary>
 /// NPOI 实体布局执行共用的 Sheet、合并区域和转换边界。

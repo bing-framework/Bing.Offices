@@ -1,6 +1,6 @@
 ﻿using Bing.Offices.Configurations;
 
-namespace Bing.Offices.Exports;
+namespace Bing.Offices.Exports.DynamicColumns;
 
 /// <summary>
 /// 复制并合并请求级动态列定义的内部辅助类。

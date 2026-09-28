@@ -1,4 +1,5 @@
 ﻿using System.Linq.Expressions;
+using Bing.Offices.Exports.DynamicColumns;
 
 namespace Bing.Offices.Imports;
 
@@ -316,10 +317,10 @@ public sealed class ExcelSheetImportBuilder<TItem> where TItem : class, new()
             var compiledDynamicTarget = _dynamicTarget.Compile();
             dynamicGetter = value => compiledDynamicTarget((TItem)value);
         }
-        var requestConfiguration = Exports.ExcelDynamicColumnCloner.MergeIntoConfiguration(
+        var requestConfiguration = ExcelDynamicColumnCloner.MergeIntoConfiguration(
             _requestMappingConfiguration, _dynamicColumns);
         return new ExcelSheetImportRequest(_name, _selector, typeof(TItem), targetGetter,
-        _headerRowIndex, _dataRowStartIndex, Exports.ExcelDynamicColumnCloner.Clone(_dynamicColumns), _dynamicTarget, _requireExpectedHeaders, _validationFailureMode, _culture,
+        _headerRowIndex, _dataRowStartIndex, ExcelDynamicColumnCloner.Clone(_dynamicColumns), _dynamicTarget, _requireExpectedHeaders, _validationFailureMode, _culture,
         requestConfiguration, _mappingDocument,
         dynamicGetter,
         _maxReadColumns,

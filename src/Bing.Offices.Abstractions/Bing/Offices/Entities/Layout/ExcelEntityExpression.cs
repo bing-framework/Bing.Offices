@@ -5,7 +5,7 @@ using Bing.Offices.Configurations;
 using Bing.Offices.Exports;
 using Bing.Offices.Imports;
 
-namespace Bing.Offices.Entities;
+namespace Bing.Offices.Entities.Layout;
 
 /// <summary>
 /// 负责解析实体属性表达式并创建已编译访问委托。

@@ -1,4 +1,4 @@
-﻿namespace Bing.Offices.Imports;
+﻿namespace Bing.Offices.Imports.Workbook;
 
 /// <summary>
 /// Excel 流式导入结果。

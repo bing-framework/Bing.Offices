@@ -2,6 +2,7 @@
 using System.ComponentModel;
 using System.Linq.Expressions;
 using Bing.Offices.Configurations;
+using Bing.Offices.Entities.Layout;
 using Bing.Offices.Exports;
 using Bing.Offices.Imports;
 

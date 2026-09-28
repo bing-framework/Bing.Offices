@@ -19,7 +19,7 @@ using Bing.Offices.Validations;
 using NPOI.SS.UserModel;
 using NPOI.SS.Util;
 
-namespace Bing.Offices.Entities;
+namespace Bing.Offices.Npoi.Entities;
 
 /// <summary>
 /// NPOI 单个实体导出执行器。

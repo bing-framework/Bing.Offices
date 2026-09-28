@@ -7,6 +7,7 @@ using Bing.Offices.Exceptions;
 using Bing.Offices.Extensions;
 using Bing.Offices.IO;
 using Bing.Offices.Npoi.Extensions;
+using Bing.Offices.Npoi.Entities;
 using Bing.Offices.Providers;
 using Bing.Offices.Validations;
 using NPOI.SS.UserModel;

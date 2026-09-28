@@ -7,6 +7,7 @@ using Bing.Offices.Conversions;
 using Bing.Offices.Entities;
 using Bing.Offices.Exceptions;
 using Bing.Offices.IO;
+using Bing.Offices.Npoi.Entities;
 using Bing.Offices.Providers;
 using NPOI.SS.UserModel;
 using NPOI.XSSF.Streaming;
