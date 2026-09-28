@@ -4,7 +4,7 @@
 
 导入和导出统一使用 Workbook Request。Mapping 的最终优先级为 `Attribute < Profile < JSON/XML Document < Request Fluent`，仅 Plan compiler 完成最终合并；JSON/XML 保留为 Document 级 API。
 
-导出模板写入默认使用 `PreserveTemplate`，保留目标单元格的模板样式和批注；需要清除模板样式和批注时，显式选择 `ReplaceTemplate`。NPOI 管线是 DOM 管线，不承诺 streaming 或零 GC。
+导出模板写入默认使用 `PreserveTemplate`，保留目标单元格的模板样式和批注；需要清除模板样式和批注时，显式选择 `ReplaceTemplate`。完整工作簿契约不等同于前向流式契约；NPOI 对符合条件的大型纯列表可能在 Provider 内部使用 SXSSF，仍不承诺零 GC。
 
 Workbook 元数据使用请求级 `ExcelWorkbookMetadataOptions` 配置，不依赖进程级默认状态。未显式调用 `Metadata(...)` 时模板 metadata 保留；显式调用时六个字段覆盖模板值，XLS 与 XLSX 采用相同策略。`IExcelExporter.ExportToFile` 和 `ICsvExporter.ExportToFile` 先写同目录临时文件，成功关闭并 flush 后在最终提交点再次检查取消，再替换目标；导出失败或取消不会截断已有目标文件。直接写入调用方 Stream 时不提供回滚保证，失败后可能已经产生部分写入。
 
@@ -12,15 +12,17 @@ Workbook 元数据使用请求级 `ExcelWorkbookMetadataOptions` 配置，不依
 
 NPOI 导入会先把输入复制到受 `MaxInputBytes` 约束的内存流，再建立 Workbook DOM；`ImportAsync` 的输入复制使用 `ReadAsync`，之后的 NPOI DOM 解析仍为同步阶段；`MaxInputBytes` 不等于解压后 DOM 峰值保护。失败工作簿的 `MaxSerializedBytes` 只限制序列化输出，不限制原始 Workbook、解压内容、业务实体或失败工作簿 DOM 的峰值。部署不受信任文件时还应设置进程内存/CPU 限额，并使用 `ExcelResourceLimits` 限制行、错误、图片和唯一值；未映射图片不会被图片限制器扫描。
 
-MiniExcel 与 ClosedXML 都是与 NPOI 并列的独立 XLSX Provider。它们复用同一套 Workbook Request、Mapping Plan、Converter、Validation、错误结果和文件提交契约，不引入第二套 Provider-specific Request、Mapping Profile 或业务 Attribute。通过 `services.AddBingOfficesMiniExcel()` 或 `services.AddBingOfficesClosedXml()` 注册后，业务代码仍只依赖 `IExcelImporter` 与 `IExcelExporter`。应用启动时应选择一个 Provider；注册扩展都使用 `TryAdd`，同时注册时先注册的实现会保留，不能把这种顺序行为当作按请求动态切换 Provider 的 API。
+MiniExcel 与 ClosedXML 都是与 NPOI 并列的独立 XLSX Provider。它们复用同一套 Workbook Request、Mapping Plan、Converter、Validation、错误结果和文件提交契约，不引入第二套 Provider-specific Request、Mapping Profile 或业务 Attribute。通过 `services.AddBingOfficesMiniExcel()` 或 `services.AddBingOfficesClosedXml()` 注册后，业务代码仍只依赖 `IExcelImporter` 与 `IExcelExporter`。默认服务解析由 `TryAdd` 和注册顺序决定；这不是按请求动态切换 Provider 的 API。若需在同一应用按报表选择完整工作簿或前向流式导出，应显式构造 Core 的 `ExcelWorkbookExportStrategy` 并传入所需接口。
 
 `Bing.Offices.ExcelDataReader` 是独立的只读 Provider，支持 XLS、XLSX、XLSB 固定列导入和单 Sheet 的 `IExcelBatchImporter`。它只注册导入服务，不提供导出器；需要导出、模板、图片或 Workbook 原生校验时选择其他 Provider。批量导入使用串行回调，已交付批次不回滚，完整边界见 [Provider 能力矩阵](09-providers.md)。
 
 `Bing.Offices.SpreadCheetah` 是独立的只写前向 Provider，注册后只提供 `IExcelStreamingExporter`。它创建新的 XLSX，按请求中的数据序列前向写入并保持串行背压，不打开已有 Workbook、不编辑模板，也不自动降级到 DOM Provider。大数据规模需要结合容器资源和实际批次探针评估。
 
+需要在一个应用中按报表选择完整工作簿或前向流式导出时，可在 Core 构造 `ExcelWorkbookExportStrategy`，并通过 `CompleteWorkbook` 或 `ForwardStreaming` 明确选择模式。该策略只调用所选接口，格式/能力不支持或前向模式使用模板时预检拒绝，不自动切换或回退；详细限制与示例见 [Provider 能力矩阵](09-providers.md)。
+
 `Bing.Offices.AsposeCells` 是独立的可选商业扩展包。它不进入 Core 依赖图，宿主通过 `AddBingOfficesAsposeCells` 配置许可证和字体目录后，才可使用 PDF/页面图片渲染、公式处理、XLSM/ODS/加密转换。缺少许可证、字体严格模式不满足或请求超出格式边界时，Provider 在预检阶段返回结构化 `UnsupportedFeature`；密码不进入日志和诊断。
 
-ClosedXML 适合富 XLSX 报表、模板样式、合并、公式保存和 Entity Layout（固定 Cell、多个 List Region、Merge、Relations）。它支持显式行高和 Sheet/Column/Cell 资源限制；Entity List Region 动态列仍显式不支持。第一版明确不支持 XLS、Chart、PivotTable、XLSM 宏保留和完整 Excel Formula Engine；公式读取通过独立 `IExcelFormulaProcessor` 暴露，详见 [Provider 能力矩阵](09-providers.md)。
+ClosedXML 适合富 XLSX 报表、模板样式、合并、公式保存和 Entity Layout（固定 Cell、属性式 Cell、命名锚点、多个 List Region、动态列组、计算列、连续分组小计、分页小计、水平分页符、Footer、Merge、Relations）。NPOI 与 ClosedXML 均支持 Entity List Region 的单字典和多分组动态列、导出计算列、连续分组小计、分页小计、水平分页符、命名锚点以及可变明细尾部；MiniExcel、SpreadCheetah 和 ExcelDataReader 不声明该能力。第一版明确不支持 XLS、Chart、PivotTable、XLSM 宏保留和完整 Excel Formula Engine；公式读取通过独立 `IExcelFormulaProcessor` 暴露，详见 [Provider 能力矩阵](09-providers.md)。
 
 下方完整 Workbook 能力列表以 NPOI Provider 为基准；MiniExcel 只承诺 [Provider 能力矩阵](09-providers.md) 中已验证的常规 XLSX、映射、转换、校验、动态列和关系能力，其余请求必须按结构化 `UnsupportedFeature` fail-fast。
 
@@ -49,6 +51,8 @@ exporter.Export(request, stream);
 - [mapping-json-xml.md](mapping-json-xml.md)：JSON/XML 映射文档
 - [import-validation.md](import-validation.md)：Workbook 原生校验、配置校验和错误收集
 - [dynamic-columns.md](dynamic-columns.md)：动态列与物理布局
+- [entity-provider-contracts.md](entity-provider-contracts.md)：将 Entity Layout 合同源码模板接入 Provider 测试
+- [entity-layout-analyzers.md](entity-layout-analyzers.md)：Entity Layout 常量配置的编译期诊断
 - [exceptions-and-observers.md](exceptions-and-observers.md)：异常分类、Observer 与文件提交边界
 - [dates.md](dates.md)：日期、DateTimeOffset 与跨时区合同
 - [npoi-extensions.md](npoi-extensions.md)：七个 NPOI 用户扩展容器和 Try/Throw 行为
@@ -64,6 +68,7 @@ exporter.Export(request, stream);
 - [mapping-json-xml.md](mapping-json-xml.md)
 - [import-validation.md](import-validation.md)
 - [dynamic-columns.md](dynamic-columns.md)
+- [entity-provider-contracts.md](entity-provider-contracts.md)
 - [exceptions-and-observers.md](exceptions-and-observers.md)
 - [dates.md](dates.md)
 - [npoi-extensions.md](npoi-extensions.md)

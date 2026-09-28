@@ -14,6 +14,41 @@ services.AddBingOfficesClosedXml();
 services.AddBingOfficesExcelDataReader();
 ```
 
+### 按报表选择完整工作簿或前向流式导出
+
+Core 的 `ExcelWorkbookExportStrategy` 允许在同一应用中按报表显式选择 `CompleteWorkbook` 或 `ForwardStreaming`。组合根可把两种可用接口传入策略；每次导出仍须明确选择模式：
+
+```csharp
+using Bing.Offices.Exports;
+using Bing.Offices.Npoi.Extensions;
+using Bing.Offices.SpreadCheetah.Extensions;
+using Microsoft.Extensions.DependencyInjection;
+using System.IO;
+using System.Threading;
+
+var services = new ServiceCollection();
+services.AddBingOfficesNpoi();
+services.AddBingOfficesSpreadCheetah();
+using var provider = services.BuildServiceProvider();
+var strategy = new ExcelWorkbookExportStrategy(
+    provider.GetService<IExcelExporter>(),
+    provider.GetService<IExcelStreamingExporter>());
+
+var orders = new[] { new OrderRow { Number = "A-001", Amount = 12m } };
+var request = ExcelExport.Workbook(builder => builder.AddSheet("订单", orders));
+using var output = new MemoryStream();
+await strategy.ExportAsync(request, output, ExcelWorkbookExportMode.ForwardStreaming,
+    new ExcelStreamingExportOptions { BatchSize = 500 }, CancellationToken.None);
+
+public sealed class OrderRow
+{
+    public string Number { get; set; }
+    public decimal Amount { get; set; }
+}
+```
+
+也可将模式改为 `CompleteWorkbook`，此时调用完整 `IExcelExporter`；NPOI 对符合条件的大型纯列表可能在 Provider 内部使用 SXSSF，MiniExcel 的完整工作簿契约也不意味着使用 DOM。`ForwardStreaming` 只调用 `IExcelStreamingExporter`，不接受模板；所选 Provider 未声明请求格式或流式创建能力时，会在写入前拒绝。完整工作簿模式要求完整导出器及其格式/能力声明。两种模式均由调用方选择，不会按数据规模自动切换，也不会在失败后回退到另一种模式。直接写入调用方 Stream 失败时可能已有部分输出；文件入口沿用被选 Provider 的文件提交边界。
+
 ### SpreadCheetah 前向流式导出
 
 `Bing.Offices.SpreadCheetah` 只实现 `IExcelStreamingExporter`，不会注册或伪造 `IExcelImporter`、完整 `IExcelExporter`，也不会打开模板。它使用 SpreadCheetah 1.28.0 创建新的 XLSX，按 `ExcelWorkbookExportRequest` 中的数据序列前向写入；`ExcelStreamingExportOptions.BatchSize` 约束批次缓存和取消检查，异步文件入口使用真实异步外围 IO。
@@ -105,7 +140,7 @@ ClosedXML 作为富 XLSX Provider 使用同一套 Workbook Request 和 Core Mapp
 | 基本字体、填充、对齐、数字格式、列宽、行高 | P1 | 行高单位为 point；null 保留模板高度，显式值覆盖 |
 | Merge、Formula 保存/读回、模板 Stream/File | P1 | 公式契约是保存、读取和缓存值，不是完整 Excel 计算引擎 |
 | 原子文件提交、取消、流所有权、输入大小/ZIP 预检 | P1 | 使用公共文件提交器和共享 XLSX 预检；DOM 创建前拒绝超限输入 |
-| Entity Layout | P1 | 支持固定 Cell、多个同 Sheet/跨 Sheet List Region、Merge、Relations 和模板布局读写；Entity List Region 动态列仍显式不支持 |
+| Entity Layout | P1 | 支持固定 Cell、属性式 Cell、命名锚点、多个同 Sheet/跨 Sheet List Region、单字典/多分组动态列、导出计算列、连续分组小计、分页小计、水平分页符、Footer、Merge、Relations 和模板布局读写 |
 | Failure Workbook、原生 Workbook Validation | P1 | 支持 AnnotatedOriginal/ErrorRowsOnly、同步/异步和结构化 Unsupported 边界；校验顺序固定为原生规则、值转换、配置规则 |
 | Sheet PNG/JPEG 图片、原生数据校验写入 | P1 | 字节图片、零基锚点；四类比较和显式列表。复杂 Custom、名称列表及跨 Sheet 列表不在新增写入子集中 |
 | Chart、PivotTable、XLSM 宏保留、XLS | Unsupported | 不静默丢弃结构；请求在 `XLWorkbook` 创建前返回 UnsupportedFeature |
