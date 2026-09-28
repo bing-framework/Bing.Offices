@@ -1,0 +1,20 @@
+﻿using System.ComponentModel;
+
+namespace Bing.Offices.Providers;
+
+/// <summary>
+/// Provider 使用的不可变 Sheet 映射计划。
+/// </summary>
+[EditorBrowsable(EditorBrowsableState.Never)]
+public interface IExcelMappingSheetPlan
+{
+    /// <summary>
+    /// 获取该计划适用的工作表名称。
+    /// </summary>
+    string Name { get; }
+
+    /// <summary>
+    /// 获取工作表使用的不可变列映射计划。
+    /// </summary>
+    IExcelMappingPlan Mapping { get; }
+}
