@@ -33,6 +33,121 @@ namespace Bing.Offices.MiniExcel.Tests;
 public sealed class MiniExcelProviderTest
 {
     /// <summary>
+    /// 验证 MiniExcel 在同步和异步导出入口预检拒绝字典及命名列表校验请求。
+    /// </summary>
+    /// <param name="lookupListRequest">是否只包含工作簿字典定义。</param>
+    /// <param name="asynchronous">是否调用异步导出入口。</param>
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    public async Task LookupListRequests_ShouldFailBeforeWritingToStream(bool lookupListRequest,
+        bool asynchronous)
+    {
+        var request = CreateLookupListRequest(lookupListRequest);
+        var exporter = new MiniExcelExcelExporter();
+        var sentinel = new byte[] { 17, 23, 42 };
+        using var destination = new MemoryStream(sentinel);
+        destination.Position = 1;
+
+        BingOfficesUnsupportedFeatureException exception;
+        if (asynchronous)
+            exception = await Assert.ThrowsAsync<BingOfficesUnsupportedFeatureException>(() =>
+                exporter.ExportAsync(request, destination));
+        else
+            exception = Assert.Throws<BingOfficesUnsupportedFeatureException>(() =>
+                exporter.Export(request, destination));
+
+        AssertUnsupportedLookupRequest(exception, lookupListRequest);
+        Assert.Equal(sentinel, destination.ToArray());
+        Assert.Equal(1, destination.Position);
+    }
+
+    /// <summary>
+    /// 验证不支持的字典请求不会替换已有文件或遗留临时文件。
+    /// </summary>
+    /// <param name="lookupListRequest">是否只包含工作簿字典定义。</param>
+    /// <param name="asynchronous">是否调用异步文件导出入口。</param>
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    public async Task LookupListRequests_ShouldPreserveExistingFile(bool lookupListRequest,
+        bool asynchronous)
+    {
+        var request = CreateLookupListRequest(lookupListRequest);
+        var exporter = new MiniExcelExcelExporter();
+        var directory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var path = Path.Combine(directory, "existing.xlsx");
+            var sentinel = new byte[] { 17, 23, 42 };
+            File.WriteAllBytes(path, sentinel);
+
+            BingOfficesUnsupportedFeatureException exception;
+            if (asynchronous)
+                exception = await Assert.ThrowsAsync<BingOfficesUnsupportedFeatureException>(() =>
+                    exporter.ExportToFileAsync(request, path));
+            else
+                exception = Assert.Throws<BingOfficesUnsupportedFeatureException>(() =>
+                    exporter.ExportToFile(request, path));
+
+            AssertUnsupportedLookupRequest(exception, lookupListRequest);
+            Assert.Equal(sentinel, File.ReadAllBytes(path));
+            Assert.Equal(new[] { path }, Directory.GetFiles(directory));
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    /// <summary>
+    /// 创建名称列表能力边界测试请求。
+    /// </summary>
+    /// <param name="lookupListRequest">是否添加工作簿文本字典。</param>
+    /// <returns>待验证的工作簿导出请求。</returns>
+    private static ExcelWorkbookExportRequest CreateLookupListRequest(bool lookupListRequest)
+    {
+        if (lookupListRequest)
+            return ExcelExport.Workbook(workbook => workbook
+                .LookupList("Allowed", new[] { "Open", "Closed" })
+                .AddSheet("Rows", new[] { new Person { Name = "A", Age = 1 } }));
+
+        return ExcelExport.Workbook(workbook => workbook.AddSheet("Rows",
+            new[] { new Person { Name = "A", Age = 1 } }, sheet => sheet.DataValidation(
+                new ExcelDataValidationDefinition
+                {
+                    Range = new ExcelRangeDefinition
+                    {
+                        StartRow = 1, EndRow = 1, StartColumn = 0, EndColumn = 0
+                    },
+                    Type = ExcelDataValidationType.List,
+                    ListSourceName = "Allowed"
+                })));
+    }
+
+    /// <summary>
+    /// 断言名称列表请求被 Provider 在写入前拒绝。
+    /// </summary>
+    /// <param name="exception">导出入口抛出的不支持异常。</param>
+    /// <param name="lookupListRequest">是否为工作簿文本字典请求。</param>
+    private static void AssertUnsupportedLookupRequest(BingOfficesUnsupportedFeatureException exception,
+        bool lookupListRequest)
+    {
+        Assert.Equal(BingOfficesErrorCode.UnsupportedFeature, exception.Code);
+        Assert.Equal(BingOfficesOperation.Export, exception.Operation);
+        Assert.Equal("MiniExcel", exception.Provider);
+        Assert.Equal(BingOfficesStage.Preflight, exception.Stage);
+        Assert.Equal(lookupListRequest
+            ? "MiniExcel 不支持字典下拉模板导出。"
+            : "MiniExcel 不支持公共图片或原生数据校验导出。", exception.Message);
+    }
+
+    /// <summary>
     /// 验证 MiniExcel 对实体布局入口应在读取输入前报告不支持能力。
     /// </summary>
     [Fact]
@@ -88,6 +203,34 @@ public sealed class MiniExcelProviderTest
         Assert.Equal("Alice", result.Workbook.People[0].Name);
         Assert.Equal(30, result.Workbook.People[0].Age);
         Assert.Equal("Core", Assert.Single(result.Workbook.Teams).Name);
+    }
+
+    /// <summary>
+    /// 验证固定列预分配行字典后仍完整写出延迟数据序列。
+    /// </summary>
+    [Fact]
+    public void FixedColumns_ShouldWriteDeferredRowsWithPreallocatedRows()
+    {
+        var request = ExcelExport.Workbook(workbook => workbook.AddSheet("Rows",
+            Enumerable.Range(1, 3).Select(index => new Person
+            {
+                Name = $"Person-{index}",
+                Age = index * 10
+            })));
+        using var stream = new MemoryStream();
+
+        new MiniExcelExcelExporter().Export(request, stream);
+
+        stream.Position = 0;
+        using var workbook = new XSSFWorkbook(stream);
+        var sheet = workbook.GetSheet("Rows");
+        Assert.Equal("Name", sheet.GetRow(0).GetCell(0).StringCellValue);
+        Assert.Equal("Age", sheet.GetRow(0).GetCell(1).StringCellValue);
+        for (var index = 1; index <= 3; index++)
+        {
+            Assert.Equal($"Person-{index}", sheet.GetRow(index).GetCell(0).StringCellValue);
+            Assert.Equal(index * 10, sheet.GetRow(index).GetCell(1).NumericCellValue);
+        }
     }
 
     /// <summary>

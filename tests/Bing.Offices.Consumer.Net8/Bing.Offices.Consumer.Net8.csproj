@@ -15,6 +15,11 @@
     <Compile Remove="artifacts/**" />
     <EmbeddedResource Remove="artifacts/**" />
     <None Remove="artifacts/**" />
+    <Compile Include="..\package-consumer-shared\AdvancedPivotPackageContract.cs" Link="AdvancedPivotPackageContract.cs" />
+    <Compile Include="..\package-consumer-shared\AdvancedPivotPackageRow.cs" Link="AdvancedPivotPackageRow.cs" />
+    <Compile Include="..\package-consumer-shared\BasicPivotPackageContract.cs" Link="BasicPivotPackageContract.cs" />
+    <Compile Include="..\package-consumer-shared\BasicPivotPackageRow.cs" Link="BasicPivotPackageRow.cs" />
+    <Compile Include="..\package-consumer-shared\ExcelDataReaderFailurePackageContract.cs" Link="ExcelDataReaderFailurePackageContract.cs" />
     <PackageReference Include="Bing.Offices.Npoi" Version="$(BingOfficesPackageVersion)" />
     <PackageReference Include="Bing.Offices.MiniExcel" Version="$(BingOfficesPackageVersion)" />
     <PackageReference Include="Bing.Offices.ClosedXml" Version="$(BingOfficesPackageVersion)" />

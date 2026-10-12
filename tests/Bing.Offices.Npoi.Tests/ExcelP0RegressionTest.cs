@@ -1529,6 +1529,19 @@ public sealed class ExcelP0RegressionTest
     }
 
     /// <summary>
+    /// 关系父键索引预算应拒绝非正数。
+    /// </summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void ResourceLimits_InvalidRelationKeyBudget_ShouldBeRejected(int value)
+    {
+        var limits = new ExcelResourceLimits { MaxTrackedRelationKeys = value };
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => limits.Validate());
+    }
+
+    /// <summary>
     /// 测试 - Workbook 资源限制应在逐行处理和错误收集阶段生效。
     /// </summary>
     [Fact]

@@ -48,6 +48,26 @@ public sealed class NamedListValidationTest
     }
 
     /// <summary>
+    /// 验证带特殊字符的合法工作表名称可用于名称列表。
+    /// </summary>
+    /// <param name="sheetName">字典工作表名称。</param>
+    [Theory]
+    [InlineData("Lookup,2026")]
+    [InlineData("Lookup!(2026)")]
+    [InlineData("O'Brien")]
+    public void NamedList_QuotedSheetNameWithSpecialCharacters_ShouldValidate(string sheetName)
+    {
+        using var workbook = new XLWorkbook();
+        var data = workbook.Worksheets.Add("Data");
+        var lookup = workbook.Worksheets.Add(sheetName);
+        lookup.Cell("A1").Value = "Allowed";
+        workbook.DefinedNames.Add("AllowedList", lookup.Range("A1"));
+
+        Assert.True(Evaluate(data, "A2", "AllowedList", "Allowed").IsValid);
+        Assert.False(Evaluate(data, "A3", "AllowedList", "Wrong").IsValid);
+    }
+
+    /// <summary>
     /// 验证名称仅接受单个绝对有界的一维引用。
     /// </summary>
     /// <param name="refersTo">命名范围的引用表达式。</param>
@@ -133,6 +153,31 @@ public sealed class NamedListValidationTest
 
         Assert.False(result.IsValid);
         Assert.True(result.IsUnsupported);
+    }
+
+    /// <summary>
+    /// 验证名称允许值在同一工作簿内复用且不同工作簿互不影响。
+    /// </summary>
+    [Fact]
+    public void NamedList_ShouldCacheValuesPerWorkbook()
+    {
+        using var first = new XLWorkbook();
+        var firstData = first.Worksheets.Add("Data");
+        var firstLookup = first.Worksheets.Add("Lookup");
+        firstLookup.Cell("A1").Value = "First";
+        first.DefinedNames.Add("Allowed", firstLookup.Range("A1"));
+        Assert.True(Evaluate(firstData, "A2", "Allowed", "First").IsValid);
+
+        firstLookup.Cell("A1").Value = "Changed";
+        Assert.True(Evaluate(firstData, "A3", "Allowed", "First").IsValid);
+        Assert.False(Evaluate(firstData, "A4", "Allowed", "Changed").IsValid);
+
+        using var second = new XLWorkbook();
+        var secondData = second.Worksheets.Add("Data");
+        var secondLookup = second.Worksheets.Add("Lookup");
+        secondLookup.Cell("A1").Value = "Changed";
+        second.DefinedNames.Add("Allowed", secondLookup.Range("A1"));
+        Assert.True(Evaluate(secondData, "A2", "Allowed", "Changed").IsValid);
     }
 
     /// <summary>

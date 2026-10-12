@@ -28,6 +28,133 @@ namespace Bing.Offices.Tests;
 public sealed class EntityLayoutProviderTest
 {
     /// <summary>
+    /// 验证 NPOI 实体导入失败时可输出保留原始坐标的标注工作簿。
+    /// </summary>
+    [Fact]
+    public void Npoi_EntityFailureWorkbook_AnnotatedOriginal_ShouldPreserveCoordinates()
+    {
+        var layout = ExcelEntity.Layout<EntityValidationRoot>(builder =>
+            builder.ListRegion("验证", "A1", root => root.Lines));
+        using var source = new MemoryStream();
+        new NpoiExcelExporter().ExportEntity(
+            CreateValidationRoot(new EntityValidationLine { Required = string.Empty }), layout, source);
+        using var input = new MemoryStream(source.ToArray(), writable: false);
+        using var failure = new MemoryStream();
+        var options = new ExcelEntityImportOptions(null, ExcelValidationFailureMode.Continue,
+            ExcelImportValidationMode.ConfiguredRules, ExcelUnsupportedFeaturePolicy.Fail,
+            new ExcelImportFailureOptions
+            {
+                Mode = ExcelImportFailureWorkbookMode.AnnotatedOriginal,
+                Destination = failure
+            });
+
+        var result = new NpoiExcelImporter().ImportEntity(input, layout, options);
+
+        Assert.False(result.IsSuccess);
+        var error = Assert.Single(result.Errors.Where(item =>
+            item.PropertyName == nameof(EntityValidationLine.Required)));
+        Assert.True(error.RowIndex > 0);
+        Assert.True(error.ColumnIndex > 0);
+        using var annotated = WorkbookFactory.Create(new MemoryStream(failure.ToArray(), writable: false));
+        var cell = annotated.GetSheet(error.SheetName).GetRow(error.RowIndex - 1)
+            .GetCell(error.ColumnIndex - 1);
+        Assert.NotNull(cell.CellComment);
+        Assert.NotNull(annotated.GetSheet("_ImportErrors"));
+        Assert.True(input.CanRead);
+    }
+
+    /// <summary>
+    /// 验证 NPOI 异步实体导入使用异步目标流写出失败工作簿。
+    /// </summary>
+    [Fact]
+    public async Task Npoi_EntityFailureWorkbook_AnnotatedOriginal_ShouldSupportAsyncOutput()
+    {
+        var layout = ExcelEntity.Layout<EntityValidationRoot>(builder =>
+            builder.ListRegion("验证", "A1", root => root.Lines));
+        using var source = new MemoryStream();
+        new NpoiExcelExporter().ExportEntity(
+            CreateValidationRoot(new EntityValidationLine { Required = string.Empty }), layout, source);
+        using var input = new MemoryStream(source.ToArray(), writable: false);
+        using var failure = new MemoryStream();
+        var options = new ExcelEntityImportOptions(null, ExcelValidationFailureMode.Continue,
+            ExcelImportValidationMode.ConfiguredRules, ExcelUnsupportedFeaturePolicy.Fail,
+            new ExcelImportFailureOptions
+            {
+                Mode = ExcelImportFailureWorkbookMode.AnnotatedOriginal,
+                Destination = failure
+            });
+
+        var result = await new NpoiExcelImporter().ImportEntityAsync(input, layout, options);
+
+        Assert.False(result.IsSuccess);
+        Assert.NotEmpty(failure.ToArray());
+        using var annotated = WorkbookFactory.Create(new MemoryStream(failure.ToArray(), writable: false));
+        Assert.NotNull(annotated.GetSheet("_ImportErrors"));
+        Assert.True(input.CanRead);
+    }
+
+    /// <summary>
+    /// 验证 NPOI 实体导入可生成仅包含失败行的工作簿。
+    /// </summary>
+    [Fact]
+    public void Npoi_EntityFailureWorkbook_ErrorRowsOnly_ShouldIncludeFailedRow()
+    {
+        var layout = ExcelEntity.Layout<EntityValidationRoot>(builder =>
+            builder.ListRegion("验证", "A1", root => root.Lines));
+        using var source = new MemoryStream();
+        new NpoiExcelExporter().ExportEntity(
+            CreateValidationRoot(new EntityValidationLine { Required = string.Empty }), layout, source);
+        using var input = new MemoryStream(source.ToArray(), writable: false);
+        using var failure = new MemoryStream();
+        var options = new ExcelEntityImportOptions(null, ExcelValidationFailureMode.Continue,
+            ExcelImportValidationMode.ConfiguredRules, ExcelUnsupportedFeaturePolicy.Fail,
+            new ExcelImportFailureOptions
+            {
+                Mode = ExcelImportFailureWorkbookMode.ErrorRowsOnly,
+                Destination = failure
+            });
+
+        new NpoiExcelImporter().ImportEntity(input, layout, options);
+
+        using var output = WorkbookFactory.Create(new MemoryStream(failure.ToArray(), writable: false));
+        Assert.NotNull(output.GetSheet("验证"));
+        Assert.NotNull(output.GetSheet("_ImportErrors"));
+        Assert.NotNull(output.GetSheet("验证").GetRow(1));
+    }
+
+    /// <summary>
+    /// 验证 NPOI 模板实体导入沿用失败工作簿输出契约。
+    /// </summary>
+    [Fact]
+    public void Npoi_EntityFailureWorkbook_Template_ShouldWriteArtifact()
+    {
+        var layout = ExcelEntity.Layout<EntityValidationRoot>(builder =>
+            builder.ListRegion("验证", "A1", root => root.Lines));
+        using var valid = new MemoryStream();
+        new NpoiExcelExporter().ExportEntity(CreateValidationRoot(), layout, valid);
+        using var input = new MemoryStream();
+        new NpoiExcelExporter().ExportEntity(
+            CreateValidationRoot(new EntityValidationLine { Required = string.Empty }), layout, input);
+        using var template = new MemoryStream(valid.ToArray(), writable: false);
+        using var source = new MemoryStream(input.ToArray(), writable: false);
+        using var failure = new MemoryStream();
+        var options = new ExcelEntityImportOptions(null, ExcelValidationFailureMode.Continue,
+            ExcelImportValidationMode.ConfiguredRules, ExcelUnsupportedFeaturePolicy.Fail,
+            new ExcelImportFailureOptions
+            {
+                Mode = ExcelImportFailureWorkbookMode.AnnotatedOriginal,
+                Destination = failure
+            });
+
+        var result = new NpoiExcelImporter().ImportForTemplate(source, layout,
+            new ExcelEntityTemplateOptions(template, leaveOpen: true), options);
+
+        Assert.False(result.IsSuccess);
+        Assert.NotEmpty(failure.ToArray());
+        Assert.True(template.CanRead);
+    }
+
+    /// <summary>
     /// 测试 - NPOI 实体布局应按模板命名锚点写入并读回固定单元格和列表区域。
     /// </summary>
     [Fact]
@@ -1253,19 +1380,20 @@ public sealed class EntityLayoutProviderTest
     }
 
     /// <summary>
-    /// 测试 - 分页行数必须为正数且不能与连续分组小计同时配置。
+    /// 测试分页行数校验与连续分组小计组合。
     /// </summary>
     [Fact]
-    public void Npoi_EntityLayout_PageBreak_ShouldRejectInvalidCombinations()
+    public void Npoi_EntityLayout_PageBreak_ShouldValidateRowsAndAllowGroups()
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => ExcelEntity.Layout<Invoice>(builder =>
             builder.ListRegion("明细", "A1", invoice => invoice.Lines,
                 region => region.PageBreak(0))));
 
-        Assert.Throws<InvalidOperationException>(() => ExcelEntity.Layout<GroupSubtotalDocument>(builder =>
+        var combined = ExcelEntity.Layout<GroupSubtotalDocument>(builder =>
             builder.ListRegion("明细", "A1", document => document.Lines, region => region
                 .PageBreak(2)
-                .GroupSubtotal(item => item.Category, "小计"))));
+                .GroupSubtotal(item => item.Category, "小计")));
+        Assert.Single(combined.ListRegions);
 
         Assert.Throws<ArgumentException>(() => ExcelEntity.Layout<Invoice>(builder =>
             builder.ListRegion("明细", "A1", invoice => invoice.Lines,

@@ -10,6 +10,8 @@
   <ItemGroup>
     <Compile Include="..\Bing.Offices.Testing\Entities\EntityLayoutProviderContractSuite.cs"
              Link="Entities\EntityLayoutProviderContractSuite.cs" />
+    <Compile Include="..\Bing.Offices.Testing\Entities\EntityPageHeaderProviderContract.cs"
+             Link="Entities\EntityPageHeaderProviderContract.cs" />
     <ProjectReference Include="..\..\src\Bing.Offices.Abstractions\Bing.Offices.Abstractions.csproj" />
   </ItemGroup>
 </Project>

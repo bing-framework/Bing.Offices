@@ -279,7 +279,7 @@ public sealed class ReviewFixCoreRegressionTest
                 {
                     new ExcelMappingDynamicColumnConfiguration
                     {
-                        Key = "region", Title = "区域", DataTypeName = "string", ConverterName = "text",
+                        Key = "region", Title = "区域", TargetPropertyName = "Attributes", DataTypeName = "string", ConverterName = "text",
                         ValidationRuleNames = new List<string> { "required", "regex" },
                         ValidationRules = new List<ExcelMappingDynamicValidationConfiguration>
                         {
@@ -302,6 +302,8 @@ public sealed class ReviewFixCoreRegressionTest
         Assert.Equal("tenant-a", jsonRoundTrip.TenantId);
         Assert.Equal("2026-08-22", xmlRoundTrip.ConfigurationVersion);
         Assert.Equal("region", Assert.Single(jsonRoundTrip.Import.DynamicColumns).Key);
+        Assert.Equal("Attributes", Assert.Single(jsonRoundTrip.Import.DynamicColumns).TargetPropertyName);
+        Assert.Equal("Attributes", Assert.Single(xmlRoundTrip.Import.DynamicColumns).TargetPropertyName);
         Assert.Equal(new[] { "required", "regex" },
             Assert.Single(jsonRoundTrip.Import.DynamicColumns).ValidationRuleNames);
         Assert.Equal(new[] { "required", "regex" },

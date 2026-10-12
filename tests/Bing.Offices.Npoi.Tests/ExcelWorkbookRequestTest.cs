@@ -684,6 +684,96 @@ public sealed class ExcelWorkbookRequestTest
     }
 
     /// <summary>
+    /// 测试 - XLS 与 XLSX 关系绑定均应遵守父键索引资源上限。
+    /// </summary>
+    /// <param name="format">输入工作簿格式。</param>
+    [Theory]
+    [InlineData(ExcelFormat.Xls)]
+    [InlineData(ExcelFormat.Xlsx)]
+    public void Import_RelationKeyLimit_ShouldReturnStructuredResourceError(ExcelFormat format)
+    {
+        using var workbook = format == ExcelFormat.Xls
+            ? (IWorkbook)new HSSFWorkbook()
+            : new XSSFWorkbook();
+        var parents = workbook.CreateSheet("Parents");
+        parents.CreateRow(0).CreateCell(0).SetCellValue("Id");
+        parents.CreateRow(1).CreateCell(0).SetCellValue(1);
+        parents.CreateRow(2).CreateCell(0).SetCellValue(2);
+        var children = workbook.CreateSheet("Children");
+        children.CreateRow(0).CreateCell(0).SetCellValue("ParentId");
+        children.CreateRow(1).CreateCell(0).SetCellValue(1);
+        children.CreateRow(2).CreateCell(0).SetCellValue(2);
+        using var output = new MemoryStream();
+        workbook.Write(output, false);
+        using var source = new MemoryStream(output.ToArray());
+
+        var request = ExcelImport.Workbook<IntRelationWorkbook>(builder => builder
+            .ResourceLimits(new ExcelResourceLimits { MaxTrackedRelationKeys = 1 })
+            .Sheet("Parents", root => root.Parents)
+            .Sheet("Children", root => root.Children)
+            .HasMany(root => root.Parents, root => root.Children,
+                parent => parent.Id, child => child.ParentId, parent => parent.Children));
+
+        var result = new NpoiExcelImporter().Import(source, request);
+
+        Assert.False(result.IsSuccess);
+        Assert.True(result.ErrorsTruncated);
+        var resourceErrors = result.Errors.Where(item =>
+            item.Code == ExcelImportErrorCode.ResourceLimit).ToArray();
+        Assert.NotEmpty(resourceErrors);
+        var error = resourceErrors[0];
+        Assert.Equal(ExcelImportErrorCode.ResourceLimit, error.Code);
+        Assert.Equal("Parents", error.SheetName);
+        Assert.Equal(3, error.RowIndex);
+        Assert.Equal(2, result.Workbook.Parents.Count);
+        Assert.Empty(result.Workbook.Parents[0].Children);
+        Assert.Empty(result.Workbook.Parents[1].Children);
+        Assert.True(source.CanRead);
+    }
+
+    /// <summary>
+    /// 测试 - 多个关系声明应共享同一个父键索引预算。
+    /// </summary>
+    [Theory]
+    [InlineData(ExcelFormat.Xls)]
+    [InlineData(ExcelFormat.Xlsx)]
+    public void Import_MultipleRelations_ShouldShareRelationKeyLimit(ExcelFormat format)
+    {
+        using var workbook = format == ExcelFormat.Xls
+            ? (IWorkbook)new HSSFWorkbook()
+            : new XSSFWorkbook();
+        var parents = workbook.CreateSheet("Parents");
+        parents.CreateRow(0).CreateCell(0).SetCellValue("Id");
+        parents.CreateRow(1).CreateCell(0).SetCellValue(1);
+        var children = workbook.CreateSheet("Children");
+        children.CreateRow(0).CreateCell(0).SetCellValue("ParentId");
+        children.CreateRow(1).CreateCell(0).SetCellValue(1);
+        using var output = new MemoryStream();
+        workbook.Write(output, false);
+        using var source = new MemoryStream(output.ToArray());
+
+        var request = ExcelImport.Workbook<IntRelationWorkbook>(builder => builder
+            .ResourceLimits(new ExcelResourceLimits { MaxTrackedRelationKeys = 1 })
+            .Sheet("Parents", root => root.Parents)
+            .Sheet("Children", root => root.Children)
+            .HasMany(root => root.Parents, root => root.Children,
+                parent => parent.Id, child => child.ParentId,
+                parent => parent.Children)
+            .HasMany(root => root.Parents, root => root.Children,
+                parent => parent.Id, child => child.ParentId,
+                parent => parent.Children));
+
+        var result = new NpoiExcelImporter().Import(source, request);
+
+        Assert.False(result.IsSuccess);
+        Assert.True(result.ErrorsTruncated);
+        Assert.Contains(result.Errors, error => error.Code == ExcelImportErrorCode.ResourceLimit);
+        Assert.Single(result.Workbook.Parents);
+        Assert.Single(result.Workbook.Parents[0].Children);
+        Assert.True(source.CanRead);
+    }
+
+    /// <summary>
     /// 测试 - 关系绑定应使用调用方提供的 comparer，大小写不同的字符串键也应关联成功。
     /// </summary>
     [Fact]

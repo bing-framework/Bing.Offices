@@ -210,6 +210,12 @@ public static class EntityLayoutProviderContractSuite
         AssertFooter(importer, workbook, "A6", "B6", "TOTAL", 9m, "PageSubtotal");
     }
 
+    /// <summary>验证实体列表重复页眉的跨 Provider 行为。</summary>
+    /// <param name="exporter">待验证的实体导出器。</param>
+    /// <param name="importer">待验证的实体导入器。</param>
+    public static void VerifyPageHeaders(IExcelEntityExporter exporter, IExcelEntityImporter importer) =>
+        EntityPageHeaderProviderContract.Verify(exporter, importer);
+
     /// <summary>
     /// 验证连续分组小计与最终尾部的输出和导入边界。
     /// </summary>

@@ -15,4 +15,9 @@
     <ProjectReference Include="..\..\src\Bing.Offices.Core\Bing.Offices.Core.csproj" />
     <ProjectReference Include="..\..\src\Bing.Offices.ClosedXml\Bing.Offices.ClosedXml.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\provider-shared\ExcelPivotTemplateManifestTestCases.cs" Link="Exports\PivotTables\ExcelPivotTemplateManifestTestCases.cs" />
+    <Compile Include="..\provider-shared\ExcelPivotTemplateReadStream.cs" Link="Exports\PivotTables\ExcelPivotTemplateReadStream.cs" />
+    <Compile Include="..\provider-shared\ExcelForwardXlsxSharedStringsTest.cs" Link="Imports\ExcelForwardXlsxSharedStringsTest.cs" />
+  </ItemGroup>
 </Project>

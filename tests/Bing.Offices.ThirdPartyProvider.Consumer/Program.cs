@@ -26,6 +26,16 @@ internal static class Program
         await VerifyPublicFileCommitters();
         await VerifyWorkbookExportStrategy();
         await VerifyEntityLayoutPublicSurface();
+        await Bing.Offices.PackageConsumer.BasicPivotPackageContract.VerifyAsync(
+            new NpoiExcelExporter());
+        await Bing.Offices.PackageConsumer.AdvancedPivotPackageContract.VerifyAsync(
+            new NpoiExcelExporter());
+        await Bing.Offices.PackageConsumer.AdvancedPivotPackageContract.VerifyTemplateUpdateAsync(
+            new NpoiExcelExporter());
+        await Bing.Offices.PackageConsumer.AdvancedPivotPackageContract.VerifyAsync(
+            new ClosedXmlExcelExporter());
+        await Bing.Offices.PackageConsumer.AdvancedPivotPackageContract.VerifyTemplateUpdateAsync(
+            new ClosedXmlExcelExporter());
         var layout = ExcelEntity.Layout<FixtureEntity>(builder =>
             builder.Cell("Data", "A1", entity => entity.Value));
         var provider = new FixtureProvider();
@@ -242,6 +252,35 @@ internal static class Program
                     .Cell("B1", items => items.Sum(item => item.Quantity))
                     .Formula("C1", "=1+1", numberFormat: "0.00")
                     .FormulaSumDetailRowsAbove("C2", "B", numberFormat: "0.00"))));
+        var independentLayout = ExcelEntity.Layout<ConsumerEntity>(builder => builder
+            .ListRegion("Order", "A2", entity => entity.Lines, region => region
+                .DynamicColumnGroup("商品组", item => item.Goods, new[]
+                {
+                    new ExcelDynamicColumnDefinition
+                    {
+                        Key = "goods-color", Title = "商品颜色", DataType = typeof(string)
+                    }
+                })
+                .DynamicColumnGroup("产品组", item => item.Product, new[]
+                {
+                    new ExcelDynamicColumnDefinition
+                    {
+                        Key = "product-weight", Title = "产品重量", DataType = typeof(decimal)
+                    }
+                })
+                .PageBreak(1)
+                .PageHeaderNamed("Head", "A1:D2", "A1", "HEADER", header => header
+                    .Cell("B1", context => $"{context.PageNumber}/{context.PageCount}"))
+                .PageFooterNamed("Sign", "SIGN", footer => footer.GapRows(1)
+                    .Cell("B1", items => items.Sum(item => item.Quantity)).Cell("A2", "审核"),
+                    ExcelEntityPageAnchorStaleNamePolicy.RemoveObsolete).Footer("END")));
+        var independentRegion = independentLayout.ListRegions.Single();
+        Ensure(independentRegion.PageHeaderAnchorPrefix == "Head"
+            && independentRegion.PageFooterAnchorPrefix == "Sign"
+            && independentRegion.PageHeaderAnchorStaleNamePolicy == ExcelEntityPageAnchorStaleNamePolicy.Reject
+            && independentRegion.PageFooterAnchorStaleNamePolicy == ExcelEntityPageAnchorStaleNamePolicy.RemoveObsolete
+            && independentRegion.PageFooter.MarkerText == "SIGN",
+            "第三方包的逐页描述与快照不完整。");
         var contiguousSumLayout = ExcelEntity.Layout<ConsumerEntity>(builder => builder
             .ListRegion("Order", "A4", entity => entity.Lines, region => region
                 .Footer("TOTAL", footer => footer
@@ -279,11 +318,51 @@ internal static class Program
             var entityImporter = (IExcelEntityImporter)provider.Importer;
             EntityLayoutProviderContractSuite.VerifyCore(entityExporter, entityImporter);
             EntityLayoutProviderContractSuite.VerifyPageSubtotal(entityExporter, entityImporter);
+            EntityLayoutProviderContractSuite.VerifyPageHeaders(entityExporter, entityImporter);
             EntityLayoutProviderContractSuite.VerifyGroupSubtotal(entityExporter, entityImporter);
             EntityLayoutProviderContractSuite.VerifyFooterFormulas(entityExporter, entityImporter);
             await EntityLayoutProviderContractSuite.VerifyAsync(entityExporter, entityImporter);
             EntityLayoutProviderContractSuite.VerifyAttributeAndNamedAnchors(entityExporter, entityImporter);
             EntityLayoutProviderContractSuite.VerifyNamedListFixedCellCollision(entityExporter, entityImporter);
+            using var independentOutput = new MemoryStream();
+            await entityExporter.ExportEntityAsync(source, independentLayout, independentOutput);
+            using (var workbook = new NPOI.XSSF.UserModel.XSSFWorkbook(
+                       new MemoryStream(independentOutput.ToArray(), writable: false)))
+            {
+                var sheet = workbook.GetSheet("Order");
+                var expected = new[] { "HEADER|1/2||", "Name|Quantity|商品颜色|产品重量", "A|2|red|1.5", "|||", "SIGN|2||", "审核|||",
+                    "HEADER|2/2||", "Name|Quantity|商品颜色|产品重量", "B|3|blue|2.5", "|||", "SIGN|3||", "审核|||", "END|||" };
+                Ensure(sheet.LastRowNum == 12 && expected.SequenceEqual(Enumerable.Range(0, 13)
+                    .Select(row => string.Join("|", Enumerable.Range(0, 4).Select(column =>
+                        sheet.GetRow(row)?.GetCell(column)?.ToString() ?? "")))),
+                    "第三方包的独立逐页内容不完整。");
+                var names = workbook.GetAllNames();
+                Ensure(names.Count == 4, "第三方包的逐页名称数量错误。");
+                for (var page = 0; page < 2; page++)
+                {
+                    var headerName = names.Single(name => name.NameName == $"Head_{page + 1:000}");
+                    var footerName = names.Single(name => name.NameName == $"Sign_{page + 1:000}");
+                    var headerReference = new NPOI.SS.Util.AreaReference(headerName.RefersToFormula,
+                        NPOI.SS.SpreadsheetVersion.EXCEL2007);
+                    var footerReference = new NPOI.SS.Util.AreaReference(footerName.RefersToFormula,
+                        NPOI.SS.SpreadsheetVersion.EXCEL2007);
+                    Ensure(headerReference.FirstCell.SheetName == "Order"
+                        && headerReference.FirstCell.Row == page * 6 && headerReference.LastCell.Row == page * 6
+                        && headerReference.FirstCell.Col == 0 && headerReference.LastCell.Col == 0
+                        && footerReference.FirstCell.SheetName == "Order"
+                        && footerReference.FirstCell.Row == page * 6 + 4 && footerReference.LastCell.Row == page * 6 + 4
+                        && footerReference.FirstCell.Col == 0 && footerReference.LastCell.Col == 0,
+                        $"第三方包的逐页名称坐标错误：{headerName.RefersToFormula}; {footerName.RefersToFormula}。");
+                }
+            }
+            independentOutput.Position = 0;
+            var independentResult = await entityImporter.ImportEntityAsync(independentOutput, independentLayout);
+            Ensure(independentResult.IsSuccess && independentResult.Errors.Count == 0
+                && source.Lines.Select(line => (line.Name, line.Quantity, (string)line.Goods["goods-color"],
+                    Convert.ToDecimal(line.Product["product-weight"]))).SequenceEqual(
+                    independentResult.Entity.Lines.Select(line => (line.Name, line.Quantity,
+                        (string)line.Goods["goods-color"], Convert.ToDecimal(line.Product["product-weight"])))),
+                "第三方包的独立逐页导入往返失败。");
             using var output = new MemoryStream();
             provider.Exporter.ExportEntity(source, layout, output);
             using var input = new MemoryStream(output.ToArray(), writable: false);

@@ -9,6 +9,7 @@ using Bing.Offices.Attributes;
 using Bing.Offices.Csv;
 using Bing.Offices.Configurations;
 using Bing.Offices.Conversions;
+using Bing.Offices.Entities;
 using Bing.Offices.Exports;
 using Bing.Offices.Exceptions;
 using Bing.Offices.Extensions;
@@ -55,6 +56,44 @@ public sealed class AsyncPipelineTest
         Assert.Equal(0, asyncInput.SyncReadCount);
         Assert.True(asyncOutput.AsyncWriteCount > 0);
         Assert.Equal(0, asyncOutput.SyncWriteCount);
+    }
+
+    /// <summary>
+    /// 验证异步 Excel 导出不会在 staging 序列化结束时同步刷新写入流。
+    /// </summary>
+    [Fact]
+    public async Task ExcelAsync_ShouldDeferStagingFlushToAsyncBoundary()
+    {
+        var stagingFactory = new FlushRejectingStagingFactory();
+        var exporter = new NpoiExcelExporter(new DefaultFileExportCommitter(), stagingFactory);
+        var request = ExcelExport.Workbook(workbook => workbook.AddSheet("Sheet1",
+            new[] { new ExcelRow { Code = "A", Count = 1 } }));
+        using var output = new MemoryStream();
+
+        await exporter.ExportAsync(request, output);
+
+        Assert.NotEmpty(output.ToArray());
+        Assert.Equal(0, stagingFactory.Staging.SyncFlushCount);
+        Assert.True(stagingFactory.Staging.AsyncFlushCount > 0);
+    }
+
+    /// <summary>
+    /// 验证异步实体导出复用 staging 的异步刷新边界。
+    /// </summary>
+    [Fact]
+    public async Task EntityAsync_ShouldDeferStagingFlushToAsyncBoundary()
+    {
+        var stagingFactory = new FlushRejectingStagingFactory();
+        var exporter = new NpoiExcelExporter(new DefaultFileExportCommitter(), stagingFactory);
+        var layout = ExcelEntity.Layout<AsyncEntity>(builder =>
+            builder.Cell("Sheet1", "A1", item => item.Value));
+        using var output = new MemoryStream();
+
+        await exporter.ExportEntityAsync(new AsyncEntity { Value = "A" }, layout, output);
+
+        Assert.NotEmpty(output.ToArray());
+        Assert.Equal(0, stagingFactory.Staging.SyncFlushCount);
+        Assert.True(stagingFactory.Staging.AsyncFlushCount > 0);
     }
 
     /// <summary>
@@ -105,6 +144,33 @@ public sealed class AsyncPipelineTest
             await staging.FlushAsync(CancellationToken.None);
             using var output = new MemoryStream();
             await staging.CopyToAsync(output, CancellationToken.None);
+            Assert.Equal("12345", Encoding.UTF8.GetString(output.ToArray()));
+        }
+        finally
+        {
+            staging.Dispose();
+            Directory.Delete(directory, true);
+        }
+    }
+
+    /// <summary>
+    /// 验证临时文件暂存刷新后保持写入边界并可完成复制。
+    /// </summary>
+    [Fact]
+    public async Task TempFileStaging_ShouldPreserveWriteBoundaryAfterFlush()
+    {
+        var directory = CreateStagingDirectory();
+        var staging = new NpoiAsyncStagingFactory(NpoiAsyncStagingStrategy.TempFile,
+            directory: directory).Create("bing-offices-excel-async-");
+        try
+        {
+            staging.WriteStream.Write(Encoding.UTF8.GetBytes("12345"));
+            await staging.FlushAsync(CancellationToken.None);
+
+            Assert.Throws<ObjectDisposedException>(() => _ = staging.WriteStream);
+            using var output = new MemoryStream();
+            await staging.CopyToAsync(output, CancellationToken.None);
+
             Assert.Equal("12345", Encoding.UTF8.GetString(output.ToArray()));
         }
         finally
@@ -1185,6 +1251,103 @@ public sealed class AsyncPipelineTest
         /// 始终抛出清理异常，用于验证失败路径。
         /// </remarks>
         public void Dispose() => throw new IOException("staging 清理失败");
+    }
+
+    /// <summary>
+    /// 提供拒绝同步刷新的 staging 工厂替身。
+    /// </summary>
+    private sealed class FlushRejectingStagingFactory : INpoiAsyncStagingFactory
+    {
+        /// <summary>
+        /// 获取最近创建的 staging 会话。
+        /// </summary>
+        public FlushRejectingStaging Staging { get; private set; }
+
+        /// <inheritdoc />
+        public INpoiAsyncStaging Create(string prefix) => Staging = new FlushRejectingStaging();
+    }
+
+    /// <summary>
+    /// 使用只允许异步刷新的内存 staging 验证输出边界。
+    /// </summary>
+    private sealed class FlushRejectingStaging : INpoiAsyncStaging
+    {
+        /// <summary>
+        /// 承载待复制工作簿内容的写入流。
+        /// </summary>
+        private readonly FlushRejectingStream _buffer = new();
+
+        /// <summary>
+        /// 获取同步刷新次数。
+        /// </summary>
+        public int SyncFlushCount => _buffer.SyncFlushCount;
+
+        /// <summary>
+        /// 获取异步刷新次数。
+        /// </summary>
+        public int AsyncFlushCount => _buffer.AsyncFlushCount;
+
+        /// <inheritdoc />
+        public Stream WriteStream => _buffer;
+
+        /// <inheritdoc />
+        public Task FlushAsync(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return _buffer.FlushAsync(cancellationToken);
+        }
+
+        /// <inheritdoc />
+        public async Task CopyToAsync(Stream destination, CancellationToken cancellationToken)
+        {
+            _buffer.Position = 0;
+            await _buffer.CopyToAsync(destination, 81920, cancellationToken);
+        }
+
+        /// <inheritdoc />
+        public void Dispose() => _buffer.Dispose();
+    }
+
+    /// <summary>
+    /// 记录并拒绝同步刷新以验证异步 staging 边界。
+    /// </summary>
+    private sealed class FlushRejectingStream : MemoryStream
+    {
+        /// <summary>
+        /// 获取同步刷新次数。
+        /// </summary>
+        public int SyncFlushCount { get; private set; }
+
+        /// <summary>
+        /// 获取异步刷新次数。
+        /// </summary>
+        public int AsyncFlushCount { get; private set; }
+
+        /// <inheritdoc />
+        public override void Flush()
+        {
+            SyncFlushCount++;
+            throw new InvalidOperationException("异步 staging 不应执行同步 Flush。");
+        }
+
+        /// <inheritdoc />
+        public override Task FlushAsync(CancellationToken cancellationToken)
+        {
+            AsyncFlushCount++;
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.CompletedTask;
+        }
+    }
+
+    /// <summary>
+    /// 异步实体导出测试模型。
+    /// </summary>
+    private sealed class AsyncEntity
+    {
+        /// <summary>
+        /// 获取或设置实体值。
+        /// </summary>
+        public string Value { get; set; }
     }
 
     /// <summary>

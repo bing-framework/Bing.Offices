@@ -1,8 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Bing.Offices.ClosedXml.Imports;
 using Bing.Offices.Entities;
+using Bing.Offices.Exceptions;
+using Bing.Offices.Imports;
 using Bing.Offices.ProviderContract.Tests.Drivers;
 using Bing.Offices.Testing.Entities;
 using Xunit;
@@ -40,6 +44,58 @@ public sealed class EntityLayoutReusableContractTest
         var (exporter, importer) = CreateEntityServices(provider);
 
         EntityLayoutProviderContractSuite.VerifyPageSubtotal(exporter, importer);
+    }
+
+    /// <summary>运行重复页眉 Entity Layout 合同。</summary>
+    /// <param name="provider">待验证的 XLSX Provider 名称。</param>
+    [Theory]
+    [InlineData("NPOI")]
+    [InlineData("ClosedXML")]
+    public void PageHeaders_ShouldSatisfyReusableContract(string provider)
+    {
+        var (exporter, importer) = CreateEntityServices(provider);
+
+        EntityLayoutProviderContractSuite.VerifyPageHeaders(exporter, importer);
+    }
+
+    /// <summary>验证重复页眉工作簿的输入字节限制。</summary>
+    /// <param name="provider">待验证的 XLSX Provider 名称。</param>
+    [Theory]
+    [InlineData("NPOI")]
+    [InlineData("ClosedXML")]
+    public void PageHeaderInputLimit_ShouldRejectBeforeRead(string provider)
+    {
+        var (exporter, importer) = CreateEntityServices(provider);
+        var layout = ExcelEntity.Layout<DetailSumOrder>(builder => builder
+            .ListRegion("Data", "B3", order => order.Lines, region => region
+                .PageBreak(1).PageHeader("A1:B3", "A1", "HEAD")));
+        var source = new DetailSumOrder
+        {
+            Lines = new List<DetailSumLine>
+            {
+                new() { Amount = 2m },
+                new() { Amount = 3m }
+            }
+        };
+        using var output = new MemoryStream();
+        exporter.ExportEntity(source, layout, output);
+        using var input = new MemoryStream(output.ToArray(), writable: false);
+        var options = new ExcelEntityImportOptions(new ExcelResourceLimits
+        {
+            MaxInputBytes = input.Length - 1
+        });
+
+        var exception = Assert.Throws<BingOfficesResourceLimitException>(() =>
+        {
+            if (provider == "NPOI")
+                ((NpoiExcelImporter)importer).ImportEntity(input, layout, options);
+            else
+                ((ClosedXmlExcelImporter)importer).ImportEntity(input, layout, options);
+        });
+        Assert.Equal(BingOfficesErrorCode.ResourceLimitExceeded, exception.Code);
+        Assert.Equal(provider == "NPOI" ? BingOfficesStage.Open : BingOfficesStage.Preflight,
+            exception.Stage);
+        Assert.True(input.CanRead);
     }
 
     /// <summary>

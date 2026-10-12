@@ -19,6 +19,121 @@ namespace Bing.Offices.SpreadCheetah.Tests;
 public sealed class SpreadCheetahStreamingExcelExporterTest
 {
     /// <summary>
+    /// 验证 SpreadCheetah 在同步和异步导出入口预检拒绝字典及命名列表校验请求。
+    /// </summary>
+    /// <param name="lookupListRequest">是否只包含工作簿字典定义。</param>
+    /// <param name="asynchronous">是否调用异步导出入口。</param>
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    public async Task LookupListRequests_ShouldFailBeforeWritingToStream(bool lookupListRequest,
+        bool asynchronous)
+    {
+        var request = CreateLookupListRequest(lookupListRequest);
+        var exporter = new SpreadCheetahStreamingExcelExporter();
+        var sentinel = new byte[] { 17, 23, 42 };
+        using var destination = new MemoryStream(sentinel);
+        destination.Position = 1;
+
+        BingOfficesUnsupportedFeatureException exception;
+        if (asynchronous)
+            exception = await Assert.ThrowsAsync<BingOfficesUnsupportedFeatureException>(() =>
+                exporter.ExportBatchesAsync(request, destination));
+        else
+            exception = Assert.Throws<BingOfficesUnsupportedFeatureException>(() =>
+                exporter.ExportBatches(request, destination));
+
+        AssertUnsupportedLookupRequest(exception, lookupListRequest);
+        Assert.Equal(sentinel, destination.ToArray());
+        Assert.Equal(1, destination.Position);
+    }
+
+    /// <summary>
+    /// 验证不支持的字典请求不会替换已有文件或遗留临时文件。
+    /// </summary>
+    /// <param name="lookupListRequest">是否只包含工作簿字典定义。</param>
+    /// <param name="asynchronous">是否调用异步文件导出入口。</param>
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    public async Task LookupListRequests_ShouldPreserveExistingFile(bool lookupListRequest,
+        bool asynchronous)
+    {
+        var request = CreateLookupListRequest(lookupListRequest);
+        var exporter = new SpreadCheetahStreamingExcelExporter();
+        var directory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var path = Path.Combine(directory, "existing.xlsx");
+            var sentinel = new byte[] { 17, 23, 42 };
+            File.WriteAllBytes(path, sentinel);
+
+            BingOfficesUnsupportedFeatureException exception;
+            if (asynchronous)
+                exception = await Assert.ThrowsAsync<BingOfficesUnsupportedFeatureException>(() =>
+                    exporter.ExportBatchesToFileAsync(request, path));
+            else
+                exception = Assert.Throws<BingOfficesUnsupportedFeatureException>(() =>
+                    exporter.ExportBatchesToFile(request, path));
+
+            AssertUnsupportedLookupRequest(exception, lookupListRequest);
+            Assert.Equal(sentinel, File.ReadAllBytes(path));
+            Assert.Equal(new[] { path }, Directory.GetFiles(directory));
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    /// <summary>
+    /// 创建名称列表能力边界测试请求。
+    /// </summary>
+    /// <param name="lookupListRequest">是否添加工作簿文本字典。</param>
+    /// <returns>待验证的工作簿导出请求。</returns>
+    private static ExcelWorkbookExportRequest CreateLookupListRequest(bool lookupListRequest)
+    {
+        if (lookupListRequest)
+            return ExcelExport.Workbook(workbook => workbook
+                .LookupList("Allowed", new[] { "Open", "Closed" })
+                .AddSheet("Rows", new[] { new Row { Id = 1, Name = "A" } }));
+
+        return ExcelExport.Workbook(workbook => workbook.AddSheet("Rows",
+            new[] { new Row { Id = 1, Name = "A" } }, sheet => sheet.DataValidation(
+                new ExcelDataValidationDefinition
+                {
+                    Range = new ExcelRangeDefinition
+                    {
+                        StartRow = 1, EndRow = 1, StartColumn = 0, EndColumn = 0
+                    },
+                    Type = ExcelDataValidationType.List,
+                    ListSourceName = "Allowed"
+                })));
+    }
+
+    /// <summary>
+    /// 断言名称列表请求被 Provider 在写入前拒绝。
+    /// </summary>
+    /// <param name="exception">导出入口抛出的不支持异常。</param>
+    /// <param name="lookupListRequest">是否为工作簿文本字典请求。</param>
+    private static void AssertUnsupportedLookupRequest(BingOfficesUnsupportedFeatureException exception,
+        bool lookupListRequest)
+    {
+        Assert.Equal(BingOfficesErrorCode.UnsupportedFeature, exception.Code);
+        Assert.Equal(BingOfficesOperation.Export, exception.Operation);
+        Assert.Equal("SpreadCheetah", exception.Provider);
+        Assert.Equal(BingOfficesStage.Preflight, exception.Stage);
+        Assert.Equal(lookupListRequest
+            ? "不支持字典下拉模板导出。"
+            : "不支持名称列表下拉模板导出。", exception.Message);
+    }
+
+    /// <summary>
     /// 验证同一区域的表格和筛选合并输出。
     /// </summary>
     /// <param name="style">待验证的表格样式名。</param>
@@ -402,7 +517,7 @@ public sealed class SpreadCheetahStreamingExcelExporterTest
         /// </summary>
         private readonly IEnumerable<T> _source;
         /// <summary>
-        /// 初始化一个 <see cref="TrackingEnumerable{T}"/> 类型的实例。
+        /// 初始化一个 <see cref="TrackingEnumerable{T}" /> 类型的实例。
         /// </summary>
         /// <param name="source">待跟踪枚举次数的数据源。</param>
         public TrackingEnumerable(IEnumerable<T> source) => _source = source;

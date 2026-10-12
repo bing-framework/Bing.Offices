@@ -37,6 +37,134 @@ namespace Bing.Offices.ClosedXml.Tests;
 public sealed class ClosedXmlProviderTest
 {
     /// <summary>
+    /// 创建必填字段为空的实体导入工作簿。
+    /// </summary>
+    private static byte[] CreateInvalidEntityWorkbook(ExcelEntityLayout<EntityValidationRoot> layout)
+    {
+        using var valid = new MemoryStream();
+        new ClosedXmlExcelExporter().ExportEntity(CreateValidationRoot(), layout, valid);
+        using var workbook = new XLWorkbook(new MemoryStream(valid.ToArray(), writable: false));
+        workbook.Worksheet("验证").Cell(2, 1).Clear();
+        using var invalid = new MemoryStream();
+        workbook.SaveAs(invalid);
+        return invalid.ToArray();
+    }
+
+    /// <summary>
+    /// 验证 ClosedXML 实体导入失败时可输出保留原始坐标的标注工作簿。
+    /// </summary>
+    [Fact]
+    public void EntityFailureWorkbook_AnnotatedOriginal_ShouldPreserveCoordinates()
+    {
+        var layout = ExcelEntity.Layout<EntityValidationRoot>(builder =>
+            builder.ListRegion("验证", "A1", root => root.Lines));
+        using var input = new MemoryStream(CreateInvalidEntityWorkbook(layout), writable: false);
+        using var failure = new MemoryStream();
+        var options = new ExcelEntityImportOptions(null, ExcelValidationFailureMode.Continue,
+            ExcelImportValidationMode.ConfiguredRules, ExcelUnsupportedFeaturePolicy.Fail,
+            new ExcelImportFailureOptions
+            {
+                Mode = ExcelImportFailureWorkbookMode.AnnotatedOriginal,
+                Destination = failure
+            });
+
+        var result = new ClosedXmlExcelImporter().ImportEntity(input, layout, options);
+
+        Assert.False(result.IsSuccess);
+        var error = Assert.Single(result.Errors.Where(item =>
+            item.PropertyName == nameof(EntityValidationLine.Required)));
+        Assert.True(error.RowIndex > 0);
+        Assert.True(error.ColumnIndex > 0);
+        using var annotated = new XLWorkbook(new MemoryStream(failure.ToArray(), writable: false));
+        var cell = annotated.Worksheet(error.SheetName).Cell(error.RowIndex, error.ColumnIndex);
+        Assert.True(cell.HasComment);
+        Assert.True(annotated.TryGetWorksheet("_ImportErrors", out _));
+        Assert.True(input.CanRead);
+    }
+
+    /// <summary>
+    /// 验证 ClosedXML 异步实体导入使用异步目标流写出失败工作簿。
+    /// </summary>
+    [Fact]
+    public async Task EntityFailureWorkbook_AnnotatedOriginal_ShouldSupportAsyncOutput()
+    {
+        var layout = ExcelEntity.Layout<EntityValidationRoot>(builder =>
+            builder.ListRegion("验证", "A1", root => root.Lines));
+        using var input = new MemoryStream(CreateInvalidEntityWorkbook(layout), writable: false);
+        using var failure = new MemoryStream();
+        var options = new ExcelEntityImportOptions(null, ExcelValidationFailureMode.Continue,
+            ExcelImportValidationMode.ConfiguredRules, ExcelUnsupportedFeaturePolicy.Fail,
+            new ExcelImportFailureOptions
+            {
+                Mode = ExcelImportFailureWorkbookMode.AnnotatedOriginal,
+                Destination = failure
+            });
+
+        var result = await new ClosedXmlExcelImporter().ImportEntityAsync(input, layout, options);
+
+        Assert.False(result.IsSuccess);
+        Assert.NotEmpty(failure.ToArray());
+        using var annotated = new XLWorkbook(new MemoryStream(failure.ToArray(), writable: false));
+        Assert.True(annotated.TryGetWorksheet("_ImportErrors", out _));
+        Assert.True(input.CanRead);
+    }
+
+    /// <summary>
+    /// 验证 ClosedXML 实体导入可生成仅包含失败行的工作簿。
+    /// </summary>
+    [Fact]
+    public void EntityFailureWorkbook_ErrorRowsOnly_ShouldIncludeFailedRow()
+    {
+        var layout = ExcelEntity.Layout<EntityValidationRoot>(builder =>
+            builder.ListRegion("验证", "A1", root => root.Lines));
+        using var input = new MemoryStream(CreateInvalidEntityWorkbook(layout), writable: false);
+        using var failure = new MemoryStream();
+        var options = new ExcelEntityImportOptions(null, ExcelValidationFailureMode.Continue,
+            ExcelImportValidationMode.ConfiguredRules, ExcelUnsupportedFeaturePolicy.Fail,
+            new ExcelImportFailureOptions
+            {
+                Mode = ExcelImportFailureWorkbookMode.ErrorRowsOnly,
+                Destination = failure
+            });
+
+        new ClosedXmlExcelImporter().ImportEntity(input, layout, options);
+
+        using var output = new XLWorkbook(new MemoryStream(failure.ToArray(), writable: false));
+        Assert.True(output.TryGetWorksheet("验证", out var sheet));
+        Assert.True(output.TryGetWorksheet("_ImportErrors", out _));
+        Assert.False(sheet.Row(2).IsEmpty());
+    }
+
+    /// <summary>
+    /// 验证 ClosedXML 模板实体导入沿用失败工作簿输出契约。
+    /// </summary>
+    [Fact]
+    public void EntityFailureWorkbook_Template_ShouldWriteArtifact()
+    {
+        var layout = ExcelEntity.Layout<EntityValidationRoot>(builder =>
+            builder.ListRegion("验证", "A1", root => root.Lines));
+        using var templateBytes = new MemoryStream();
+        new ClosedXmlExcelExporter().ExportEntity(CreateValidationRoot(), layout, templateBytes);
+        using var template = new MemoryStream(templateBytes.ToArray(), writable: false);
+        using var source = new MemoryStream(CreateInvalidEntityWorkbook(layout), writable: false);
+        using var failure = new MemoryStream();
+        var options = new ExcelEntityImportOptions(null, ExcelValidationFailureMode.Continue,
+            ExcelImportValidationMode.ConfiguredRules, ExcelUnsupportedFeaturePolicy.Fail,
+            new ExcelImportFailureOptions
+            {
+                Mode = ExcelImportFailureWorkbookMode.AnnotatedOriginal,
+                Destination = failure
+            });
+
+        var result = new ClosedXmlExcelImporter().ImportForTemplate(source, layout,
+            new ExcelEntityTemplateOptions(template, leaveOpen: true), options);
+
+        Assert.False(result.IsSuccess);
+        Assert.NotEmpty(failure.ToArray());
+        Assert.True(template.CanRead);
+    }
+
+    /// <summary>
     /// 验证 ClosedXML 实体布局按模板命名锚点写入并读回固定单元格和列表区域。
     /// </summary>
     [Fact]
@@ -1779,19 +1907,20 @@ public sealed class ClosedXmlProviderTest
     }
 
     /// <summary>
-    /// 验证分页配置的非法行数和分组小计冲突会在布局阶段失败。
+    /// 验证分页行数校验与连续分组小计组合。
     /// </summary>
     [Fact]
-    public void EntityLayout_PageBreak_ShouldRejectInvalidCombinations()
+    public void EntityLayout_PageBreak_ShouldValidateRowsAndAllowGroups()
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => ExcelEntity.Layout<EntityInvoice>(builder =>
             builder.ListRegion("明细", "A1", invoice => invoice.Lines,
                 region => region.PageBreak(0))));
 
-        Assert.Throws<InvalidOperationException>(() => ExcelEntity.Layout<GroupSubtotalDocument>(builder =>
+        var combined = ExcelEntity.Layout<GroupSubtotalDocument>(builder =>
             builder.ListRegion("明细", "A1", document => document.Lines, region => region
                 .PageBreak(2)
-                .GroupSubtotal(item => item.Category, "小计"))));
+                .GroupSubtotal(item => item.Category, "小计")));
+        Assert.Single(combined.ListRegions);
 
         Assert.Throws<ArgumentException>(() => ExcelEntity.Layout<EntityInvoice>(builder =>
             builder.ListRegion("明细", "A1", invoice => invoice.Lines,
@@ -2937,6 +3066,163 @@ public sealed class ClosedXmlProviderTest
         var parent = Assert.Single(result.Workbook.Parents);
         var child = Assert.Single(parent.Children);
         Assert.Equal("Line", child.Name);
+    }
+
+    /// <summary>
+    /// 验证关系绑定使用配置比较器建立父键索引。
+    /// </summary>
+    [Fact]
+    public void Relations_ShouldIndexParentKeysBeforeChildScan()
+    {
+        var comparer = new CountingRelationComparer();
+        var export = ExcelExport.Workbook(workbook => workbook
+            .AddSheet("Parents", new[]
+            {
+                new RelationParent { Id = "P-1" },
+                new RelationParent { Id = "P-2" },
+                new RelationParent { Id = "P-3" }
+            })
+            .AddSheet("Children", new[]
+            {
+                new RelationChild { ParentId = "p-1", Name = "Line 1" },
+                new RelationChild { ParentId = "p-2", Name = "Line 2" },
+                new RelationChild { ParentId = "p-3", Name = "Line 3" }
+            }));
+        using var stream = new MemoryStream();
+        new ClosedXmlExcelExporter().Export(export, stream);
+        stream.Position = 0;
+
+        var import = ExcelImport.Workbook<RelationWorkbook>(workbook => workbook
+            .Sheet<RelationParent>("Parents", root => root.Parents)
+            .Sheet<RelationChild>("Children", root => root.Children)
+            .HasMany(root => root.Parents, root => root.Children,
+                parent => parent.Id, child => child.ParentId,
+                parent => parent.Children, comparer));
+        var result = new ClosedXmlExcelImporter().Import(stream, import);
+
+        Assert.True(result.IsSuccess, string.Join(";", result.Errors.Select(error => error.Message)));
+        Assert.Equal(3, result.Workbook.Parents.Sum(parent => parent.Children.Count));
+        Assert.True(comparer.GetHashCodeCalls >= 6);
+    }
+
+    /// <summary>
+    /// 验证关系错误追加时保留已有转换错误并遵守全局错误上限。
+    /// </summary>
+    [Fact]
+    public void Relations_ShouldAppendErrorsWithinGlobalLimit()
+    {
+        using var source = new MemoryStream();
+        using (var workbook = new XLWorkbook())
+        {
+            var parents = workbook.AddWorksheet("Parents");
+            parents.Cell(1, 1).Value = "Id";
+            parents.Cell(2, 1).Value = "P-1";
+            var children = workbook.AddWorksheet("Children");
+            children.Cell(1, 1).Value = "ParentId";
+            children.Cell(1, 2).Value = "Quantity";
+            children.Cell(2, 1).Value = "missing";
+            children.Cell(2, 2).Value = 1;
+            children.Cell(3, 1).Value = "missing";
+            children.Cell(3, 2).Value = "wrong";
+            workbook.SaveAs(source);
+        }
+        source.Position = 0;
+
+        var import = ExcelImport.Workbook<RelationErrorWorkbook>(workbook => workbook
+            .ResourceLimits(new ExcelResourceLimits { MaxErrors = 2 })
+            .Sheet<RelationErrorParent>("Parents", root => root.Parents)
+            .Sheet<RelationErrorChild>("Children", root => root.Children)
+            .HasMany(root => root.Parents, root => root.Children,
+                parent => parent.Id, child => child.ParentId,
+                parent => parent.Children, StringComparer.OrdinalIgnoreCase));
+        var result = new ClosedXmlExcelImporter().Import(source, import);
+
+        Assert.False(result.IsSuccess);
+        Assert.True(result.ErrorsTruncated);
+        Assert.Equal(2, result.Errors.Count);
+        Assert.Equal(ExcelImportErrorCode.ValueConversion, result.Errors[0].Code);
+        Assert.Equal(ExcelImportErrorCode.Relationship, result.Errors[1].Code);
+        Assert.Equal("missing", result.Errors[1].RawValue);
+    }
+
+    /// <summary>
+    /// 验证同步和异步关系绑定均遵守父键索引资源上限。
+    /// </summary>
+    /// <param name="asynchronous">是否通过异步入口导入。</param>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Relations_ShouldHonorRelationKeyLimit(bool asynchronous)
+    {
+        var export = ExcelExport.Workbook(workbook => workbook
+            .AddSheet("Parents", new[]
+            {
+                new RelationParent { Id = "P-1" },
+                new RelationParent { Id = "P-2" }
+            })
+            .AddSheet("Children", new[]
+            {
+                new RelationChild { ParentId = "P-1", Name = "Line 1" },
+                new RelationChild { ParentId = "P-2", Name = "Line 2" }
+            }));
+        using var source = new MemoryStream();
+        new ClosedXmlExcelExporter().Export(export, source);
+        source.Position = 0;
+        var import = ExcelImport.Workbook<RelationWorkbook>(workbook => workbook
+            .ResourceLimits(new ExcelResourceLimits { MaxTrackedRelationKeys = 1 })
+            .Sheet<RelationParent>("Parents", root => root.Parents)
+            .Sheet<RelationChild>("Children", root => root.Children)
+            .HasMany(root => root.Parents, root => root.Children,
+                parent => parent.Id, child => child.ParentId, parent => parent.Children));
+
+        var result = asynchronous
+            ? await new ClosedXmlExcelImporter().ImportAsync(source, import)
+            : new ClosedXmlExcelImporter().Import(source, import);
+
+        Assert.False(result.IsSuccess);
+        Assert.True(result.ErrorsTruncated);
+        var error = Assert.Single(result.Errors);
+        Assert.Equal(ExcelImportErrorCode.ResourceLimit, error.Code);
+        Assert.Equal(2, result.Workbook.Parents.Count);
+        Assert.Empty(result.Workbook.Parents[0].Children);
+        Assert.Empty(result.Workbook.Parents[1].Children);
+        Assert.True(source.CanRead);
+    }
+
+    /// <summary>
+    /// 验证多个关系声明共享同一个父键索引资源上限。
+    /// </summary>
+    /// <param name="asynchronous">是否通过异步入口导入。</param>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Relations_ShouldShareRelationKeyLimitAcrossDeclarations(bool asynchronous)
+    {
+        var export = ExcelExport.Workbook(workbook => workbook
+            .AddSheet("Parents", new[] { new RelationParent { Id = "P-1" } })
+            .AddSheet("Children", new[] { new RelationChild { ParentId = "P-1", Name = "Line 1" } }));
+        using var source = new MemoryStream();
+        new ClosedXmlExcelExporter().Export(export, source);
+        source.Position = 0;
+        var import = ExcelImport.Workbook<RelationWorkbook>(workbook => workbook
+            .ResourceLimits(new ExcelResourceLimits { MaxTrackedRelationKeys = 1 })
+            .Sheet<RelationParent>("Parents", root => root.Parents)
+            .Sheet<RelationChild>("Children", root => root.Children)
+            .HasMany(root => root.Parents, root => root.Children,
+                parent => parent.Id, child => child.ParentId, parent => parent.Children)
+            .HasMany(root => root.Parents, root => root.Children,
+                parent => parent.Id, child => child.ParentId, parent => parent.Children));
+
+        var result = asynchronous
+            ? await new ClosedXmlExcelImporter().ImportAsync(source, import)
+            : new ClosedXmlExcelImporter().Import(source, import);
+
+        Assert.False(result.IsSuccess);
+        Assert.True(result.ErrorsTruncated);
+        Assert.Contains(result.Errors, error => error.Code == ExcelImportErrorCode.ResourceLimit);
+        Assert.Single(result.Workbook.Parents);
+        Assert.Single(result.Workbook.Parents[0].Children);
+        Assert.True(source.CanRead);
     }
 
     /// <summary>
@@ -4958,6 +5244,85 @@ public sealed class ClosedXmlProviderTest
         /// 获取或设置子项名称。
         /// </summary>
         public string Name { get; set; }
+    }
+
+    /// <summary>
+    /// 统计关系键哈希调用次数的比较器。
+    /// </summary>
+    private sealed class CountingRelationComparer : IEqualityComparer<string>
+    {
+        /// <summary>
+        /// 获取哈希调用次数。
+        /// </summary>
+        public int GetHashCodeCalls { get; private set; }
+
+        /// <summary>
+        /// 比较两个关系键。
+        /// </summary>
+        /// <param name="x">左侧关系键。</param>
+        /// <param name="y">右侧关系键。</param>
+        /// <returns>关系键忽略大小写相等时返回 true。</returns>
+        public bool Equals(string x, string y) =>
+            StringComparer.OrdinalIgnoreCase.Equals(x, y);
+
+        /// <summary>
+        /// 计算关系键哈希值并记录调用次数。
+        /// </summary>
+        /// <param name="obj">关系键。</param>
+        /// <returns>关系键哈希值。</returns>
+        public int GetHashCode(string obj)
+        {
+            GetHashCodeCalls++;
+            return StringComparer.OrdinalIgnoreCase.GetHashCode(obj);
+        }
+    }
+
+    /// <summary>
+    /// 表示关系错误预算测试的工作簿模型。
+    /// </summary>
+    private sealed class RelationErrorWorkbook
+    {
+        /// <summary>
+        /// 获取父项集合。
+        /// </summary>
+        public List<RelationErrorParent> Parents { get; } = new();
+
+        /// <summary>
+        /// 获取子项集合。
+        /// </summary>
+        public List<RelationErrorChild> Children { get; } = new();
+    }
+
+    /// <summary>
+    /// 表示关系错误预算测试中的父项。
+    /// </summary>
+    private sealed class RelationErrorParent
+    {
+        /// <summary>
+        /// 获取或设置父项标识。
+        /// </summary>
+        public string Id { get; set; }
+
+        /// <summary>
+        /// 获取关系绑定后的子项集合。
+        /// </summary>
+        public List<RelationErrorChild> Children { get; } = new();
+    }
+
+    /// <summary>
+    /// 表示关系错误预算测试中的子项。
+    /// </summary>
+    private sealed class RelationErrorChild
+    {
+        /// <summary>
+        /// 获取或设置父项标识。
+        /// </summary>
+        public string ParentId { get; set; }
+
+        /// <summary>
+        /// 获取或设置数量。
+        /// </summary>
+        public int Quantity { get; set; }
     }
 
     /// <summary>

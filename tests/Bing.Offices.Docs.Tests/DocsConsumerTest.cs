@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Threading.Tasks;
 using Bing.Offices.Attributes;
 using Bing.Offices.Csv;
 using Bing.Offices.Configurations;
@@ -9,6 +10,8 @@ using Bing.Offices.Exports;
 using Bing.Offices.Imports;
 using Bing.Offices.Extensions;
 using Bing.Offices.Npoi.Extensions;
+using Bing.Offices.ClosedXml.Exports;
+using ClosedXML.Excel;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.CodeAnalysis;
@@ -268,11 +271,11 @@ public sealed class DocsConsumerTest
         // Arrange
         var documents = new[] { "README.md", "mapping-profile.md", "mapping-json-xml.md",
             "import-validation.md", "dynamic-columns.md", "exceptions-and-observers.md", "dates.md",
-            "npoi-extensions.md", "nuget-migration.md" };
+            "npoi-extensions.md", "nuget-migration.md", "pivot-tables.md" };
         var fences = System.Linq.Enumerable.SelectMany(documents, document => ExtractFences(document)).ToArray();
 
         // Act / Assert
-        Assert.Equal(19, fences.Length);
+        Assert.Equal(27, fences.Length);
         foreach (var fence in fences)
         {
             var source = BuildFenceSource(fence.FileName, fence.Index, fence.Code);
@@ -287,7 +290,9 @@ public sealed class DocsConsumerTest
             Assert.True(emit.Success, $"{fence.FileName} fence {fence.Index} 编译失败:{Environment.NewLine}{errors}");
             assemblyStream.Position = 0;
             var assembly = Assembly.Load(assemblyStream.ToArray());
-            assembly.GetType("FenceConsumer.FenceEntry")!.GetMethod("Run")!.Invoke(null, null);
+            var result = assembly.GetType("FenceConsumer.FenceEntry")!.GetMethod("Run")!.Invoke(null, null);
+            if (result is Task task)
+                task.GetAwaiter().GetResult();
         }
     }
 
@@ -316,6 +321,7 @@ public sealed class DocsConsumerTest
             .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
             .Concat(System.Linq.Enumerable.Select(AppDomain.CurrentDomain.GetAssemblies(),
                 assembly => assembly.Location))
+            .Concat(new[] { typeof(ClosedXmlExcelExporter).Assembly.Location, typeof(XLWorkbook).Assembly.Location })
             .Where(path => !string.IsNullOrWhiteSpace(path) && File.Exists(path))
             .Distinct(StringComparer.OrdinalIgnoreCase);
         return System.Linq.Enumerable.Select(paths, path => MetadataReference.CreateFromFile(path));
@@ -348,6 +354,14 @@ public sealed class DocsConsumerTest
             declarations = code;
             statements = "_ = new OrderRow();";
         }
+        else if (fileName == "import-validation.md"
+            && code.Contains("public sealed class PurchaseOrder", StringComparison.Ordinal))
+        {
+            var statementStart = code.IndexOf("var categories", StringComparison.Ordinal);
+            var declarationStart = code.IndexOf("public sealed class PurchaseOrder", StringComparison.Ordinal);
+            declarations = code.Substring(declarationStart);
+            statements = code.Substring(statementStart, declarationStart - statementStart);
+        }
         else if (fileName == "nuget-migration.md"
             && code.Contains("public static class PurchaseOrderMigrationExample", StringComparison.Ordinal))
         {
@@ -361,6 +375,20 @@ public sealed class DocsConsumerTest
             declarations = separator < 0 ? code : code.Substring(0, separator);
             statements = separator < 0 ? "_ = new PurchaseOrder();" : code.Substring(separator);
         }
+        else if (fileName == "pivot-tables.md" && index == 2)
+        {
+            statements = code.Replace("File.OpenRead(\"sales-template.xlsx\")",
+                "new MemoryStream(templateBytes)", StringComparison.Ordinal);
+        }
+        else if (fileName == "pivot-tables.md" && index == 3)
+        {
+            const string rowDeclaration = "/// <summary>\n/// 表示高级透视示例中的仓库业务记录。\n/// </summary>\npublic sealed class WarehousePivotRow";
+            var declarationStart = code.IndexOf(rowDeclaration, StringComparison.Ordinal);
+            if (declarationStart < 0)
+                throw new InvalidOperationException("高级透视示例缺少具名来源行类型。");
+            declarations = code.Substring(declarationStart);
+            statements = code.Substring(0, declarationStart).TrimEnd();
+        }
 
         var prelude = string.Empty;
         if (fileName == "README.md")
@@ -373,13 +401,26 @@ public sealed class DocsConsumerTest
             prelude = "var document = new ExcelMappingDocument(); ";
         else if (fileName == "mapping-profile.md" && index == 2)
             prelude = "var services = new ServiceCollection(); ";
+        else if (fileName == "pivot-tables.md" && index == 1)
+            prelude = "var rows = new List<PivotBasicRow> { new PivotBasicRow { Region = \"North\", Amount = 10m }, new PivotBasicRow { Region = \"South\", Amount = 20m } }; ";
+        else if (fileName == "pivot-tables.md" && index == 2)
+            prelude = "var seedRows = new List<PivotBasicRow> { new PivotBasicRow { Region = \"North\", Amount = 10m }, new PivotBasicRow { Region = \"South\", Amount = 20m } }; "
+                + "var seedRequest = ExcelExport.Workbook(workbook => workbook.Format(Bing.Offices.ExcelFormat.Xlsx).AddSheet(\"Sales\", seedRows)"
+                + ".PivotTable(new ExcelPivotTableDefinition { Name = \"SalesByRegion\", SourceSheet = \"Sales\", "
+                + "SourceRange = new ExcelRangeDefinition { StartRow = 0, StartColumn = 0, EndRow = seedRows.Count, EndColumn = 1 }, "
+                + "TargetSheet = \"Summary\", TargetRow = 1, TargetColumn = 2, RowField = \"Region\", ValueField = \"Amount\" })); "
+                + "using var templateOutput = new MemoryStream(); var exporter = new ClosedXmlExcelExporter(); "
+                + "exporter.Export(seedRequest, templateOutput); var templateBytes = templateOutput.ToArray(); "
+                + "var refreshedRows = new List<PivotBasicRow> { new PivotBasicRow { Region = \"North\", Amount = 15m }, new PivotBasicRow { Region = \"South\", Amount = 20m } }; "
+                + "using var output = new MemoryStream(); ";
         else if (fileName == "nuget-migration.md"
             && !code.Contains("ExcelEntity.LayoutFromAttributes", StringComparison.Ordinal))
         {
             declarations = "public sealed class OrderWorkbook { public List<OrderRow> Rows { get; } = new List<OrderRow>(); }";
             prelude = "var services = new ServiceCollection(); ";
         }
-        else if (fileName == "import-validation.md" && index == 2)
+        else if (fileName == "import-validation.md"
+            && code.Contains("public IResult Upload", StringComparison.Ordinal))
             prelude = "var uploadServices = new ServiceCollection(); uploadServices.AddBingOfficesNpoi(); "
                 + "using var uploadProvider = uploadServices.BuildServiceProvider(); "
                 + "var exporter = uploadProvider.GetRequiredService<IExcelExporter>(); "
@@ -397,11 +438,16 @@ public sealed class DocsConsumerTest
                 $"File.OpenRead(@\"{path}\")", StringComparison.Ordinal);
         }
 
+        var asyncRun = fileName == "pivot-tables.md"
+            && code.Contains("await exporter.ExportAsync", StringComparison.Ordinal);
         return $@"using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
+using System.Xml.Linq;
 using Bing.Offices.Attributes;
 using Bing.Offices.Configurations;
 using Bing.Offices.Csv;
@@ -410,6 +456,8 @@ using Bing.Offices.Exports;
 using Bing.Offices.Imports;
 using Bing.Offices.Extensions;
 using Bing.Offices.Npoi.Extensions;
+using Bing.Offices.ClosedXml.Exports;
+using ClosedXML.Excel;
 using NPOI.HSSF.UserModel;
 using NPOI.SS.UserModel;
 using NPOI.XSSF.UserModel;
@@ -420,7 +468,7 @@ namespace FenceConsumer;
 {declarations}
 public static class FenceEntry
 {{
-    public static void Run()
+    public static {(asyncRun ? "async Task" : "void")} Run()
     {{
         {prelude}
         {statements}
@@ -443,6 +491,9 @@ public static class FenceEntry
             : "public sealed class OrderProfile : IMappingProfile<OrderImport, OrderExport> { public void Configure(FluentSetting<OrderImport, OrderExport> setting) { } }";
         var hasPurchaseOrderDeclaration = code.Contains("public sealed class PurchaseOrder", StringComparison.Ordinal);
         var hasPurchaseLineDeclaration = code.Contains("public sealed class PurchaseLine", StringComparison.Ordinal);
+        var pivotRow = code.Contains("RowField = \"Region\"", StringComparison.Ordinal)
+            ? "public sealed class PivotBasicRow { public string Region { get; set; } public decimal Amount { get; set; } }"
+            : string.Empty;
         var entityLayout = code.Contains("ExcelEntity.LayoutFromAttributes", StringComparison.Ordinal)
             || code.Contains("CellNamed", StringComparison.Ordinal)
             || code.Contains("ListRegionNamed", StringComparison.Ordinal)
@@ -453,6 +504,9 @@ public static class FenceEntry
             || code.Contains("FormulaSumContiguousRowsAbove", StringComparison.Ordinal)
                 ? (hasPurchaseOrderDeclaration && hasPurchaseLineDeclaration
                 ? string.Empty
+                : code.Contains("PageHeaderNamed", StringComparison.Ordinal)
+                    && code.Contains("var order = new PurchaseOrder", StringComparison.Ordinal)
+                ? "public sealed class PurchaseOrder { public string Number { get; set; } public string Customer { get; set; } public List<PurchaseLine> Lines { get; set; } = new List<PurchaseLine>(); } public sealed class PurchaseLine { public string Name { get; set; } public int Quantity { get; set; } public decimal UnitPrice { get; set; } }"
                 : hasPurchaseOrderDeclaration
                 ? "public sealed class PurchaseLine { public string Name { get; set; } public string Warehouse { get; set; } public int Quantity { get; set; } public decimal UnitPrice { get; set; } public decimal Amount { get; set; } public IDictionary<string, object> Goods { get; set; } = new Dictionary<string, object>(); public IDictionary<string, object> Product { get; set; } = new Dictionary<string, object>(); }"
                 : "public sealed class PurchaseOrder { [ExcelEntityCell(\"采购单\", \"B2\")] public string Code { get; set; } public string Status { get; set; } public List<PurchaseLine> Lines { get; set; } = new List<PurchaseLine>(); } public sealed class PurchaseLine { public string Name { get; set; } public string Warehouse { get; set; } public int Quantity { get; set; } public decimal UnitPrice { get; set; } public decimal Amount { get; set; } public IDictionary<string, object> Goods { get; set; } = new Dictionary<string, object>(); public IDictionary<string, object> Product { get; set; } = new Dictionary<string, object>(); }")
@@ -464,6 +518,7 @@ public sealed class OrdersWorkbook {{ public List<OrderRow> Items {{ get; }} = n
 public sealed class UploadWorkbook {{ public List<OrderRow> Rows {{ get; }} = new List<OrderRow>(); }}
 {orderRow}
 {profile}
+{pivotRow}
 {entityLayout}";
     }
 

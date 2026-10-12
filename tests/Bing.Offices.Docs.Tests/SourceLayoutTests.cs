@@ -18,6 +18,7 @@ public sealed class SourceLayoutTests
     /// <summary>
     /// 验证源码文件归入已定义的能力目录。
     /// </summary>
+    /// <param name="area">契约能力名称。</param>
     [Theory]
     [InlineData("Entities")]
     [InlineData("Exports")]
@@ -29,7 +30,7 @@ public sealed class SourceLayoutTests
         Assert.NotEmpty(files);
         var folders = new Dictionary<string, string[]>(StringComparer.Ordinal)
         {
-            ["Entities"] = new[] { "Layout", "Lists", "Import", "Export" },
+            ["Entities"] = new[] { "Layout", "Lists", "Anchors", "Import", "Export" },
             ["Exports"] = new[] { "Workbook", "Sheets", "DynamicColumns", "Reports", "Charts", "Content", "Streaming" },
             ["Imports"] = new[] { "Workbook", "Sheets", "Batch", "Failures", "Validation", "Resources" }
         };
@@ -52,6 +53,7 @@ public sealed class SourceLayoutTests
     /// <summary>
     /// 验证公开契约保持原有命名空间。
     /// </summary>
+    /// <param name="area">契约能力名称。</param>
     [Theory]
     [InlineData("Entities")]
     [InlineData("Exports")]
@@ -78,6 +80,7 @@ public sealed class SourceLayoutTests
     /// <summary>
     /// 验证 NPOI 实体执行类型使用统一的内部命名空间。
     /// </summary>
+    /// <param name="typeName">内部执行类型名称。</param>
     [Theory]
     [InlineData("NpoiEntityLayoutSupport")]
     [InlineData("NpoiEntityExportExecutor")]
@@ -98,6 +101,8 @@ public sealed class SourceLayoutTests
     /// <summary>
     /// 获取契约能力目录。
     /// </summary>
+    /// <param name="area">契约能力名称。</param>
+    /// <returns>契约源码目录。</returns>
     private static string GetAreaDirectory(string area)
     {
         var path = Path.Combine(GetRepositoryDirectory(), "src", "Bing.Offices.Abstractions", "Bing", "Offices", area);
@@ -108,6 +113,7 @@ public sealed class SourceLayoutTests
     /// <summary>
     /// 获取仓库根目录。
     /// </summary>
+    /// <returns>包含解决方案的仓库目录。</returns>
     private static string GetRepositoryDirectory()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
