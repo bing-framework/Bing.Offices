@@ -12,6 +12,13 @@ public sealed class ExcelMappingDynamicColumnConfiguration
     /// </summary>
     public string Key { get; set; }
     /// <summary>
+    /// 获取或设置动态值所属的实体字典属性名称。
+    /// </summary>
+    /// <remarks>
+    /// 单个动态字典时可以省略；多个动态字典时必须为每个动态列指定直接属性名称。
+    /// </remarks>
+    public string TargetPropertyName { get; set; }
+    /// <summary>
     /// 获取或设置展示标题。
     /// </summary>
     public string Title { get; set; }

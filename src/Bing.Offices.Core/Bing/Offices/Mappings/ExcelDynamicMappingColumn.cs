@@ -23,6 +23,7 @@ internal sealed class ExcelDynamicMappingColumn : IExcelDynamicMappingColumn
         IReadOnlyList<IExcelValueConverter> converters, IReadOnlyList<IExcelValidationBinding> validations)
     {
         Key = column.Key;
+        TargetPropertyName = column.TargetPropertyName;
         Title = column.Title;
         Aliases = new ReadOnlyCollection<string>((column.Aliases ?? new List<string>()).ToArray());
         DataTypeName = column.DataTypeName ?? "string";
@@ -63,6 +64,8 @@ internal sealed class ExcelDynamicMappingColumn : IExcelDynamicMappingColumn
 
     /// <inheritdoc />
     public string Key { get; }
+    /// <inheritdoc />
+    public string TargetPropertyName { get; }
     /// <inheritdoc />
     public string Title { get; }
     /// <inheritdoc />

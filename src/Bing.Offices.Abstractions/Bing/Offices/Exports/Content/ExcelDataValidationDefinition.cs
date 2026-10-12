@@ -3,28 +3,33 @@
 /// <summary>
 /// 有界区域的 Excel 原生数据校验定义。
 /// </summary>
-/// <remarks>不接受公式或外部引用。</remarks>
+/// <remarks>
+/// 调用方不能提供任意公式或外部引用；级联列表公式由 Provider 生成。
+/// </remarks>
 public sealed class ExcelDataValidationDefinition
 {
     /// <summary>
-    /// 获取或初始化应用区域，零基且包含结束位置。
+    /// 获取或初始化应用区域。
     /// </summary>
+    /// <remarks>区域坐标为零基，且包含结束位置。</remarks>
     public ExcelRangeDefinition Range { get; init; }
     /// <summary>
     /// 获取或初始化校验类型。
     /// </summary>
     public ExcelDataValidationType Type { get; init; }
     /// <summary>
-    /// 获取或初始化比较运算符，列表不使用。
+    /// 获取或初始化比较运算符。
     /// </summary>
+    /// <remarks>列表校验不使用比较运算符。</remarks>
     public ExcelConditionalComparisonOperator Operator { get; init; }
     /// <summary>
     /// 获取或初始化数字或长度的第一个边界。
     /// </summary>
     public double Value1 { get; init; }
     /// <summary>
-    /// 获取或初始化Between/NotBetween 的第二个边界。
+    /// 获取或初始化第二个边界。
     /// </summary>
+    /// <remarks>仅 Between 和 NotBetween 运算使用该边界。</remarks>
     public double Value2 { get; init; }
     /// <summary>
     /// 获取或初始化日期第一个边界。
@@ -35,9 +40,22 @@ public sealed class ExcelDataValidationDefinition
     /// </summary>
     public DateTime? Date2 { get; init; }
     /// <summary>
-    /// 获取或初始化显式列表项，不支持逗号、引号及换行。
+    /// 获取或初始化显式列表项。
     /// </summary>
+    /// <remarks>列表项不能包含逗号、引号或换行。</remarks>
     public IReadOnlyList<string> Values { get; init; } = Array.Empty<string>();
+    /// <summary>
+    /// 获取或初始化列表校验使用的工作簿名称。
+    /// </summary>
+    public string ListSourceName { get; init; }
+    /// <summary>
+    /// 获取或初始化级联列表名称。
+    /// </summary>
+    public string CascadeSourceName { get; init; }
+    /// <summary>
+    /// 获取或初始化同一行上级单元格的零基列号。
+    /// </summary>
+    public int? ParentColumnIndex { get; init; }
     /// <summary>
     /// 获取或初始化是否允许空单元格。
     /// </summary>
@@ -78,11 +96,30 @@ public sealed class ExcelDataValidationDefinition
         var between = Operator == ExcelConditionalComparisonOperator.Between || Operator == ExcelConditionalComparisonOperator.NotBetween;
         if (Type == ExcelDataValidationType.List)
         {
-            if (Values == null || Values.Count == 0 || Values.Any(value => string.IsNullOrEmpty(value)
+            var hasName = ListSourceName != null;
+            var hasValues = Values?.Count > 0;
+            var hasCascade = CascadeSourceName != null;
+            if ((hasName ? 1 : 0) + (hasValues ? 1 : 0) + (hasCascade ? 1 : 0) != 1)
+                throw new ArgumentException("列表必须且只能指定一种值来源。");
+            if (hasName)
+                ExcelLookupListDefinition.ValidateName(ListSourceName);
+            else if (hasCascade)
+            {
+                ExcelLookupListDefinition.ValidateName(CascadeSourceName);
+                if (!ParentColumnIndex.HasValue || ParentColumnIndex.Value < 0
+                    || Range.StartColumn != Range.EndColumn
+                    || ParentColumnIndex.Value == Range.StartColumn)
+                    throw new ArgumentException("级联列表必须指定区域外的同一行上级列。", nameof(ParentColumnIndex));
+            }
+            else if (Values.Any(value => string.IsNullOrEmpty(value)
                 || value.IndexOfAny(new[] { ',', '"', '\r', '\n' }) >= 0) || string.Join(",", Values).Length > 253)
-                throw new ArgumentException("显式列表不能为空，不能包含分隔符，编码后含引号最多 255 字符。", nameof(Values));
+                throw new ArgumentException("显式列表不能包含分隔符，编码后含引号最多 255 字符。", nameof(Values));
+            if (!hasCascade && ParentColumnIndex.HasValue)
+                throw new ArgumentException("只有级联列表可以指定上级列。", nameof(ParentColumnIndex));
             return;
         }
+        if (ListSourceName != null || CascadeSourceName != null || ParentColumnIndex.HasValue)
+            throw new ArgumentException("只有列表校验可以指定列表来源和上级列。");
         if (Type == ExcelDataValidationType.Date)
         {
             if (!Date1.HasValue || between && !Date2.HasValue) throw new ArgumentException("日期校验缺少边界。");
@@ -102,4 +139,23 @@ public sealed class ExcelDataValidationDefinition
         }
         if (between && Value1 > Value2) throw new ArgumentException("校验边界顺序错误。");
     }
+
+    /// <summary>
+    /// 复制数据校验定义。
+    /// </summary>
+    /// <returns>与原定义相互独立的快照。</returns>
+    internal ExcelDataValidationDefinition Clone() => new()
+    {
+        Range = Range == null ? null : new ExcelRangeDefinition
+        {
+            StartRow = Range.StartRow, EndRow = Range.EndRow,
+            StartColumn = Range.StartColumn, EndColumn = Range.EndColumn
+        },
+        Type = Type, Operator = Operator, Value1 = Value1, Value2 = Value2,
+        Date1 = Date1, Date2 = Date2, Values = Values?.ToArray(), ListSourceName = ListSourceName,
+        CascadeSourceName = CascadeSourceName, ParentColumnIndex = ParentColumnIndex,
+        IgnoreBlanks = IgnoreBlanks, ShowErrorMessage = ShowErrorMessage,
+        InputTitle = InputTitle, InputMessage = InputMessage,
+        ErrorTitle = ErrorTitle, ErrorMessage = ErrorMessage
+    };
 }

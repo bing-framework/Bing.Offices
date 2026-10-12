@@ -88,5 +88,45 @@ public enum ExcelProviderFeatures
     /// <summary>
     /// 支持写入加密工作簿。
     /// </summary>
-    EncryptionWrite = 1 << 18
+    EncryptionWrite = 1 << 18,
+
+    /// <summary>
+    /// 支持以命名区域为来源的列表校验。
+    /// </summary>
+    NamedListValidation = 1 << 19,
+
+    /// <summary>
+    /// 支持工作表保护及可填写区域。
+    /// </summary>
+    SheetProtection = 1 << 20,
+
+    /// <summary>
+    /// 支持导出两级联动列表校验。
+    /// </summary>
+    CascadeListValidation = 1 << 21,
+
+    /// <summary>
+    /// 支持工作簿多工作表分批导入。
+    /// </summary>
+    MultiSheetBatchImport = 1 << 22,
+
+    /// <summary>
+    /// 支持实体布局列表区域分批导入。
+    /// </summary>
+    EntityLayoutBatchImport = 1 << 23,
+
+    /// <summary>
+    /// 支持新建工作簿透视表。
+    /// </summary>
+    PivotTables = 1 << 24,
+
+    /// <summary>
+    /// 支持新建多维、多度量和报表筛选透视表。
+    /// </summary>
+    AdvancedPivotTables = 1 << 25,
+
+    /// <summary>
+    /// 支持保留或更新 XLSX 模板中的已有透视表。
+    /// </summary>
+    TemplatePivotTables = 1 << 26
 }

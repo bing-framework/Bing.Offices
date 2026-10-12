@@ -85,6 +85,7 @@ internal static class MappingConfigurationCloner
         column == null ? null : new ExcelMappingDynamicColumnConfiguration
         {
             Key = column.Key,
+            TargetPropertyName = column.TargetPropertyName,
             Title = column.Title,
             Aliases = (column.Aliases ?? new List<string>()).ToList(),
             DataTypeName = column.DataTypeName,

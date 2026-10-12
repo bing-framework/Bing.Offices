@@ -16,13 +16,7 @@ internal static class ExcelEntityLayoutValidation
     /// 验证工作表名称是否满足 Excel 长度和字符约束。
     /// </summary>
     /// <param name="name">待验证的工作表名称。</param>
-    internal static void ValidateSheetName(string name)
-    {
-        if (string.IsNullOrWhiteSpace(name))
-            throw new ArgumentException("工作表名称不能为空。", nameof(name));
-        if (name.Length > 31 || name.IndexOfAny(new[] { ':', '\\', '/', '?', '*', '[', ']' }) >= 0)
-            throw new ArgumentException($"工作表名称无效: {name}", nameof(name));
-    }
+    internal static void ValidateSheetName(string name) => ExcelSheetNameValidation.Validate(name);
 
     /// <summary>
     /// 验证模板命名锚点名称。

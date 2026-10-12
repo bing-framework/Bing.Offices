@@ -44,6 +44,13 @@ public sealed class ExcelEntityListRegion<TEntity> where TEntity : class, new()
     /// <param name="pageSubtotal">可选的每页明细小计定义。</param>
     /// <param name="anchorName">可选的模板命名锚点名称。</param>
     /// <param name="footerAnchorName">可选的最终尾部命名锚点名称。</param>
+    /// <param name="pageSubtotalAnchorPrefix">可选的分页小计命名锚点前缀。</param>
+    /// <param name="pageHeader">可选的实际重复页眉。</param>
+    /// <param name="pageHeaderAnchorPrefix">可选的逐页页眉命名锚点前缀。</param>
+    /// <param name="pageHeaderAnchorStaleNamePolicy">逐页页眉旧名称处理策略。</param>
+    /// <param name="pageFooter">可选的每页明细尾部定义。</param>
+    /// <param name="pageFooterAnchorPrefix">可选的逐页尾部命名锚点前缀。</param>
+    /// <param name="pageFooterAnchorStaleNamePolicy">逐页尾部旧名称处理策略。</param>
     internal ExcelEntityListRegion(string sheetName, ExcelEntityCellReference start, string propertyName,
         Type itemType, Func<object, IEnumerable> getter, Action<object, object> setter, bool includeHeader,
         ExcelEntityCellReference? end, ExcelMappingConfiguration mappingConfiguration,
@@ -56,7 +63,16 @@ public sealed class ExcelEntityListRegion<TEntity> where TEntity : class, new()
         int? pageBreakRows = null,
         IExcelEntityListFooter pageSubtotal = null,
         string anchorName = null,
-        string footerAnchorName = null)
+        string footerAnchorName = null,
+        string pageSubtotalAnchorPrefix = null,
+        ExcelEntityPageHeaderDefinition pageHeader = null,
+        string pageHeaderAnchorPrefix = null,
+        ExcelEntityPageAnchorStaleNamePolicy pageHeaderAnchorStaleNamePolicy =
+            ExcelEntityPageAnchorStaleNamePolicy.Reject,
+        IExcelEntityListFooter pageFooter = null,
+        string pageFooterAnchorPrefix = null,
+        ExcelEntityPageAnchorStaleNamePolicy pageFooterAnchorStaleNamePolicy =
+            ExcelEntityPageAnchorStaleNamePolicy.Reject)
     {
         SheetName = sheetName ?? throw new ArgumentNullException(nameof(sheetName));
         Start = start;
@@ -68,6 +84,13 @@ public sealed class ExcelEntityListRegion<TEntity> where TEntity : class, new()
         End = end;
         AnchorName = anchorName;
         FooterAnchorName = footerAnchorName;
+        PageSubtotalAnchorPrefix = pageSubtotalAnchorPrefix;
+        PageHeader = pageHeader;
+        PageHeaderAnchorPrefix = pageHeaderAnchorPrefix;
+        PageHeaderAnchorStaleNamePolicy = pageHeaderAnchorStaleNamePolicy;
+        PageFooter = pageFooter;
+        PageFooterAnchorPrefix = pageFooterAnchorPrefix;
+        PageFooterAnchorStaleNamePolicy = pageFooterAnchorStaleNamePolicy;
         DynamicColumnGroups = Array.AsReadOnly((dynamicColumnGroups ??
             Array.Empty<IExcelEntityDynamicColumnGroup>()).ToArray());
         UnknownDynamicValues = unknownDynamicValues;
@@ -101,6 +124,26 @@ public sealed class ExcelEntityListRegion<TEntity> where TEntity : class, new()
     /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public string FooterAnchorName { get; }
+    /// <summary>
+    /// 获取分页小计命名锚点前缀。
+    /// </summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public string PageSubtotalAnchorPrefix { get; }
+    /// <summary>
+    /// 获取实际重复页眉描述。
+    /// </summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public ExcelEntityPageHeaderDefinition PageHeader { get; }
+    /// <summary>
+    /// 获取实际重复页眉的逐页命名锚点前缀。
+    /// </summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public string PageHeaderAnchorPrefix { get; }
+    /// <summary>
+    /// 获取实际重复页眉的旧名称处理策略。
+    /// </summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public ExcelEntityPageAnchorStaleNamePolicy PageHeaderAnchorStaleNamePolicy { get; }
     /// <summary>
     /// 获取列表区域可选的零基右下角坐标。
     /// </summary>
@@ -160,6 +203,24 @@ public sealed class ExcelEntityListRegion<TEntity> where TEntity : class, new()
     public IExcelEntityListFooter PageSubtotal { get; }
 
     /// <summary>
+    /// 获取每个逻辑页末尾的尾部定义。
+    /// </summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public IExcelEntityListFooter PageFooter { get; }
+
+    /// <summary>
+    /// 获取每页尾部的逐页命名锚点前缀。
+    /// </summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public string PageFooterAnchorPrefix { get; }
+
+    /// <summary>
+    /// 获取每页尾部的旧名称处理策略。
+    /// </summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public ExcelEntityPageAnchorStaleNamePolicy PageFooterAnchorStaleNamePolicy { get; }
+
+    /// <summary>
     /// 获取每页明细行数；未配置分页时为 <see langword="null" />。
     /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
@@ -187,5 +248,10 @@ public sealed class ExcelEntityListRegion<TEntity> where TEntity : class, new()
         new ExcelEntityListRegion<TEntity>(SheetName, start, PropertyName, ItemType, Getter, Setter,
             IncludeHeader, End, _mappingConfiguration, _mappingDocument, DynamicColumnGroups,
             UnknownDynamicValues, Footer, CalculatedColumns, GroupSubtotal, PageBreakRows,
-            PageSubtotal, footerAnchorName: FooterAnchorName);
+            PageSubtotal, footerAnchorName: FooterAnchorName,
+            pageSubtotalAnchorPrefix: PageSubtotalAnchorPrefix, pageHeader: PageHeader,
+            pageHeaderAnchorPrefix: PageHeaderAnchorPrefix,
+            pageHeaderAnchorStaleNamePolicy: PageHeaderAnchorStaleNamePolicy,
+            pageFooter: PageFooter, pageFooterAnchorPrefix: PageFooterAnchorPrefix,
+            pageFooterAnchorStaleNamePolicy: PageFooterAnchorStaleNamePolicy);
 }

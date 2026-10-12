@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.ComponentModel;
 using System.Linq.Expressions;
+using System.Text.RegularExpressions;
 using Bing.Offices.Configurations;
 using Bing.Offices.Entities.Layout;
 using Bing.Offices.Exports;
@@ -32,6 +33,120 @@ public sealed class ExcelEntityLayoutBuilder<TEntity> where TEntity : class, new
     /// 按配置顺序保存聚合对象父子关系绑定。
     /// </summary>
     private readonly List<ExcelRelationRequest> _relations = new List<ExcelRelationRequest>();
+    /// <summary>
+    /// 按配置顺序保存文本字典。
+    /// </summary>
+    private readonly List<ExcelLookupListDefinition> _lookupLists = new List<ExcelLookupListDefinition>();
+    /// <summary>
+    /// 按配置顺序保存级联字典。
+    /// </summary>
+    private readonly List<ExcelCascadeListDefinition> _cascadeLists = new List<ExcelCascadeListDefinition>();
+    /// <summary>
+    /// 保存工作表原生校验定义。
+    /// </summary>
+    private readonly Dictionary<string, List<ExcelDataValidationDefinition>> _dataValidations =
+        new Dictionary<string, List<ExcelDataValidationDefinition>>(StringComparer.OrdinalIgnoreCase);
+    /// <summary>
+    /// 保存按工作表配置的保护定义。
+    /// </summary>
+    private readonly Dictionary<string, ExcelSheetProtectionDefinition> _protections =
+        new Dictionary<string, ExcelSheetProtectionDefinition>(StringComparer.OrdinalIgnoreCase);
+    /// <summary>
+    /// 保存工作表重复打印标题行。
+    /// </summary>
+    private readonly Dictionary<string, string> _printTitleRows =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// 设置工作表重复打印标题行。
+    /// </summary>
+    /// <param name="sheetName">工作表名称。</param>
+    /// <param name="rows">正向行区域，例如 1:3。</param>
+    /// <returns>当前构建器。</returns>
+    public ExcelEntityLayoutBuilder<TEntity> PrintTitleRows(string sheetName, string rows)
+    {
+        ExcelEntityLayoutValidation.ValidateSheetName(sheetName);
+        var match = Regex.Match(rows ?? string.Empty, @"^\$?([1-9][0-9]*):\$?([1-9][0-9]*)$");
+        if (!match.Success || !int.TryParse(match.Groups[1].Value, out var first)
+            || !int.TryParse(match.Groups[2].Value, out var last)
+            || first > last || last > 1_048_576)
+            throw new ArgumentException("重复打印标题行必须是有效的正向行区域。", nameof(rows));
+        if (_printTitleRows.ContainsKey(sheetName))
+            throw new ArgumentException("同一工作表不能重复配置打印标题行。", nameof(sheetName));
+        _printTitleRows.Add(sheetName, $"{first}:{last}");
+        return this;
+    }
+
+    /// <summary>
+    /// 添加工作簿文本字典。
+    /// </summary>
+    /// <param name="name">供列表校验引用的工作簿级名称。</param>
+    /// <param name="values">按显示顺序排列的文本值。</param>
+    /// <returns>当前构建器。</returns>
+    public ExcelEntityLayoutBuilder<TEntity> LookupList(string name, IReadOnlyList<string> values)
+    {
+        var definition = new ExcelLookupListDefinition(name, values);
+        if (_lookupLists.Any(item => string.Equals(item.Name, name, StringComparison.OrdinalIgnoreCase))
+            || _cascadeLists.Any(item => string.Equals(item.Name, name, StringComparison.OrdinalIgnoreCase)))
+            throw new ArgumentException("实体布局包含重复字典名称。", nameof(name));
+        _lookupLists.Add(definition);
+        return this;
+    }
+
+    /// <summary>
+    /// 添加两级联动文本字典。
+    /// </summary>
+    /// <param name="name">上级列表的工作簿名称。</param>
+    /// <param name="values">上级文本与下级列表。</param>
+    /// <returns>当前构建器。</returns>
+    public ExcelEntityLayoutBuilder<TEntity> CascadeList(string name,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> values)
+    {
+        var definition = new ExcelCascadeListDefinition(name, values);
+        if (_lookupLists.Any(item => string.Equals(item.Name, name, StringComparison.OrdinalIgnoreCase))
+            || _cascadeLists.Any(item => string.Equals(item.Name, name, StringComparison.OrdinalIgnoreCase)))
+            throw new ArgumentException("实体布局包含重复字典名称。", nameof(name));
+        _cascadeLists.Add(definition);
+        return this;
+    }
+
+    /// <summary>
+    /// 为工作表添加原生数据校验。
+    /// </summary>
+    /// <param name="sheetName">校验区域所属的工作表名称。</param>
+    /// <param name="validation">带绝对行列坐标的校验定义。</param>
+    /// <returns>当前构建器。</returns>
+    public ExcelEntityLayoutBuilder<TEntity> DataValidation(string sheetName,
+        ExcelDataValidationDefinition validation)
+    {
+        if (string.IsNullOrWhiteSpace(sheetName))
+            throw new ArgumentException("校验必须指定工作表名称。", nameof(sheetName));
+        if (validation == null)
+            throw new ArgumentNullException(nameof(validation));
+        validation.Validate();
+        if (!_dataValidations.TryGetValue(sheetName, out var definitions))
+            _dataValidations.Add(sheetName, definitions = new List<ExcelDataValidationDefinition>());
+        definitions.Add(validation.Clone());
+        return this;
+    }
+
+    /// <summary>
+    /// 配置实体工作表保护和可填写区域。
+    /// </summary>
+    /// <param name="sheetName">目标工作表名称。</param>
+    /// <param name="definition">保护定义。</param>
+    /// <returns>当前构建器。</returns>
+    public ExcelEntityLayoutBuilder<TEntity> Protection(string sheetName,
+        ExcelSheetProtectionDefinition definition)
+    {
+        ExcelEntityLayoutValidation.ValidateSheetName(sheetName);
+        if (definition == null)
+            throw new ArgumentNullException(nameof(definition));
+        if (_protections.ContainsKey(sheetName))
+            throw new ArgumentException($"实体布局包含重复工作表保护: {sheetName}", nameof(sheetName));
+        _protections.Add(sheetName, definition.Clone());
+        return this;
+    }
 
     /// <summary>
     /// 从实体公开实例属性上的固定单元格特性添加绑定。
@@ -234,8 +349,21 @@ public sealed class ExcelEntityLayoutBuilder<TEntity> where TEntity : class, new
         ExcelEntityListRegionBuilder<TItem> builder) where TItem : class, new()
     {
         if (builder.FooterDefinition?.ContainsContiguousSum == true &&
-            (builder.PageSubtotalDefinition != null || builder.GroupSubtotalDefinition != null))
+            (builder.PageSubtotalDefinition != null || builder.PageFooterDefinition != null
+                || builder.GroupSubtotalDefinition != null))
             throw new ArgumentException("最终尾部跨越中间小计行，不能使用连续明细求和公式。");
+        if (builder.PageFooterDefinition?.ContainsContiguousSum == true &&
+            (builder.PageSubtotalDefinition != null || builder.GroupSubtotalDefinition != null))
+            throw new ArgumentException("每页尾部跨越中间小计行，不能使用连续明细求和公式。");
+        if (builder.PageFooterDefinition != null
+            && builder.GroupSubtotalDefinition?.Footer is ExcelEntityListFooter<TItem> groupFooterWithPageFooter
+            && groupFooterWithPageFooter.ContainsContiguousSum)
+            throw new ArgumentException("分组小计跨越每页尾部，不能使用连续明细求和公式。");
+        if (builder.GroupSubtotalDefinition != null && builder.PageSubtotalDefinition != null
+            && (builder.PageSubtotalDefinition.ContainsContiguousSum
+                || builder.GroupSubtotalDefinition.Footer is ExcelEntityListFooter<TItem> groupFooter
+                && groupFooter.ContainsContiguousSum))
+            throw new ArgumentException("分组和分页小计组合时，不能使用连续明细求和公式。");
         return new ExcelEntityListRegion<TEntity>(sheetName,
             startAddress == null ? ExcelEntityCellReference.Parse("A1") :
                 ExcelEntityCellReference.Parse(startAddress), member.Name, typeof(TItem),
@@ -244,7 +372,11 @@ public sealed class ExcelEntityLayoutBuilder<TEntity> where TEntity : class, new
             ExcelEntityCellReference.Parse(builder.EndAddress), builder.MappingConfiguration,
             builder.MappingDocument, builder.DynamicColumnGroups, builder.UnknownDynamicValuePolicy,
             builder.FooterDefinition, builder.CalculatedColumns, builder.GroupSubtotalDefinition,
-            builder.PageBreakRows, builder.PageSubtotalDefinition, anchorName, builder.FooterAnchorName);
+            builder.PageBreakRows, builder.PageSubtotalDefinition, anchorName, builder.FooterAnchorName,
+            builder.PageSubtotalAnchorPrefix, builder.PageHeaderDefinition,
+            builder.PageHeaderAnchorPrefix, builder.PageHeaderAnchorStaleNamePolicy,
+            builder.PageFooterDefinition, builder.PageFooterAnchorPrefix,
+            builder.PageFooterAnchorStaleNamePolicy);
     }
 
     /// <summary>
@@ -297,6 +429,20 @@ public sealed class ExcelEntityLayoutBuilder<TEntity> where TEntity : class, new
             ExcelEntityLayoutValidation.ValidateAnchorName(region.AnchorName);
         foreach (var region in _listRegions.Where(item => item.FooterAnchorName != null))
             ExcelEntityLayoutValidation.ValidateAnchorName(region.FooterAnchorName);
+        foreach (var region in _listRegions)
+        {
+            if (region.PageSubtotalAnchorPrefix != null)
+                ExcelEntityLayoutValidation.ValidateAnchorName(region.PageSubtotalAnchorPrefix + "_001");
+            if (region.PageHeaderAnchorPrefix != null)
+                ExcelEntityLayoutValidation.ValidateAnchorName(region.PageHeaderAnchorPrefix + "_001");
+            if (region.PageFooterAnchorPrefix != null)
+                ExcelEntityLayoutValidation.ValidateAnchorName(region.PageFooterAnchorPrefix + "_001");
+            if (!Enum.IsDefined(typeof(ExcelEntityPageAnchorStaleNamePolicy),
+                    region.PageHeaderAnchorStaleNamePolicy)
+                || !Enum.IsDefined(typeof(ExcelEntityPageAnchorStaleNamePolicy),
+                    region.PageFooterAnchorStaleNamePolicy))
+                throw new ArgumentOutOfRangeException(nameof(region), "逐页命名锚点策略无效。");
+        }
 
         var duplicateAnchors = _cells.Where(item => item.AnchorName != null)
             .Select(item => (item.SheetName, item.AnchorName))
@@ -314,9 +460,64 @@ public sealed class ExcelEntityLayoutBuilder<TEntity> where TEntity : class, new
         if (footerAnchors.Concat(allAnchors).GroupBy(name => name, StringComparer.OrdinalIgnoreCase)
             .Any(group => group.Count() > 1))
             throw new ArgumentException("最终尾部命名锚点与实体布局中的其他锚点重复。");
+        var pagePrefixes = _listRegions.SelectMany(region => new[]
+            {
+                region.PageSubtotalAnchorPrefix,
+                region.PageHeaderAnchorPrefix,
+                region.PageFooterAnchorPrefix
+            })
+            .Where(prefix => prefix != null).ToArray();
+        if (pagePrefixes.Distinct(StringComparer.OrdinalIgnoreCase).Count() != pagePrefixes.Length
+            || pagePrefixes.SelectMany(prefix => pagePrefixes.Where(other =>
+                    !string.Equals(prefix, other, StringComparison.OrdinalIgnoreCase))
+                .Select(other => (prefix, other)))
+                .Any(pair => IsPageAnchorName(pair.prefix, pair.other)
+                    || IsPageAnchorName(pair.other, pair.prefix))
+            || pagePrefixes.Any(prefix => footerAnchors.Concat(allAnchors)
+                .Any(name => IsPageAnchorName(name, prefix))))
+            throw new ArgumentException("逐页命名锚点系列与实体布局中的其他锚点重复。");
 
         foreach (var region in _listRegions)
         {
+            if (region.PageHeader != null)
+            {
+                if (!region.PageBreakRows.HasValue)
+                    throw new ArgumentException("实际重复页眉必须配置 PageBreak。");
+                if (_printTitleRows.ContainsKey(region.SheetName))
+                    throw new ArgumentException("同一工作表的打印标题与实际重复页眉互斥。");
+                if (_listRegions.Count(other => other.PageHeader != null
+                        && string.Equals(other.SheetName, region.SheetName,
+                            StringComparison.OrdinalIgnoreCase)) > 1)
+                    throw new ArgumentException("同一工作表只能配置一个实际重复页眉区域。");
+                if (_cells.Any(cell => cell.AnchorName == null
+                        && string.Equals(cell.SheetName, region.SheetName,
+                            StringComparison.OrdinalIgnoreCase)
+                        && cell.Reference.Equals(region.PageHeader.Marker)))
+                    throw new ArgumentException("实际重复页眉标记与固定单元格重叠。");
+                if (region.AnchorName == null && region.PageHeader.SourceRange.Last.Row
+                    != region.Start.Row + (region.IncludeHeader ? 0 : -1))
+                    throw new ArgumentException("实际重复页眉必须紧邻首个明细行。");
+                if (new[] { region.Footer?.MarkerText, region.PageSubtotal?.MarkerText,
+                        region.PageFooter?.MarkerText, region.GroupSubtotal?.Footer.MarkerText }.Any(text =>
+                        text != null && string.Equals(text, region.PageHeader.MarkerText,
+                            StringComparison.Ordinal)))
+                    throw new ArgumentException("实际重复页眉与小计或尾部不能使用相同标记文本。");
+            }
+            if (region.PageHeaderAnchorPrefix != null && region.PageHeader == null)
+                throw new ArgumentException("实际重复页眉命名锚点缺少页眉定义。");
+            if (region.PageFooterAnchorPrefix != null && region.PageFooter == null)
+                throw new ArgumentException("每页尾部命名锚点缺少每页尾部定义。");
+            if (region.PageFooter != null && !region.PageBreakRows.HasValue)
+                throw new ArgumentException("每页尾部必须同时配置分页行数。");
+            if (region.PageFooter != null && new[]
+                {
+                    region.Footer?.MarkerText,
+                    region.PageSubtotal?.MarkerText,
+                    region.GroupSubtotal?.Footer.MarkerText,
+                    region.PageHeader?.MarkerText
+                }.Any(text => text != null && string.Equals(text, region.PageFooter.MarkerText,
+                    StringComparison.Ordinal)))
+                throw new ArgumentException("每页尾部与页眉、小计或最终尾部不能使用相同标记文本。");
             if (region.End.HasValue && !ExcelEntityLayoutValidation.Contains(region.Start, region.End.Value))
                 throw new ArgumentException($"列表区域结束地址不能位于起始地址之前: {region.SheetName}!{region.Start.Address}");
             if (region.DynamicColumnGroups.Count > 0 && region.MappingConfiguration != null &&
@@ -364,8 +565,8 @@ public sealed class ExcelEntityLayoutBuilder<TEntity> where TEntity : class, new
                 throw new ArgumentException("分组小计与最终尾部不能使用相同标记文本。");
             if (region.PageSubtotal != null && !region.PageBreakRows.HasValue)
                 throw new ArgumentException("分页小计必须同时配置分页行数。");
-            if (region.PageSubtotal != null && region.GroupSubtotal != null)
-                throw new ArgumentException("分页小计不能同时配置连续分组小计。");
+            if (region.PageSubtotalAnchorPrefix != null && region.PageSubtotal == null)
+                throw new ArgumentException("分页小计命名锚点缺少分页小计定义。");
             if (region.PageSubtotal != null && region.Footer != null
                 && string.Equals(region.PageSubtotal.MarkerText, region.Footer.MarkerText,
                     StringComparison.Ordinal))
@@ -442,6 +643,24 @@ public sealed class ExcelEntityLayoutBuilder<TEntity> where TEntity : class, new
         }
 
         return new ExcelEntityLayout<TEntity>(normalizedCells, _listRegions.ToArray(), _merges.ToArray(),
-            _relations.ToArray());
+            _relations.ToArray(), _lookupLists.ToArray(), _cascadeLists.ToArray(),
+            _dataValidations, _protections, _printTitleRows);
+    }
+
+    /// <summary>
+    /// 判断名称是否属于指定逐页名称系列或其生成序号。
+    /// </summary>
+    /// <param name="name">待比较的名称。</param>
+    /// <param name="prefix">逐页名称前缀。</param>
+    /// <returns>名称属于该系列时返回 <see langword="true" />；否则返回 <see langword="false" />。</returns>
+    private static bool IsPageAnchorName(string name, string prefix)
+    {
+        if (string.Equals(name, prefix, StringComparison.OrdinalIgnoreCase))
+            return true;
+        var marker = prefix + "_";
+        if (!name.StartsWith(marker, StringComparison.OrdinalIgnoreCase))
+            return false;
+        var suffix = name.Substring(marker.Length);
+        return suffix.Length >= 3 && suffix.All(character => character >= '0' && character <= '9');
     }
 }

@@ -131,6 +131,7 @@ internal static class ExcelMappingDocumentValidator
             if (dynamic == null)
                 throw new InvalidOperationException($"{dynamicPath} 不能为 null。");
             ValidateText(dynamic.Key, $"{dynamicPath}.key");
+            ValidateText(dynamic.TargetPropertyName, $"{dynamicPath}.targetPropertyName");
             ValidateText(dynamic.Title, $"{dynamicPath}.title");
             ValidateText(dynamic.DataTypeName, $"{dynamicPath}.dataTypeName");
             ValidateText(dynamic.ConverterName, $"{dynamicPath}.converterName");
@@ -249,6 +250,7 @@ internal static class ExcelMappingDocumentValidator
             return child == nameof(ExcelMappingDynamicColumnConfiguration);
         if (parent == nameof(ExcelMappingDynamicColumnConfiguration))
             return child is nameof(ExcelMappingDynamicColumnConfiguration.Key)
+                or nameof(ExcelMappingDynamicColumnConfiguration.TargetPropertyName)
                 or nameof(ExcelMappingDynamicColumnConfiguration.Title)
                 or nameof(ExcelMappingDynamicColumnConfiguration.Aliases)
                 or nameof(ExcelMappingDynamicColumnConfiguration.DataTypeName)
@@ -333,12 +335,12 @@ internal static class ExcelMappingDocumentValidator
             : path.EndsWith(".import", StringComparison.Ordinal) || path.EndsWith(".export", StringComparison.Ordinal)
                 ? new[] { "sourceKind", "profile", "modelAlias", "columns", "dynamicColumns", "dynamicColumnKeysToRemove", "dynamicColumnMergeMode", "style", "layout", "clearDynamicColumns", "resetStyle", "resetLayout" }
                 : path.EndsWith(".dynamicColumns", StringComparison.Ordinal)
-                    ? new[] { "key", "title", "aliases", "dataTypeName", "order", "converterName", "validatorName", "validationRuleNames", "validationRules", "numberFormat", "columnIndex", "placementKey", "imageMultiplicity" }
+                    ? new[] { "key", "targetPropertyName", "title", "aliases", "dataTypeName", "order", "converterName", "validatorName", "validationRuleNames", "validationRules", "numberFormat", "columnIndex", "placementKey", "imageMultiplicity" }
                     : path.EndsWith(".validationRules", StringComparison.Ordinal)
                         || path.IndexOf(".validationRules[", StringComparison.Ordinal) >= 0
                         ? new[] { "name", "pattern", "format", "cultureName", "min", "max", "maxValue", "maxLength", "ignoreEmpty" }
                         : path.IndexOf(".dynamicColumns[", StringComparison.Ordinal) >= 0
-                            ? new[] { "key", "title", "aliases", "dataTypeName", "order", "converterName", "validatorName", "validationRuleNames", "validationRules", "numberFormat", "columnIndex", "placementKey", "imageMultiplicity" }
+                            ? new[] { "key", "targetPropertyName", "title", "aliases", "dataTypeName", "order", "converterName", "validatorName", "validationRuleNames", "validationRules", "numberFormat", "columnIndex", "placementKey", "imageMultiplicity" }
                             : path.EndsWith(".style", StringComparison.Ordinal)
                                 ? new[] { "headerStyleKey", "clearHeaderStyleKey", "bodyStyleKey", "clearBodyStyleKey", "numberFormat", "clearNumberFormat" }
                                 : path.EndsWith(".layout", StringComparison.Ordinal)

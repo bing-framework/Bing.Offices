@@ -4,9 +4,9 @@ using Bing.Offices.Exports.DynamicColumns;
 namespace Bing.Offices.Imports;
 
 /// <summary>
-/// 单个 Sheet 导入构建器。
+/// 单个工作表导入构建器。
 /// </summary>
-/// <typeparam name="TItem">Sheet 明细模型类型。</typeparam>
+    /// <typeparam name="TItem">工作表明细模型类型。</typeparam>
 public sealed class ExcelSheetImportBuilder<TItem> where TItem : class, new()
 {
     /// <summary>
@@ -90,6 +90,10 @@ public sealed class ExcelSheetImportBuilder<TItem> where TItem : class, new()
     /// 是否在首个空行处停止读取。
     /// </summary>
     private bool _stopAtFirstEmptyRow;
+    /// <summary>
+    /// 分批导入时的单批实体数量，默认为 1000。
+    /// </summary>
+    private int _batchSize = 1000;
 
     /// <summary>
     /// 初始化一个 <see cref="ExcelSheetImportBuilder{TItem}" /> 类型的实例。
@@ -145,7 +149,7 @@ public sealed class ExcelSheetImportBuilder<TItem> where TItem : class, new()
     /// <summary>
     /// 设置是否要求固定列全部存在。
     /// </summary>
-    /// <param name="value">为 <see langword="true"/> 时要求全部固定列存在，为 <see langword="false"/> 时允许缺少固定列。</param>
+    /// <param name="value">为 <see langword="true" /> 时要求全部固定列存在，为 <see langword="false" /> 时允许缺少固定列。</param>
     /// <returns>当前 Sheet 构建器，用于继续配置。</returns>
     public ExcelSheetImportBuilder<TItem> RequireExpectedHeaders(bool value)
     {
@@ -212,7 +216,7 @@ public sealed class ExcelSheetImportBuilder<TItem> where TItem : class, new()
     /// <summary>
     /// 设置未知动态表头是否导致当前 Sheet 失败。
     /// </summary>
-    /// <param name="value">为 <see langword="true"/> 时未知动态表头使当前 Sheet 失败，为 <see langword="false"/> 时忽略未知表头。</param>
+    /// <param name="value">为 <see langword="true" /> 时未知动态表头使当前工作表失败，为 <see langword="false" /> 时忽略未知表头。</param>
     /// <returns>当前 Sheet 构建器，用于继续配置。</returns>
     public ExcelSheetImportBuilder<TItem> FailOnUnknownDynamicColumns(bool value = true)
     {
@@ -223,7 +227,7 @@ public sealed class ExcelSheetImportBuilder<TItem> where TItem : class, new()
     /// <summary>
     /// 设置是否报告空数据行。
     /// </summary>
-    /// <param name="value">为 <see langword="true"/> 时将空数据行纳入结果报告。</param>
+    /// <param name="value">为 <see langword="true" /> 时将空数据行纳入结果报告。</param>
     /// <returns>当前 Sheet 构建器，用于继续配置。</returns>
     public ExcelSheetImportBuilder<TItem> ReportEmptyRows(bool value = true)
     {
@@ -234,11 +238,24 @@ public sealed class ExcelSheetImportBuilder<TItem> where TItem : class, new()
     /// <summary>
     /// 设置是否在首个空行后停止读取。
     /// </summary>
-    /// <param name="value">为 <see langword="true"/> 时遇到首个空行即停止读取。</param>
+    /// <param name="value">为 <see langword="true" /> 时遇到首个空行即停止读取。</param>
     /// <returns>当前 Sheet 构建器，用于继续配置。</returns>
     public ExcelSheetImportBuilder<TItem> StopAtFirstEmptyRow(bool value = true)
     {
         _stopAtFirstEmptyRow = value;
+        return this;
+    }
+
+    /// <summary>
+    /// 设置分批导入时的单批实体数量。
+    /// </summary>
+    /// <param name="value">单批允许交付的最大实体数量。</param>
+    /// <returns>当前 Sheet 构建器，用于继续配置。</returns>
+    public ExcelSheetImportBuilder<TItem> BatchSize(int value)
+    {
+        if (value <= 0)
+            throw new ArgumentOutOfRangeException(nameof(value));
+        _batchSize = value;
         return this;
     }
 
@@ -297,6 +314,8 @@ public sealed class ExcelSheetImportBuilder<TItem> where TItem : class, new()
     {
         if (_maxReadColumns <= 0)
             throw new ArgumentOutOfRangeException(nameof(_maxReadColumns));
+        if (_batchSize <= 0)
+            throw new ArgumentOutOfRangeException(nameof(_batchSize));
         if (_headerRowIndex < 0 || _dataRowStartIndex < 0 || _dataRowStartIndex <= _headerRowIndex)
             throw new ArgumentOutOfRangeException(nameof(_dataRowStartIndex));
         if (!Enum.IsDefined(typeof(ExcelValidationFailureMode), _validationFailureMode))
@@ -325,6 +344,6 @@ public sealed class ExcelSheetImportBuilder<TItem> where TItem : class, new()
         dynamicGetter,
         _maxReadColumns,
         _failOnUnknownDynamicColumns, _reportEmptyRows, _stopAtFirstEmptyRow, _readColumnRange,
-        _headerComparison, _headerWhitespace, _bodyWhitespace);
+        _headerComparison, _headerWhitespace, _bodyWhitespace, _batchSize);
     }
 }

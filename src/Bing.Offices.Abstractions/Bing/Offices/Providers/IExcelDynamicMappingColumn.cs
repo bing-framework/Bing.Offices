@@ -16,6 +16,10 @@ public interface IExcelDynamicMappingColumn
     /// </summary>
     string Key { get; }
     /// <summary>
+    /// 获取动态值所属的实体字典属性名称。
+    /// </summary>
+    string TargetPropertyName { get; }
+    /// <summary>
     /// 获取导出表头或导入匹配使用的显示标题。
     /// </summary>
     string Title { get; }

@@ -35,9 +35,41 @@ public sealed class ExcelEntityListRegionBuilder<TItem> where TItem : class, new
     private ExcelEntityListFooter<TItem> _pageSubtotal;
 
     /// <summary>
+    /// 保存可选的每页明细尾部配置。
+    /// </summary>
+    private ExcelEntityListFooter<TItem> _pageFooter;
+
+    /// <summary>
     /// 保存可选的明细分页行数。
     /// </summary>
     private int? _pageBreakRows;
+
+    /// <summary>
+    /// 保存可选的实际重复页眉。
+    /// </summary>
+    private ExcelEntityPageHeaderDefinition _pageHeader;
+
+    /// <summary>
+    /// 保存实际重复页眉的逐页名称前缀。
+    /// </summary>
+    private string _pageHeaderAnchorPrefix;
+
+    /// <summary>
+    /// 保存实际重复页眉的旧名称处理策略。
+    /// </summary>
+    private ExcelEntityPageAnchorStaleNamePolicy _pageHeaderAnchorStaleNamePolicy =
+        ExcelEntityPageAnchorStaleNamePolicy.Reject;
+
+    /// <summary>
+    /// 保存每页明细尾部的逐页名称前缀。
+    /// </summary>
+    private string _pageFooterAnchorPrefix;
+
+    /// <summary>
+    /// 保存每页明细尾部的旧名称处理策略。
+    /// </summary>
+    private ExcelEntityPageAnchorStaleNamePolicy _pageFooterAnchorStaleNamePolicy =
+        ExcelEntityPageAnchorStaleNamePolicy.Reject;
 
     /// <summary>
     /// 获取是否在列表区域起始行包含表头。
@@ -77,9 +109,46 @@ public sealed class ExcelEntityListRegionBuilder<TItem> where TItem : class, new
     internal ExcelEntityListFooter<TItem> PageSubtotalDefinition => _pageSubtotal;
 
     /// <summary>
+    /// 获取每页明细尾部定义。
+    /// </summary>
+    internal ExcelEntityListFooter<TItem> PageFooterDefinition => _pageFooter;
+
+    /// <summary>
+    /// 获取分页小计命名锚点前缀。
+    /// </summary>
+    internal string PageSubtotalAnchorPrefix { get; private set; }
+
+    /// <summary>
+    /// 获取实际重复页眉的逐页名称前缀。
+    /// </summary>
+    internal string PageHeaderAnchorPrefix => _pageHeaderAnchorPrefix;
+
+    /// <summary>
+    /// 获取实际重复页眉的旧名称处理策略。
+    /// </summary>
+    internal ExcelEntityPageAnchorStaleNamePolicy PageHeaderAnchorStaleNamePolicy =>
+        _pageHeaderAnchorStaleNamePolicy;
+
+    /// <summary>
+    /// 获取每页明细尾部的逐页名称前缀。
+    /// </summary>
+    internal string PageFooterAnchorPrefix => _pageFooterAnchorPrefix;
+
+    /// <summary>
+    /// 获取每页明细尾部的旧名称处理策略。
+    /// </summary>
+    internal ExcelEntityPageAnchorStaleNamePolicy PageFooterAnchorStaleNamePolicy =>
+        _pageFooterAnchorStaleNamePolicy;
+
+    /// <summary>
     /// 获取明细分页行数。
     /// </summary>
     internal int? PageBreakRows => _pageBreakRows;
+
+    /// <summary>
+    /// 获取实际重复页眉描述。
+    /// </summary>
+    internal ExcelEntityPageHeaderDefinition PageHeaderDefinition => _pageHeader;
 
     /// <summary>
     /// 获取未知动态值处理策略。
@@ -266,7 +335,7 @@ public sealed class ExcelEntityListRegionBuilder<TItem> where TItem : class, new
     /// <returns>当前构建器。</returns>
     /// <remarks>
     /// 分组按明细原有顺序处理，仅当相邻项目的键发生变化时写入小计，不自动排序或合并非连续分组。
-    /// 导入时会跳过已识别的分组小计标记行及其间隔和尾部区域。
+    /// 与分页组合时，组可以跨页；导入会跳过已识别的小计区域。
     /// </remarks>
     public ExcelEntityListRegionBuilder<TItem> GroupSubtotal<TKey>(
         Expression<Func<TItem, TKey>> keySelector, string markerText,
@@ -278,10 +347,6 @@ public sealed class ExcelEntityListRegionBuilder<TItem> where TItem : class, new
             throw new ArgumentException("分组小计标记不能为空。", nameof(markerText));
         if (_groupSubtotal != null)
             throw new InvalidOperationException("每个列表区域只能配置一个连续分组小计。");
-        if (_pageBreakRows.HasValue)
-            throw new InvalidOperationException("分页列表不能同时配置连续分组小计。");
-        if (_pageSubtotal != null)
-            throw new InvalidOperationException("分页小计不能同时配置连续分组小计。");
         var footerBuilder = new ExcelEntityListFooterBuilder<TItem>();
         configure?.Invoke(footerBuilder);
         var footer = footerBuilder.Build(markerText);
@@ -298,7 +363,7 @@ public sealed class ExcelEntityListRegionBuilder<TItem> where TItem : class, new
     /// <returns>当前构建器。</returns>
     /// <remarks>
     /// Provider 只在导出工作表中写入分页符，不插入空白行，也不改变导入数据边界。
-    /// 每个列表区域最多配置一个分页策略；分页不能与连续分组小计组合。
+    /// 每个列表区域最多配置一个分页策略；与分组小计组合时按明细行数分页。
     /// </remarks>
     public ExcelEntityListRegionBuilder<TItem> PageBreak(int rowsPerPage)
     {
@@ -306,8 +371,6 @@ public sealed class ExcelEntityListRegionBuilder<TItem> where TItem : class, new
             throw new ArgumentOutOfRangeException(nameof(rowsPerPage), "每页明细行数必须大于零。");
         if (_pageBreakRows.HasValue)
             throw new InvalidOperationException("每个列表区域只能配置一个分页策略。");
-        if (_groupSubtotal != null)
-            throw new InvalidOperationException("分页列表不能同时配置连续分组小计。");
         _pageBreakRows = rowsPerPage;
         return this;
     }
@@ -320,22 +383,165 @@ public sealed class ExcelEntityListRegionBuilder<TItem> where TItem : class, new
     /// <returns>当前构建器。</returns>
     /// <remarks>
     /// 分页小计仅在存在下一页明细时写入，聚合委托接收当前页的明细快照；必须同时配置
-    /// <see cref="PageBreak"/>，且不能与连续分组小计组合。导入时会跳过分页小计区域。
+    /// <see cref="PageBreak"/>。与分组小计在同一边界时，先写分组小计再写分页小计。
+    /// 导入时会跳过分页小计区域。
     /// </remarks>
     public ExcelEntityListRegionBuilder<TItem> PageSubtotal(string markerText,
         Action<ExcelEntityListFooterBuilder<TItem>> configure = null)
     {
         if (_pageSubtotal != null)
             throw new InvalidOperationException("每个列表区域只能配置一个分页小计。");
-        if (_groupSubtotal != null)
-            throw new InvalidOperationException("分页小计不能同时配置连续分组小计。");
         var footerBuilder = new ExcelEntityListFooterBuilder<TItem>();
         configure?.Invoke(footerBuilder);
         var footer = footerBuilder.Build(markerText);
         if (footer.ContainsDetailSum)
             throw new ArgumentException("跨小计明细求和公式只能用于最终尾部。", nameof(configure));
         _pageSubtotal = footer;
+        PageSubtotalAnchorPrefix = null;
         return this;
+    }
+
+    /// <summary>
+    /// 声明带逐页命名锚点的分页小计。
+    /// </summary>
+    /// <param name="anchorPrefix">分页小计名称前缀。</param>
+    /// <param name="markerText">分页小计标记文本。</param>
+    /// <param name="configure">分页小计配置委托。</param>
+    /// <returns>当前构建器。</returns>
+    /// <remarks>
+    /// 每个非末页小计依次使用前缀加三位起始序号命名，例如 PageTotal_001。
+    /// 模板中的同名单格名称会重定位；导入仍通过标记文本识别小计。
+    /// </remarks>
+    public ExcelEntityListRegionBuilder<TItem> PageSubtotalNamed(string anchorPrefix, string markerText,
+        Action<ExcelEntityListFooterBuilder<TItem>> configure = null)
+    {
+        ExcelEntityLayoutValidation.ValidateAnchorName(anchorPrefix);
+        ExcelEntityLayoutValidation.ValidateAnchorName(anchorPrefix + "_001");
+        PageSubtotal(markerText, configure);
+        PageSubtotalAnchorPrefix = anchorPrefix;
+        return this;
+    }
+
+    /// <summary>
+    /// 声明带逐页命名锚点的实际重复页眉。
+    /// </summary>
+    /// <param name="anchorPrefix">逐页页眉名称前缀。</param>
+    /// <param name="sourceRange">首页连续页眉的绝对 A1 区域。</param>
+    /// <param name="markerAddress">首页页眉中用于导入识别的绝对 A1 地址。</param>
+    /// <param name="markerText">页眉标记文本。</param>
+    /// <param name="configure">相对单元格与合并配置。</param>
+    /// <param name="staleNames">模板中旧页眉名称的处理策略。</param>
+    /// <returns>当前构建器。</returns>
+    /// <remarks>
+    /// 名称按逻辑页从 001 开始递增；必须先配置 <see cref="PageBreak" />。
+    /// </remarks>
+    public ExcelEntityListRegionBuilder<TItem> PageHeaderNamed(string anchorPrefix,
+        string sourceRange, string markerAddress, string markerText,
+        Action<ExcelEntityPageHeaderBuilder<TItem>> configure = null,
+        ExcelEntityPageAnchorStaleNamePolicy staleNames = ExcelEntityPageAnchorStaleNamePolicy.Reject)
+    {
+        ValidatePageAnchorPrefix(anchorPrefix);
+        ValidatePageAnchorStaleNamePolicy(staleNames);
+        if (!_pageBreakRows.HasValue)
+            throw new InvalidOperationException("逐页命名页眉必须同时配置 PageBreak。");
+        PageHeader(sourceRange, markerAddress, markerText, configure);
+        _pageHeaderAnchorPrefix = anchorPrefix;
+        _pageHeaderAnchorStaleNamePolicy = staleNames;
+        return this;
+    }
+
+    /// <summary>
+    /// 声明每个逻辑页末尾的尾部内容。
+    /// </summary>
+    /// <param name="markerText">每页尾部标记文本。</param>
+    /// <param name="configure">尾部配置委托。</param>
+    /// <returns>当前构建器。</returns>
+    /// <remarks>
+    /// 每页尾部复用最终尾部的单元格、样式、合并和 GapRows 语义，但必须先配置
+    /// <see cref="PageBreak" />；不创建工作簿命名锚点。
+    /// </remarks>
+    public ExcelEntityListRegionBuilder<TItem> PageFooter(string markerText,
+        Action<ExcelEntityListFooterBuilder<TItem>> configure = null)
+    {
+        if (!_pageBreakRows.HasValue)
+            throw new InvalidOperationException("每页尾部必须同时配置 PageBreak。");
+        if (_pageFooter != null)
+            throw new InvalidOperationException("每个列表区域只能配置一个每页尾部。");
+        var footerBuilder = new ExcelEntityListFooterBuilder<TItem>();
+        configure?.Invoke(footerBuilder);
+        var footer = footerBuilder.Build(markerText);
+        if (footer.ContainsDetailSum)
+            throw new ArgumentException("跨小计明细求和公式只能用于最终尾部。", nameof(configure));
+        _pageFooter = footer;
+        _pageFooterAnchorPrefix = null;
+        _pageFooterAnchorStaleNamePolicy = ExcelEntityPageAnchorStaleNamePolicy.Reject;
+        return this;
+    }
+
+    /// <summary>
+    /// 声明带逐页命名锚点的每页尾部内容。
+    /// </summary>
+    /// <param name="anchorPrefix">逐页尾部名称前缀。</param>
+    /// <param name="markerText">每页尾部标记文本。</param>
+    /// <param name="configure">尾部配置委托。</param>
+    /// <param name="staleNames">模板中旧尾部名称的处理策略。</param>
+    /// <returns>当前构建器。</returns>
+    /// <remarks>
+    /// 名称按逻辑页从 001 开始递增；必须先配置 <see cref="PageBreak" />。
+    /// 尾部内容仍按原有 Footer 语义生成。
+    /// </remarks>
+    public ExcelEntityListRegionBuilder<TItem> PageFooterNamed(string anchorPrefix,
+        string markerText, Action<ExcelEntityListFooterBuilder<TItem>> configure = null,
+        ExcelEntityPageAnchorStaleNamePolicy staleNames = ExcelEntityPageAnchorStaleNamePolicy.Reject)
+    {
+        ValidatePageAnchorPrefix(anchorPrefix);
+        ValidatePageAnchorStaleNamePolicy(staleNames);
+        PageFooter(markerText, configure);
+        _pageFooterAnchorPrefix = anchorPrefix;
+        _pageFooterAnchorStaleNamePolicy = staleNames;
+        return this;
+    }
+
+    /// <summary>
+    /// 声明每个后续逻辑页实际插入的页眉。
+    /// </summary>
+    /// <param name="sourceRange">首页连续页眉的绝对 A1 区域。</param>
+    /// <param name="markerAddress">首页页眉中用于导入识别的绝对 A1 地址。</param>
+    /// <param name="markerText">页眉标记文本。</param>
+    /// <param name="configure">相对单元格与合并配置。</param>
+    /// <returns>当前构建器。</returns>
+    /// <remarks>页眉必须紧邻首个明细行，并与 <see cref="PageBreak"/> 配合。</remarks>
+    public ExcelEntityListRegionBuilder<TItem> PageHeader(string sourceRange,
+        string markerAddress, string markerText,
+        Action<ExcelEntityPageHeaderBuilder<TItem>> configure = null)
+    {
+        if (_pageHeader != null)
+            throw new InvalidOperationException("每个列表区域只能配置一个实际重复页眉。");
+        var builder = new ExcelEntityPageHeaderBuilder<TItem>();
+        configure?.Invoke(builder);
+        _pageHeader = builder.Build(sourceRange, markerAddress, markerText);
+        return this;
+    }
+
+    /// <summary>
+    /// 验证逐页名称前缀及其首个生成名称。
+    /// </summary>
+    /// <param name="anchorPrefix">逐页名称前缀。</param>
+    private static void ValidatePageAnchorPrefix(string anchorPrefix)
+    {
+        ExcelEntityLayoutValidation.ValidateAnchorName(anchorPrefix);
+        ExcelEntityLayoutValidation.ValidateAnchorName(anchorPrefix + "_001");
+    }
+
+    /// <summary>
+    /// 验证逐页旧名称处理策略。
+    /// </summary>
+    /// <param name="staleNames">待验证的旧名称处理策略。</param>
+    private static void ValidatePageAnchorStaleNamePolicy(
+        ExcelEntityPageAnchorStaleNamePolicy staleNames)
+    {
+        if (!Enum.IsDefined(typeof(ExcelEntityPageAnchorStaleNamePolicy), staleNames))
+            throw new ArgumentOutOfRangeException(nameof(staleNames));
     }
 
     /// <summary>

@@ -9,7 +9,7 @@ internal sealed class SystemAtomicFileSystem : IAtomicFileSystem
 {
     /// <inheritdoc />
     public Stream CreateFile(string path) => new FileStream(path, FileMode.CreateNew, FileAccess.Write,
-        FileShare.None, 4096, FileOptions.SequentialScan | FileOptions.Asynchronous);
+        FileShare.None, 81920, FileOptions.SequentialScan | FileOptions.Asynchronous);
 
     /// <inheritdoc />
     public void Flush(Stream stream)

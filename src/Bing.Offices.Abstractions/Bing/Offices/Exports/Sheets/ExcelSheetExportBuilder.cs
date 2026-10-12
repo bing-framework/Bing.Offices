@@ -95,6 +95,10 @@ public sealed class ExcelSheetExportBuilder<T> where T : class, new()
     /// </summary>
     private readonly List<ExcelDataValidationDefinition> _dataValidations = new();
     /// <summary>
+    /// 当前工作表的保护配置。
+    /// </summary>
+    private ExcelSheetProtectionDefinition _protection;
+    /// <summary>
     /// 多行表头定义；未设置时使用单行表头。
     /// </summary>
     private IReadOnlyList<ExcelHeaderRow> _headerRows = Array.Empty<ExcelHeaderRow>();
@@ -332,7 +336,7 @@ public sealed class ExcelSheetExportBuilder<T> where T : class, new()
     /// <summary>
     /// 设置 Sheet 隐藏状态。
     /// </summary>
-    /// <param name="hidden">为 <see langword="true"/> 时隐藏当前 Sheet，为 <see langword="false"/> 时保持可见。</param>
+    /// <param name="hidden">为 <see langword="true" /> 时隐藏当前工作表，为 <see langword="false" /> 时保持可见。</param>
     /// <returns>当前 Sheet 构建器，用于继续配置。</returns>
     public ExcelSheetExportBuilder<T> Hidden(bool hidden = true)
     {
@@ -377,6 +381,17 @@ public sealed class ExcelSheetExportBuilder<T> where T : class, new()
         if (validation == null) throw new ArgumentNullException(nameof(validation));
         validation.Validate();
         _dataValidations.Add(validation);
+        return this;
+    }
+
+    /// <summary>
+    /// 配置工作表保护和可填写区域。
+    /// </summary>
+    /// <param name="definition">保护定义。</param>
+    /// <returns>当前 Sheet 构建器。</returns>
+    public ExcelSheetExportBuilder<T> Protection(ExcelSheetProtectionDefinition definition)
+    {
+        _protection = definition?.Clone() ?? throw new ArgumentNullException(nameof(definition));
         return this;
     }
 
@@ -501,7 +516,7 @@ public sealed class ExcelSheetExportBuilder<T> where T : class, new()
             _culture, _columnWidth, _rowHeight, _commentConflictPolicy, _templateCellOverwritePolicy,
             _tables.AsReadOnly(), _autoFilters.AsReadOnly(), _freezePane,
             _conditionalFormats.AsReadOnly(), _namedRanges.AsReadOnly(), _printLayout,
-            _images.AsReadOnly(), _dataValidations.AsReadOnly());
+            _images.AsReadOnly(), _dataValidations.AsReadOnly(), _protection);
     }
 
     /// <summary>

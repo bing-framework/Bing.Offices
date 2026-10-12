@@ -195,6 +195,7 @@ internal sealed class ExcelMappingPlanFactory : IExcelMappingPlanFactory
         var dynamicColumns = (configuration?.DynamicColumns ?? new List<ExcelMappingDynamicColumnConfiguration>())
             .Select(CreateDynamicColumn).ToArray();
         ValidateDynamicColumns(dynamicColumns);
+        ValidateDynamicPropertyAssociations<T>(map, dynamicColumns);
         return new ExcelMappingPlan(map.Properties
                 .Select(property => CreateColumn(property, allowImplicitNamedConverters)).ToArray(),
             dynamicColumns, new ExcelMappingStyle(configuration?.Style),
@@ -387,6 +388,49 @@ internal sealed class ExcelMappingPlanFactory : IExcelMappingPlanFactory
                 if (string.IsNullOrWhiteSpace(alias) || !titles.Add(alias))
                     throw new InvalidOperationException($"动态列包含重复或空标题别名: {alias}");
             }
+        }
+    }
+
+    /// <summary>
+    /// 验证动态列与实体字典属性的归属关系。
+    /// </summary>
+    /// <typeparam name="T">动态列所属实体类型。</typeparam>
+    /// <param name="map">实体属性映射。</param>
+    /// <param name="columns">已编译的动态列计划。</param>
+    private static void ValidateDynamicPropertyAssociations<T>(ExcelTypeMap<T> map,
+        IReadOnlyList<IExcelDynamicMappingColumn> columns) where T : class, new()
+    {
+        var dynamicProperties = map.Properties.Where(property => property.IsDynamicColumn)
+            .ToDictionary(property => property.Name, StringComparer.OrdinalIgnoreCase);
+        if (dynamicProperties.Count == 0)
+        {
+            if (columns.Any(column => !string.IsNullOrWhiteSpace(column.TargetPropertyName)))
+                throw new InvalidOperationException("动态列指定了不存在的动态字典属性。");
+            return;
+        }
+
+        if (dynamicProperties.Count == 1)
+        {
+            var propertyName = dynamicProperties.Keys.Single();
+            var mismatch = columns.FirstOrDefault(column => !string.IsNullOrWhiteSpace(column.TargetPropertyName)
+                && !string.Equals(column.TargetPropertyName, propertyName, StringComparison.OrdinalIgnoreCase));
+            if (mismatch != null)
+                throw new InvalidOperationException(
+                    $"动态列 {mismatch.Key} 的目标属性不是实体动态字典: {mismatch.TargetPropertyName}");
+            return;
+        }
+
+        if (columns.Count == 0)
+            throw new InvalidOperationException(
+                $"类型 {typeof(T).FullName} 声明了多个动态字典属性，必须配置动态列定义和目标属性。");
+        foreach (var column in columns)
+        {
+            if (string.IsNullOrWhiteSpace(column.TargetPropertyName))
+                throw new InvalidOperationException(
+                    $"多个动态字典属性时，动态列 {column.Key} 必须指定 TargetPropertyName。");
+            if (!dynamicProperties.ContainsKey(column.TargetPropertyName))
+                throw new InvalidOperationException(
+                    $"动态列 {column.Key} 的目标属性不是实体动态字典: {column.TargetPropertyName}");
         }
     }
 

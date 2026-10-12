@@ -5,7 +5,7 @@ using Bing.Offices.Configurations;
 namespace Bing.Offices.Imports;
 
 /// <summary>
-/// 单个 Sheet 导入请求的执行描述。
+/// 单个工作表导入请求的执行描述。
 /// </summary>
 [EditorBrowsable(EditorBrowsableState.Never)]
 public sealed class ExcelSheetImportRequest
@@ -35,6 +35,7 @@ public sealed class ExcelSheetImportRequest
     /// <param name="headerComparison">表头名称比较策略。</param>
     /// <param name="headerWhitespace">表头文本空白处理策略。</param>
     /// <param name="bodyWhitespace">正文文本空白处理策略。</param>
+    /// <param name="batchSize">分批导入时的单批实体数量。</param>
     internal ExcelSheetImportRequest(string name, ExcelSheetSelector selector, Type itemType, Func<object, object> target,
         int headerRowIndex,
         int dataRowStartIndex, IReadOnlyList<Exports.ExcelDynamicColumnDefinition> dynamicColumns,
@@ -45,7 +46,7 @@ public sealed class ExcelSheetImportRequest
         bool failOnUnknownDynamicColumns,
         bool reportEmptyRows, bool stopAtFirstEmptyRow, ExcelReadColumnRange readColumnRange,
         ExcelNameComparison headerComparison, ExcelWhitespacePolicy headerWhitespace,
-        ExcelWhitespacePolicy bodyWhitespace)
+        ExcelWhitespacePolicy bodyWhitespace, int batchSize = 1000)
     {
         Name = name;
         Selector = selector;
@@ -70,10 +71,11 @@ public sealed class ExcelSheetImportRequest
         HeaderComparison = headerComparison;
         HeaderWhitespace = headerWhitespace;
         BodyWhitespace = bodyWhitespace;
+        BatchSize = batchSize;
     }
 
     /// <summary>
-    /// 获取Sheet 名称。
+    /// 获取工作表名称。
     /// </summary>
     public string Name { get; }
 
@@ -98,7 +100,7 @@ public sealed class ExcelSheetImportRequest
     public int DynamicColumnCount => DynamicColumns.Count;
 
     /// <summary>
-    /// 获取Sheet 数据项类型。
+    /// 获取工作表数据项类型。
     /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Type ItemType { get; }
@@ -187,4 +189,10 @@ public sealed class ExcelSheetImportRequest
     /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public bool StopAtFirstEmptyRow { get; }
+
+    /// <summary>
+    /// 获取分批导入时的单批实体数量。
+    /// </summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public int BatchSize { get; }
 }

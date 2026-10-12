@@ -56,6 +56,11 @@ public sealed class ExcelResourceLimits
     public int? MaxTrackedUniqueValues { get; init; }
 
     /// <summary>
+    /// 获取或初始化关系绑定允许建立的最大父键索引数量；null 表示不额外限制。
+    /// </summary>
+    public int? MaxTrackedRelationKeys { get; init; }
+
+    /// <summary>
     /// 获取或初始化唯一值比较策略；默认使用忽略大小写的序号比较。
     /// </summary>
     public StringComparison UniqueComparison { get; init; } = StringComparison.OrdinalIgnoreCase;
@@ -135,6 +140,8 @@ public sealed class ExcelResourceLimits
             throw new ArgumentOutOfRangeException(nameof(MaxTotalPictureBytes));
         if (MaxTrackedUniqueValues <= 0)
             throw new ArgumentOutOfRangeException(nameof(MaxTrackedUniqueValues));
+        if (MaxTrackedRelationKeys <= 0)
+            throw new ArgumentOutOfRangeException(nameof(MaxTrackedRelationKeys));
         if (MaxZipEntries <= 0)
             throw new ArgumentOutOfRangeException(nameof(MaxZipEntries));
         if (MaxZipEntryUncompressedBytes <= 0)

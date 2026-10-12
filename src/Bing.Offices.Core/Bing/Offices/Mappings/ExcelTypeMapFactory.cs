@@ -38,7 +38,11 @@ internal static class ExcelTypeMapFactory
     /// <returns>应用请求级列配置后的类型映射。</returns>
     public static ExcelTypeMap<T> Get<T>(ExcelMappingConfiguration configuration)
     {
-        return ApplyConfiguration(configuration, Get<T>());
+        var source = configuration?.DynamicColumns != null && configuration.DynamicColumns.Count > 0 &&
+                     HasMultipleDynamicProperties<T>()
+            ? Create<T>(allowMultipleDynamicColumns: true)
+            : Get<T>();
+        return ApplyConfiguration(configuration, source);
     }
 
     /// <summary>
@@ -174,16 +178,26 @@ internal static class ExcelTypeMapFactory
     /// </summary>
     /// <typeparam name="T">实体类型。</typeparam>
     /// <returns>根据实体公共可读属性创建的类型映射。</returns>
-    private static ExcelTypeMap<T> Create<T>()
+    private static ExcelTypeMap<T> Create<T>(bool allowMultipleDynamicColumns = false)
     {
         var properties = typeof(T).GetProperties(BindingFlags.Instance | BindingFlags.Public)
             .Where(property => property.CanRead)
             .Select(CreatePropertyMap)
             .ToList();
-        var dynamicColumns = properties.Count(property => property.IsDynamicColumn);
-        if (dynamicColumns > 1)
-            throw new ArgumentException($"类型 {typeof(T).FullName} 最多只能声明一个动态列属性。", nameof(T));
+        if (!allowMultipleDynamicColumns && properties.Count(property => property.IsDynamicColumn) > 1)
+            throw new ArgumentException("实体最多只能声明一个动态列属性；多个动态字典请使用映射配置为每个动态列指定目标字典。", typeof(T).Name);
         return new ExcelTypeMap<T>(new ReadOnlyCollection<ExcelPropertyMap>(properties));
+    }
+
+    /// <summary>
+    /// 判断实体是否声明了多个动态列属性。
+    /// </summary>
+    /// <typeparam name="T">实体类型。</typeparam>
+    /// <returns>存在多个动态列属性时返回 <see langword="true"/>。</returns>
+    private static bool HasMultipleDynamicProperties<T>()
+    {
+        return typeof(T).GetProperties(BindingFlags.Instance | BindingFlags.Public)
+            .Count(property => property.IsDefined(typeof(DynamicColumnAttribute))) > 1;
     }
 
     /// <summary>

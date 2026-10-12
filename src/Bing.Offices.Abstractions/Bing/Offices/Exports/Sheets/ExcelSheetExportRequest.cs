@@ -42,6 +42,7 @@ public sealed class ExcelSheetExportRequest
     /// <param name="printLayout">公共打印布局定义。</param>
     /// <param name="images">嵌入图片定义。</param>
     /// <param name="dataValidations">原生数据校验定义。</param>
+    /// <param name="protection">工作表保护定义。</param>
     internal ExcelSheetExportRequest(string name, Type itemType, System.Collections.IEnumerable data,
         int headerRowIndex, int dataRowStartIndex, IReadOnlyList<ExcelDynamicColumnDefinition> dynamicColumns,
         bool failOnUnknownDynamicValues, Func<object, IDictionary<string, object>> dynamicGetter,
@@ -60,7 +61,8 @@ public sealed class ExcelSheetExportRequest
         IReadOnlyList<ExcelNamedRangeDefinition> namedRanges,
         ExcelPrintLayoutOptions printLayout,
         IReadOnlyList<ExcelSheetImageDefinition> images,
-        IReadOnlyList<ExcelDataValidationDefinition> dataValidations)
+        IReadOnlyList<ExcelDataValidationDefinition> dataValidations,
+        ExcelSheetProtectionDefinition protection)
     {
         Name = name;
         ItemType = itemType;
@@ -114,14 +116,8 @@ public sealed class ExcelSheetExportRequest
             Content = image.Content?.ToArray(), Row = image.Row, Column = image.Column,
             Width = image.Width, Height = image.Height, OffsetX = image.OffsetX, OffsetY = image.OffsetY
         }).ToArray();
-        DataValidations = dataValidations.Select(rule => new ExcelDataValidationDefinition
-        {
-            Range = CloneRange(rule.Range), Type = rule.Type, Operator = rule.Operator,
-            Value1 = rule.Value1, Value2 = rule.Value2, Date1 = rule.Date1, Date2 = rule.Date2,
-            Values = rule.Values?.ToArray(), IgnoreBlanks = rule.IgnoreBlanks,
-            ShowErrorMessage = rule.ShowErrorMessage, InputTitle = rule.InputTitle,
-            InputMessage = rule.InputMessage, ErrorTitle = rule.ErrorTitle, ErrorMessage = rule.ErrorMessage
-        }).ToArray();
+        DataValidations = dataValidations.Select(rule => rule.Clone()).ToArray();
+        Protection = protection?.Clone();
     }
 
     /// <summary>
@@ -145,7 +141,7 @@ public sealed class ExcelSheetExportRequest
         };
 
     /// <summary>
-    /// 获取请求中的 Sheet 名称。
+    /// 获取请求中的工作表名称。
     /// </summary>
     public string Name { get; }
 
@@ -165,17 +161,17 @@ public sealed class ExcelSheetExportRequest
     public int DynamicColumnCount => DynamicColumns.Count;
 
     /// <summary>
-    /// 获取Sheet 是否隐藏。
+    /// 获取工作表是否隐藏。
     /// </summary>
     public bool Hidden { get; }
 
     /// <summary>
-    /// 获取Sheet 数据项类型。
+    /// 获取工作表数据项类型。
     /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Type ItemType { get; }
     /// <summary>
-    /// 获取Sheet 数据序列。
+    /// 获取工作表数据序列。
     /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public System.Collections.IEnumerable Data { get; }
@@ -195,7 +191,7 @@ public sealed class ExcelSheetExportRequest
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Func<object, IDictionary<string, object>> DynamicGetter { get; }
     /// <summary>
-    /// 获取Sheet 样式。
+    /// 获取工作表样式。
     /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Styles.ExcelCellStyle SheetStyle { get; }
@@ -301,6 +297,12 @@ public sealed class ExcelSheetExportRequest
     public IReadOnlyList<ExcelDataValidationDefinition> DataValidations { get; }
 
     /// <summary>
+    /// 获取工作表保护定义。
+    /// </summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public ExcelSheetProtectionDefinition Protection { get; }
+
+    /// <summary>
     /// 复制表格定义及其区域。
     /// </summary>
     /// <param name="values">待复制的表格定义；允许为空。</param>
@@ -327,7 +329,7 @@ public sealed class ExcelSheetExportRequest
     /// 复制冻结窗格定义。
     /// </summary>
     /// <param name="value">待复制的定义；允许为空。</param>
-    /// <returns>独立的定义；输入为空时返回 <see langword="null"/>。</returns>
+    /// <returns>独立的定义；输入为空时返回 <see langword="null" />。</returns>
     private static ExcelFreezePaneDefinition CloneFreezePane(ExcelFreezePaneDefinition value) => value == null ? null : new ExcelFreezePaneDefinition
     {
         Rows = value.Rows, Columns = value.Columns, TopRow = value.TopRow, LeftColumn = value.LeftColumn
@@ -362,7 +364,7 @@ public sealed class ExcelSheetExportRequest
     /// 复制打印布局选项。
     /// </summary>
     /// <param name="value">待复制的选项；允许为空。</param>
-    /// <returns>独立的选项；输入为空时返回 <see langword="null"/>。</returns>
+    /// <returns>独立的选项；输入为空时返回 <see langword="null" />。</returns>
     private static ExcelPrintLayoutOptions ClonePrintLayout(ExcelPrintLayoutOptions value) => value == null ? null : new ExcelPrintLayoutOptions
     {
         PaperSize = value.PaperSize, Orientation = value.Orientation,
@@ -377,7 +379,7 @@ public sealed class ExcelSheetExportRequest
     /// 复制工作表区域定义。
     /// </summary>
     /// <param name="value">待复制的区域；允许为空。</param>
-    /// <returns>独立的区域定义；输入为空时返回 <see langword="null"/>。</returns>
+    /// <returns>独立的区域定义；输入为空时返回 <see langword="null" />。</returns>
     private static ExcelRangeDefinition CloneRange(ExcelRangeDefinition value) => value == null ? null : new ExcelRangeDefinition
     {
         StartRow = value.StartRow, StartColumn = value.StartColumn, EndRow = value.EndRow, EndColumn = value.EndColumn

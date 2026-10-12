@@ -29,27 +29,27 @@ public sealed class ExcelImportFailureOptions
     public long? MaxSerializedBytes { get; init; }
 
     /// <summary>
-    /// 获取或初始化ErrorRowsOnly 模式允许复制的最大错误数据行数。
+    /// 获取或初始化失败工作簿输出允许处理的最大错误数据行数。
     /// </summary>
     public int? MaxCandidateErrorRows { get; init; }
 
     /// <summary>
-    /// 获取或初始化ErrorRowsOnly 模式允许复制的最大单元格估算数量。
+    /// 获取或初始化失败工作簿输出允许复制的最大单元格估算数量。
     /// </summary>
     public long? MaxCopiedCells { get; init; }
 
     /// <summary>
-    /// 获取或初始化ErrorRowsOnly 模式允许复制的最大图片数量。
+    /// 获取或初始化失败工作簿输出允许复制的最大图片数量。
     /// </summary>
     public int? MaxCopiedPictures { get; init; }
 
     /// <summary>
-    /// 获取或初始化ErrorRowsOnly 模式允许复制的图片数据最大字节数。
+    /// 获取或初始化失败工作簿输出允许复制的图片数据最大字节数。
     /// </summary>
     public long? MaxCopiedPictureBytes { get; init; }
 
     /// <summary>
-    /// 获取或初始化ErrorRowsOnly 模式允许目标工作簿估算对象的最大数量；估算包括 Sheet、行、单元格和图片对象。
+    /// 获取或初始化失败工作簿输出允许目标工作簿估算对象的最大数量；估算包括 Sheet、行、单元格和图片对象。
     /// </summary>
     public long? MaxEstimatedTargetObjects { get; init; }
 

@@ -78,6 +78,15 @@ public sealed class ExcelBatchImportRequest<TItem> where TItem : class, new()
     public ExcelWhitespacePolicy BodyWhitespace { get; init; } = ExcelWhitespacePolicy.Trim;
 
     /// <summary>
+    /// 获取或初始化失败工作簿输出选项。
+    /// </summary>
+    /// <remarks>
+    /// ExcelDataReader 分批导入支持 <see cref="ExcelImportFailureWorkbookMode.ErrorRowsOnly" />；
+    /// 需要保留源工作簿样式、图片或其他部件时，应使用支持完整失败工作簿的 DOM Provider。
+    /// </remarks>
+    public ExcelImportFailureOptions FailureOptions { get; init; }
+
+    /// <summary>
     /// 验证请求参数。
     /// </summary>
     public void Validate()
@@ -93,5 +102,6 @@ public sealed class ExcelBatchImportRequest<TItem> where TItem : class, new()
         if (Culture == null)
             throw new ArgumentNullException(nameof(Culture));
         ResourceLimits?.Validate();
+        FailureOptions?.Validate();
     }
 }
