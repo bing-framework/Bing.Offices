@@ -1,11 +1,15 @@
 ﻿using System.Collections;
 using System.Globalization;
+using System.Linq;
 using System.Reflection;
+using System.Runtime.ExceptionServices;
+using Bing.Offices;
 using Bing.Offices.ClosedXml.Imports;
 using Bing.Offices.ClosedXml.Internals;
 using Bing.Offices.Configurations;
 using Bing.Offices.Conversions;
 using Bing.Offices.Entities;
+using Bing.Offices.ExcelDataReader;
 using Bing.Offices.Exceptions;
 using Bing.Offices.Exports;
 using Bing.Offices.Imports;
@@ -143,8 +147,20 @@ internal sealed class ClosedXmlEntityLayoutExecutor
             if (region.AnchorName != null)
                 resolvedRegion = region.WithResolvedStart(ResolveNamedAnchor(sheet,
                     region.AnchorName).Reference);
+            if (resolvedRegion.PageHeader != null && sheet.PageSetup.FirstRowToRepeatAtTop > 0)
+                throw new BingOfficesConfigurationException(
+                    $"工作表打印标题与实际重复页眉互斥: {sheet.Name}",
+                    stage: BingOfficesStage.Plan);
             ValidateCellRegionConflict(workbook, layout, resolvedRegion);
-            WriteRegion(workbook, entity, resolvedRegion, template, footprints, cancellationToken);
+            layout.DataValidations.TryGetValue(sheet.Name, out var validations);
+            WriteRegion(workbook, entity, resolvedRegion, layout.Cells, template, footprints,
+                validations, cancellationToken);
+        }
+        foreach (var pair in layout.PrintTitleRows)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var sheet = ResolveSheet(workbook, pair.Key, template);
+            sheet.PageSetup.SetRowsToRepeatAtTop(pair.Value);
         }
     }
 
@@ -158,11 +174,14 @@ internal sealed class ClosedXmlEntityLayoutExecutor
     /// <param name="isDate1904">是否使用 1904 日期系统。</param>
     /// <param name="limits">实体导入资源限制。</param>
     /// <param name="validationFailureMode">当前行校验失败后的继续策略。</param>
+    /// <param name="validationMode">导入校验规则来源。</param>
+    /// <param name="unsupportedFeaturePolicy">不支持的工作簿规则处理策略。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>实体、列表区域结果和结构化导入错误。</returns>
     public ExcelEntityImportResult<TEntity> Read<TEntity>(XLWorkbook workbook, ExcelEntityLayout<TEntity> layout,
         bool requireTemplateMerges, bool isDate1904, ExcelResourceLimits limits,
-        ExcelValidationFailureMode validationFailureMode,
+        ExcelValidationFailureMode validationFailureMode, ExcelImportValidationMode validationMode,
+        ExcelUnsupportedFeaturePolicy unsupportedFeaturePolicy,
         CancellationToken cancellationToken)
         where TEntity : class, new()
     {
@@ -199,7 +218,11 @@ internal sealed class ClosedXmlEntityLayoutExecutor
             var raw = ReadRaw(cell, resolvedBinding.PropertyType);
             var text = ClosedXmlValueAdapter.ToText(raw, CultureInfo.InvariantCulture);
             var cellValue = ClosedXmlValueAdapter.CreateCell(raw, text, isDate1904);
-            if (!ValidateImport(column, raw, null, text, cellValue, sheet.Name,
+            if (UsesWorkbookValidation(validationMode) && !ValidateWorkbookCell(sheet, cell, raw, text,
+                    isDate1904, unsupportedFeaturePolicy, errors, resolvedBinding.PropertyName,
+                    cancellationToken))
+                continue;
+            if (UsesConfiguredValidation(validationMode) && !ValidateImport(column, raw, null, text, cellValue, sheet.Name,
                     resolvedBinding.Reference, errors, rawOnly: true))
                 continue;
             try
@@ -207,7 +230,7 @@ internal sealed class ClosedXmlEntityLayoutExecutor
                 var converted = ClosedXmlValueAdapter.ConvertFrom(raw, column.Column, column.Property,
                     sheet.Name, resolvedBinding.Reference.Row + 1, resolvedBinding.Reference.Column + 1,
                     CultureInfo.InvariantCulture, isDate1904, cellValue);
-                if (!ValidateImport(column, raw, converted, text, cellValue, sheet.Name,
+                if (UsesConfiguredValidation(validationMode) && !ValidateImport(column, raw, converted, text, cellValue, sheet.Name,
                         resolvedBinding.Reference, errors, rawOnly: false))
                     continue;
                 resolvedBinding.Setter?.Invoke(entity, converted);
@@ -223,6 +246,8 @@ internal sealed class ClosedXmlEntityLayoutExecutor
 
         var sheetResults = new List<ExcelSheetImportResult>();
         var totalRows = 0;
+        var uniqueBudget = new ClosedXmlUniqueBudget(limits?.MaxTrackedUniqueValues);
+        var relationKeyBudget = new ClosedXmlRelationKeyBudget(limits?.MaxTrackedRelationKeys);
         foreach (var region in layout.ListRegions)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -231,14 +256,869 @@ internal sealed class ClosedXmlEntityLayoutExecutor
             if (region.AnchorName != null)
                 resolvedRegion = region.WithResolvedStart(ResolveNamedAnchor(sheet,
                     region.AnchorName).Reference);
+            ExcelEntityPageHeaderImportValidation.ValidateStart(resolvedRegion);
             ValidateCellRegionConflict(workbook, layout, resolvedRegion);
             sheetResults.Add(ReadRegion(workbook, entity, resolvedRegion, isDate1904, errors, limits,
-                validationFailureMode, ref totalRows, cancellationToken));
+                uniqueBudget, validationFailureMode, validationMode, unsupportedFeaturePolicy,
+                ref totalRows, cancellationToken));
         }
-        ClosedXmlRelationCoordinator.Bind(entity, layout.Relations, errors, limits?.MaxErrors,
-            cancellationToken);
+        var relationErrorsTruncated = ClosedXmlRelationCoordinator.Bind(entity, layout.Relations,
+            errors, limits?.MaxErrors, relationKeyBudget, cancellationToken);
         return new ExcelEntityImportResult<TEntity>(entity, errorCollector.Items, sheetResults,
-            errorCollector.IsTruncated, limits?.MaxErrors);
+            errorCollector.IsTruncated || relationErrorsTruncated, limits?.MaxErrors);
+    }
+
+    /// <summary>
+    /// 从受限 XLSX 行事件读取单列表实体并交付批次。
+    /// </summary>
+    /// <typeparam name="TEntity">聚合对象类型。</typeparam>
+    /// <param name="workbook">前向读取的工作簿描述。</param>
+    /// <param name="rows">按物理行顺序排列的行事件。</param>
+    /// <param name="layout">实体布局。</param>
+    /// <param name="options">实体批次导入选项。</param>
+    /// <param name="onBatch">同步批次回调。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>实体批次导入摘要。</returns>
+    internal ExcelEntityBatchImportSummary<TEntity> ReadForward<TEntity>(
+        ExcelForwardXlsxWorkbook workbook, IEnumerable<ExcelForwardXlsxRow> rows,
+        ExcelEntityLayout<TEntity> layout, ExcelEntityBatchImportOptions options,
+        Action<ExcelEntityImportBatch<TEntity>> onBatch, CancellationToken cancellationToken)
+        where TEntity : class, new()
+        => ReadForwardRegion(workbook, rows, layout, layout.ListRegions[0], options, onBatch,
+            cancellationToken, null);
+
+    /// <summary>
+    /// 从受限 XLSX 行事件读取实体固定单元格并收集诊断错误。
+    /// </summary>
+    /// <typeparam name="TEntity">聚合对象类型。</typeparam>
+    /// <param name="workbook">前向读取的工作簿描述。</param>
+    /// <param name="rowsFactory">按工作表名称创建行事件序列的委托。</param>
+    /// <param name="bindings">实体固定单元格绑定。</param>
+    /// <param name="options">实体批次导入选项。</param>
+    /// <param name="entity">接收固定单元格值的实体。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <param name="workbookValidation">工作簿原生校验快照；为空时不执行原生校验。</param>
+    /// <param name="errorBudget">跨固定单元格和列表区域共享的错误预算。</param>
+    /// <param name="failureCapture">可选的低保留失败工作簿捕获器。</param>
+    /// <returns>固定单元格错误及错误截断状态。</returns>
+    internal (IReadOnlyList<ExcelImportError> Errors, bool IsTruncated) ReadForwardFixedCells<TEntity>(
+        ExcelForwardXlsxWorkbook workbook,
+        Func<string, IEnumerable<ExcelForwardXlsxRow>> rowsFactory,
+        IReadOnlyList<ExcelEntityCellBinding<TEntity>> bindings,
+        ExcelEntityBatchImportOptions options, TEntity entity,
+        CancellationToken cancellationToken,
+        ExcelXlsxWorkbookValidation workbookValidation = null,
+        ClosedXmlForwardErrorBudget errorBudget = null,
+        ExcelDataReaderFailureWorkbookCapture failureCapture = null) where TEntity : class, new()
+    {
+        if (workbook == null)
+            throw new ArgumentNullException(nameof(workbook));
+        if (rowsFactory == null)
+            throw new ArgumentNullException(nameof(rowsFactory));
+        if (bindings == null)
+            throw new ArgumentNullException(nameof(bindings));
+        if (options == null)
+            throw new ArgumentNullException(nameof(options));
+        if (entity == null)
+            throw new ArgumentNullException(nameof(entity));
+        if (bindings.Count == 0)
+            return (Array.Empty<ExcelImportError>(), false);
+
+        var limits = options.ImportOptions.ResourceLimits;
+        limits?.Validate();
+        var errors = new LimitedErrorCollection(errorBudget
+            ?? new ClosedXmlForwardErrorBudget(limits?.MaxErrors));
+        var resolvedBindings = bindings.Select(binding => binding.AnchorName == null
+            ? binding
+            : binding.WithResolvedReference(ExcelForwardXlsxReader.ResolveSingleCellAnchor(
+                workbook, binding.SheetName, binding.AnchorName))).ToArray();
+        foreach (var group in resolvedBindings.GroupBy(binding => binding.SheetName,
+                     StringComparer.OrdinalIgnoreCase))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (workbook.FindSheet(group.Key) == null)
+                throw new BingOfficesConfigurationException(
+                    $"Forward 实体布局要求 Sheet {group.Key}，工作簿中不存在该工作表。",
+                    stage: BingOfficesStage.Plan);
+
+            var groupBindings = group.ToArray();
+            var values = ReadForwardFixedCellValues(rowsFactory(group.Key), groupBindings,
+                workbook.Date1904, cancellationToken);
+            var rowErrors = failureCapture == null
+                ? null
+                : new Dictionary<int, List<ExcelImportError>>();
+            foreach (var binding in groupBindings)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (errors.IsTruncated)
+                    break;
+                if (binding.Setter == null)
+                    throw new BingOfficesConfigurationException(
+                        $"实体属性不可写入: {binding.PropertyName}", stage: BingOfficesStage.Plan);
+
+                var reference = binding.Reference;
+                var cellValue = values.TryGetValue((reference.Row, reference.Column), out var value)
+                    ? value
+                    : new ExcelCellValue(null, string.Empty, ExcelCellKind.Empty,
+                        isDate1904: workbook.Date1904);
+                var raw = ForwardRawValue(cellValue);
+                var text = cellValue.Text;
+                var errorCount = errors.Items.Count;
+                try
+                {
+                    var column = CreateColumn(typeof(TEntity), binding.PropertyName,
+                        binding.ConverterName, binding.MappingDocument, binding.MappingConfiguration,
+                        MappingDirection.Import);
+                    if (workbookValidation != null && !ValidateForwardWorkbookCell(
+                            workbookValidation, group.Key, reference.Row, reference.Column, raw, text,
+                            binding.PropertyName, reference, options.ImportOptions,
+                            errors, cancellationToken))
+                        continue;
+                    if (UsesConfiguredValidation(options.ImportOptions.ValidationMode)
+                        && !ValidateImport(column, raw, null, text, cellValue, group.Key,
+                            reference, errors, rawOnly: true))
+                        continue;
+                    var converted = ClosedXmlValueAdapter.ConvertFrom(raw, column.Column,
+                        column.Property, group.Key, reference.Row + 1, reference.Column + 1,
+                        CultureInfo.InvariantCulture, cellValue.IsDate1904, cellValue);
+                    if (UsesConfiguredValidation(options.ImportOptions.ValidationMode)
+                        && !ValidateImport(column, raw, converted, text, cellValue, group.Key,
+                            reference, errors, rawOnly: false))
+                        continue;
+                    binding.Setter(entity, converted);
+                }
+                catch (BingOfficesException)
+                {
+                    throw;
+                }
+                catch (Exception exception) when (exception is not OperationCanceledException
+                    && exception is not OutOfMemoryException && exception is not StackOverflowException)
+                {
+                    errors.Add(new ExcelImportError(ExcelImportErrorCode.ValueConversion,
+                        exception.Message, group.Key, reference.Row + 1, reference.Column + 1,
+                        binding.PropertyName, rawValue: raw));
+                }
+                finally
+                {
+                    if (rowErrors != null && errors.Items.Count > errorCount)
+                    {
+                        if (!rowErrors.TryGetValue(reference.Row, out var current))
+                        {
+                            current = new List<ExcelImportError>();
+                            rowErrors[reference.Row] = current;
+                        }
+                        current.AddRange(errors.Items.Skip(errorCount));
+                    }
+                }
+            }
+            if (rowErrors != null)
+            {
+                foreach (var pair in rowErrors)
+                {
+                    var rowCells = new Dictionary<int, ExcelCellValue>();
+                    foreach (var binding in groupBindings.Where(item => item.Reference.Row == pair.Key))
+                    {
+                        rowCells[binding.Reference.Column] = values.TryGetValue(
+                            (pair.Key, binding.Reference.Column), out var cell)
+                            ? cell
+                            : new ExcelCellValue(null, string.Empty, ExcelCellKind.Empty,
+                                isDate1904: workbook.Date1904);
+                    }
+                    failureCapture.CaptureErrorRow(group.Key, pair.Key + 1,
+                        ToFailureValues(rowCells), pair.Value);
+                }
+            }
+            if (errors.IsTruncated)
+                break;
+        }
+        return (errors.Items, errors.IsTruncated);
+    }
+
+    /// <summary>
+    /// 从受限 XLSX 行事件读取指定列表区域并交付批次。
+    /// </summary>
+    internal ExcelEntityBatchImportSummary<TEntity> ReadForwardRegion<TEntity>(
+        ExcelForwardXlsxWorkbook workbook, IEnumerable<ExcelForwardXlsxRow> rows,
+        ExcelEntityLayout<TEntity> layout, ExcelEntityListRegion<TEntity> region,
+        ExcelEntityBatchImportOptions options, Action<ExcelEntityImportBatch<TEntity>> onBatch,
+        CancellationToken cancellationToken, TEntity targetEntity = null,
+        ExcelXlsxWorkbookValidation workbookValidation = null,
+        ExcelDataReaderFailureWorkbookCapture failureCapture = null,
+        ClosedXmlForwardRowBudget rowBudget = null,
+        ClosedXmlForwardErrorBudget errorBudget = null,
+        ClosedXmlForwardUniqueBudget uniqueBudget = null,
+        ExcelEntityForwardRelationTracker relationTracker = null,
+        IDictionary<object, ClosedXmlSourceLocation> sourceLocations = null)
+        where TEntity : class, new()
+    {
+        ValidateForwardInputs(workbook, rows, layout, region, options, onBatch);
+        var plan = CreateForwardRegionPlan(region);
+        var limits = options.ImportOptions.ResourceLimits;
+        limits?.Validate();
+        rowBudget ??= new ClosedXmlForwardRowBudget(limits?.MaxRows);
+        var entity = targetEntity ?? new TEntity();
+        var errorCollector = new LimitedErrorCollection(errorBudget
+            ?? new ClosedXmlForwardErrorBudget(limits?.MaxErrors));
+        var retainResult = options.ResultMode == ExcelEntityBatchResultMode.Complete;
+        if (errorCollector.IsTruncated)
+            return CreateForwardSummary(entity, region, Array.Empty<int>(), retainResult,
+                errorCollector, 0, 0, 0);
+        var target = retainResult ? PrepareForwardCollection(entity, region) : null;
+        var tracksUnique = UsesConfiguredValidation(options.ImportOptions.ValidationMode)
+            && plan.HasUniqueColumns;
+        var duplicateValues = tracksUnique
+            ? new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase)
+            : null;
+        var uniqueTracker = tracksUnique
+            ? new UniqueTracker(duplicateValues, uniqueBudget?.Remaining
+                ?? limits?.MaxTrackedUniqueValues,
+                CreateStringComparer(limits?.UniqueComparison ?? StringComparison.OrdinalIgnoreCase))
+            : null;
+        var sourceRows = retainResult ? new List<int>() : null;
+        var dispatcher = new ForwardBatchDispatcher<TEntity>(entity, region, options.BatchSize, onBatch);
+        var rowsRead = 0;
+        var succeededRows = 0;
+        var failedRows = 0;
+        var headerRead = false;
+        var headerRow = region.Start.Row;
+        var dataRow = headerRow + 1;
+
+        var filteredRows = ExcelEntityForwardFooterBoundary.Filter(rows, region,
+            item => item.RowIndex,
+            (item, column) => item.Cells.TryGetValue(column, out var cell) ? cell : null,
+            cancellationToken);
+        foreach (var row in filteredRows)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ValidateForwardColumnLimit(row, limits);
+            if (row.RowIndex < headerRow)
+                continue;
+            if (!headerRead)
+            {
+                if (row.RowIndex != headerRow)
+                    continue;
+                ValidateForwardHeader(row, region, plan);
+                failureCapture?.CaptureSheet(region.SheetName, ToFailureValues(row.Cells),
+                    headerRow);
+                headerRead = true;
+                continue;
+            }
+            if (row.RowIndex < dataRow)
+                continue;
+            if (region.End.HasValue && row.RowIndex > region.End.Value.Row)
+                break;
+            if (region.Footer == null && IsForwardEmptyRow(row))
+                break;
+            if (!rowBudget.TryConsume())
+            {
+                if (rowBudget.TryMarkLimitReported())
+                    errorCollector.Add(new ExcelImportError(ExcelImportErrorCode.ResourceLimit,
+                        $"Workbook 数据行数超过限制: {limits?.MaxRows}", region.SheetName,
+                        row.RowIndex + 1, 0, null));
+                break;
+            }
+
+            rowsRead++;
+            var result = ReadForwardItem(row, region, plan, options.ImportOptions,
+                uniqueTracker, errorCollector, workbookValidation, cancellationToken);
+            if (result.Item != null && relationTracker != null)
+            {
+                var relationErrors = relationTracker.Track(region.ItemType, result.Item,
+                    region.SheetName, row.RowIndex);
+                foreach (var error in relationErrors)
+                    errorCollector.Add(error);
+                if (relationTracker.IsTruncated)
+                    errorCollector.MarkTruncated();
+                if (relationErrors.Count > 0)
+                    result = new ForwardItemResult(result.Item,
+                        result.Errors.Concat(relationErrors).ToArray());
+            }
+            if (result.Errors.Count > 0)
+                failureCapture?.CaptureErrorRow(region.SheetName, row.RowIndex + 1,
+                    ToFailureValues(row.Cells), result.Errors);
+            if (result.Item != null)
+            {
+                if (retainResult)
+                {
+                    AddForwardItem(target, result.Item);
+                    sourceRows.Add(row.RowIndex);
+                    if (sourceLocations != null)
+                        sourceLocations[result.Item] = new ClosedXmlSourceLocation(
+                            region.SheetName, row.RowIndex + 1);
+                }
+                succeededRows++;
+            }
+            else if (result.Errors.Count > 0)
+                failedRows++;
+            if (result.Item != null || result.Errors.Count > 0)
+                dispatcher.Add(row.RowIndex, result.Item, result.Errors);
+            if (errorCollector.IsTruncated)
+                break;
+        }
+        if (!headerRead)
+            throw new BingOfficesConfigurationException("Forward 实体导入未匹配列表表头。",
+                stage: BingOfficesStage.Plan);
+        dispatcher.Flush();
+        uniqueBudget?.Consume(uniqueTracker?.TrackedValueCount ?? 0);
+        return CreateForwardSummary(entity, region, sourceRows, retainResult, errorCollector,
+            rowsRead, succeededRows, failedRows);
+    }
+
+    /// <summary>
+    /// 从受限 XLSX 行事件异步读取单列表实体并交付批次。
+    /// </summary>
+    /// <typeparam name="TEntity">聚合对象类型。</typeparam>
+    /// <param name="workbook">前向读取的工作簿描述。</param>
+    /// <param name="rows">按物理行顺序排列的行事件。</param>
+    /// <param name="layout">实体布局。</param>
+    /// <param name="options">实体批次导入选项。</param>
+    /// <param name="onBatch">异步批次回调。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>实体批次导入摘要任务。</returns>
+    internal async Task<ExcelEntityBatchImportSummary<TEntity>> ReadForwardAsync<TEntity>(
+        ExcelForwardXlsxWorkbook workbook, IEnumerable<ExcelForwardXlsxRow> rows,
+        ExcelEntityLayout<TEntity> layout, ExcelEntityBatchImportOptions options,
+        Func<ExcelEntityImportBatch<TEntity>, CancellationToken, Task> onBatch,
+        CancellationToken cancellationToken)
+        where TEntity : class, new()
+        => await ReadForwardRegionAsync(workbook, rows, layout, layout.ListRegions[0], options,
+            onBatch, cancellationToken, null).ConfigureAwait(false);
+
+    /// <summary>
+    /// 从受限 XLSX 行事件异步读取指定列表区域并交付批次。
+    /// </summary>
+    internal async Task<ExcelEntityBatchImportSummary<TEntity>> ReadForwardRegionAsync<TEntity>(
+        ExcelForwardXlsxWorkbook workbook, IEnumerable<ExcelForwardXlsxRow> rows,
+        ExcelEntityLayout<TEntity> layout, ExcelEntityListRegion<TEntity> region,
+        ExcelEntityBatchImportOptions options,
+        Func<ExcelEntityImportBatch<TEntity>, CancellationToken, Task> onBatch,
+        CancellationToken cancellationToken, TEntity targetEntity = null,
+        ExcelXlsxWorkbookValidation workbookValidation = null,
+        ExcelDataReaderFailureWorkbookCapture failureCapture = null,
+        ClosedXmlForwardRowBudget rowBudget = null,
+        ClosedXmlForwardErrorBudget errorBudget = null,
+        ClosedXmlForwardUniqueBudget uniqueBudget = null,
+        ExcelEntityForwardRelationTracker relationTracker = null,
+        IDictionary<object, ClosedXmlSourceLocation> sourceLocations = null)
+        where TEntity : class, new()
+    {
+        if (onBatch == null)
+            throw new ArgumentNullException(nameof(onBatch));
+        ValidateForwardInputs(workbook, rows, layout, region, options, onBatch);
+        var plan = CreateForwardRegionPlan(region);
+        var limits = options.ImportOptions.ResourceLimits;
+        limits?.Validate();
+        rowBudget ??= new ClosedXmlForwardRowBudget(limits?.MaxRows);
+        var entity = targetEntity ?? new TEntity();
+        var errorCollector = new LimitedErrorCollection(errorBudget
+            ?? new ClosedXmlForwardErrorBudget(limits?.MaxErrors));
+        var retainResult = options.ResultMode == ExcelEntityBatchResultMode.Complete;
+        if (errorCollector.IsTruncated)
+            return CreateForwardSummary(entity, region, Array.Empty<int>(), retainResult,
+                errorCollector, 0, 0, 0);
+        var target = retainResult ? PrepareForwardCollection(entity, region) : null;
+        var tracksUnique = UsesConfiguredValidation(options.ImportOptions.ValidationMode)
+            && plan.HasUniqueColumns;
+        var duplicateValues = tracksUnique
+            ? new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase)
+            : null;
+        var uniqueTracker = tracksUnique
+            ? new UniqueTracker(duplicateValues, uniqueBudget?.Remaining
+                ?? limits?.MaxTrackedUniqueValues,
+                CreateStringComparer(limits?.UniqueComparison ?? StringComparison.OrdinalIgnoreCase))
+            : null;
+        var sourceRows = retainResult ? new List<int>() : null;
+        var dispatcher = new ForwardBatchDispatcher<TEntity>(entity, region, options.BatchSize, onBatch);
+        var rowsRead = 0;
+        var succeededRows = 0;
+        var failedRows = 0;
+        var headerRead = false;
+        var headerRow = region.Start.Row;
+        var dataRow = headerRow + 1;
+
+        var filteredRows = ExcelEntityForwardFooterBoundary.Filter(rows, region,
+            item => item.RowIndex,
+            (item, column) => item.Cells.TryGetValue(column, out var cell) ? cell : null,
+            cancellationToken);
+        foreach (var row in filteredRows)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ValidateForwardColumnLimit(row, limits);
+            if (row.RowIndex < headerRow)
+                continue;
+            if (!headerRead)
+            {
+                if (row.RowIndex != headerRow)
+                    continue;
+                ValidateForwardHeader(row, region, plan);
+                failureCapture?.CaptureSheet(region.SheetName, ToFailureValues(row.Cells),
+                    headerRow);
+                headerRead = true;
+                continue;
+            }
+            if (row.RowIndex < dataRow)
+                continue;
+            if (region.End.HasValue && row.RowIndex > region.End.Value.Row)
+                break;
+            if (region.Footer == null && IsForwardEmptyRow(row))
+                break;
+            if (!rowBudget.TryConsume())
+            {
+                if (rowBudget.TryMarkLimitReported())
+                    errorCollector.Add(new ExcelImportError(ExcelImportErrorCode.ResourceLimit,
+                        $"Workbook 数据行数超过限制: {limits?.MaxRows}", region.SheetName,
+                        row.RowIndex + 1, 0, null));
+                break;
+            }
+
+            rowsRead++;
+            var result = ReadForwardItem(row, region, plan, options.ImportOptions,
+                uniqueTracker, errorCollector, workbookValidation, cancellationToken);
+            if (result.Item != null && relationTracker != null)
+            {
+                var relationErrors = relationTracker.Track(region.ItemType, result.Item,
+                    region.SheetName, row.RowIndex);
+                foreach (var error in relationErrors)
+                    errorCollector.Add(error);
+                if (relationTracker.IsTruncated)
+                    errorCollector.MarkTruncated();
+                if (relationErrors.Count > 0)
+                    result = new ForwardItemResult(result.Item,
+                        result.Errors.Concat(relationErrors).ToArray());
+            }
+            if (result.Errors.Count > 0)
+                failureCapture?.CaptureErrorRow(region.SheetName, row.RowIndex + 1,
+                    ToFailureValues(row.Cells), result.Errors);
+            if (result.Item != null)
+            {
+                if (retainResult)
+                {
+                    AddForwardItem(target, result.Item);
+                    sourceRows.Add(row.RowIndex);
+                    if (sourceLocations != null)
+                        sourceLocations[result.Item] = new ClosedXmlSourceLocation(
+                            region.SheetName, row.RowIndex + 1);
+                }
+                succeededRows++;
+            }
+            else if (result.Errors.Count > 0)
+                failedRows++;
+            if (result.Item != null || result.Errors.Count > 0)
+                await dispatcher.AddAsync(row.RowIndex, result.Item, result.Errors,
+                    cancellationToken).ConfigureAwait(false);
+            if (errorCollector.IsTruncated)
+                break;
+        }
+        if (!headerRead)
+            throw new BingOfficesConfigurationException("Forward 实体导入未匹配列表表头。",
+                stage: BingOfficesStage.Plan);
+        await dispatcher.FlushAsync(cancellationToken).ConfigureAwait(false);
+        uniqueBudget?.Consume(uniqueTracker?.TrackedValueCount ?? 0);
+        return CreateForwardSummary(entity, region, sourceRows, retainResult, errorCollector,
+            rowsRead, succeededRows, failedRows);
+    }
+
+    /// <summary>
+    /// 校验前向实体读取的公共参数。
+    /// </summary>
+    private static void ValidateForwardInputs<TEntity>(ExcelForwardXlsxWorkbook workbook,
+        IEnumerable<ExcelForwardXlsxRow> rows, ExcelEntityLayout<TEntity> layout,
+        ExcelEntityListRegion<TEntity> region, ExcelEntityBatchImportOptions options,
+        Delegate onBatch)
+        where TEntity : class, new()
+    {
+        if (workbook == null)
+            throw new ArgumentNullException(nameof(workbook));
+        if (rows == null)
+            throw new ArgumentNullException(nameof(rows));
+        if (layout == null)
+            throw new ArgumentNullException(nameof(layout));
+        if (options == null)
+            throw new ArgumentNullException(nameof(options));
+        if (onBatch == null)
+            throw new ArgumentNullException(nameof(onBatch));
+        if (region == null)
+            throw new ArgumentNullException(nameof(region));
+        if (workbook.FindSheet(region.SheetName) == null)
+            throw new BingOfficesConfigurationException(
+                $"Forward 实体布局要求 Sheet {region.SheetName}，工作簿中不存在该工作表。",
+                stage: BingOfficesStage.Plan);
+        ValidateResultMode(options);
+    }
+
+    /// <summary>
+    /// 校验批次结果保留模式与前向解析模式的组合。
+    /// </summary>
+    private static void ValidateResultMode(ExcelEntityBatchImportOptions options)
+    {
+        if (options.ResultMode == ExcelEntityBatchResultMode.SummaryOnly
+            && options.ParsingMode != ExcelEntityBatchParsingMode.Forward)
+            throw new BingOfficesConfigurationException(
+                "ClosedXML Forward 实体批次摘要模式不能用于 Buffered 解析。",
+                stage: BingOfficesStage.Plan);
+    }
+
+    /// <summary>
+    /// 创建 Forward 路径使用的固定列计划。
+    /// </summary>
+    private EntityRegionPlan CreateForwardRegionPlan<TEntity>(ExcelEntityListRegion<TEntity> region)
+        where TEntity : class, new()
+    {
+        var plan = CreateRegionPlan(region, MappingDirection.Import);
+        if (!plan.Columns.Any(column => column.Calculated != null))
+            return plan;
+
+        // 计算列只参与导出行规划，实体导入不应把它们当作可写入的输入列。
+        var columns = plan.Columns.Where(column => column.Calculated == null).ToArray();
+        var width = columns.Length == 0 ? 0 : columns.Max(column => column.PhysicalColumnIndex) + 1;
+        return new EntityRegionPlan(columns, plan.DynamicProperty, plan.DynamicGroups,
+            plan.DynamicProperties, width);
+    }
+
+    /// <summary>
+    /// 校验 Forward 列表表头与固定列计划一致。
+    /// </summary>
+    private static void ValidateForwardHeader<TEntity>(ExcelForwardXlsxRow row,
+        ExcelEntityListRegion<TEntity> region, EntityRegionPlan plan)
+        where TEntity : class, new()
+    {
+        var knownColumns = new HashSet<int>();
+        foreach (var column in plan.Columns)
+        {
+            var index = region.Start.Column + column.PhysicalColumnIndex;
+            knownColumns.Add(index);
+            if (!row.Cells.TryGetValue(index, out var cell)
+                || string.IsNullOrWhiteSpace(cell?.Text))
+                throw new BingOfficesConfigurationException(
+                    $"Forward 实体导入缺少表头列: {column.Title}。", stage: BingOfficesStage.Plan);
+            var actual = cell.Text.Trim();
+            var expected = column.Dynamic?.Title ?? column.Fixed?.Title ?? column.Title;
+            var matches = string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase)
+                || (column.Dynamic?.Aliases ?? column.Fixed?.Aliases ?? Array.Empty<string>()).Any(alias =>
+                    string.Equals(actual, alias, StringComparison.OrdinalIgnoreCase));
+            if (!matches)
+                throw new BingOfficesConfigurationException(
+                    $"Forward 实体导入表头不匹配: 需要 {expected}，实际为 {actual}。",
+                    stage: BingOfficesStage.Plan);
+        }
+        if (region.UnknownDynamicValues == ExcelUnknownDynamicValuePolicy.Fail
+            && plan.HasDynamicProperties)
+        {
+            var unknown = row.Cells.Where(pair => !knownColumns.Contains(pair.Key)
+                && !string.IsNullOrWhiteSpace(pair.Value?.Text))
+                .Select(pair => pair.Value.Text.Trim()).ToArray();
+            if (unknown.Length > 0)
+                throw new BingOfficesConfigurationException(
+                    $"Forward 实体导入包含未知动态列: {string.Join(", ", unknown)}",
+                    stage: BingOfficesStage.Plan);
+        }
+    }
+
+    /// <summary>
+    /// 判断前向行是否没有任何数据。
+    /// </summary>
+    private static bool IsForwardEmptyRow(ExcelForwardXlsxRow row) =>
+        row.Cells.Count == 0 || row.Cells.Values.All(cell => string.IsNullOrWhiteSpace(cell?.Text));
+
+    /// <summary>
+    /// 校验 Forward 行的物理列资源上限。
+    /// </summary>
+    private static void ValidateForwardColumnLimit(ExcelForwardXlsxRow row,
+        ExcelResourceLimits limits)
+    {
+        if (limits?.MaxColumnsPerSheet is not int maximum
+            || !row.Cells.Keys.Any(column => column >= maximum))
+            return;
+        throw new BingOfficesResourceLimitException(
+            $"Workbook 使用列数超过限制: {maximum}", provider: Provider,
+            operation: BingOfficesOperation.Import, stage: BingOfficesStage.Read);
+    }
+
+    /// <summary>
+    /// 物化一行实体列并执行配置校验。
+    /// </summary>
+    private static ForwardItemResult ReadForwardItem<TEntity>(ExcelForwardXlsxRow row,
+        ExcelEntityListRegion<TEntity> region, EntityRegionPlan plan,
+        ExcelEntityImportOptions options, UniqueTracker uniqueTracker,
+        LimitedErrorCollection errorCollector, ExcelXlsxWorkbookValidation workbookValidation,
+        CancellationToken cancellationToken)
+        where TEntity : class, new()
+    {
+        var before = errorCollector.Items.Count;
+        var rowErrors = new List<ExcelImportError>();
+        var item = Activator.CreateInstance(region.ItemType);
+        var dynamicValues = plan.Columns.Any(column => column.Dynamic != null)
+            ? GetDynamicValues(item, plan, create: true) : null;
+        var valid = true;
+        if (uniqueTracker != null)
+            uniqueTracker.BeginRow();
+        foreach (var column in plan.Columns)
+        {
+            if (column.Calculated != null)
+                continue;
+            cancellationToken.ThrowIfCancellationRequested();
+            var columnIndex = region.Start.Column + column.PhysicalColumnIndex;
+            var cell = row.Cells.TryGetValue(columnIndex, out var value)
+                ? value : new ExcelCellValue(null, string.Empty, ExcelCellKind.Empty);
+            var raw = ForwardRawValue(cell);
+            var text = cell?.Text ?? string.Empty;
+            var reference = ExcelEntityCellReference.Parse(ToAddress(row.RowIndex, columnIndex));
+            var entityColumn = column.Fixed == null ? null : new EntityColumn(column.Fixed, column.Property);
+            if (workbookValidation != null && !ValidateForwardWorkbookCell(
+                    workbookValidation, region.SheetName, row.RowIndex, columnIndex, raw, text,
+                    column.Dynamic?.Key ?? column.Property.Name, reference, options,
+                    rowErrors, cancellationToken))
+            {
+                valid = false;
+                if (options.ValidationFailureMode == ExcelValidationFailureMode.StopOnFirstFailure)
+                    break;
+                continue;
+            }
+            if (UsesConfiguredValidation(options.ValidationMode) && column.Dynamic != null
+                && !ValidateDynamicImport(column.Dynamic, raw, null, text, cell, region.SheetName,
+                    reference, rowErrors, rawOnly: true))
+            {
+                valid = false;
+                if (options.ValidationFailureMode == ExcelValidationFailureMode.StopOnFirstFailure)
+                    break;
+                continue;
+            }
+            if (UsesConfiguredValidation(options.ValidationMode) && entityColumn != null
+                && !ValidateImport(entityColumn, raw, null, text, cell, region.SheetName,
+                    reference, rowErrors, rawOnly: true))
+            {
+                valid = false;
+                if (options.ValidationFailureMode == ExcelValidationFailureMode.StopOnFirstFailure)
+                    break;
+                continue;
+            }
+            try
+            {
+                var converted = column.Dynamic != null
+                    ? ClosedXmlValueAdapter.ConvertDynamicFrom(raw, column.Dynamic, region.SheetName,
+                        row.RowIndex + 1, columnIndex + 1, CultureInfo.InvariantCulture,
+                        cell?.IsDate1904 ?? false, cell)
+                    : ClosedXmlValueAdapter.ConvertFrom(raw, column.Fixed, column.Property,
+                        region.SheetName, row.RowIndex + 1, columnIndex + 1,
+                        CultureInfo.InvariantCulture, cell?.IsDate1904 ?? false, cell);
+                if (UsesConfiguredValidation(options.ValidationMode) && column.Dynamic != null
+                    && !ValidateDynamicImport(column.Dynamic, raw, converted, text, cell,
+                        region.SheetName, reference, rowErrors, rawOnly: false))
+                {
+                    valid = false;
+                    if (options.ValidationFailureMode == ExcelValidationFailureMode.StopOnFirstFailure)
+                        break;
+                    continue;
+                }
+                if (UsesConfiguredValidation(options.ValidationMode) && entityColumn != null
+                    && !ValidateImport(entityColumn, raw, converted, text, cell,
+                        region.SheetName, reference, rowErrors, rawOnly: false))
+                {
+                    valid = false;
+                    if (options.ValidationFailureMode == ExcelValidationFailureMode.StopOnFirstFailure)
+                        break;
+                    continue;
+                }
+                if (UsesConfiguredValidation(options.ValidationMode)
+                    && column.Dynamic != null && !ValidateUniqueImport(column.Dynamic.Key,
+                        column.Dynamic.IsUnique, column.Dynamic.UniqueIgnoreEmpty, text,
+                        region.SheetName, reference, rowErrors, uniqueTracker))
+                {
+                    valid = false;
+                    if (options.ValidationFailureMode == ExcelValidationFailureMode.StopOnFirstFailure)
+                        break;
+                    continue;
+                }
+                if (UsesConfiguredValidation(options.ValidationMode) && entityColumn != null
+                    && !ValidateUniqueImport(column.Fixed.Name, column.Fixed.IsUnique,
+                        column.Fixed.UniqueIgnoreEmpty, text, region.SheetName, reference,
+                        rowErrors, uniqueTracker))
+                {
+                    valid = false;
+                    if (options.ValidationFailureMode == ExcelValidationFailureMode.StopOnFirstFailure)
+                        break;
+                    continue;
+                }
+                if (column.Dynamic != null)
+                    SetDynamicValue(item, plan, column.Key, converted, dynamicValues);
+                else
+                    column.Property.SetValue(item, converted);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException
+                && exception is not OutOfMemoryException && exception is not StackOverflowException)
+            {
+                valid = false;
+                rowErrors.Add(new ExcelImportError(ExcelImportErrorCode.ValueConversion,
+                    exception.Message, region.SheetName, row.RowIndex + 1, columnIndex + 1,
+                    column.Dynamic?.Key ?? column.Property.Name, rawValue: raw));
+                if (options.ValidationFailureMode == ExcelValidationFailureMode.StopOnFirstFailure)
+                    break;
+            }
+        }
+        if (valid && dynamicValues != null)
+            ValidateUnknownDynamicValues(region, plan, item, dynamicValues);
+        if (uniqueTracker != null)
+        {
+            if (valid)
+                uniqueTracker.CommitRow();
+            else
+                uniqueTracker.RollbackRow();
+        }
+        foreach (var error in rowErrors)
+            errorCollector.Add(error);
+        var retained = errorCollector.Items.Skip(before).ToArray();
+        return new ForwardItemResult(valid ? item : null, retained);
+    }
+
+    /// <summary>
+    /// 校验前向实体单元格的工作簿原生规则。
+    /// </summary>
+    private static bool ValidateForwardWorkbookCell(
+        ExcelXlsxWorkbookValidation workbookValidation, string sheetName, int rowIndex,
+        int columnIndex, object raw, string text, string propertyName,
+        ExcelEntityCellReference reference, ExcelEntityImportOptions options,
+        ICollection<ExcelImportError> errors, CancellationToken cancellationToken)
+    {
+        var valid = true;
+        foreach (var result in workbookValidation.ValidateCell(sheetName, rowIndex, columnIndex,
+                     raw, text, CultureInfo.InvariantCulture, cancellationToken))
+        {
+            if (result.IsValid)
+                continue;
+            errors.Add(new ExcelImportError(ExcelImportErrorCode.WorkbookValidation,
+                result.Message, sheetName, reference.Row + 1, reference.Column + 1,
+                propertyName, rawValue: raw));
+            if (result.IsUnsupported
+                && options.UnsupportedFeaturePolicy == ExcelUnsupportedFeaturePolicy.Report)
+                continue;
+            valid = false;
+        }
+        return valid;
+    }
+
+    /// <summary>
+    /// 从公共单元格值获取 ClosedXML 转换使用的原始对象。
+    /// </summary>
+    private static object ForwardRawValue(ExcelCellValue cell)
+    {
+        if (cell == null || cell.Kind == ExcelCellKind.Empty)
+            return null;
+        if (cell.Kind == ExcelCellKind.Error)
+            return cell.Text;
+        return cell.Value ?? cell.Text;
+    }
+
+    /// <summary>
+    /// 将前向行转换为失败工作簿需要的连续原始值数组。
+    /// </summary>
+    private static IReadOnlyList<object> ToFailureValues(
+        IReadOnlyDictionary<int, ExcelCellValue> cells)
+    {
+        if (cells == null || cells.Count == 0)
+            return Array.Empty<object>();
+        var values = new object[cells.Keys.Max() + 1];
+        foreach (var pair in cells)
+            values[pair.Key] = pair.Value?.Value ?? pair.Value?.Text;
+        return values;
+    }
+
+    /// <summary>
+    /// 从行事件中读取固定单元格所需的最小坐标集合。
+    /// </summary>
+    /// <typeparam name="TEntity">聚合对象类型。</typeparam>
+    /// <param name="rows">工作表行事件。</param>
+    /// <param name="bindings">固定单元格绑定。</param>
+    /// <param name="date1904">是否使用 1904 日期系统。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>按零基行列坐标索引的单元格值。</returns>
+    private static IReadOnlyDictionary<(int Row, int Column), ExcelCellValue>
+        ReadForwardFixedCellValues<TEntity>(IEnumerable<ExcelForwardXlsxRow> rows,
+            IReadOnlyList<ExcelEntityCellBinding<TEntity>> bindings, bool date1904,
+            CancellationToken cancellationToken) where TEntity : class, new()
+    {
+        var requested = bindings.Select(binding =>
+            (binding.Reference.Row, binding.Reference.Column)).ToHashSet();
+        var values = new Dictionary<(int Row, int Column), ExcelCellValue>();
+        var maxRow = requested.Count == 0 ? -1 : requested.Max(item => item.Row);
+        foreach (var row in rows)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (row.RowIndex > maxRow)
+                break;
+            foreach (var pair in row.Cells)
+            {
+                var key = (row.RowIndex, pair.Key);
+                if (requested.Contains(key))
+                    values[key] = pair.Value;
+            }
+            if (values.Count == requested.Count)
+                break;
+        }
+        return values;
+    }
+
+    /// <summary>
+    /// 准备实体列表集合并清空已有内容。
+    /// </summary>
+    private static object PrepareForwardCollection<TEntity>(TEntity entity,
+        ExcelEntityListRegion<TEntity> region) where TEntity : class, new()
+    {
+        if (region.Setter != null)
+        {
+            var list = CreateTypedList(region.ItemType, Array.Empty<object>());
+            region.Setter(entity, list);
+            return list;
+        }
+        var collection = region.Getter(entity);
+        var collectionType = typeof(ICollection<>).MakeGenericType(region.ItemType);
+        if (!collectionType.IsInstanceOfType(collection)
+            || (bool)collectionType.GetProperty(nameof(ICollection<object>.IsReadOnly))
+                .GetValue(collection))
+            throw new BingOfficesConfigurationException($"实体集合属性不可写入: {region.PropertyName}",
+                stage: BingOfficesStage.Plan);
+        collectionType.GetMethod(nameof(ICollection<object>.Clear)).Invoke(collection, null);
+        return collection;
+    }
+
+    /// <summary>
+    /// 将前向读取的实体加入目标集合。
+    /// </summary>
+    private static void AddForwardItem(object collection, object item)
+    {
+        if (collection is IList list)
+        {
+            list.Add(item);
+            return;
+        }
+        var add = collection.GetType().GetMethod(nameof(ICollection<object>.Add),
+            BindingFlags.Instance | BindingFlags.Public);
+        if (add == null)
+            throw new BingOfficesConfigurationException("实体集合属性不支持 Add。",
+                stage: BingOfficesStage.Plan);
+        add.Invoke(collection, new[] { item });
+    }
+
+    /// <summary>
+    /// 创建前向实体批次摘要。
+    /// </summary>
+    private static ExcelEntityBatchImportSummary<TEntity> CreateForwardSummary<TEntity>(TEntity entity,
+        ExcelEntityListRegion<TEntity> region, IReadOnlyList<int> sourceRows, bool hasCompleteResult,
+        LimitedErrorCollection errors, int rowsRead, int succeededRows, int failedRows)
+        where TEntity : class, new()
+    {
+        var sheet = new ExcelSheetImportResult(region.SheetName, region.ItemType,
+            sourceRows ?? Array.Empty<int>(),
+            errors.Items.Where(error => string.Equals(error.SheetName, region.SheetName,
+                StringComparison.OrdinalIgnoreCase)).ToArray());
+        var result = new ExcelEntityImportResult<TEntity>(entity, errors.Items,
+            new[] { sheet }, errors.IsTruncated, errors.MaxErrors);
+        var summary = new ExcelBatchImportSummary(rowsRead, succeededRows, failedRows,
+            errors.Count, errors.IsTruncated,
+            errors.Items.Any(error => error.Code == ExcelImportErrorCode.ResourceLimit));
+        var regionSummary = new ExcelEntityBatchRegionSummary(0, region.SheetName,
+            region.PropertyName, region.ItemType, summary);
+        return new ExcelEntityBatchImportSummary<TEntity>(result, new[] { regionSummary },
+            Array.Empty<ExcelImportError>(), hasCompleteResult);
     }
 
     /// <summary>
@@ -248,21 +1128,27 @@ internal sealed class ClosedXmlEntityLayoutExecutor
     /// <param name="workbook">目标工作簿。</param>
     /// <param name="entity">根实体。</param>
     /// <param name="region">列表区域声明。</param>
+    /// <param name="fixedCells">布局中的固定单元格。</param>
     /// <param name="template">是否按模板模式写入。</param>
     /// <param name="footprints">已写入或预检的列表区域范围。</param>
+    /// <param name="validations">布局声明的数据校验。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     private void WriteRegion<TEntity>(XLWorkbook workbook, TEntity entity,
-        ExcelEntityListRegion<TEntity> region, bool template,
-        ICollection<EntityListFootprint> footprints, CancellationToken cancellationToken)
+        ExcelEntityListRegion<TEntity> region, IReadOnlyList<ExcelEntityCellBinding<TEntity>> fixedCells,
+        bool template,
+        ICollection<EntityListFootprint> footprints,
+        IReadOnlyList<ExcelDataValidationDefinition> validations, CancellationToken cancellationToken)
         where TEntity : class, new()
     {
         var sheet = ResolveSheet(workbook, region.SheetName, template);
         var values = (region.Getter(entity) as IEnumerable)?.Cast<object>().ToArray()
             ?? Array.Empty<object>();
+        if (region.PageHeader != null && values.Length > region.PageBreakRows.GetValueOrDefault())
+            ValidateConfiguredPageHeaderValidations(region, validations);
         var plan = CreateRegionPlan(region, MappingDirection.Export);
-        if (region.GroupSubtotal != null)
+        if (region.GroupSubtotal != null || region.PageHeader != null || region.PageFooter != null)
         {
-            WriteGroupedRegion(workbook, sheet, region, plan, values, template,
+            WriteGroupedRegion(workbook, sheet, region, plan, values, fixedCells, template,
                 footprints, cancellationToken);
             return;
         }
@@ -371,6 +1257,8 @@ internal sealed class ClosedXmlEntityLayoutExecutor
         if (region.PageSubtotal == null || region.PageBreakRows is not int rowsPerPage)
             throw new BingOfficesConfigurationException("分页小计缺少分页配置。",
                 stage: BingOfficesStage.Plan);
+        var pageAnchorNames = PreparePageAnchorNames(sheet, region.PageSubtotalAnchorPrefix,
+            values.Count < 2 ? 0 : (values.Count - 1) / rowsPerPage);
         var plannedRow = region.Start.Row + (region.IncludeHeader ? 1 : 0);
         var plannedIndex = 0;
         while (plannedIndex < values.Count)
@@ -386,6 +1274,7 @@ internal sealed class ClosedXmlEntityLayoutExecutor
         }
         PrepareFooterMerges(sheet, region.Footer, plannedRow, region.Start.Column);
         var row = region.Start.Row;
+        var pageAnchorIndex = 0;
         if (region.IncludeHeader)
         {
             foreach (var column in plan.Columns)
@@ -475,7 +1364,8 @@ internal sealed class ClosedXmlEntityLayoutExecutor
             {
                 var pageItems = values.Skip(pageStart).Take(pageCount).ToArray();
                 WriteFooter(sheet, region.PageSubtotal, pageItems, row, region.Start.Column,
-                    template, cancellationToken);
+                    template, cancellationToken, pageAnchorNames.Count == 0
+                        ? null : pageAnchorNames[pageAnchorIndex++]);
                 row += region.PageSubtotal.GapRows + GetFooterHeight(region.PageSubtotal);
                 ApplyPageBreak(sheet, row - 1);
             }
@@ -493,43 +1383,96 @@ internal sealed class ClosedXmlEntityLayoutExecutor
     /// <param name="region">列表区域定义。</param>
     /// <param name="plan">列表区域映射计划。</param>
     /// <param name="values">列表项快照。</param>
+    /// <param name="fixedCells">布局中的固定单元格。</param>
     /// <param name="template">是否按模板模式写入。</param>
     /// <param name="footprints">已写入或预检的列表区域范围。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     private void WriteGroupedRegion<TEntity>(XLWorkbook workbook, IXLWorksheet sheet,
         ExcelEntityListRegion<TEntity> region, EntityRegionPlan plan, IReadOnlyList<object> values,
-        bool template, ICollection<EntityListFootprint> footprints, CancellationToken cancellationToken)
+        IReadOnlyList<ExcelEntityCellBinding<TEntity>> fixedCells, bool template,
+        ICollection<EntityListFootprint> footprints, CancellationToken cancellationToken)
         where TEntity : class, new()
     {
-        var subtotal = region.GroupSubtotal;
         var firstDataRow = region.Start.Row + (region.IncludeHeader ? 1 : 0);
         var row = firstDataRow;
-        var groupRanges = GetGroupedRanges(values, subtotal);
-        var previewRow = firstDataRow;
-        foreach (var range in groupRanges)
+        var rowPlan = ExcelEntityRowPlan.Create(region, values, cancellationToken);
+        var pageAnchorNames = PreparePageAnchorNames(sheet, region.PageSubtotalAnchorPrefix,
+            rowPlan.Segments.Count(segment => segment.Kind == ExcelEntityRowPlan.SegmentKind.PageSubtotal));
+        var logicalPageCount = values.Count == 0 ? 1
+            : 1 + (values.Count - 1) / region.PageBreakRows.GetValueOrDefault(int.MaxValue);
+        var headerAnchors = PrepareIndependentPageAnchorNames(sheet, region.PageHeaderAnchorPrefix,
+            logicalPageCount, region.PageHeaderAnchorStaleNamePolicy, cancellationToken);
+        var footerAnchors = PrepareIndependentPageAnchorNames(sheet, region.PageFooterAnchorPrefix,
+            logicalPageCount, region.PageFooterAnchorStaleNamePolicy, cancellationToken);
+        ValidateBounds(region, plan.Width, values.Count);
+        ValidatePageHeader(sheet, region, rowPlan, plan.Width, fixedCells);
+        foreach (var segment in rowPlan.Segments)
         {
-            var dataEndRow = previewRow + range.Count;
-            ValidateFooterBounds(region, subtotal.Footer, dataEndRow);
-            previewRow = dataEndRow + subtotal.Footer.GapRows + GetFooterHeight(subtotal.Footer);
+            if (segment.Kind == ExcelEntityRowPlan.SegmentKind.Detail)
+            {
+                if ((long)segment.Row + segment.Count - 1 > 1_048_575
+                    || region.End.HasValue && (long)segment.Row + segment.Count - 1 > region.End.Value.Row)
+                    throw new BingOfficesConfigurationException(
+                        $"列表区域明细超出工作表边界: {region.SheetName}!{region.Start.Address}",
+                        stage: BingOfficesStage.Plan);
+                continue;
+            }
+            if (segment.Kind == ExcelEntityRowPlan.SegmentKind.PageHeader)
+                continue;
+            var footer = segment.Kind == ExcelEntityRowPlan.SegmentKind.GroupSubtotal
+                ? region.GroupSubtotal.Footer : segment.Kind == ExcelEntityRowPlan.SegmentKind.PageFooter
+                    ? region.PageFooter : region.PageSubtotal;
+            ValidateFooterBounds(region, footer, segment.Row);
+            if (segment.Kind == ExcelEntityRowPlan.SegmentKind.PageFooter)
+            {
+                var lastColumn = region.Start.Column + footer.Cells.Select(cell => cell.Reference.Column)
+                    .Concat(footer.Merges.Select(merge => merge.Last.Column)).DefaultIfEmpty(0).Max();
+                var lastFooterRow = (long)segment.Row + footer.GapRows + GetFooterHeight(footer) - 1;
+                foreach (var binding in fixedCells)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var target = binding.Reference;
+                    var targetSheet = binding.SheetName;
+                    if (binding.AnchorName != null)
+                    {
+                        var named = ResolveNamedAnchor(sheet, binding.AnchorName);
+                        target = named.Reference;
+                        targetSheet = named.Sheet.Name;
+                    }
+                    if (string.Equals(targetSheet, sheet.Name, StringComparison.OrdinalIgnoreCase)
+                        && target.Row >= segment.Row && target.Row <= lastFooterRow
+                        && target.Column >= region.Start.Column && target.Column <= lastColumn)
+                        throw new BingOfficesConfigurationException("每页尾部与固定单元格冲突。",
+                            BingOfficesStage.Plan, region.SheetName, target.Row + 1, target.Column + 1);
+                }
+            }
         }
-        ValidateFooterBounds(region, region.Footer, previewRow);
-        var lastRow = previewRow + (region.Footer == null ? -1
+        ValidateFooterBounds(region, region.Footer, rowPlan.FinalRow);
+        var lastRow = (long)rowPlan.FinalRow + (region.Footer == null ? -1
             : region.Footer.GapRows + GetFooterHeight(region.Footer) - 1);
         if (region.End.HasValue && (lastRow > region.End.Value.Row
             || region.Start.Column + plan.Width - 1 > region.End.Value.Column))
             throw new BingOfficesConfigurationException(
                 $"列表区域分组小计超出声明边界: {region.SheetName}!{region.Start.Address}",
                 stage: BingOfficesStage.Plan);
-        RegisterRuntimeFootprint(region, plan.Width, values.Count, footprints, values);
+        RegisterRuntimeFootprint(region, plan.Width, values.Count, footprints, rowPlan);
         cancellationToken.ThrowIfCancellationRequested();
-        var mergeRow = firstDataRow;
-        foreach (var range in groupRanges)
+        foreach (var obsolete in headerAnchors.Obsolete.Concat(footerAnchors.Obsolete))
         {
-            var groupDataEndRow = mergeRow + range.Count;
-            PrepareFooterMerges(sheet, subtotal.Footer, groupDataEndRow, region.Start.Column);
-            mergeRow = groupDataEndRow + subtotal.Footer.GapRows + GetFooterHeight(subtotal.Footer);
+            cancellationToken.ThrowIfCancellationRequested();
+            obsolete.Delete();
         }
-        PrepareFooterMerges(sheet, region.Footer, previewRow, region.Start.Column);
+        foreach (var segment in rowPlan.Segments)
+        {
+            if (segment.Kind == ExcelEntityRowPlan.SegmentKind.Detail
+                || segment.Kind == ExcelEntityRowPlan.SegmentKind.PageHeader)
+                continue;
+            var footer = segment.Kind == ExcelEntityRowPlan.SegmentKind.GroupSubtotal
+                ? region.GroupSubtotal.Footer : segment.Kind == ExcelEntityRowPlan.SegmentKind.PageFooter
+                    ? region.PageFooter : region.PageSubtotal;
+            PrepareFooterMerges(sheet, footer, segment.Row, region.Start.Column);
+        }
+        PrepareFooterMerges(sheet, region.Footer, rowPlan.FinalRow, region.Start.Column);
 
         if (region.IncludeHeader)
         {
@@ -540,6 +1483,18 @@ internal sealed class ClosedXmlEntityLayoutExecutor
                 header.Value = column.Title;
                 ApplyCalculatedStyle(header, column, header: true);
             }
+        }
+        if (region.PageHeader != null)
+        {
+            var firstPageCount = Math.Min(values.Count, region.PageBreakRows.GetValueOrDefault());
+            WritePageHeader(sheet, region.PageHeader, region.PageHeader.SourceRange.First.Row,
+                1, values.Count == 0 ? 1 : 1 + (values.Count - 1) / region.PageBreakRows.Value,
+                values.Take(firstPageCount).ToArray(), source: true, cancellationToken);
+            ValidateWrittenPageHeader(sheet, region, plan,
+                region.PageHeader.SourceRange.First.Row);
+            if (headerAnchors.Names.Count > 0)
+                UpdateFooterAnchor(sheet, headerAnchors.Names[0], region.PageHeader.Marker.Row,
+                    region.PageHeader.Marker.Column);
         }
 
         var calculatedItems = values.ToArray();
@@ -605,25 +1560,361 @@ internal sealed class ClosedXmlEntityLayoutExecutor
                 WriteValue(sheet.Cell(row + 1, columnIndex + 1), converted);
                 ApplyCalculatedStyle(sheet.Cell(row + 1, columnIndex + 1), column, header: false);
             }
+            ValidateWrittenDetailMarker(sheet, region, row);
             row++;
         }
 
-        var itemIndexOffset = 0;
-        var detailRows = new List<(int FirstRow, int LastRow)>();
-        foreach (var range in groupRanges)
+        var pageAnchorIndex = 0;
+        var pageCount = region.PageHeader == null ? 0 : values.Count == 0 ? 1
+            : 1 + (values.Count - 1) / region.PageBreakRows.Value;
+        foreach (var segment in rowPlan.Segments)
         {
-            var firstDetailRow = row + 1;
-            var groupItems = values.Skip(range.Start).Take(range.Count).ToArray();
-            for (var itemIndex = 0; itemIndex < range.Count; itemIndex++)
-                WriteItem(values[range.Start + itemIndex], itemIndexOffset + itemIndex);
-            detailRows.Add((firstDetailRow, row));
-            WriteFooter(sheet, subtotal.Footer, groupItems, row, region.Start.Column, template,
-                cancellationToken);
-            row += subtotal.Footer.GapRows + GetFooterHeight(subtotal.Footer);
-            itemIndexOffset += range.Count;
+            if (segment.Kind == ExcelEntityRowPlan.SegmentKind.Detail)
+            {
+                for (var index = 0; index < segment.Count; index++)
+                    WriteItem(values[segment.StartIndex + index], segment.StartIndex + index);
+                continue;
+            }
+            if (segment.Kind == ExcelEntityRowPlan.SegmentKind.PageHeader)
+            {
+                var count = Math.Min(region.PageBreakRows.Value, values.Count - segment.StartIndex);
+                WritePageHeader(sheet, region.PageHeader, segment.Row,
+                    segment.StartIndex / region.PageBreakRows.Value + 1, pageCount,
+                    values.Skip(segment.StartIndex).Take(count).ToArray(), source: false,
+                    cancellationToken);
+                ValidateWrittenPageHeader(sheet, region, plan, segment.Row);
+                if (headerAnchors.Names.Count > 0)
+                    UpdateFooterAnchor(sheet,
+                        headerAnchors.Names[segment.StartIndex / region.PageBreakRows.Value],
+                        segment.Row + region.PageHeader.Marker.Row - region.PageHeader.SourceRange.First.Row,
+                        region.PageHeader.Marker.Column);
+                row += region.PageHeader.RowCount;
+                continue;
+            }
+            var footer = segment.Kind == ExcelEntityRowPlan.SegmentKind.GroupSubtotal
+                ? region.GroupSubtotal.Footer : segment.Kind == ExcelEntityRowPlan.SegmentKind.PageFooter
+                    ? region.PageFooter : region.PageSubtotal;
+            var items = values.Skip(segment.StartIndex).Take(segment.Count).ToArray();
+            WriteFooter(sheet, footer, items, row, region.Start.Column, template, cancellationToken,
+                segment.Kind == ExcelEntityRowPlan.SegmentKind.PageSubtotal && pageAnchorNames.Count > 0
+                    ? pageAnchorNames[pageAnchorIndex++]
+                    : segment.Kind == ExcelEntityRowPlan.SegmentKind.PageFooter && footerAnchors.Names.Count > 0
+                        ? footerAnchors.Names[segment.StartIndex / region.PageBreakRows.Value] : null);
+            row += footer.GapRows + GetFooterHeight(footer);
         }
         WriteFooter(sheet, region.Footer, values, row, region.Start.Column, template,
-            cancellationToken, region.FooterAnchorName, detailRows);
+            cancellationToken, region.FooterAnchorName, rowPlan.DetailRows);
+        ExcelEntitySubtotalImportScanner.ValidateWrittenMarkers(region, firstDataRow, rowPlan.FinalRow,
+            physicalRow => Convert.ToString(ReadRaw(sheet.Cell(physicalRow + 1,
+                region.Start.Column + 1), typeof(string)), CultureInfo.InvariantCulture)?.Trim(),
+            physicalRow => region.PageHeader == null ? null : Convert.ToString(ReadRaw(
+                sheet.Cell(physicalRow + 1, region.PageHeader.Marker.Column + 1), typeof(string)),
+                CultureInfo.InvariantCulture)?.Trim(), cancellationToken);
+        foreach (var breakRow in rowPlan.PageBreakRows)
+            ApplyPageBreak(sheet, breakRow);
+    }
+
+    /// <summary>
+    /// 预检重复页眉的目标行及占用范围。
+    /// </summary>
+    private static void ValidatePageHeader<TEntity>(IXLWorksheet sheet,
+        ExcelEntityListRegion<TEntity> region, ExcelEntityRowPlan rowPlan, int columnCount,
+        IReadOnlyList<ExcelEntityCellBinding<TEntity>> fixedCells)
+        where TEntity : class, new()
+    {
+        var header = region.PageHeader;
+        if (header == null)
+            return;
+        ExcelEntityPageHeaderImportValidation.ValidateMarkerColumn(region, columnCount);
+        if (rowPlan.Segments.Any(item => item.Kind == ExcelEntityRowPlan.SegmentKind.PageHeader))
+            ValidatePageHeaderSourceMetadata(sheet, header);
+        var source = header.SourceRange;
+        var firstDetail = region.Start.Row + (region.IncludeHeader ? 1 : 0);
+        if (source.Last.Row != firstDetail - 1)
+            throw new BingOfficesConfigurationException(
+                $"重复页眉源区域未紧邻明细: {sheet.Name}!{source.Address}",
+                stage: BingOfficesStage.Plan);
+        if (region.IncludeHeader && (source.First.Column > region.Start.Column
+            || source.Last.Column < region.Start.Column + columnCount - 1))
+            throw new BingOfficesConfigurationException(
+                $"重复页眉源区域未包含完整列表表头: {sheet.Name}!{source.Address}",
+                stage: BingOfficesStage.Plan);
+        if (region.IncludeHeader && header.Marker.Row == region.Start.Row
+            && header.Marker.Column >= region.Start.Column
+            && header.Marker.Column < region.Start.Column + columnCount)
+            throw new BingOfficesConfigurationException(
+                $"重复页眉标记与列表表头重叠: {sheet.Name}!{header.Marker.Address}",
+                stage: BingOfficesStage.Plan);
+        foreach (var merge in header.Merges)
+        {
+            var absolute = ExcelEntityCellRange.Parse(
+                ToAddress(source.First.Row + merge.First.Row,
+                    source.First.Column + merge.First.Column) + ":" +
+                ToAddress(source.First.Row + merge.Last.Row,
+                    source.First.Column + merge.Last.Column));
+            if (region.IncludeHeader && absolute.First.Row <= region.Start.Row
+                && absolute.Last.Row >= region.Start.Row
+                && absolute.First.Column <= region.Start.Column + columnCount - 1
+                && absolute.Last.Column >= region.Start.Column)
+                throw new BingOfficesConfigurationException("重复页眉合并区域与列表表头重叠。",
+                    BingOfficesStage.Plan, region.SheetName, region.Start.Row + 1,
+                    Math.Max(absolute.First.Column, region.Start.Column) + 1);
+            if (absolute.Contains(header.Marker) && !absolute.First.Equals(header.Marker))
+                throw new BingOfficesConfigurationException(
+                    $"重复页眉标记必须位于合并区域左上角: {sheet.Name}!{header.Marker.Address}",
+                    stage: BingOfficesStage.Plan);
+            EnsureMerge(sheet, absolute, addMissing: false, requireExisting: false);
+        }
+        foreach (var merge in sheet.MergedRanges)
+        {
+            var address = merge.RangeAddress;
+            var overlapsSource = address.FirstAddress.RowNumber <= source.Last.Row + 1
+                && address.LastAddress.RowNumber >= source.First.Row + 1
+                && address.FirstAddress.ColumnNumber <= source.Last.Column + 1
+                && address.LastAddress.ColumnNumber >= source.First.Column + 1;
+            if (overlapsSource && (address.FirstAddress.RowNumber < source.First.Row + 1
+                || address.LastAddress.RowNumber > source.Last.Row + 1
+                || address.FirstAddress.ColumnNumber < source.First.Column + 1
+                || address.LastAddress.ColumnNumber > source.Last.Column + 1))
+                throw new BingOfficesConfigurationException(
+                    $"重复页眉源区域包含不完整的模板合并: {sheet.Name}!{source.Address}",
+                    stage: BingOfficesStage.Plan);
+            if (address.FirstAddress.RowNumber <= header.Marker.Row + 1
+                && address.LastAddress.RowNumber >= header.Marker.Row + 1
+                && address.FirstAddress.ColumnNumber <= header.Marker.Column + 1
+                && address.LastAddress.ColumnNumber >= header.Marker.Column + 1
+                && (address.FirstAddress.RowNumber != header.Marker.Row + 1
+                    || address.FirstAddress.ColumnNumber != header.Marker.Column + 1))
+                throw new BingOfficesConfigurationException(
+                    $"重复页眉标记必须位于合并区域左上角: {sheet.Name}!{header.Marker.Address}",
+                    stage: BingOfficesStage.Plan);
+        }
+        foreach (var segment in rowPlan.Segments.Where(item =>
+                     item.Kind == ExcelEntityRowPlan.SegmentKind.PageHeader))
+        {
+            var lastRow = (long)segment.Row + header.RowCount - 1;
+            if (lastRow > 1_048_575L || region.End.HasValue
+                && (lastRow > region.End.Value.Row || source.Last.Column > region.End.Value.Column))
+                throw new BingOfficesConfigurationException(
+                    $"重复页眉超出工作表边界: {sheet.Name}!{source.Address}",
+                    stage: BingOfficesStage.Plan);
+            foreach (var merge in sheet.MergedRanges)
+            {
+                var address = merge.RangeAddress;
+                if (address.FirstAddress.RowNumber <= lastRow + 1
+                    && address.LastAddress.RowNumber >= segment.Row + 1
+                    && address.FirstAddress.ColumnNumber <= source.Last.Column + 1
+                    && address.LastAddress.ColumnNumber >= source.First.Column + 1)
+                    throw new BingOfficesConfigurationException(
+                        $"重复页眉与模板合并区域冲突: {sheet.Name}!{source.Address}",
+                        stage: BingOfficesStage.Plan);
+            }
+            foreach (var binding in fixedCells)
+            {
+                var target = binding.Reference;
+                var targetSheet = binding.SheetName;
+                if (binding.AnchorName != null)
+                {
+                    var named = ResolveNamedAnchor(sheet, binding.AnchorName);
+                    target = named.Reference;
+                    targetSheet = named.Sheet.Name;
+                }
+                if (string.Equals(targetSheet, sheet.Name, StringComparison.OrdinalIgnoreCase)
+                    && target.Row >= segment.Row && target.Row <= lastRow
+                    && target.Column >= source.First.Column && target.Column <= source.Last.Column)
+                    throw new BingOfficesConfigurationException(
+                        $"重复页眉与固定单元格冲突: {sheet.Name}!{target.Address}",
+                        stage: BingOfficesStage.Plan);
+            }
+            for (var row = segment.Row; row <= lastRow; row++)
+                for (var column = source.First.Column; column <= source.Last.Column; column++)
+                    if (!sheet.Cell(row + 1, column + 1).IsEmpty(XLCellsUsedOptions.Contents))
+                        throw new BingOfficesConfigurationException(
+                            $"重复页眉与已有单元格冲突: {sheet.Name}!{ToAddress(row, column)}",
+                            stage: BingOfficesStage.Plan);
+        }
+    }
+
+    /// <summary>拒绝源页眉中无法随页复制的单元格和区域元数据。</summary>
+    private static void ValidatePageHeaderSourceMetadata(IXLWorksheet sheet,
+        ExcelEntityPageHeaderDefinition header)
+    {
+        var source = header.SourceRange;
+        for (var row = source.First.Row; row <= source.Last.Row; row++)
+            for (var column = source.First.Column; column <= source.Last.Column; column++)
+            {
+                var cell = sheet.Cell(row + 1, column + 1);
+                if (!cell.HasRichText && !cell.HasHyperlink && !cell.HasComment)
+                    continue;
+                throw new BingOfficesConfigurationException("重复页眉源单元格包含不支持复制的元数据。",
+                    BingOfficesStage.Plan, sheet.Name, row + 1, column + 1);
+            }
+        foreach (var validation in sheet.DataValidations)
+            foreach (var range in validation.Ranges)
+                if (IntersectsPageHeaderSource(range.RangeAddress, source))
+                    throw new BingOfficesConfigurationException("重复页眉源区域包含数据校验。",
+                        BingOfficesStage.Plan, sheet.Name,
+                        Math.Max(range.RangeAddress.FirstAddress.RowNumber, source.First.Row + 1),
+                        Math.Max(range.RangeAddress.FirstAddress.ColumnNumber, source.First.Column + 1));
+        foreach (var format in sheet.ConditionalFormats)
+            foreach (var range in format.Ranges)
+                if (IntersectsPageHeaderSource(range.RangeAddress, source))
+                    throw new BingOfficesConfigurationException("重复页眉源区域包含条件格式。",
+                        BingOfficesStage.Plan, sheet.Name,
+                        Math.Max(range.RangeAddress.FirstAddress.RowNumber, source.First.Row + 1),
+                        Math.Max(range.RangeAddress.FirstAddress.ColumnNumber, source.First.Column + 1));
+    }
+
+    /// <summary>判断工作表区域是否与页眉源区域相交。</summary>
+    private static bool IntersectsPageHeaderSource(IXLRangeAddress range,
+        ExcelEntityCellRange source) =>
+        range.FirstAddress.RowNumber <= source.Last.Row + 1
+        && range.LastAddress.RowNumber >= source.First.Row + 1
+        && range.FirstAddress.ColumnNumber <= source.Last.Column + 1
+        && range.LastAddress.ColumnNumber >= source.First.Column + 1;
+
+    /// <summary>拒绝覆盖页眉源区域的配置式数据校验。</summary>
+    private static void ValidateConfiguredPageHeaderValidations<TEntity>(
+        ExcelEntityListRegion<TEntity> region,
+        IReadOnlyList<ExcelDataValidationDefinition> validations)
+        where TEntity : class, new()
+    {
+        if (validations == null)
+            return;
+        var source = region.PageHeader.SourceRange;
+        foreach (var validation in validations)
+        {
+            var range = validation.Range;
+            if (range.EndRow < source.First.Row || range.StartRow > source.Last.Row
+                || range.EndColumn < source.First.Column || range.StartColumn > source.Last.Column)
+                continue;
+            throw new BingOfficesConfigurationException("重复页眉源区域包含配置式数据校验。",
+                BingOfficesStage.Plan, region.SheetName,
+                Math.Max(range.StartRow, source.First.Row) + 1,
+                Math.Max(range.StartColumn, source.First.Column) + 1);
+        }
+    }
+
+    /// <summary>校验明细中的保留标记。</summary>
+    private static void ValidateWrittenDetailMarker<TEntity>(IXLWorksheet sheet,
+        ExcelEntityListRegion<TEntity> region, int row) where TEntity : class, new()
+    {
+        if (region.PageFooter != null && string.Equals(Convert.ToString(ReadRaw(
+                sheet.Cell(row + 1, region.Start.Column + 1), typeof(string)),
+                CultureInfo.InvariantCulture)?.Trim(), region.PageFooter.MarkerText, StringComparison.Ordinal))
+            throw new BingOfficesConfigurationException("明细值与每页尾部标记文本冲突。",
+                BingOfficesStage.Plan, region.SheetName, row + 1, region.Start.Column + 1);
+        var header = region.PageHeader;
+        if (header == null)
+            return;
+        var value = Convert.ToString(
+            ReadRaw(sheet.Cell(row + 1, header.Marker.Column + 1), typeof(string)),
+            CultureInfo.InvariantCulture)?.Trim();
+        if (string.Equals(value, header.MarkerText, StringComparison.Ordinal))
+            throw new BingOfficesConfigurationException("明细值与重复页眉标记文本冲突。",
+                BingOfficesStage.Plan, region.SheetName, row + 1,
+                header.Marker.Column + 1);
+    }
+
+    /// <summary>校验写出的每页列表表头未被覆盖。</summary>
+    private static void ValidateWrittenPageHeader<TEntity>(IXLWorksheet sheet,
+        ExcelEntityListRegion<TEntity> region, EntityRegionPlan plan, int startRow)
+        where TEntity : class, new()
+    {
+        if (!region.IncludeHeader)
+            return;
+        var row = startRow + region.Start.Row - region.PageHeader.SourceRange.First.Row;
+        foreach (var column in plan.Columns)
+        {
+            var index = region.Start.Column + column.PhysicalColumnIndex;
+            var actual = Convert.ToString(ReadRaw(sheet.Cell(row + 1, index + 1),
+                typeof(string)), CultureInfo.InvariantCulture)?.Trim();
+            if (!string.Equals(actual, column.Title, StringComparison.Ordinal))
+                throw new BingOfficesConfigurationException("重复页眉的列表表头与映射标题不一致。",
+                    BingOfficesStage.Plan, region.SheetName, row + 1, index + 1);
+        }
+    }
+
+    /// <summary>
+    /// 写入首页页眉或复制后续页页眉。
+    /// </summary>
+    private static void WritePageHeader(IXLWorksheet sheet, ExcelEntityPageHeaderDefinition header,
+        int startRow, int pageNumber, int pageCount, IReadOnlyList<object> items, bool source,
+        CancellationToken cancellationToken)
+    {
+        var range = header.SourceRange;
+        if (!source)
+        {
+            for (var offset = 0; offset < header.RowCount; offset++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var sourceRow = range.First.Row + offset + 1;
+                var targetRow = startRow + offset + 1;
+                if (sheet.Row(sourceRow).IsHidden)
+                    sheet.Row(targetRow).Hide();
+                else
+                    sheet.Row(targetRow).Unhide();
+                sheet.Row(targetRow).Height = sheet.Row(sourceRow).Height;
+                for (var column = range.First.Column; column <= range.Last.Column; column++)
+                {
+                    var origin = sheet.Cell(sourceRow, column + 1);
+                    var target = sheet.Cell(targetRow, column + 1);
+                    if (origin.HasFormula)
+                        target.FormulaA1 = origin.FormulaA1;
+                    else
+                        target.Value = origin.Value;
+                    target.Style = origin.Style;
+                }
+            }
+        }
+
+        var markerRow = startRow + header.Marker.Row - range.First.Row;
+        WriteValue(sheet.Cell(markerRow + 1, header.Marker.Column + 1), header.MarkerText);
+        foreach (var definition in header.Cells)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var cellRow = startRow + definition.Reference.Row;
+            var cellColumn = range.First.Column + definition.Reference.Column;
+            object value;
+            try
+            {
+                value = definition.GetValue(pageNumber, pageCount, items);
+            }
+            catch (BingOfficesException)
+            {
+                throw;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception exception) when (exception is not OutOfMemoryException
+                && exception is not StackOverflowException)
+            {
+                throw new BingOfficesExportException("Excel 实体重复页眉计算失败。", exception,
+                    Provider, BingOfficesStage.Validate, sheet.Name, cellRow + 1, cellColumn + 1,
+                    code: BingOfficesErrorCode.UserExtensionFailed);
+            }
+            var cell = sheet.Cell(cellRow + 1, cellColumn + 1);
+            WriteValue(cell, value);
+            ApplyFooterStyle(cell, definition.Style, definition.NumberFormat);
+        }
+
+        var merges = source
+            ? header.Merges.Select(merge => ExcelEntityCellRange.Parse(
+                ToAddress(startRow + merge.First.Row, range.First.Column + merge.First.Column) + ":" +
+                ToAddress(startRow + merge.Last.Row, range.First.Column + merge.Last.Column))).ToArray()
+            : sheet.MergedRanges.Where(merge => merge.RangeAddress.FirstAddress.RowNumber >= range.First.Row + 1
+                && merge.RangeAddress.LastAddress.RowNumber <= range.Last.Row + 1
+                && merge.RangeAddress.FirstAddress.ColumnNumber >= range.First.Column + 1
+                && merge.RangeAddress.LastAddress.ColumnNumber <= range.Last.Column + 1)
+                .Select(merge => ExcelEntityCellRange.Parse(
+                    ToAddress(startRow + merge.RangeAddress.FirstAddress.RowNumber - range.First.Row - 1,
+                        merge.RangeAddress.FirstAddress.ColumnNumber - 1) + ":" +
+                    ToAddress(startRow + merge.RangeAddress.LastAddress.RowNumber - range.First.Row - 1,
+                        merge.RangeAddress.LastAddress.ColumnNumber - 1))).ToArray();
+        foreach (var merge in merges)
+            EnsureMerge(sheet, merge, addMissing: true, requireExisting: false);
     }
 
     /// <summary>
@@ -634,10 +1925,10 @@ internal sealed class ClosedXmlEntityLayoutExecutor
     /// <param name="columnCount">映射计划的列数。</param>
     /// <param name="itemCount">实际明细行数。</param>
     /// <param name="footprints">已登记的列表区域范围。</param>
-    /// <param name="values">列表项快照；配置分组小计时用于计算运行时行数。</param>
+    /// <param name="rowPlan">已预检的分组分页物理行规划。</param>
     private static void RegisterRuntimeFootprint<TEntity>(ExcelEntityListRegion<TEntity> region,
         int columnCount, int itemCount, ICollection<EntityListFootprint> footprints,
-        IReadOnlyList<object> values = null)
+        ExcelEntityRowPlan rowPlan = null)
         where TEntity : class, new()
     {
         var dataRows = (long)itemCount + (region.IncludeHeader ? 1 : 0);
@@ -646,19 +1937,35 @@ internal sealed class ClosedXmlEntityLayoutExecutor
         var lastRow = hasData ? firstRow + dataRows - 1 : firstRow - 1;
         var firstColumn = (long)region.Start.Column;
         var lastColumn = hasData ? firstColumn + Math.Max(0, columnCount - 1) : firstColumn - 1;
-        if (region.GroupSubtotal != null)
+        if (region.GroupSubtotal != null || region.PageHeader != null || region.PageFooter != null)
         {
-            var row = (long)region.Start.Row + (region.IncludeHeader ? 1 : 0);
-            foreach (var range in GetGroupedRanges(values ?? Array.Empty<object>(), region.GroupSubtotal))
-                row += range.Count + region.GroupSubtotal.Footer.GapRows
-                    + GetFooterHeight(region.GroupSubtotal.Footer);
-            lastRow = Math.Max(lastRow, row - 1);
-            foreach (var cell in region.GroupSubtotal.Footer.Cells ?? Array.Empty<IExcelEntityListFooterCell>())
+            lastRow = Math.Max(lastRow, (long)rowPlan.FinalRow - 1);
+            if (region.GroupSubtotal != null)
+            {
+                foreach (var cell in region.GroupSubtotal.Footer.Cells ?? Array.Empty<IExcelEntityListFooterCell>())
+                    lastColumn = Math.Max(lastColumn, firstColumn + cell.Reference.Column);
+                foreach (var merge in region.GroupSubtotal.Footer.Merges ?? Array.Empty<ExcelEntityCellRange>())
+                    lastColumn = Math.Max(lastColumn, firstColumn + merge.Last.Column);
+            }
+            if (region.PageSubtotal != null)
+            {
+                foreach (var cell in region.PageSubtotal.Cells ?? Array.Empty<IExcelEntityListFooterCell>())
+                    lastColumn = Math.Max(lastColumn, firstColumn + cell.Reference.Column);
+                foreach (var merge in region.PageSubtotal.Merges ?? Array.Empty<ExcelEntityCellRange>())
+                    lastColumn = Math.Max(lastColumn, firstColumn + merge.Last.Column);
+            }
+            if (region.PageHeader != null)
+            {
+                firstRow = Math.Min(firstRow, region.PageHeader.SourceRange.First.Row);
+                lastColumn = Math.Max(lastColumn, region.PageHeader.SourceRange.Last.Column);
+            }
+            foreach (var cell in region.PageFooter?.Cells ?? Array.Empty<IExcelEntityListFooterCell>())
                 lastColumn = Math.Max(lastColumn, firstColumn + cell.Reference.Column);
-            foreach (var merge in region.GroupSubtotal.Footer.Merges ?? Array.Empty<ExcelEntityCellRange>())
+            foreach (var merge in region.PageFooter?.Merges ?? Array.Empty<ExcelEntityCellRange>())
                 lastColumn = Math.Max(lastColumn, firstColumn + merge.Last.Column);
         }
-        if (region.PageSubtotal != null && region.PageBreakRows is int rowsPerPage)
+        if (region.GroupSubtotal == null && region.PageSubtotal != null
+            && region.PageBreakRows is int rowsPerPage)
         {
             var row = (long)region.Start.Row + (region.IncludeHeader ? 1 : 0);
             var written = 0;
@@ -679,7 +1986,8 @@ internal sealed class ClosedXmlEntityLayoutExecutor
         }
         if (region.Footer != null)
         {
-            var footerBaseRow = region.GroupSubtotal != null || region.PageSubtotal != null
+            var footerBaseRow = rowPlan != null
+                ? rowPlan.FinalRow : region.GroupSubtotal != null || region.PageSubtotal != null
                 ? lastRow + 1 : firstRow + dataRows;
             var footerRow = footerBaseRow + region.Footer.GapRows;
             lastRow = Math.Max(lastRow, footerRow);
@@ -695,9 +2003,12 @@ internal sealed class ClosedXmlEntityLayoutExecutor
                 lastColumn = Math.Max(lastColumn, firstColumn + merge.Last.Column);
             }
         }
-        if (!hasData && region.Footer == null)
+        if (!hasData && region.Footer == null && region.PageHeader == null && region.PageFooter == null)
             return;
-        var current = new EntityListFootprint(region.SheetName, firstRow, lastRow, firstColumn, lastColumn);
+        var footprintFirstColumn = region.PageHeader == null ? firstColumn
+            : Math.Min(firstColumn, region.PageHeader.SourceRange.First.Column);
+        var current = new EntityListFootprint(region.SheetName, firstRow, lastRow,
+            footprintFirstColumn, lastColumn);
         if (footprints.Any(existing => current.Intersects(existing)))
             throw new BingOfficesConfigurationException(
                 $"实体列表区域运行时范围与已有区域重叠: {region.SheetName}!{region.Start.Address}",
@@ -715,13 +2026,18 @@ internal sealed class ClosedXmlEntityLayoutExecutor
     /// <param name="isDate1904">是否使用 1904 日期系统。</param>
     /// <param name="errors">共享导入错误集合。</param>
     /// <param name="limits">实体导入使用的资源限制。</param>
+    /// <param name="uniqueBudget">跨列表区域共享的唯一值预算。</param>
     /// <param name="validationFailureMode">当前行校验失败后的继续策略。</param>
+    /// <param name="validationMode">导入校验规则来源。</param>
+    /// <param name="unsupportedFeaturePolicy">不支持的工作簿规则处理策略。</param>
     /// <param name="totalRows">跨列表区域累计读取的数据行数。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>列表区域导入结果。</returns>
     private ExcelSheetImportResult ReadRegion<TEntity>(XLWorkbook workbook, TEntity entity,
         ExcelEntityListRegion<TEntity> region, bool isDate1904, ICollection<ExcelImportError> errors,
-        ExcelResourceLimits limits, ExcelValidationFailureMode validationFailureMode,
+        ExcelResourceLimits limits, ClosedXmlUniqueBudget uniqueBudget,
+        ExcelValidationFailureMode validationFailureMode,
+        ExcelImportValidationMode validationMode, ExcelUnsupportedFeaturePolicy unsupportedFeaturePolicy,
         ref int totalRows, CancellationToken cancellationToken)
         where TEntity : class, new()
     {
@@ -729,19 +2045,36 @@ internal sealed class ClosedXmlEntityLayoutExecutor
         var plan = CreateRegionPlan(region, MappingDirection.Import);
         var maxItems = GetRegionItemCapacity(region, plan.Width, sheet);
         ValidateBounds(region, plan.Width, maxItems);
+        ExcelEntityPageHeaderImportValidation.ValidateMarkerColumn(region, plan.Width);
         var rows = new List<int>();
         var items = new List<object>();
-        var duplicateValues = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
-        var uniqueTracker = new UniqueTracker(duplicateValues, limits?.MaxTrackedUniqueValues,
-            CreateStringComparer(limits?.UniqueComparison ?? StringComparison.OrdinalIgnoreCase));
+        var configuredValidationEnabled = UsesConfiguredValidation(validationMode);
+        var tracksUnique = configuredValidationEnabled && plan.HasUniqueColumns;
+        var duplicateValues = tracksUnique
+            ? new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase)
+            : null;
+        var uniqueTracker = tracksUnique
+            ? new UniqueTracker(duplicateValues, uniqueBudget?.Remaining ?? limits?.MaxTrackedUniqueValues,
+                CreateStringComparer(limits?.UniqueComparison ?? StringComparison.OrdinalIgnoreCase))
+            : null;
         var row = region.Start.Row + (region.IncludeHeader ? 1 : 0);
         var markerRow = FindFooterMarkerRow(sheet, region, row);
         var lastRow = markerRow.HasValue ? markerRow.Value - 1 - (region.Footer?.GapRows ?? 0)
-            : (region.End?.Row ?? sheet.LastRowUsed()?.RowNumber() - 1 ?? row - 1);
+            : region.PageHeader == null && region.PageFooter == null
+                ? region.End?.Row ?? sheet.LastRowUsed()?.RowNumber() - 1 ?? row - 1
+                : FindLastPageHeaderRegionRow(sheet, region, plan.Width, row,
+                    cancellationToken);
         var skipSpans = region.GroupSubtotal == null && region.PageSubtotal == null
+            && region.PageHeader == null && region.PageFooter == null
             ? Array.Empty<(int StartRow, int EndRow)>()
-            : FindFooterSkipSpans(sheet, region, row)
+            : FindFooterSkipSpans(sheet, region, row, lastRow, cancellationToken)
                 .Where(span => span.StartRow <= lastRow).ToArray();
+        ExcelEntityPageHeaderImportValidation.ValidateCopiedHeaders(region, skipSpans,
+            plan.Width,
+            index => plan.Columns.FirstOrDefault(column => column.PhysicalColumnIndex == index)?.Title,
+            (sourceRow, column) => Convert.ToString(ReadRaw(
+                sheet.Cell(sourceRow + 1, column + 1), typeof(string)),
+                CultureInfo.InvariantCulture)?.Trim(), cancellationToken);
         while (row <= lastRow)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -761,10 +2094,32 @@ internal sealed class ClosedXmlEntityLayoutExecutor
                 break;
             }
             totalRows++;
+            if (UsesWorkbookValidation(validationMode))
+            {
+                var nativeValid = true;
+                foreach (var column in plan.Columns.Where(item => item.Calculated == null))
+                {
+                    var columnIndex = region.Start.Column + column.PhysicalColumnIndex;
+                    var cell = sheet.Cell(row + 1, columnIndex + 1);
+                    var raw = ReadRaw(cell, column.Property?.PropertyType ?? typeof(object));
+                    var text = ClosedXmlValueAdapter.ToText(raw, CultureInfo.InvariantCulture);
+                    if (ValidateWorkbookCell(sheet, cell, raw, text, isDate1904,
+                            unsupportedFeaturePolicy, errors, column.Key, cancellationToken))
+                        continue;
+                    nativeValid = false;
+                    if (validationFailureMode == ExcelValidationFailureMode.StopOnFirstFailure)
+                        break;
+                }
+                if (!nativeValid)
+                {
+                    row++;
+                    continue;
+                }
+            }
             var item = Activator.CreateInstance(region.ItemType);
             var dynamicValues = GetDynamicValues(item, plan, create: true);
             var valid = true;
-            uniqueTracker.BeginRow();
+            uniqueTracker?.BeginRow();
             foreach (var column in plan.Columns)
             {
                 var columnIndex = region.Start.Column + column.PhysicalColumnIndex;
@@ -775,7 +2130,7 @@ internal sealed class ClosedXmlEntityLayoutExecutor
                 var raw = ReadRaw(cell, column.Property?.PropertyType ?? typeof(object));
                 var text = ClosedXmlValueAdapter.ToText(raw, CultureInfo.InvariantCulture);
                 var cellValue = ClosedXmlValueAdapter.CreateCell(raw, text, isDate1904);
-                if (column.Dynamic != null && !ValidateDynamicImport(column.Dynamic, raw, null, text,
+                if (UsesConfiguredValidation(validationMode) && column.Dynamic != null && !ValidateDynamicImport(column.Dynamic, raw, null, text,
                         cellValue, region.SheetName, reference, errors, rawOnly: true))
                 {
                     valid = false;
@@ -783,7 +2138,7 @@ internal sealed class ClosedXmlEntityLayoutExecutor
                         break;
                     continue;
                 }
-                if (column.Fixed != null && !ValidateImport(new EntityColumn(column.Fixed, column.Property),
+                if (UsesConfiguredValidation(validationMode) && column.Fixed != null && !ValidateImport(new EntityColumn(column.Fixed, column.Property),
                         raw, null, text, cellValue, region.SheetName, reference, errors, rawOnly: true))
                 {
                     valid = false;
@@ -799,7 +2154,7 @@ internal sealed class ClosedXmlEntityLayoutExecutor
                         : ClosedXmlValueAdapter.ConvertFrom(raw, column.Fixed, column.Property,
                             region.SheetName, row + 1, columnIndex + 1,
                             CultureInfo.InvariantCulture, isDate1904, cellValue);
-                    if (column.Dynamic != null && !ValidateDynamicImport(column.Dynamic, raw, converted,
+                    if (UsesConfiguredValidation(validationMode) && column.Dynamic != null && !ValidateDynamicImport(column.Dynamic, raw, converted,
                             text, cellValue, region.SheetName, reference, errors, rawOnly: false))
                     {
                         valid = false;
@@ -807,7 +2162,7 @@ internal sealed class ClosedXmlEntityLayoutExecutor
                             break;
                         continue;
                     }
-                    if (column.Fixed != null && !ValidateImport(new EntityColumn(column.Fixed, column.Property),
+                    if (UsesConfiguredValidation(validationMode) && column.Fixed != null && !ValidateImport(new EntityColumn(column.Fixed, column.Property),
                             raw, converted, text, cellValue, region.SheetName, reference, errors, rawOnly: false))
                     {
                         valid = false;
@@ -815,7 +2170,7 @@ internal sealed class ClosedXmlEntityLayoutExecutor
                             break;
                         continue;
                     }
-                    if (column.Dynamic != null && !ValidateUniqueImport(column.Dynamic.Key,
+                    if (UsesConfiguredValidation(validationMode) && column.Dynamic != null && !ValidateUniqueImport(column.Dynamic.Key,
                             column.Dynamic.IsUnique, column.Dynamic.UniqueIgnoreEmpty, text,
                             region.SheetName, reference, errors, uniqueTracker))
                     {
@@ -824,7 +2179,7 @@ internal sealed class ClosedXmlEntityLayoutExecutor
                             break;
                         continue;
                     }
-                    if (column.Fixed != null && !ValidateUniqueImport(column.Fixed.Name,
+                    if (UsesConfiguredValidation(validationMode) && column.Fixed != null && !ValidateUniqueImport(column.Fixed.Name,
                             column.Fixed.IsUnique, column.Fixed.UniqueIgnoreEmpty, text,
                             region.SheetName, reference, errors, uniqueTracker))
                     {
@@ -853,21 +2208,98 @@ internal sealed class ClosedXmlEntityLayoutExecutor
             {
                 items.Add(item);
                 rows.Add(row);
-                uniqueTracker.CommitRow();
+                uniqueTracker?.CommitRow();
             }
             else
-                uniqueTracker.RollbackRow();
+                uniqueTracker?.RollbackRow();
             row++;
         }
-        if (region.Setter != null)
-        {
-            var typed = CreateTypedList(region.ItemType, items);
-            region.Setter(entity, typed);
-        }
+        AssignRegionItems(entity, region, items);
+        uniqueBudget?.Consume(uniqueTracker?.TrackedValueCount ?? 0);
         return new ExcelSheetImportResult(region.SheetName, region.ItemType, rows,
             errors.Where(error => string.Equals(error.SheetName, region.SheetName,
                 StringComparison.OrdinalIgnoreCase)).ToArray());
     }
+
+    /// <summary>
+    /// 将导入项写入实体列表集合。
+    /// </summary>
+    /// <typeparam name="TEntity">聚合对象类型。</typeparam>
+    /// <param name="entity">接收列表项的聚合对象。</param>
+    /// <param name="region">列表区域定义。</param>
+    /// <param name="items">已成功导入的列表项。</param>
+    private static void AssignRegionItems<TEntity>(TEntity entity, ExcelEntityListRegion<TEntity> region,
+        IReadOnlyList<object> items) where TEntity : class, new()
+    {
+        if (region.Setter != null)
+        {
+            region.Setter(entity, CreateTypedList(region.ItemType, items));
+            return;
+        }
+
+        var collection = region.Getter(entity);
+        var collectionType = typeof(ICollection<>).MakeGenericType(region.ItemType);
+        if (!collectionType.IsInstanceOfType(collection)
+            || (bool)collectionType.GetProperty(nameof(ICollection<object>.IsReadOnly))
+                .GetValue(collection))
+            throw new BingOfficesConfigurationException($"实体集合属性不可写入: {region.PropertyName}",
+                stage: BingOfficesStage.Plan);
+
+        try
+        {
+            collectionType.GetMethod(nameof(ICollection<object>.Clear)).Invoke(collection, null);
+            var add = collectionType.GetMethod(nameof(ICollection<object>.Add));
+            foreach (var item in items)
+                add.Invoke(collection, new[] { item });
+        }
+        catch (TargetInvocationException exception) when (exception.InnerException != null)
+        {
+            ExceptionDispatchInfo.Capture(exception.InnerException).Throw();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// 校验实体单元格的工作簿原生规则。
+    /// </summary>
+    /// <param name="sheet">目标工作表。</param>
+    /// <param name="cell">待校验的单元格。</param>
+    /// <param name="raw">单元格原始值。</param>
+    /// <param name="text">单元格文本。</param>
+    /// <param name="isDate1904">工作簿是否使用 1904 日期系统。</param>
+    /// <param name="unsupportedFeaturePolicy">不支持规则的处理策略。</param>
+    /// <param name="errors">接收校验错误的收集器。</param>
+    /// <param name="propertyName">实体属性名称。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>当前单元格通过规则时为 <see langword="true" />；否则为 <see langword="false" />。</returns>
+    private static bool ValidateWorkbookCell(IXLWorksheet sheet, IXLCell cell, object raw, string text,
+        bool isDate1904, ExcelUnsupportedFeaturePolicy unsupportedFeaturePolicy,
+        ICollection<ExcelImportError> errors, string propertyName, CancellationToken cancellationToken)
+    {
+        var result = ClosedXmlWorkbookValidationPipeline.Validate(sheet, cell, raw, text,
+            CultureInfo.InvariantCulture, isDate1904, cancellationToken);
+        if (result.IsValid)
+            return true;
+        errors.Add(new ExcelImportError(ExcelImportErrorCode.WorkbookValidation, result.Message,
+            sheet.Name, cell.Address.RowNumber, cell.Address.ColumnNumber, propertyName, rawValue: raw));
+        return result.IsUnsupported && unsupportedFeaturePolicy == ExcelUnsupportedFeaturePolicy.Report;
+    }
+
+    /// <summary>
+    /// 判断是否执行工作簿原生校验。
+    /// </summary>
+    /// <param name="mode">导入校验模式。</param>
+    /// <returns>模式包含工作簿原生校验时为 <see langword="true" />；否则为 <see langword="false" />。</returns>
+    private static bool UsesWorkbookValidation(ExcelImportValidationMode mode) =>
+        mode == ExcelImportValidationMode.WorkbookRules || mode == ExcelImportValidationMode.ConfiguredAndWorkbook;
+
+    /// <summary>
+    /// 判断是否执行配置校验。
+    /// </summary>
+    /// <param name="mode">导入校验模式。</param>
+    /// <returns>模式包含配置校验时为 <see langword="true" />；否则为 <see langword="false" />。</returns>
+    private static bool UsesConfiguredValidation(ExcelImportValidationMode mode) =>
+        mode == ExcelImportValidationMode.ConfiguredRules || mode == ExcelImportValidationMode.ConfiguredAndWorkbook;
 
     /// <summary>
     /// 为列表项目类型创建固定列和动态列的统一物理布局。
@@ -901,17 +2333,80 @@ internal sealed class ClosedXmlEntityLayoutExecutor
         if (columns.Length == 0)
             throw new BingOfficesConfigurationException($"实体列表没有可用映射列: {region.ItemType.FullName}",
                 stage: BingOfficesStage.Plan);
-        var dynamicPlanColumn = plan.DynamicColumns.Count == 0 ? null
-            : plan.Columns.SingleOrDefault(column => column.IsDynamicColumn && !column.Ignored);
-        var dynamicProperty = dynamicPlanColumn == null ? null : region.ItemType.GetProperty(dynamicPlanColumn.Name,
-            BindingFlags.Instance | BindingFlags.Public);
-        if (plan.DynamicColumns.Count > 0 && region.DynamicColumnGroups.Count == 0 &&
-            (dynamicProperty == null || !dynamicProperty.CanRead
-            || !typeof(IDictionary<string, object>).IsAssignableFrom(dynamicProperty.PropertyType)))
-            throw new BingOfficesConfigurationException(
-                "实体动态列属性必须是可读的 IDictionary<string, object>。", stage: BingOfficesStage.Plan);
+        var dynamicColumns = plan.Columns.Where(column => column.IsDynamicColumn && !column.Ignored).ToArray();
+        var dynamicProperty = dynamicColumns.Length == 1
+            ? region.ItemType.GetProperty(dynamicColumns[0].Name, BindingFlags.Instance | BindingFlags.Public)
+            : null;
+        var implicitDynamicProperties = region.DynamicColumnGroups.Count == 0
+            ? CreateImplicitDynamicPropertyMap(region.ItemType, plan, dynamicColumns)
+            : new Dictionary<string, PropertyInfo>(StringComparer.OrdinalIgnoreCase);
         var width = columns.Max(column => column.PhysicalColumnIndex) + 1;
-        return new EntityRegionPlan(columns, dynamicProperty, region.DynamicColumnGroups, width);
+        return new EntityRegionPlan(columns, dynamicProperty, region.DynamicColumnGroups,
+            implicitDynamicProperties, width);
+    }
+
+    /// <summary>
+    /// 创建隐式动态列到实体字典属性的归属映射。
+    /// </summary>
+    /// <param name="itemType">列表项类型。</param>
+    /// <param name="mapping">列表项映射计划。</param>
+    /// <param name="dynamicColumns">动态字典属性列。</param>
+    /// <returns>动态列 Key 到实体字典属性的映射。</returns>
+    private static IReadOnlyDictionary<string, PropertyInfo> CreateImplicitDynamicPropertyMap(Type itemType,
+        IExcelMappingPlan mapping, IReadOnlyList<IExcelMappingColumn> dynamicColumns)
+    {
+        var properties = (dynamicColumns ?? Array.Empty<IExcelMappingColumn>())
+            .ToDictionary(column => column.Name,
+                column => itemType.GetProperty(column.Name, BindingFlags.Instance | BindingFlags.Public),
+                StringComparer.OrdinalIgnoreCase);
+        foreach (var pair in properties)
+        {
+            var property = pair.Value;
+            if (property == null || !property.CanRead || !property.CanWrite
+                || !typeof(IDictionary<string, object>).IsAssignableFrom(property.PropertyType))
+                throw new BingOfficesConfigurationException(
+                    $"实体动态列属性必须是可读写的 IDictionary<string, object>: {pair.Key}",
+                    stage: BingOfficesStage.Plan);
+        }
+        if (properties.Count == 0)
+            return new Dictionary<string, PropertyInfo>(StringComparer.OrdinalIgnoreCase);
+        if (mapping.DynamicColumns == null || mapping.DynamicColumns.Count == 0)
+        {
+            if (properties.Count > 1)
+                throw new BingOfficesConfigurationException(
+                    $"类型 {itemType.FullName} 声明了多个动态字典属性，必须配置动态列和 TargetPropertyName。",
+                    stage: BingOfficesStage.Plan);
+            return new Dictionary<string, PropertyInfo>(StringComparer.OrdinalIgnoreCase);
+        }
+        if (properties.Count == 1)
+        {
+            var propertyName = properties.Keys.Single();
+            var mismatch = mapping.DynamicColumns.FirstOrDefault(column =>
+                !string.IsNullOrWhiteSpace(column.TargetPropertyName)
+                && !string.Equals(column.TargetPropertyName, propertyName,
+                    StringComparison.OrdinalIgnoreCase));
+            if (mismatch != null)
+                throw new BingOfficesConfigurationException(
+                    $"动态列 {mismatch.Key} 的目标属性不是实体动态字典: {mismatch.TargetPropertyName}",
+                    stage: BingOfficesStage.Plan);
+            return new Dictionary<string, PropertyInfo>(StringComparer.OrdinalIgnoreCase);
+        }
+        var result = new Dictionary<string, PropertyInfo>(StringComparer.OrdinalIgnoreCase);
+        foreach (var column in mapping.DynamicColumns)
+        {
+            if (string.IsNullOrWhiteSpace(column.TargetPropertyName))
+                throw new BingOfficesConfigurationException(
+                    $"多个动态字典属性时，动态列 {column.Key} 必须指定 TargetPropertyName。",
+                    stage: BingOfficesStage.Plan);
+            if (!properties.TryGetValue(column.TargetPropertyName, out var property))
+                throw new BingOfficesConfigurationException(
+                    $"动态列 {column.Key} 的目标属性不是实体动态字典: {column.TargetPropertyName}",
+                    stage: BingOfficesStage.Plan);
+            if (!result.TryAdd(column.Key, property))
+                throw new BingOfficesConfigurationException(
+                    $"动态列 Key 重复或归属不明确: {column.Key}", stage: BingOfficesStage.Plan);
+        }
+        return result;
     }
 
     /// <summary>
@@ -1177,6 +2672,10 @@ internal sealed class ClosedXmlEntityLayoutExecutor
             var reference = cell.AnchorName == null ? cell.Reference :
                 ResolveNamedAnchor(ResolveSheet(workbook, cell.SheetName, template: true),
                     cell.AnchorName).Reference;
+            if (region.PageHeader != null && reference.Equals(region.PageHeader.Marker))
+                throw new BingOfficesConfigurationException(
+                    $"固定单元格与重复页眉标记重叠: {cell.SheetName}!{reference.Address}",
+                    stage: BingOfficesStage.Plan);
             if (reference.Row >= region.Start.Row && reference.Column >= region.Start.Column
                 && (!region.End.HasValue || (reference.Row <= region.End.Value.Row
                     && reference.Column <= region.End.Value.Column)))
@@ -1352,6 +2851,37 @@ internal sealed class ClosedXmlEntityLayoutExecutor
     }
 
     /// <summary>
+    /// 查找分页内容的最后一个占用行。
+    /// </summary>
+    private static int FindLastPageHeaderRegionRow<TEntity>(IXLWorksheet sheet,
+        ExcelEntityListRegion<TEntity> region, int width, int firstRow,
+        CancellationToken cancellationToken)
+        where TEntity : class, new()
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var usedLastRow = sheet.LastRowUsed()?.RowNumber() - 1 ?? firstRow - 1;
+        var lastRow = Math.Min(usedLastRow, region.End?.Row ?? usedLastRow);
+        if (region.PageFooter != null)
+        {
+            width = Math.Max(width, region.PageFooter.Cells.Select(cell => cell.Reference.Column + 1)
+                .Concat(region.PageFooter.Merges.Select(merge => merge.Last.Column + 1))
+                .DefaultIfEmpty(1).Max());
+        }
+        for (var row = lastRow; row >= firstRow; row--)
+        {
+            if (((lastRow - row) & 255) == 0)
+                cancellationToken.ThrowIfCancellationRequested();
+            if (!IsEmptyRow(sheet, row, region.Start.Column, width)
+                || region.PageHeader != null && !sheet.Cell(row + 1, region.PageHeader.Marker.Column + 1).IsEmpty())
+                return ExcelEntitySubtotalImportScanner.CompletePageFooterEnd(region, firstRow,
+                    row, markerRow => Convert.ToString(ReadRaw(sheet.Cell(markerRow + 1,
+                        region.Start.Column + 1), typeof(string)), CultureInfo.InvariantCulture)?.Trim(),
+                    cancellationToken);
+        }
+        return firstRow - 1;
+    }
+
+    /// <summary>
     /// 将对象序列物化为指定元素类型的泛型列表。
     /// </summary>
     /// <param name="itemType">列表元素类型。</param>
@@ -1376,7 +2906,25 @@ internal sealed class ClosedXmlEntityLayoutExecutor
     private static IDictionary<string, object> GetDynamicValues(object item, EntityRegionPlan plan, bool create)
     {
         if (plan.DynamicGroups == null || plan.DynamicGroups.Count == 0)
-            return GetDynamicValues(item, plan.DynamicProperty, create);
+        {
+            if (plan.DynamicProperties.Count == 0)
+                return GetDynamicValues(item, plan.DynamicProperty, create);
+            var combinedImplicit = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+            foreach (var property in plan.DynamicProperties.Values.Distinct())
+            {
+                var values = GetDynamicValues(item, property, create);
+                if (values == null)
+                    continue;
+                foreach (var pair in values)
+                {
+                    if (combinedImplicit.ContainsKey(pair.Key))
+                        throw new BingOfficesConfigurationException($"实体动态列组包含重复 Key: {pair.Key}",
+                            stage: BingOfficesStage.Plan);
+                    combinedImplicit.Add(pair.Key, pair.Value);
+                }
+            }
+            return combinedImplicit;
+        }
         var combined = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
         foreach (var group in plan.DynamicGroups)
         {
@@ -1442,6 +2990,14 @@ internal sealed class ClosedXmlEntityLayoutExecutor
     {
         if (plan.DynamicGroups == null || plan.DynamicGroups.Count == 0)
         {
+            if (plan.DynamicProperties.Count > 0)
+            {
+                if (!plan.DynamicProperties.TryGetValue(key, out var property))
+                    throw new BingOfficesConfigurationException($"动态列未找到所属字典: {key}",
+                        stage: BingOfficesStage.Plan);
+                GetDynamicValues(item, property, create: true)[key] = value;
+                return;
+            }
             combined[key] = value;
             return;
         }
@@ -1535,7 +3091,7 @@ internal sealed class ClosedXmlEntityLayoutExecutor
     /// </summary>
     /// <param name="footer">尾部定义。</param>
     /// <returns>尾部占用的行数。</returns>
-    private static int GetFooterHeight(IExcelEntityListFooter footer)
+    internal static int GetFooterHeight(IExcelEntityListFooter footer)
     {
         if (footer == null)
             return 0;
@@ -1545,33 +3101,6 @@ internal sealed class ClosedXmlEntityLayoutExecutor
         foreach (var merge in footer.Merges ?? Array.Empty<ExcelEntityCellRange>())
             lastRelativeRow = Math.Max(lastRelativeRow, merge.Last.Row);
         return lastRelativeRow + 1;
-    }
-
-    /// <summary>
-    /// 按相邻分组键计算列表元素的连续区间。
-    /// </summary>
-    /// <param name="data">列表元素集合。</param>
-    /// <param name="subtotal">分组小计定义。</param>
-    /// <returns>连续分组的起始索引和元素数量。</returns>
-    private static IReadOnlyList<(int Start, int Count)> GetGroupedRanges(
-        IReadOnlyList<object> data, IExcelEntityGroupSubtotal subtotal)
-    {
-        var ranges = new List<(int Start, int Count)>();
-        if (data == null || data.Count == 0)
-            return ranges;
-        var start = 0;
-        var key = subtotal.GetKey(data[0]);
-        for (var index = 1; index < data.Count; index++)
-        {
-            var next = subtotal.GetKey(data[index]);
-            if (Equals(key, next))
-                continue;
-            ranges.Add((start, index - start));
-            start = index;
-            key = next;
-        }
-        ranges.Add((start, data.Count - start));
-        return ranges;
     }
 
     /// <summary>
@@ -1630,7 +3159,7 @@ internal sealed class ClosedXmlEntityLayoutExecutor
     }
 
     /// <summary>
-    /// 将工作簿名称定位到最终尾部标记单元格。
+    /// 将工作簿名称定位到尾部标记单元格。
     /// </summary>
     /// <param name="sheet">尾部所在工作表。</param>
     /// <param name="anchorName">命名锚点名称。</param>
@@ -1643,7 +3172,7 @@ internal sealed class ClosedXmlEntityLayoutExecutor
         var scoped = workbook.Worksheets.Where(item => item.DefinedNames.Contains(anchorName)).ToArray();
         if ((global ? 1 : 0) + scoped.Length > 1 || scoped.Any(item => item != sheet))
             throw new BingOfficesConfigurationException(
-                $"最终尾部命名锚点不唯一或属于其他 Sheet: {sheet.Name}!{anchorName}",
+                $"尾部命名锚点不唯一或属于其他 Sheet: {sheet.Name}!{anchorName}",
                 stage: BingOfficesStage.Plan);
         if (global || scoped.Length == 1)
             ResolveNamedAnchor(sheet, anchorName);
@@ -1657,6 +3186,87 @@ internal sealed class ClosedXmlEntityLayoutExecutor
             sheet.DefinedNames.DefinedName(anchorName).RefersTo = formula;
         else
             workbook.DefinedNames.Add(anchorName, sheet.Range(row + 1, column + 1, row + 1, column + 1));
+    }
+
+    /// <summary>
+    /// 预检分页小计的顺序名称和模板占用情况。
+    /// </summary>
+    /// <param name="sheet">目标工作表。</param>
+    /// <param name="prefix">分页小计名称前缀。</param>
+    /// <param name="count">本次中间页小计数。</param>
+    /// <returns>按分页顺序排列的名称。</returns>
+    private static IReadOnlyList<string> PreparePageAnchorNames(IXLWorksheet sheet, string prefix, int count)
+    {
+        if (prefix == null)
+            return Array.Empty<string>();
+        var names = Enumerable.Range(1, count).Select(index =>
+            ExcelEntityPageAnchorNames.Create(prefix, index)).ToArray();
+        var expected = new HashSet<string>(names, StringComparer.OrdinalIgnoreCase);
+        var workbook = sheet.Workbook;
+        var existing = workbook.DefinedNames.Select(name => (name.Name, Sheet: (IXLWorksheet)null))
+            .Concat(workbook.Worksheets.SelectMany(owner => owner.DefinedNames.Select(name =>
+                (name.Name, Sheet: owner))))
+            .Where(item => ExcelEntityPageAnchorNames.IsSeriesName(prefix, item.Name))
+            .ToArray();
+        if (existing.Any(item => !expected.Contains(item.Name)))
+            throw new BingOfficesConfigurationException(
+                $"模板包含本次未使用的分页小计命名锚点: {sheet.Name}!{prefix}",
+                stage: BingOfficesStage.Plan);
+        foreach (var name in names)
+        {
+            var matches = existing.Where(item => string.Equals(item.Name, name,
+                StringComparison.OrdinalIgnoreCase)).ToArray();
+            if (matches.Length > 1 || matches.Any(item => item.Sheet != null && item.Sheet != sheet))
+                throw new BingOfficesConfigurationException(
+                    $"分页小计命名锚点不唯一或属于其他 Sheet: {sheet.Name}!{name}",
+                    stage: BingOfficesStage.Plan);
+            if (matches.Length == 1)
+                ResolveNamedAnchor(sheet, name);
+        }
+        return names;
+    }
+
+    /// <summary>
+    /// 预检独立逐页名称及允许清理的旧名称。
+    /// </summary>
+    /// <param name="sheet">目标工作表。</param>
+    /// <param name="prefix">逐页名称前缀。</param>
+    /// <param name="count">逻辑页数。</param>
+    /// <param name="staleNames">旧名称处理策略。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>预期名称及通过预检的过期名称。</returns>
+    private static (IReadOnlyList<string> Names, IReadOnlyList<IXLDefinedName> Obsolete)
+        PrepareIndependentPageAnchorNames(IXLWorksheet sheet, string prefix, int count,
+            ExcelEntityPageAnchorStaleNamePolicy staleNames, CancellationToken cancellationToken)
+    {
+        if (prefix == null)
+            return (Array.Empty<string>(), Array.Empty<IXLDefinedName>());
+        var names = Enumerable.Range(1, count).Select(index =>
+            ExcelEntityPageAnchorNames.Create(prefix, index)).ToArray();
+        var expected = new HashSet<string>(names, StringComparer.OrdinalIgnoreCase);
+        var existing = sheet.Workbook.DefinedNames.Select(name => (Name: name, Sheet: (IXLWorksheet)null))
+            .Concat(sheet.Workbook.Worksheets.SelectMany(owner => owner.DefinedNames.Select(name =>
+                (Name: name, Sheet: owner))))
+            .Where(item => ExcelEntityPageAnchorNames.IsSeriesName(prefix, item.Name.Name)).ToArray();
+        var obsolete = new List<IXLDefinedName>();
+        foreach (var group in existing.GroupBy(item => item.Name.Name, StringComparer.OrdinalIgnoreCase))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var matches = group.ToArray();
+            if (matches.Length != 1 || matches[0].Sheet != null && matches[0].Sheet != sheet)
+                throw new BingOfficesConfigurationException(
+                    $"逐页命名锚点不唯一或属于其他 Sheet: {sheet.Name}!{group.Key}",
+                    stage: BingOfficesStage.Plan);
+            ResolveNamedAnchor(sheet, group.Key);
+            if (expected.Contains(group.Key))
+                continue;
+            if (staleNames != ExcelEntityPageAnchorStaleNamePolicy.RemoveObsolete)
+                throw new BingOfficesConfigurationException(
+                    $"模板包含本次未使用的逐页命名锚点: {sheet.Name}!{group.Key}",
+                    stage: BingOfficesStage.Plan);
+            obsolete.Add(matches[0].Name);
+        }
+        return (names, obsolete);
     }
 
     /// <summary>
@@ -1783,12 +3393,32 @@ internal sealed class ClosedXmlEntityLayoutExecutor
     /// <param name="sheet">来源工作表。</param>
     /// <param name="region">列表区域定义。</param>
     /// <param name="firstDataRow">明细首行的零基行索引。</param>
+    /// <param name="lastRow">列表区域的零基末行。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>按起始行排序且不重叠的跳过行段。</returns>
-    private static IReadOnlyList<(int StartRow, int EndRow)> FindFooterSkipSpans<TEntity>(
-        IXLWorksheet sheet, ExcelEntityListRegion<TEntity> region, int firstDataRow)
+    internal static IReadOnlyList<(int StartRow, int EndRow)> FindFooterSkipSpans<TEntity>(
+        IXLWorksheet sheet, ExcelEntityListRegion<TEntity> region, int firstDataRow, int lastRow,
+        CancellationToken cancellationToken)
         where TEntity : class, new()
     {
-        var lastRow = region.End?.Row ?? sheet.LastRowUsed()?.RowNumber() - 1 ?? firstDataRow;
+        if ((region.GroupSubtotal != null || region.PageHeader != null || region.PageFooter != null)
+            && region.PageBreakRows.HasValue)
+        {
+            var finalMarker = region.Footer == null ? (int?)null
+                : FindFooterMarkerRow(sheet, region, firstDataRow);
+            var detailEnd = finalMarker.HasValue
+                ? finalMarker.Value - region.Footer.GapRows : lastRow + 1;
+            var combined = ExcelEntitySubtotalImportScanner.FindSpans(region, firstDataRow,
+                detailEnd, row => Convert.ToString(
+                    ReadRaw(sheet.Cell(row + 1, region.Start.Column + 1), typeof(string)),
+                    CultureInfo.InvariantCulture)?.Trim(), row => region.PageHeader == null ? null : Convert.ToString(
+                    ReadRaw(sheet.Cell(row + 1, region.PageHeader.Marker.Column + 1), typeof(string)),
+                    CultureInfo.InvariantCulture)?.Trim(), cancellationToken).ToList();
+            if (finalMarker.HasValue)
+                combined.Add((detailEnd,
+                    finalMarker.Value + GetFooterHeight(region.Footer) - 1));
+            return combined;
+        }
         var spans = new List<(int StartRow, int EndRow)>();
         var pageSubtotal = region.PageSubtotal;
         if (pageSubtotal != null && region.PageBreakRows is int rowsPerPage)
@@ -2098,6 +3728,110 @@ internal sealed class ClosedXmlEntityLayoutExecutor
     }
 
     /// <summary>
+    /// 保存一行 Forward 物化结果。
+    /// </summary>
+    private readonly struct ForwardItemResult
+    {
+        internal ForwardItemResult(object item, IReadOnlyList<ExcelImportError> errors)
+        {
+            Item = item;
+            Errors = errors ?? Array.Empty<ExcelImportError>();
+        }
+
+        internal object Item { get; }
+        internal IReadOnlyList<ExcelImportError> Errors { get; }
+    }
+
+    /// <summary>
+    /// 按批次交付 ClosedXML Forward 实体。
+    /// </summary>
+    private sealed class ForwardBatchDispatcher<TEntity> where TEntity : class, new()
+    {
+        private readonly TEntity _entity;
+        private readonly ExcelEntityListRegion<TEntity> _region;
+        private readonly int _batchSize;
+        private readonly Action<ExcelEntityImportBatch<TEntity>> _onBatch;
+        private readonly Func<ExcelEntityImportBatch<TEntity>, CancellationToken, Task> _onBatchAsync;
+        private List<object> _items = new();
+        private List<ExcelImportError> _errors = new();
+        private int _firstRow;
+        private int _batchNumber = 1;
+
+        internal ForwardBatchDispatcher(TEntity entity, ExcelEntityListRegion<TEntity> region,
+            int batchSize, Action<ExcelEntityImportBatch<TEntity>> onBatch)
+        {
+            _entity = entity;
+            _region = region;
+            _batchSize = batchSize;
+            _onBatch = onBatch;
+        }
+
+        internal ForwardBatchDispatcher(TEntity entity, ExcelEntityListRegion<TEntity> region,
+            int batchSize, Func<ExcelEntityImportBatch<TEntity>, CancellationToken, Task> onBatch)
+        {
+            _entity = entity;
+            _region = region;
+            _batchSize = batchSize;
+            _onBatchAsync = onBatch;
+        }
+
+        internal void Add(int rowIndex, object item, IReadOnlyList<ExcelImportError> errors)
+        {
+            if (_firstRow == 0)
+                _firstRow = rowIndex + 1;
+            if (item != null)
+                _items.Add(item);
+            if (errors != null)
+                _errors.AddRange(errors);
+            if (_items.Count >= _batchSize || _errors.Count >= _batchSize)
+                Flush();
+        }
+
+        internal void Flush()
+        {
+            if (_items.Count == 0 && _errors.Count == 0)
+                return;
+            _onBatch?.Invoke(CreateBatch());
+        }
+
+        internal async Task AddAsync(int rowIndex, object item, IReadOnlyList<ExcelImportError> errors,
+            CancellationToken cancellationToken)
+        {
+            if (_firstRow == 0)
+                _firstRow = rowIndex + 1;
+            if (item != null)
+                _items.Add(item);
+            if (errors != null)
+                _errors.AddRange(errors);
+            if (_items.Count >= _batchSize || _errors.Count >= _batchSize)
+                await FlushAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        internal async Task FlushAsync(CancellationToken cancellationToken)
+        {
+            if (_items.Count == 0 && _errors.Count == 0)
+                return;
+            await _onBatchAsync(CreateBatch(), cancellationToken).ConfigureAwait(false);
+        }
+
+        private ExcelEntityImportBatch<TEntity> CreateBatch()
+        {
+            IReadOnlyList<object> items = _items.Count == 0 ? Array.Empty<object>() : _items;
+            IReadOnlyList<ExcelImportError> errors = _errors.Count == 0
+                ? Array.Empty<ExcelImportError>()
+                : _errors;
+            if (_items.Count > 0)
+                _items = new List<object>();
+            if (_errors.Count > 0)
+                _errors = new List<ExcelImportError>();
+            var firstRow = _firstRow;
+            _firstRow = 0;
+            return new ExcelEntityImportBatch<TEntity>(_entity, _region.SheetName, _region.PropertyName,
+                _region.ItemType, 0, _batchNumber++, firstRow, items, errors, false);
+        }
+    }
+
+    /// <summary>
     /// 将公共字符串比较选项转换为 .NET 比较器。
     /// </summary>
     /// <param name="comparison">字符串比较选项。</param>
@@ -2210,21 +3944,30 @@ internal sealed class ClosedXmlEntityLayoutExecutor
     private sealed class LimitedErrorCollection : ICollection<ExcelImportError>
     {
         /// <summary>
-        /// 当前导入允许保留的最大错误数；未指定时不限制。
+        /// 当前导入共享的错误预算。
         /// </summary>
-        private readonly int? _maxErrors;
+        private readonly ClosedXmlForwardErrorBudget _budget;
         /// <summary>
         /// 当前导入已收集的结构化错误。
         /// </summary>
         private readonly List<ExcelImportError> _items = new List<ExcelImportError>();
 
         /// <summary>
-        /// 初始化一个 <see cref="LimitedErrorCollection"/> 类型的实例。
+        /// 初始化一个 <see cref="LimitedErrorCollection" /> 类型的实例。
         /// </summary>
         /// <param name="maxErrors">允许保留的最大错误数。</param>
         internal LimitedErrorCollection(int? maxErrors)
         {
-            _maxErrors = maxErrors;
+            _budget = new ClosedXmlForwardErrorBudget(maxErrors);
+        }
+
+        /// <summary>
+        /// 初始化一个 <see cref="LimitedErrorCollection" /> 类型的实例。
+        /// </summary>
+        /// <param name="budget">共享错误预算。</param>
+        internal LimitedErrorCollection(ClosedXmlForwardErrorBudget budget)
+        {
+            _budget = budget ?? throw new ArgumentNullException(nameof(budget));
         }
 
         /// <summary>
@@ -2233,9 +3976,19 @@ internal sealed class ClosedXmlEntityLayoutExecutor
         internal IReadOnlyList<ExcelImportError> Items => _items;
 
         /// <summary>
+        /// 获取当前导入允许保留的最大错误数。
+        /// </summary>
+        internal int? MaxErrors => _budget.Maximum;
+
+        /// <summary>
+        /// 将当前结果标记为已截断。
+        /// </summary>
+        internal void MarkTruncated() => _budget.MarkTruncated();
+
+        /// <summary>
         /// 获取是否因达到数量上限而截断。
         /// </summary>
-        internal bool IsTruncated { get; private set; }
+        internal bool IsTruncated => _budget.IsTruncated;
 
         /// <inheritdoc />
         public int Count => _items.Count;
@@ -2248,14 +4001,9 @@ internal sealed class ClosedXmlEntityLayoutExecutor
         {
             if (item == null)
                 return;
-            if (_maxErrors.HasValue && _items.Count >= _maxErrors.Value)
-            {
-                IsTruncated = true;
+            if (!_budget.TryReserve())
                 return;
-            }
             _items.Add(item);
-            if (_maxErrors.HasValue && _items.Count >= _maxErrors.Value)
-                IsTruncated = true;
         }
 
         /// <inheritdoc />
@@ -2285,7 +4033,22 @@ internal sealed class ClosedXmlEntityLayoutExecutor
     /// <param name="Columns">按布局生成的固定列和动态列。</param>
     /// <param name="DynamicProperty">单字典动态列属性。</param>
     /// <param name="DynamicGroups">显式动态列组。</param>
+    /// <param name="DynamicProperties">隐式动态列 Key 到实体字典属性的映射。</param>
     /// <param name="Width">从区域起点计算的物理列宽度。</param>
     private sealed record EntityRegionPlan(IReadOnlyList<ClosedXmlExportColumn> Columns,
-        PropertyInfo DynamicProperty, IReadOnlyList<IExcelEntityDynamicColumnGroup> DynamicGroups, int Width);
+        PropertyInfo DynamicProperty, IReadOnlyList<IExcelEntityDynamicColumnGroup> DynamicGroups,
+        IReadOnlyDictionary<string, PropertyInfo> DynamicProperties, int Width)
+    {
+        /// <summary>
+        /// 获取当前区域是否包含可用的动态字典属性。
+        /// </summary>
+        internal bool HasDynamicProperties => DynamicProperty != null || DynamicGroups.Count > 0
+            || DynamicProperties.Count > 0;
+
+        /// <summary>
+        /// 获取当前区域是否包含唯一性校验列。
+        /// </summary>
+        internal bool HasUniqueColumns => Columns.Any(column => column.Fixed?.IsUnique == true
+            || column.Dynamic?.IsUnique == true);
+    }
 }

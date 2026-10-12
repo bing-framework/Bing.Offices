@@ -91,12 +91,44 @@ internal sealed class NpoiImportRowMaterializer
         IDictionary<string, HashSet<string>> duplicateValues, string sheetName, int rowIndex,
         ExcelValidationFailureMode validationFailureMode, CultureInfo culture, ExcelWhitespacePolicy bodyWhitespace,
         ExcelImportErrorCollector errors, bool isDate1904)
+        => ValidateRawValuesCore(row, null, isDate1904, columns, duplicateValues, sheetName, rowIndex,
+            validationFailureMode, culture, bodyWhitespace, errors);
+
+    /// <summary>
+    /// 校验前向解析器提供的单元格值。
+    /// </summary>
+    /// <param name="cells">按零基列索引排列的单元格值。</param>
+    /// <param name="columns">按零基列索引排列的列执行计划。</param>
+    /// <param name="duplicateValues">兼容旧校验规则的重复值状态。</param>
+    /// <param name="sheetName">用于错误定位的工作表名称。</param>
+    /// <param name="rowIndex">当前行的零基索引。</param>
+    /// <param name="validationFailureMode">发生校验失败后的继续策略。</param>
+    /// <param name="culture">校验上下文使用的区域性。</param>
+    /// <param name="bodyWhitespace">正文单元格文本的空白处理策略。</param>
+    /// <param name="errors">接收原始值校验错误的收集器。</param>
+    /// <returns>当前行全部原始值校验通过时为 true。</returns>
+    internal bool ValidateRawValues(IReadOnlyDictionary<int, ExcelCellValue> cells,
+        IReadOnlyDictionary<int, ExcelColumnPlan> columns,
+        IDictionary<string, HashSet<string>> duplicateValues, string sheetName, int rowIndex,
+        ExcelValidationFailureMode validationFailureMode, CultureInfo culture, ExcelWhitespacePolicy bodyWhitespace,
+        ExcelImportErrorCollector errors)
+        => ValidateRawValuesCore(null, cells, false, columns, duplicateValues, sheetName, rowIndex,
+            validationFailureMode, culture, bodyWhitespace, errors);
+
+    /// <summary>
+    /// 使用工作表行或预解析单元格值执行原始值校验。
+    /// </summary>
+    private bool ValidateRawValuesCore(IRow row, IReadOnlyDictionary<int, ExcelCellValue> cells,
+        bool isDate1904,
+        IReadOnlyDictionary<int, ExcelColumnPlan> columns,
+        IDictionary<string, HashSet<string>> duplicateValues, string sheetName, int rowIndex,
+        ExcelValidationFailureMode validationFailureMode, CultureInfo culture, ExcelWhitespacePolicy bodyWhitespace,
+        ExcelImportErrorCollector errors)
     {
         var valid = true;
         foreach (var column in columns)
         {
-            var cell = row.GetCell(column.Key);
-            var cellValue = NormalizeCellValue(NpoiExcelImporter.ReadCellValue(cell, isDate1904),
+            var cellValue = NormalizeCellValue(ReadCellValue(row, cells, column.Key, isDate1904),
                 column.Value.Property.ImportWhitespace ?? bodyWhitespace);
             var value = cellValue.Text;
             foreach (var binding in column.Value.ValidationBindings.Where(binding => binding.IsRaw))
@@ -164,6 +196,7 @@ internal sealed class NpoiImportRowMaterializer
     /// <param name="culture">文本转换和校验使用的区域性。</param>
     /// <param name="bodyWhitespace">正文单元格文本的空白处理策略。</param>
     /// <param name="dynamicTargetGetter">从实体取得动态值目标字典的委托。</param>
+    /// <param name="dynamicTargetSetter">将动态值按列键写回实体的委托。</param>
     /// <param name="imageIndex">按行列坐标索引的图片集合。</param>
     /// <param name="isDate1904">当前工作簿是否使用 1904 日期系统。</param>
     /// <param name="item">成功时返回已物化的实体；失败时为 null。</param>
@@ -173,8 +206,58 @@ internal sealed class NpoiImportRowMaterializer
         string sheetName, int rowIndex, ExcelValidationFailureMode validationFailureMode, bool configuredValidationEnabled,
         ExcelImportErrorCollector errors, CultureInfo culture, ExcelWhitespacePolicy bodyWhitespace,
         Func<object, object> dynamicTargetGetter,
+        Action<object, IReadOnlyDictionary<string, object>> dynamicTargetSetter,
         IReadOnlyDictionary<(int Row, int Column), IReadOnlyList<PictureInfo>> imageIndex,
         bool isDate1904, out T item)
+        where T : class, new()
+        => TryCreateItemCore(row, null, isDate1904, columns, duplicateValues, uniqueTracker, sheetName,
+            rowIndex, validationFailureMode, configuredValidationEnabled, errors, culture, bodyWhitespace,
+            dynamicTargetGetter, dynamicTargetSetter, imageIndex, out item);
+
+    /// <summary>
+    /// 使用前向解析器提供的单元格值创建实体。
+    /// </summary>
+    /// <typeparam name="T">要物化的实体类型。</typeparam>
+    /// <param name="cells">按零基列索引排列的单元格值。</param>
+    /// <param name="columns">按零基列索引排列的列执行计划。</param>
+    /// <param name="duplicateValues">兼容旧校验规则的重复值状态。</param>
+    /// <param name="uniqueTracker">负责当前行唯一值预留、提交和回滚的跟踪器。</param>
+    /// <param name="sheetName">用于错误定位的工作表名称。</param>
+    /// <param name="rowIndex">当前行的零基索引。</param>
+    /// <param name="validationFailureMode">发生校验失败后的继续策略。</param>
+    /// <param name="configuredValidationEnabled">是否执行配置校验规则。</param>
+    /// <param name="errors">接收转换和校验错误的收集器。</param>
+    /// <param name="culture">文本转换和校验使用的区域性。</param>
+    /// <param name="bodyWhitespace">正文单元格文本的空白处理策略。</param>
+    /// <param name="dynamicTargetGetter">从实体取得动态列字典的委托。</param>
+    /// <param name="dynamicTargetSetter">将动态值按列键写回实体的委托。</param>
+    /// <param name="item">成功时返回已物化的实体；失败时为 null。</param>
+    /// <returns>当前行成功转换并通过校验时为 true。</returns>
+    internal bool TryCreateItem<T>(IReadOnlyDictionary<int, ExcelCellValue> cells,
+        IReadOnlyDictionary<int, ExcelColumnPlan> columns,
+        IDictionary<string, HashSet<string>> duplicateValues, UniqueTracker uniqueTracker,
+        string sheetName, int rowIndex, ExcelValidationFailureMode validationFailureMode, bool configuredValidationEnabled,
+        ExcelImportErrorCollector errors, CultureInfo culture, ExcelWhitespacePolicy bodyWhitespace,
+        Func<object, object> dynamicTargetGetter,
+        Action<object, IReadOnlyDictionary<string, object>> dynamicTargetSetter, out T item)
+        where T : class, new()
+        => TryCreateItemCore(null, cells, false, columns, duplicateValues, uniqueTracker, sheetName,
+            rowIndex, validationFailureMode, configuredValidationEnabled, errors, culture, bodyWhitespace,
+            dynamicTargetGetter, dynamicTargetSetter, null, out item);
+
+    /// <summary>
+    /// 使用工作表行或预解析单元格值创建实体。
+    /// </summary>
+    private bool TryCreateItemCore<T>(IRow row, IReadOnlyDictionary<int, ExcelCellValue> cells,
+        bool isDate1904,
+        IReadOnlyDictionary<int, ExcelColumnPlan> columns,
+        IDictionary<string, HashSet<string>> duplicateValues, UniqueTracker uniqueTracker,
+        string sheetName, int rowIndex, ExcelValidationFailureMode validationFailureMode, bool configuredValidationEnabled,
+        ExcelImportErrorCollector errors, CultureInfo culture, ExcelWhitespacePolicy bodyWhitespace,
+        Func<object, object> dynamicTargetGetter,
+        Action<object, IReadOnlyDictionary<string, object>> dynamicTargetSetter,
+        IReadOnlyDictionary<(int Row, int Column), IReadOnlyList<PictureInfo>> imageIndex,
+        out T item)
         where T : class, new()
     {
         item = new T();
@@ -184,7 +267,6 @@ internal sealed class NpoiImportRowMaterializer
             var cellValue = default(ExcelCellValue);
             try
             {
-                var cell = row.GetCell(column.Key);
                 var images = imageIndex == null ? null : FindImages(imageIndex, rowIndex, column.Key);
                 var imageMultiplicity = column.Value.ImageMultiplicity;
                 if (images != null && images.Count > 1
@@ -198,7 +280,7 @@ internal sealed class NpoiImportRowMaterializer
                 }
                 var image = images?.FirstOrDefault();
                 cellValue = image == null
-                    ? NormalizeCellValue(NpoiExcelImporter.ReadCellValue(cell, isDate1904),
+                    ? NormalizeCellValue(ReadCellValue(row, cells, column.Key, isDate1904),
                         column.Value.Property.ImportWhitespace ?? bodyWhitespace)
                     : new ExcelCellValue(image, string.Empty, ExcelCellKind.Empty);
                 var value = cellValue.Text;
@@ -277,59 +359,11 @@ internal sealed class NpoiImportRowMaterializer
         }
         if (dynamicValues != null)
         {
-            object rawTarget;
-            try
+            if (dynamicTargetSetter != null)
             {
-                rawTarget = dynamicTargetGetter?.Invoke(item);
-            }
-            catch (BingOfficesException)
-            {
-                throw;
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch (Exception exception) when (exception is not OutOfMemoryException
-                && exception is not StackOverflowException)
-            {
-                throw new BingOfficesImportException("Excel 动态属性读取器执行失败。", exception, "NPOI",
-                    BingOfficesStage.Validate, propertyName: columns.Values.First(column => column.IsDynamic).Property.Name,
-                    code: BingOfficesErrorCode.UserExtensionFailed);
-            }
-            var target = rawTarget as IDictionary<string, object>;
-            if (target != null)
-            {
-                foreach (var pair in dynamicValues)
-                {
-                    try
-                    {
-                        target[pair.Key] = pair.Value;
-                    }
-                    catch (BingOfficesException)
-                    {
-                        throw;
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        throw;
-                    }
-                    catch (Exception exception) when (exception is not OutOfMemoryException
-                        && exception is not StackOverflowException)
-                    {
-                        throw new BingOfficesImportException("Excel 动态属性写入器执行失败。", exception, "NPOI",
-                            BingOfficesStage.Validate,
-                            propertyName: columns.Values.First(column => column.IsDynamic).Property.Name,
-                            code: BingOfficesErrorCode.UserExtensionFailed);
-                    }
-                }
-            }
-            else
-            {
-                var dynamicColumn = columns.Values.First(column => column.IsDynamic);
                 try
                 {
-                    dynamicColumn.Setter(item, dynamicValues);
+                    dynamicTargetSetter(item, dynamicValues);
                 }
                 catch (BingOfficesException)
                 {
@@ -343,8 +377,83 @@ internal sealed class NpoiImportRowMaterializer
                     && exception is not StackOverflowException)
                 {
                     throw new BingOfficesImportException("Excel 动态属性写入器执行失败。", exception, "NPOI",
-                        BingOfficesStage.Validate, propertyName: dynamicColumn.Property.Name,
+                        BingOfficesStage.Validate,
+                        propertyName: columns.Values.First(column => column.IsDynamic).Property.Name,
                         code: BingOfficesErrorCode.UserExtensionFailed);
+                }
+            }
+            else
+            {
+                object rawTarget;
+                try
+                {
+                    rawTarget = dynamicTargetGetter?.Invoke(item);
+                }
+                catch (BingOfficesException)
+                {
+                    throw;
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception exception) when (exception is not OutOfMemoryException
+                    && exception is not StackOverflowException)
+                {
+                    throw new BingOfficesImportException("Excel 动态属性读取器执行失败。", exception, "NPOI",
+                        BingOfficesStage.Validate,
+                        propertyName: columns.Values.First(column => column.IsDynamic).Property.Name,
+                        code: BingOfficesErrorCode.UserExtensionFailed);
+                }
+                var target = rawTarget as IDictionary<string, object>;
+                if (target != null)
+                {
+                    foreach (var pair in dynamicValues)
+                    {
+                        try
+                        {
+                            target[pair.Key] = pair.Value;
+                        }
+                        catch (BingOfficesException)
+                        {
+                            throw;
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            throw;
+                        }
+                        catch (Exception exception) when (exception is not OutOfMemoryException
+                            && exception is not StackOverflowException)
+                        {
+                            throw new BingOfficesImportException("Excel 动态属性写入器执行失败。", exception, "NPOI",
+                                BingOfficesStage.Validate,
+                                propertyName: columns.Values.First(column => column.IsDynamic).Property.Name,
+                                code: BingOfficesErrorCode.UserExtensionFailed);
+                        }
+                    }
+                }
+                else
+                {
+                    var dynamicColumn = columns.Values.First(column => column.IsDynamic);
+                    try
+                    {
+                        dynamicColumn.Setter(item, dynamicValues);
+                    }
+                    catch (BingOfficesException)
+                    {
+                        throw;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
+                    catch (Exception exception) when (exception is not OutOfMemoryException
+                        && exception is not StackOverflowException)
+                    {
+                        throw new BingOfficesImportException("Excel 动态属性写入器执行失败。", exception, "NPOI",
+                            BingOfficesStage.Validate, propertyName: dynamicColumn.Property.Name,
+                            code: BingOfficesErrorCode.UserExtensionFailed);
+                    }
                 }
             }
         }
@@ -455,6 +564,24 @@ internal sealed class NpoiImportRowMaterializer
             }
         }
         return valid;
+    }
+
+    /// <summary>
+    /// 从工作表行或前向解析结果读取单元格值。
+    /// </summary>
+    /// <param name="row">直接读取的 NPOI 数据行；前向解析时为空。</param>
+    /// <param name="cells">前向解析器提供的单元格值；直接读取时为空。</param>
+    /// <param name="column">目标列的零基索引。</param>
+    /// <param name="isDate1904">当前工作簿是否使用 1904 日期系统。</param>
+    /// <returns>读取到的结构化单元格值。</returns>
+    private static ExcelCellValue ReadCellValue(IRow row, IReadOnlyDictionary<int, ExcelCellValue> cells,
+        int column, bool isDate1904)
+    {
+        if (row != null)
+            return NpoiExcelImporter.ReadCellValue(row.GetCell(column), isDate1904);
+        return cells != null && cells.TryGetValue(column, out var value)
+            ? value
+            : new ExcelCellValue(null, string.Empty, ExcelCellKind.Empty);
     }
 
     /// <summary>

@@ -25,16 +25,18 @@ internal static class ClosedXmlFailureWorkbookWriter
     /// <param name="errors">结构化导入错误。</param>
     /// <param name="resolvedSheetRequests">实际工作表名称对应的导入请求。</param>
     /// <param name="cancellationToken">取消令牌。</param>
+    /// <param name="requiredRowsBySheet">实体布局要求保留的工作表行号；通用 Workbook 为 null。</param>
     /// <returns>可提交的临时产物；不需要输出时返回 null。</returns>
     internal static ClosedXmlFailureWorkbookArtifact Create(XLWorkbook source,
         ExcelImportFailureOptions options, IReadOnlyCollection<ExcelImportError> errors,
         IReadOnlyDictionary<string, ExcelSheetImportRequest> resolvedSheetRequests,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyDictionary<string, IReadOnlyList<int>> requiredRowsBySheet = null)
     {
         if (options == null || options.Mode == ExcelImportFailureWorkbookMode.None || errors.Count == 0)
             return null;
         cancellationToken.ThrowIfCancellationRequested();
-        ValidatePreflight(source, options, errors, resolvedSheetRequests);
+        ValidatePreflight(source, options, errors, resolvedSheetRequests, requiredRowsBySheet);
 
         XLWorkbook output = source;
         XLWorkbook independent = null;
@@ -42,7 +44,7 @@ internal static class ClosedXmlFailureWorkbookWriter
         {
             if (options.Mode == ExcelImportFailureWorkbookMode.ErrorRowsOnly)
                 output = independent = CreateErrorRowsWorkbook(source, errors, resolvedSheetRequests,
-                    cancellationToken);
+                    cancellationToken, requiredRowsBySheet);
             else if (options.Mode == ExcelImportFailureWorkbookMode.AnnotatedOriginal)
                 AnnotateErrors(output, errors, options.CommentConflictPolicy, cancellationToken);
             else
@@ -77,9 +79,11 @@ internal static class ClosedXmlFailureWorkbookWriter
     /// <param name="options">失败工作簿输出及清理选项。</param>
     /// <param name="errors">结构化导入错误集合。</param>
     /// <param name="resolvedSheetRequests">实际工作表名称对应的导入请求。</param>
+    /// <param name="requiredRowsBySheet">实体布局要求保留的工作表行号；通用 Workbook 为 null。</param>
     internal static void ValidatePreflight(XLWorkbook source, ExcelImportFailureOptions options,
         IReadOnlyCollection<ExcelImportError> errors,
-        IReadOnlyDictionary<string, ExcelSheetImportRequest> resolvedSheetRequests)
+        IReadOnlyDictionary<string, ExcelSheetImportRequest> resolvedSheetRequests,
+        IReadOnlyDictionary<string, IReadOnlyList<int>> requiredRowsBySheet = null)
     {
         if (options.Mode != ExcelImportFailureWorkbookMode.ErrorRowsOnly)
             return;
@@ -94,14 +98,31 @@ internal static class ClosedXmlFailureWorkbookWriter
 
         long cells = 0;
         long objects = 0;
-        foreach (var group in errors.Where(error => error.RowIndex > 1)
-                     .GroupBy(error => error.SheetName, StringComparer.OrdinalIgnoreCase))
+        var groups = errors.Where(error => error.RowIndex > 1)
+            .GroupBy(error => error.SheetName, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.OrdinalIgnoreCase);
+        if (requiredRowsBySheet != null)
+        {
+            foreach (var sheetName in requiredRowsBySheet.Keys)
+            {
+                if (!groups.ContainsKey(sheetName))
+                    groups.Add(sheetName, new List<ExcelImportError>());
+            }
+        }
+        foreach (var group in groups)
         {
             if (!source.Worksheets.TryGetWorksheet(group.Key, out var worksheet))
                 continue;
             var headerRow = resolvedSheetRequests.TryGetValue(worksheet.Name, out var request)
                 ? request.HeaderRowIndex + 1 : 1;
-            var rows = new HashSet<int>(group.Select(error => error.RowIndex)) { headerRow };
+            var rows = new HashSet<int>(group.Value.Select(error => error.RowIndex));
+            if (group.Value.Count > 0)
+                rows.Add(headerRow);
+            if (requiredRowsBySheet != null
+                && requiredRowsBySheet.TryGetValue(worksheet.Name, out var requiredRows))
+            {
+                rows.UnionWith(requiredRows);
+            }
             var lastColumn = worksheet.LastColumnUsed()?.ColumnNumber() ?? 0;
             cells += (long)rows.Count * lastColumn;
             objects += 1L + rows.Count + (long)rows.Count * lastColumn;
@@ -121,15 +142,27 @@ internal static class ClosedXmlFailureWorkbookWriter
     /// <param name="errors">结构化导入错误集合。</param>
     /// <param name="resolvedSheetRequests">实际工作表名称对应的导入请求。</param>
     /// <param name="cancellationToken">取消令牌。</param>
+    /// <param name="requiredRowsBySheet">实体布局要求保留的工作表行号；通用 Workbook 为 null。</param>
     /// <returns>仅包含表头和错误行的独立工作簿。</returns>
     private static XLWorkbook CreateErrorRowsWorkbook(XLWorkbook source,
         IReadOnlyCollection<ExcelImportError> errors,
         IReadOnlyDictionary<string, ExcelSheetImportRequest> resolvedSheetRequests,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyDictionary<string, IReadOnlyList<int>> requiredRowsBySheet)
     {
         var output = new XLWorkbook();
-        foreach (var group in errors.Where(error => error.RowIndex > 1)
-                     .GroupBy(error => error.SheetName, StringComparer.OrdinalIgnoreCase))
+        var groups = errors.Where(error => error.RowIndex > 1)
+            .GroupBy(error => error.SheetName, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.OrdinalIgnoreCase);
+        if (requiredRowsBySheet != null)
+        {
+            foreach (var sheetName in requiredRowsBySheet.Keys)
+            {
+                if (!groups.ContainsKey(sheetName))
+                    groups.Add(sheetName, new List<ExcelImportError>());
+            }
+        }
+        foreach (var group in groups)
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (!source.Worksheets.TryGetWorksheet(group.Key, out var sourceSheet))
@@ -137,7 +170,14 @@ internal static class ClosedXmlFailureWorkbookWriter
             var targetSheet = output.Worksheets.Add(sourceSheet.Name);
             var headerRow = resolvedSheetRequests.TryGetValue(sourceSheet.Name, out var request)
                 ? request.HeaderRowIndex + 1 : 1;
-            sourceSheet.Row(headerRow).CopyTo(targetSheet.Row(1));
+            var sourceRows = new HashSet<int>(group.Value.Select(error => error.RowIndex));
+            if (group.Value.Count > 0)
+                sourceRows.Add(headerRow);
+            if (requiredRowsBySheet != null
+                && requiredRowsBySheet.TryGetValue(sourceSheet.Name, out var requiredRows))
+            {
+                sourceRows.UnionWith(requiredRows);
+            }
             var lastColumn = sourceSheet.LastColumnUsed()?.ColumnNumber() ?? 0;
             for (var column = 1; column <= lastColumn; column++)
             {
@@ -146,17 +186,51 @@ internal static class ClosedXmlFailureWorkbookWriter
                     targetSheet.Column(column).Hide();
             }
 
-            var targetRow = 2;
+            var targetRow = 1;
             var rowMap = new Dictionary<int, int>();
-            foreach (var sourceRow in group.Select(error => error.RowIndex).Distinct().OrderBy(value => value))
+            foreach (var sourceRow in sourceRows.OrderBy(value => value))
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 sourceSheet.Row(sourceRow).CopyTo(targetSheet.Row(targetRow));
                 rowMap[sourceRow] = targetRow++;
             }
-            AddFailureColumns(targetSheet, group.ToArray(), rowMap, lastColumn + 1);
+            CopyMergedRanges(sourceSheet, targetSheet, rowMap, cancellationToken);
+            if (group.Value.Count > 0)
+                AddFailureColumns(targetSheet, group.Value, rowMap, lastColumn + 1);
         }
         return output;
+    }
+
+    /// <summary>
+    /// 复制错误行工作簿中仍完整保留的合并区域。
+    /// </summary>
+    /// <param name="source">源工作表。</param>
+    /// <param name="target">目标工作表。</param>
+    /// <param name="rowMap">源工作表行号到目标工作表行号的映射。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    private static void CopyMergedRanges(IXLWorksheet source, IXLWorksheet target,
+        IReadOnlyDictionary<int, int> rowMap, CancellationToken cancellationToken)
+    {
+        foreach (var merged in source.MergedRanges)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var first = merged.RangeAddress.FirstAddress;
+            var last = merged.RangeAddress.LastAddress;
+            if (!rowMap.TryGetValue(first.RowNumber, out var targetFirstRow)
+                || !rowMap.TryGetValue(last.RowNumber, out var targetLastRow))
+                continue;
+            var complete = true;
+            for (var row = first.RowNumber; row <= last.RowNumber; row++)
+            {
+                if (rowMap.ContainsKey(row))
+                    continue;
+                complete = false;
+                break;
+            }
+            if (!complete)
+                continue;
+            target.Range(targetFirstRow, first.ColumnNumber, targetLastRow, last.ColumnNumber).Merge();
+        }
     }
 
     /// <summary>

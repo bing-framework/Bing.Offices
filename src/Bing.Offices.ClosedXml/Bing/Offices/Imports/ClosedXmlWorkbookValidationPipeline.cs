@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using System.Threading;
 using Bing.Offices.ClosedXml.Internals;
@@ -51,12 +52,18 @@ internal static class ClosedXmlWorkbookValidationPipeline
     private static readonly DateTimeExcelValidationRule DateRule = new();
 
     /// <summary>
+    /// 在工作簿生命周期内缓存名称列表的允许值。
+    /// </summary>
+    private static readonly ConditionalWeakTable<IXLWorkbook, Dictionary<string, HashSet<string>>>
+        NamedListCaches = new();
+
+    /// <summary>
     /// 表示一次原生规则的可观察结果。
     /// </summary>
     internal readonly struct Result
     {
         /// <summary>
-        /// 初始化一个 <see cref="Result"/> 类型的实例。
+        /// 初始化一个 <see cref="Result" /> 类型的实例。
         /// </summary>
         /// <param name="valid">是否通过校验。</param>
         /// <param name="unsupported">是否超出支持范围。</param>
@@ -247,9 +254,44 @@ internal static class ClosedXmlWorkbookValidationPipeline
         IXLRange range;
         if (TryResolveDirectRange(worksheet, expression, out range))
             return ValidateListRange(range, text, cancellationToken, rejectFormulaCells: false);
-        if (!TryResolveNamedRange(worksheet, expression, out range))
-            return Unsupported();
-        return ValidateListRange(range, text, cancellationToken, rejectFormulaCells: true);
+        var cache = NamedListCaches.GetValue(worksheet.Workbook,
+            _ => new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase));
+        var key = worksheet.Name + "\0" + expression;
+        lock (cache)
+        {
+            if (!cache.TryGetValue(key, out var values))
+            {
+                if (!TryResolveNamedRange(worksheet, expression, out range))
+                {
+                    cache.Add(key, null);
+                    return Unsupported();
+                }
+                values = new HashSet<string>(StringComparer.Ordinal);
+                try
+                {
+                    foreach (var cell in range.CellsUsed(XLCellsUsedOptions.Contents))
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        if (cell.HasFormula)
+                        {
+                            cache.Add(key, null);
+                            return Unsupported();
+                        }
+                        values.Add(cell.GetString());
+                    }
+                }
+                catch (Exception exception) when (exception is ArgumentException
+                                              || exception is FormatException
+                                              || exception is InvalidOperationException)
+                {
+                    cache.Add(key, null);
+                    return Unsupported();
+                }
+                cache.Add(key, values);
+            }
+            return values == null ? Unsupported() : values.Contains(text)
+                ? Valid() : Invalid("不符合 Workbook 列表校验。");
+        }
     }
 
     /// <summary>
@@ -440,8 +482,7 @@ internal static class ClosedXmlWorkbookValidationPipeline
     {
         sheetName = null;
         address = null;
-        if (string.IsNullOrWhiteSpace(expression) || expression.IndexOf('[') >= 0
-            || expression.IndexOf(']') >= 0 || expression.IndexOf(',') >= 0)
+        if (string.IsNullOrWhiteSpace(expression))
             return false;
         var quoted = false;
         var separator = -1;
@@ -456,8 +497,13 @@ internal static class ClosedXmlWorkbookValidationPipeline
                 }
                 quoted = !quoted;
             }
-            else if (expression[index] == '!' && !quoted)
-                separator = index;
+            else if (!quoted)
+            {
+                if (expression[index] == '!' && separator < 0)
+                    separator = index;
+                else if (expression[index] is '[' or ']' or ',' or ';' or '!')
+                    return false;
+            }
         }
         if (quoted)
             return false;

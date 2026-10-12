@@ -79,11 +79,14 @@ internal sealed class NpoiEntityImportExecutor
     /// <param name="requireTemplateMerges">是否要求声明的合并区域已存在。</param>
     /// <param name="limits">实体导入资源限制。</param>
     /// <param name="validationFailureMode">当前行校验失败后的继续策略。</param>
+    /// <param name="validationMode">导入校验规则来源。</param>
+    /// <param name="unsupportedFeaturePolicy">不支持的工作簿规则处理策略。</param>
     /// <param name="cancellationToken">用于取消操作的令牌。</param>
     /// <returns>包含实体、工作表结果和结构化错误的导入结果。</returns>
     internal ExcelEntityImportResult<TEntity> Read<TEntity>(IWorkbook workbook, TEntity entity,
         ExcelEntityLayout<TEntity> layout, bool requireTemplateMerges, ExcelResourceLimits limits,
-        ExcelValidationFailureMode validationFailureMode,
+        ExcelValidationFailureMode validationFailureMode, ExcelImportValidationMode validationMode,
+        ExcelUnsupportedFeaturePolicy unsupportedFeaturePolicy,
         CancellationToken cancellationToken)
         where TEntity : class, new()
     {
@@ -91,6 +94,8 @@ internal sealed class NpoiEntityImportExecutor
         var errors = new ExcelImportErrorCollector(limits?.MaxErrors);
         var sheetResults = new List<ExcelSheetImportResult>();
         var runtime = new ExcelImportRuntime(limits);
+        var uniqueBudget = new NpoiUniqueBudget(limits?.MaxTrackedUniqueValues);
+        var relationKeyBudget = new NpoiRelationKeyBudget(limits?.MaxTrackedRelationKeys);
         foreach (var name in layout.Cells.Select(item => item.SheetName)
                      .Concat(layout.ListRegions.Select(item => item.SheetName))
                      .Concat(layout.Merges.Select(item => item.SheetName))
@@ -129,12 +134,18 @@ internal sealed class NpoiEntityImportExecutor
                 var normalizedCellValue = new ExcelCellValue(cellValue.Value, value, cellValue.Kind,
                     cellValue.CachedKind, cellValue.Formula, cellValue.ErrorCode, cellValue.FormatIndex,
                     cellValue.IsDate1904);
-                if (!NpoiEntityLayoutSupport.ValidateCellImportRaw(column, normalizedCellValue, value,
+                if (UsesWorkbookValidation(validationMode) && !ValidateWorkbookCell(sheet,
+                        ValidationRangeIndex.Create(sheet.GetDataValidations(), anchor.Row, anchor.Row,
+                            anchor.Column, anchor.Column), anchor.Row, anchor.Column, normalizedCellValue, value,
+                        column.Property.Name, unsupportedFeaturePolicy, errors, workbook.IsDate1904(),
+                        cancellationToken))
+                    continue;
+                if (UsesConfiguredValidation(validationMode) && !NpoiEntityLayoutSupport.ValidateCellImportRaw(column, normalizedCellValue, value,
                         sheet.SheetName, anchor, errors))
                     continue;
                 var converted = column.ConvertFrom(value, normalizedCellValue, sheet.SheetName,
                     anchor.Row + 1, anchor.Column + 1, CultureInfo.InvariantCulture);
-                if (!NpoiEntityLayoutSupport.ValidateCellImportConverted(column, normalizedCellValue, value,
+                if (UsesConfiguredValidation(validationMode) && !NpoiEntityLayoutSupport.ValidateCellImportConverted(column, normalizedCellValue, value,
                         converted, sheet.SheetName, anchor, errors))
                     continue;
                 resolvedBinding.Setter(entity, converted);
@@ -163,15 +174,18 @@ internal sealed class NpoiEntityImportExecutor
                 sheet = named.Sheet;
                 resolvedRegion = region.WithResolvedStart(named.Reference);
             }
+            ExcelEntityPageHeaderImportValidation.ValidateStart(resolvedRegion);
             NpoiEntityLayoutSupport.ValidateCellRegionConflict(workbook, layout, resolvedRegion);
             ReadRegion(workbook, sheet, entity, resolvedRegion, errors, sheetResults, runtime,
-                limits, validationFailureMode, cancellationToken);
+                limits, uniqueBudget, validationFailureMode, validationMode, unsupportedFeaturePolicy,
+                cancellationToken);
         }
         var sourceLocations = new Dictionary<object, SourceLocation>();
         foreach (var relation in layout.Relations ?? Array.Empty<ExcelRelationRequest>())
         {
             cancellationToken.ThrowIfCancellationRequested();
-            NpoiRelationBinder.Bind(entity, relation, errors, sourceLocations, cancellationToken);
+            NpoiRelationBinder.Bind(entity, relation, errors, sourceLocations, relationKeyBudget,
+                cancellationToken);
         }
         return new ExcelEntityImportResult<TEntity>(entity, errors.Errors, sheetResults, errors.IsTruncated,
             errors.MaxErrors);
@@ -189,19 +203,23 @@ internal sealed class NpoiEntityImportExecutor
     /// <param name="sheetResults">工作表结果集合。</param>
     /// <param name="runtime">导入运行时状态。</param>
     /// <param name="limits">实体导入资源限制。</param>
+    /// <param name="uniqueBudget">跨列表区域共享的唯一值预算。</param>
     /// <param name="validationFailureMode">当前行校验失败后的继续策略。</param>
+    /// <param name="validationMode">导入校验规则来源。</param>
+    /// <param name="unsupportedFeaturePolicy">不支持的工作簿规则处理策略。</param>
     /// <param name="cancellationToken">用于取消操作的令牌。</param>
     private void ReadRegion<TEntity>(IWorkbook workbook, ISheet sheet, TEntity entity,
         ExcelEntityListRegion<TEntity> region, ExcelImportErrorCollector errors,
         ICollection<ExcelSheetImportResult> sheetResults, ExcelImportRuntime runtime,
-        ExcelResourceLimits limits,
-        ExcelValidationFailureMode validationFailureMode,
+        ExcelResourceLimits limits, NpoiUniqueBudget uniqueBudget,
+        ExcelValidationFailureMode validationFailureMode, ExcelImportValidationMode validationMode,
+        ExcelUnsupportedFeaturePolicy unsupportedFeaturePolicy,
         CancellationToken cancellationToken) where TEntity : class, new()
     {
         var method = GetType().GetMethod(nameof(ReadTypedRegion), System.Reflection.BindingFlags.Instance
             | System.Reflection.BindingFlags.NonPublic).MakeGenericMethod(typeof(TEntity), region.ItemType);
         InvokeUnwrapped(method, this, new object[] { workbook, sheet, entity, region, errors, sheetResults, runtime,
-            limits, validationFailureMode, cancellationToken });
+            limits, uniqueBudget, validationFailureMode, validationMode, unsupportedFeaturePolicy, cancellationToken });
     }
 
     /// <summary>
@@ -217,13 +235,17 @@ internal sealed class NpoiEntityImportExecutor
     /// <param name="sheetResults">工作表结果集合。</param>
     /// <param name="runtime">导入运行时状态。</param>
     /// <param name="limits">实体导入资源限制。</param>
+    /// <param name="uniqueBudget">跨列表区域共享的唯一值预算。</param>
     /// <param name="validationFailureMode">当前行校验失败后的继续策略。</param>
+    /// <param name="validationMode">导入校验规则来源。</param>
+    /// <param name="unsupportedFeaturePolicy">不支持的工作簿规则处理策略。</param>
     /// <param name="cancellationToken">用于取消操作的令牌。</param>
     private void ReadTypedRegion<TEntity, TItem>(IWorkbook workbook, ISheet source, TEntity entity,
         ExcelEntityListRegion<TEntity> region, ExcelImportErrorCollector errors,
         ICollection<ExcelSheetImportResult> sheetResults, ExcelImportRuntime runtime,
-        ExcelResourceLimits limits,
-        ExcelValidationFailureMode validationFailureMode,
+        ExcelResourceLimits limits, NpoiUniqueBudget uniqueBudget,
+        ExcelValidationFailureMode validationFailureMode, ExcelImportValidationMode validationMode,
+        ExcelUnsupportedFeaturePolicy unsupportedFeaturePolicy,
         CancellationToken cancellationToken) where TEntity : class, new() where TItem : class, new()
     {
         var groups = region.DynamicColumnGroups ?? Array.Empty<IExcelEntityDynamicColumnGroup>();
@@ -243,7 +265,13 @@ internal sealed class NpoiEntityImportExecutor
             }));
         var resolved = new NpoiResolvedSheet(request.Sheets[0], 0, region.SheetName);
         var mapping = _planBuilder.Create(new[] { resolved })[request.Sheets[0]];
-        var dynamicProperty = groups.Count == 0 ? GetDynamicProperty<TItem>(mapping) : null;
+        var dynamicProperties = groups.Count == 0
+            ? NpoiEntityLayoutSupport.GetDynamicProperties<TItem>(mapping)
+            : Array.Empty<PropertyInfo>();
+        var dynamicProperty = dynamicProperties.Count == 1 ? dynamicProperties[0] : null;
+        var implicitDynamicPropertyNames = groups.Count == 0
+            ? NpoiEntityLayoutSupport.CreateDynamicPropertyNames(mapping, dynamicProperties)
+            : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var dynamicDefinitions = groupDefinitions.Length > 0
             ? groupDefinitions : CreateDynamicDefinitions(mapping);
         var columns = groups.Count == 0
@@ -256,9 +284,16 @@ internal sealed class NpoiEntityImportExecutor
             ? region.End.Value.Row - region.Start.Row + (region.IncludeHeader ? 0 : 1)
             : 0;
         NpoiEntityLayoutSupport.ValidateListRegionBounds(region, columns.Count, itemCount, region.IncludeHeader);
+        ExcelEntityPageHeaderImportValidation.ValidateMarkerColumn(region, columns.Count);
+        var sourceRows = new List<int>();
+        var nativeErrors = errors.CreateChild();
+        var nativeIndex = UsesWorkbookValidation(validationMode)
+            ? ValidationRangeIndex.Create(source.GetDataValidations(), region.Start.Row, source.LastRowNum,
+                region.Start.Column, region.Start.Column + columns.Count - 1)
+            : null;
         var temp = CreateRegionSheet<TEntity, TItem>(workbook, source, region, columns.Count, columns,
-            workbook.IsDate1904(),
-            cancellationToken);
+            workbook.IsDate1904(), sourceRows, runtime.RemainingRows, nativeIndex, nativeErrors,
+            unsupportedFeaturePolicy, validationFailureMode, cancellationToken);
         try
         {
             var options = new ExcelImportExecutionOptions<TItem>
@@ -273,18 +308,24 @@ internal sealed class NpoiEntityImportExecutor
                 BodyWhitespace = ExcelWhitespacePolicy.Trim,
                 ValidationFailureMode = validationFailureMode,
                 RequireExpectedHeaders = true,
-                ValidationMode = ExcelImportValidationMode.ConfiguredRules,
-                MaxTrackedUniqueValues = limits?.MaxTrackedUniqueValues,
+                ValidationMode = UsesConfiguredValidation(validationMode)
+                    ? ExcelImportValidationMode.ConfiguredRules : ExcelImportValidationMode.Disabled,
+                MaxTrackedUniqueValues = uniqueBudget?.Remaining ?? limits?.MaxTrackedUniqueValues,
                 UniqueComparison = limits?.UniqueComparison ?? StringComparison.OrdinalIgnoreCase,
                 StopAtFirstEmptyRow = false,
                 DynamicColumns = dynamicDefinitions,
                 DynamicTargetGetter = groups.Count == 0 && dynamicProperty != null
                     ? item => dynamicProperty.GetValue(item)
                     : groups.Count == 0 ? null : item => CreateTemporaryDynamicValues(item, dynamicTargets),
+                DynamicTargetSetter = groups.Count == 0 && implicitDynamicPropertyNames.Count > 0
+                    ? (item, values) => NpoiEntityLayoutSupport.ApplyImplicitDynamicValues(item,
+                        implicitDynamicPropertyNames, values)
+                    : null,
                 DynamicPropertyNames = groups.Count == 0 ? null :
                     new HashSet<string>(groups.Select(group => group.Property.Name), StringComparer.OrdinalIgnoreCase),
-                DynamicColumnPropertyNames = groups.Count == 0 ? null : groupDefinitions
-                    .ToDictionary(definition => definition.Key,
+                DynamicColumnPropertyNames = groups.Count == 0 && implicitDynamicPropertyNames.Count > 0
+                    ? implicitDynamicPropertyNames
+                    : groups.Count == 0 ? null : groupDefinitions.ToDictionary(definition => definition.Key,
                         definition => groups.Single(group => group.Definitions.Any(column =>
                             string.Equals(column.Key, definition.Key, StringComparison.OrdinalIgnoreCase)))
                             .Property.Name, StringComparer.OrdinalIgnoreCase)
@@ -292,13 +333,17 @@ internal sealed class NpoiEntityImportExecutor
             };
             var items = new List<TItem>();
             var rows = new List<int>();
-            var child = errors.CreateChild();
-            _sheetExecutor.Execute(temp, options, items, child, runtime, cancellationToken, rows);
+            var child = errors.CreateChild(error => MapRegionError(error, sourceRows, region.Start.Column,
+                region.Start.Row));
+            var trackedUniqueValues = _sheetExecutor.Execute(temp, options, items, child, runtime,
+                cancellationToken, rows);
+            uniqueBudget?.Consume(trackedUniqueValues);
             if (groups.Count > 0)
                 ApplyDynamicGroups(dynamicTargets, groups);
             AssignItems(entity, region, items);
-            var sourceRows = rows.Select(row => region.Start.Row + row - (region.IncludeHeader ? 0 : 1)).ToArray();
-            sheetResults.Add(new ExcelSheetImportResult(source.SheetName, typeof(TItem), sourceRows, child.Errors));
+            var acceptedRows = rows.Select(row => sourceRows[row - 1]).ToArray();
+            sheetResults.Add(new ExcelSheetImportResult(source.SheetName, typeof(TItem), acceptedRows,
+                nativeErrors.Errors.Concat(child.Errors).ToArray()));
         }
         finally
         {
@@ -400,32 +445,6 @@ internal sealed class NpoiEntityImportExecutor
     }
 
     /// <summary>
-    /// 获取映射计划中声明的单个动态字典属性。
-    /// </summary>
-    /// <typeparam name="TItem">列表项类型。</typeparam>
-    /// <param name="mapping">列表项映射计划。</param>
-    /// <returns>动态字典属性；未声明时返回 <see langword="null" />。</returns>
-    private static PropertyInfo GetDynamicProperty<TItem>(IExcelMappingPlan mapping)
-        where TItem : class, new()
-    {
-        var properties = (mapping?.Columns ?? Array.Empty<IExcelMappingColumn>())
-            .Where(column => column.IsDynamicColumn).ToArray();
-        if (properties.Length == 0)
-            return null;
-        if (properties.Length > 1)
-            throw new BingOfficesConfigurationException(
-                $"导入实体列表项 {typeof(TItem).FullName} 只能声明一个动态列字典属性。",
-                stage: BingOfficesStage.Plan);
-        var property = typeof(TItem).GetProperty(properties[0].Name,
-            BindingFlags.Instance | BindingFlags.Public);
-        if (property == null || !typeof(IDictionary<string, object>).IsAssignableFrom(property.PropertyType))
-            throw new BingOfficesConfigurationException(
-                $"动态列属性必须实现 IDictionary<string, object>: {properties[0].Name}",
-                stage: BingOfficesStage.Plan);
-        return property;
-    }
-
-    /// <summary>
     /// 将映射计划中的动态列转换为实体布局导入定义。
     /// </summary>
     /// <param name="mapping">列表项映射计划。</param>
@@ -446,11 +465,20 @@ internal sealed class NpoiEntityImportExecutor
     /// <param name="width">区域列数。</param>
     /// <param name="columns">导入列计划。</param>
     /// <param name="isDate1904">工作簿是否使用 1904 日期系统。</param>
+    /// <param name="sourceRows">投影行对应的原始行号。</param>
+    /// <param name="remainingRows">工作簿剩余的数据行配额。</param>
+    /// <param name="validationIndex">原始工作表的校验规则索引。</param>
+    /// <param name="errors">原生规则错误收集器。</param>
+    /// <param name="unsupportedFeaturePolicy">不支持的规则处理策略。</param>
+    /// <param name="validationFailureMode">当前行校验失败后的继续策略。</param>
     /// <param name="cancellationToken">用于取消操作的令牌。</param>
     /// <returns>供标准工作表导入执行器读取的临时工作表。</returns>
     private static ISheet CreateRegionSheet<TEntity, TItem>(IWorkbook workbook, ISheet source,
         ExcelEntityListRegion<TEntity> region, int width, IReadOnlyList<ExcelColumnPlan> columns,
-        bool isDate1904, CancellationToken cancellationToken) where TEntity : class, new()
+        bool isDate1904, List<int> sourceRows, long? remainingRows, ValidationRangeIndex validationIndex,
+        ExcelImportErrorCollector errors, ExcelUnsupportedFeaturePolicy unsupportedFeaturePolicy,
+        ExcelValidationFailureMode validationFailureMode, CancellationToken cancellationToken)
+        where TEntity : class, new()
         where TItem : class, new()
     {
         var temp = workbook.CreateSheet("__BingEnt" + Guid.NewGuid().ToString("N").Substring(0, 12));
@@ -468,11 +496,21 @@ internal sealed class NpoiEntityImportExecutor
         var footerMarkerRow = NpoiEntityLayoutSupport.FindFooterMarkerRow(source, region);
         var lastRow = footerMarkerRow.HasValue
             ? footerMarkerRow.Value - 1 - (region.Footer?.GapRows ?? 0)
-            : (region.End?.Row ?? source.LastRowNum);
+            : region.PageHeader == null && region.PageFooter == null
+                ? region.End?.Row ?? source.LastRowNum
+                : FindLastPageHeaderRegionRow(source, region, width, startRow,
+                    cancellationToken);
         var skipSpans = region.GroupSubtotal == null && region.PageSubtotal == null
+            && region.PageHeader == null && region.PageFooter == null
             ? Array.Empty<(int StartRow, int EndRow)>()
-            : NpoiEntityLayoutSupport.FindFooterSkipSpans(source, region)
+            : NpoiEntityLayoutSupport.FindFooterSkipSpans(source, region, lastRow,
+                    cancellationToken)
                 .Where(span => span.StartRow <= lastRow).ToArray();
+        ExcelEntityPageHeaderImportValidation.ValidateCopiedHeaders(region, skipSpans, width,
+            index => columns[index].Title,
+            (row, column) => NpoiExcelImporter.NormalizeText(
+                NpoiExcelImporter.GetRawStringValue(source.GetRow(row)?.GetCell(column)),
+                ExcelWhitespacePolicy.Trim), cancellationToken);
         var outputRow = 1;
         for (var rowIndex = startRow; rowIndex <= lastRow; rowIndex++)
         {
@@ -481,12 +519,146 @@ internal sealed class NpoiEntityImportExecutor
                 continue;
             var sourceRow = source.GetRow(rowIndex);
             var targetRow = temp.CreateRow(outputRow);
-            for (var column = 0; column < width; column++)
-                CopyCell(sourceRow?.GetCell(region.Start.Column + column), targetRow.CreateCell(column), isDate1904);
+            sourceRows.Add(rowIndex);
+            var valid = true;
+            if (validationIndex != null)
+            {
+                for (var column = 0; column < width; column++)
+                {
+                    if (columns[column].Calculated != null)
+                        continue;
+                    var physicalColumn = region.Start.Column + column;
+                    var cellValue = NpoiExcelImporter.ReadCellValue(sourceRow?.GetCell(physicalColumn),
+                        isDate1904);
+                    var text = NpoiExcelImporter.NormalizeText(cellValue.Text, ExcelWhitespacePolicy.Trim);
+                    if (ValidateWorkbookCell(source, validationIndex, rowIndex, physicalColumn, cellValue,
+                            text, columns[column].Property?.Name ?? columns[column].Key,
+                            unsupportedFeaturePolicy, errors,
+                            isDate1904, cancellationToken))
+                        continue;
+                    valid = false;
+                    if (validationFailureMode == ExcelValidationFailureMode.StopOnFirstFailure)
+                        break;
+                }
+            }
+            if (valid)
+            {
+                for (var column = 0; column < width; column++)
+                    CopyCell(sourceRow?.GetCell(region.Start.Column + column), targetRow.CreateCell(column),
+                        isDate1904);
+            }
             outputRow++;
+            if (remainingRows.HasValue && sourceRows.Count > remainingRows.Value)
+                break;
         }
         return temp;
     }
+
+    /// <summary>
+    /// 查找分页内容的最后一个占用行。
+    /// </summary>
+    private static int FindLastPageHeaderRegionRow<TEntity>(ISheet sheet,
+        ExcelEntityListRegion<TEntity> region, int width, int firstRow,
+        CancellationToken cancellationToken)
+        where TEntity : class, new()
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var lastRow = Math.Min(sheet.LastRowNum, region.End?.Row ?? sheet.LastRowNum);
+        if (region.PageFooter != null)
+        {
+            width = Math.Max(width, region.PageFooter.Cells.Select(cell => cell.Reference.Column + 1)
+                .Concat(region.PageFooter.Merges.Select(merge => merge.Last.Column + 1))
+                .DefaultIfEmpty(1).Max());
+        }
+        for (var rowIndex = lastRow; rowIndex >= firstRow; rowIndex--)
+        {
+            if (((lastRow - rowIndex) & 255) == 0)
+                cancellationToken.ThrowIfCancellationRequested();
+            var row = sheet.GetRow(rowIndex);
+            if (row == null)
+                continue;
+            for (var column = region.Start.Column; column < region.Start.Column + width; column++)
+                if (!string.IsNullOrEmpty(NpoiExcelImporter.GetRawStringValue(row.GetCell(column))))
+                    return CompleteEnd(rowIndex);
+            if (region.PageHeader != null && !string.IsNullOrEmpty(NpoiExcelImporter.GetRawStringValue(
+                    row.GetCell(region.PageHeader.Marker.Column))))
+                return CompleteEnd(rowIndex);
+        }
+        return firstRow - 1;
+
+        // 根据末页标记补齐配置中保留的空白尾部行。
+        int CompleteEnd(int row) => ExcelEntitySubtotalImportScanner.CompletePageFooterEnd(
+            region, firstRow, row, markerRow => NpoiExcelImporter.NormalizeText(
+                NpoiExcelImporter.GetRawStringValue(sheet.GetRow(markerRow)?.GetCell(region.Start.Column)),
+                ExcelWhitespacePolicy.Trim), cancellationToken);
+    }
+
+    /// <summary>
+    /// 校验原始工作表中的实体单元格。
+    /// </summary>
+    /// <param name="sheet">原始工作表。</param>
+    /// <param name="index">原生校验规则索引。</param>
+    /// <param name="row">单元格的零基行号。</param>
+    /// <param name="column">单元格的零基列号。</param>
+    /// <param name="cellValue">保留原始类型的单元格值。</param>
+    /// <param name="text">按策略规范化后的单元格文本。</param>
+    /// <param name="propertyName">实体属性名称。</param>
+    /// <param name="unsupportedFeaturePolicy">不支持规则的处理策略。</param>
+    /// <param name="errors">接收校验错误的收集器。</param>
+    /// <param name="isDate1904">工作簿是否使用 1904 日期系统。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>当前单元格通过全部规则时为 <see langword="true" />；否则为 <see langword="false" />。</returns>
+    private static bool ValidateWorkbookCell(ISheet sheet, ValidationRangeIndex index, int row, int column,
+        ExcelCellValue cellValue, string text, string propertyName,
+        ExcelUnsupportedFeaturePolicy unsupportedFeaturePolicy, ExcelImportErrorCollector errors,
+        bool isDate1904, CancellationToken cancellationToken)
+    {
+        var valid = true;
+        foreach (var validation in index.Get(row, column))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (NpoiWorkbookValidationPipeline.ValidateCell(validation, cellValue, text, sheet,
+                    isDate1904, cancellationToken, out var message))
+                continue;
+            errors.Add(new ExcelImportError(ExcelImportErrorCode.WorkbookValidation, message,
+                sheet.SheetName, row + 1, column + 1, propertyName, rawValue: cellValue.Value));
+            if (unsupportedFeaturePolicy != ExcelUnsupportedFeaturePolicy.Report
+                || message == null || !message.StartsWith("Workbook Data Validation 规则类型或公式暂不支持",
+                    StringComparison.Ordinal))
+                valid = false;
+        }
+        return valid;
+    }
+
+    /// <summary>
+    /// 将临时工作表错误映射回原始实体区域。
+    /// </summary>
+    private static ExcelImportError MapRegionError(ExcelImportError error, IReadOnlyList<int> sourceRows,
+        int startColumn, int headerRow)
+    {
+        int MapRow(int row) => row > 1 && row - 2 < sourceRows.Count
+            ? sourceRows[row - 2] + 1 : headerRow + 1;
+        return new ExcelImportError(error.Code, error.Message, error.SheetName, MapRow(error.RowIndex),
+            error.ColumnIndex > 0 ? startColumn + error.ColumnIndex : 0, error.PropertyName,
+            error.ColumnKey, error.Header, error.RawValue,
+            error.FirstRowNumber.HasValue ? MapRow(error.FirstRowNumber.Value) : null);
+    }
+
+    /// <summary>
+    /// 判断是否执行工作簿原生校验。
+    /// </summary>
+    /// <param name="mode">导入校验模式。</param>
+    /// <returns>模式包含工作簿原生校验时为 <see langword="true" />；否则为 <see langword="false" />。</returns>
+    private static bool UsesWorkbookValidation(ExcelImportValidationMode mode) =>
+        mode == ExcelImportValidationMode.WorkbookRules || mode == ExcelImportValidationMode.ConfiguredAndWorkbook;
+
+    /// <summary>
+    /// 判断是否执行配置校验。
+    /// </summary>
+    /// <param name="mode">导入校验模式。</param>
+    /// <returns>模式包含配置校验时为 <see langword="true" />；否则为 <see langword="false" />。</returns>
+    private static bool UsesConfiguredValidation(ExcelImportValidationMode mode) =>
+        mode == ExcelImportValidationMode.ConfiguredRules || mode == ExcelImportValidationMode.ConfiguredAndWorkbook;
 
     /// <summary>
     /// 将源单元格的样式和值复制到临时工作表单元格。

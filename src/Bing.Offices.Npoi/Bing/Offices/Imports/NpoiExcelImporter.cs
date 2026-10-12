@@ -43,7 +43,7 @@ public sealed class NpoiExcelImporter : IExcelImporter, IExcelEntityImporter,
     /// <inheritdoc />
     public bool SupportsCompleteWorkbookImport => true;
     /// <inheritdoc />
-    public bool SupportsBatchImport => false;
+    public bool SupportsBatchImport => true;
     /// <inheritdoc />
     public bool SupportsCompleteWorkbookExport => false;
     /// <inheritdoc />
@@ -56,7 +56,8 @@ public sealed class NpoiExcelImporter : IExcelImporter, IExcelEntityImporter,
     /// <inheritdoc />
     public ExcelProviderFeatures Features => ExcelProviderFeatures.TemplateEditing
         | ExcelProviderFeatures.WorkbookEditing | ExcelProviderFeatures.FormulaText
-        | ExcelProviderFeatures.FormulaCachedValues;
+        | ExcelProviderFeatures.FormulaCachedValues | ExcelProviderFeatures.NamedListValidation
+        | ExcelProviderFeatures.MultiSheetBatchImport | ExcelProviderFeatures.EntityLayoutBatchImport;
     /// <inheritdoc />
     public bool Supports(ExcelProviderFeatures features) => (Features & features) == features;
     /// <summary>
@@ -142,6 +143,35 @@ public sealed class NpoiExcelImporter : IExcelImporter, IExcelEntityImporter,
     /// 单个实体布局执行器。
     /// </summary>
     private readonly NpoiEntityImportExecutor _entityExecutor;
+
+    /// <summary>
+    /// 实体布局失败输出使用的空 Workbook 请求映射。
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, ExcelSheetImportRequest>
+        EmptyResolvedSheetRequests = new Dictionary<string, ExcelSheetImportRequest>(
+            StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// 获取前向实体批次解析使用的映射计划构建器。
+    /// </summary>
+    internal NpoiImportPlanBuilder PlanBuilder => _planBuilder;
+
+    /// <summary>
+    /// 获取共享的 NPOI 行物化器。
+    /// </summary>
+    internal NpoiImportRowMaterializer RowMaterializer => _rowMaterializer;
+
+    /// <summary>
+    /// 获取失败工作簿使用的文件提交服务。
+    /// </summary>
+    internal IFileExportCommitter FileExportCommitter => _fileExportCommitter;
+
+    /// <summary>
+    /// 观察 Provider 内部批次路径产生的公共异常。
+    /// </summary>
+    /// <param name="exception">待观察的异常。</param>
+    internal void ObserveException(BingOfficesException exception)
+        => _exceptionDispatcher.Observe(exception);
 
     /// <summary>
     /// 初始化一个 <see cref="NpoiExcelImporter" /> 类型的实例。
@@ -267,7 +297,7 @@ public sealed class NpoiExcelImporter : IExcelImporter, IExcelEntityImporter,
             using var buffered = new MemoryStream();
             NpoiStreamCopier.Copy(source, buffered, cancellationToken, limits.MaxInputBytes);
             return ImportEntityBuffered(buffered, layout, false, limits,
-                options.ValidationFailureMode, cancellationToken);
+                options, cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -308,8 +338,8 @@ public sealed class NpoiExcelImporter : IExcelImporter, IExcelEntityImporter,
             using var buffered = new MemoryStream();
             await NpoiStreamCopier.CopyAsync(source, buffered, cancellationToken, limits.MaxInputBytes)
                 .ConfigureAwait(false);
-            return ImportEntityBuffered(buffered, layout, false, limits,
-                options.ValidationFailureMode, cancellationToken);
+            return await ImportEntityBufferedAsync(buffered, layout, false, limits,
+                options, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -355,7 +385,7 @@ public sealed class NpoiExcelImporter : IExcelImporter, IExcelEntityImporter,
             using var buffered = new MemoryStream();
             NpoiStreamCopier.Copy(source, buffered, cancellationToken, limits.MaxInputBytes);
             return ImportEntityBuffered(buffered, layout, false, limits,
-                options.ValidationFailureMode, cancellationToken);
+                options, cancellationToken);
         }
         finally
         {
@@ -391,8 +421,8 @@ public sealed class NpoiExcelImporter : IExcelImporter, IExcelEntityImporter,
             using var buffered = new MemoryStream();
             await NpoiStreamCopier.CopyAsync(source, buffered, cancellationToken, limits.MaxInputBytes)
                 .ConfigureAwait(false);
-            return ImportEntityBuffered(buffered, layout, false, limits,
-                options.ValidationFailureMode, cancellationToken);
+            return await ImportEntityBufferedAsync(buffered, layout, false, limits,
+                options, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -426,12 +456,12 @@ public sealed class NpoiExcelImporter : IExcelImporter, IExcelEntityImporter,
     /// <param name="layout">实体布局。</param>
     /// <param name="requireTemplateMerges">是否要求模板中的合并区域已存在。</param>
     /// <param name="limits">实体导入使用的资源限制。</param>
-    /// <param name="validationFailureMode">当前行校验失败后的继续策略。</param>
+    /// <param name="options">实体导入选项。</param>
     /// <param name="cancellationToken">用于取消导入的令牌。</param>
     /// <returns>实体导入结果。</returns>
     private ExcelEntityImportResult<TEntity> ImportEntityBuffered<TEntity>(MemoryStream buffered,
         ExcelEntityLayout<TEntity> layout, bool requireTemplateMerges, ExcelResourceLimits limits,
-        ExcelValidationFailureMode validationFailureMode,
+        ExcelEntityImportOptions options,
         CancellationToken cancellationToken)
         where TEntity : class, new()
     {
@@ -440,8 +470,54 @@ public sealed class NpoiExcelImporter : IExcelImporter, IExcelEntityImporter,
         NpoiXlsxZipPreflight.Validate(buffered, limits, cancellationToken);
         buffered.Position = 0;
         using var workbook = WorkbookFactory.Create(buffered);
-        return _entityExecutor.Read(workbook, new TEntity(), layout, requireTemplateMerges, limits,
-            validationFailureMode, cancellationToken);
+        var result = _entityExecutor.Read(workbook, new TEntity(), layout, requireTemplateMerges, limits,
+            options.ValidationFailureMode, options.ValidationMode, options.UnsupportedFeaturePolicy,
+            cancellationToken);
+        var requiredRows = options.FailureOptions != null
+            && options.FailureOptions.Mode != ExcelImportFailureWorkbookMode.None
+            && result.Errors.Count > 0
+            ? BuildFailureWorkbookRequiredRows(workbook, layout, cancellationToken)
+            : null;
+        NpoiFailureWorkbookWriter.Write(workbook, options.FailureOptions, result.Errors,
+            EmptyResolvedSheetRequests, cancellationToken, new SystemFailureWorkbookFileSystem(),
+            null, _fileExportCommitter, requiredRows);
+        return result;
+    }
+
+    /// <summary>
+    /// 从已缓冲的实体输入执行异步失败工作簿输出。
+    /// </summary>
+    /// <typeparam name="TEntity">实体类型。</typeparam>
+    /// <param name="buffered">已定位到内存中的工作簿流。</param>
+    /// <param name="layout">实体布局。</param>
+    /// <param name="requireTemplateMerges">是否要求模板中的合并区域已存在。</param>
+    /// <param name="limits">实体导入使用的资源限制。</param>
+    /// <param name="options">实体导入选项。</param>
+    /// <param name="cancellationToken">用于取消导入和输出的令牌。</param>
+    /// <returns>实体导入结果。</returns>
+    private async Task<ExcelEntityImportResult<TEntity>> ImportEntityBufferedAsync<TEntity>(
+        MemoryStream buffered, ExcelEntityLayout<TEntity> layout, bool requireTemplateMerges,
+        ExcelResourceLimits limits, ExcelEntityImportOptions options,
+        CancellationToken cancellationToken)
+        where TEntity : class, new()
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        buffered.Position = 0;
+        NpoiXlsxZipPreflight.Validate(buffered, limits, cancellationToken);
+        buffered.Position = 0;
+        using var workbook = WorkbookFactory.Create(buffered);
+        var result = _entityExecutor.Read(workbook, new TEntity(), layout, requireTemplateMerges, limits,
+            options.ValidationFailureMode, options.ValidationMode, options.UnsupportedFeaturePolicy,
+            cancellationToken);
+        var requiredRows = options.FailureOptions != null
+            && options.FailureOptions.Mode != ExcelImportFailureWorkbookMode.None
+            && result.Errors.Count > 0
+            ? BuildFailureWorkbookRequiredRows(workbook, layout, cancellationToken)
+            : null;
+        await NpoiFailureWorkbookWriter.WriteAsync(workbook, options.FailureOptions, result.Errors,
+            EmptyResolvedSheetRequests, cancellationToken, _fileExportCommitter, requiredRows)
+            .ConfigureAwait(false);
+        return result;
     }
 
     /// <summary>
@@ -499,6 +575,88 @@ public sealed class NpoiExcelImporter : IExcelImporter, IExcelEntityImporter,
         foreach (var region in layout.ListRegions.Where(item => item.AnchorName != null))
             NpoiEntityLayoutSupport.ResolveNamedAnchor(workbook, region.SheetName,
                 region.AnchorName);
+    }
+
+    /// <summary>
+    /// 收集实体失败工作簿需要保留的固定和列表结构行。
+    /// </summary>
+    /// <typeparam name="TEntity">实体类型。</typeparam>
+    /// <param name="workbook">已打开的实体工作簿。</param>
+    /// <param name="layout">实体布局。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>按工作表分组的零基结构行快照。</returns>
+    private static IReadOnlyDictionary<string, IReadOnlyList<int>> BuildFailureWorkbookRequiredRows<TEntity>(
+        IWorkbook workbook, ExcelEntityLayout<TEntity> layout, CancellationToken cancellationToken)
+        where TEntity : class, new()
+    {
+        var rows = new Dictionary<string, SortedSet<int>>(StringComparer.OrdinalIgnoreCase);
+
+        void Add(string sheetName, int row)
+        {
+            if (row < 0)
+                return;
+            if (!rows.TryGetValue(sheetName, out var sheetRows))
+            {
+                sheetRows = new SortedSet<int>();
+                rows.Add(sheetName, sheetRows);
+            }
+            sheetRows.Add(row);
+        }
+
+        void AddRange(string sheetName, int firstRow, int lastRow)
+        {
+            for (var row = firstRow; row <= lastRow; row++)
+                Add(sheetName, row);
+        }
+
+        foreach (var cell in layout.Cells)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var reference = cell.AnchorName == null
+                ? cell.Reference
+                : NpoiEntityLayoutSupport.ResolveNamedAnchor(workbook, cell.SheetName,
+                    cell.AnchorName).Reference;
+            Add(cell.SheetName, reference.Row);
+        }
+        foreach (var region in layout.ListRegions.Where(item => item.IncludeHeader))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var start = region.AnchorName == null
+                ? region.Start
+                : NpoiEntityLayoutSupport.ResolveNamedAnchor(workbook, region.SheetName,
+                    region.AnchorName).Reference;
+            Add(region.SheetName, start.Row);
+        }
+        foreach (var merge in layout.Merges)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            AddRange(merge.SheetName, merge.Range.First.Row, merge.Range.Last.Row);
+        }
+        foreach (var region in layout.ListRegions)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var sheet = workbook.GetSheet(region.SheetName);
+            if (sheet == null)
+                continue;
+            if (region.PageHeader != null)
+            {
+                AddRange(region.SheetName, region.PageHeader.SourceRange.First.Row,
+                    region.PageHeader.SourceRange.Last.Row);
+            }
+            if (region.Footer != null || region.GroupSubtotal != null
+                || region.PageSubtotal != null || region.PageHeader != null
+                || region.PageFooter != null)
+            {
+                var lastRow = region.End?.Row ?? sheet.LastRowNum;
+                foreach (var span in NpoiEntityLayoutSupport.FindFooterSkipSpans(sheet, region,
+                    lastRow, cancellationToken))
+                    AddRange(region.SheetName, span.StartRow, span.EndRow);
+            }
+        }
+
+        return rows.ToDictionary(pair => pair.Key,
+            pair => (IReadOnlyList<int>)Array.AsReadOnly(pair.Value.ToArray()),
+            StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -749,6 +907,8 @@ public sealed class NpoiExcelImporter : IExcelImporter, IExcelEntityImporter,
         var root = new TWorkbook();
         var sheetResults = new List<ExcelSheetImportResult>();
         var errors = new ExcelImportErrorCollector(request.ResourceLimits?.MaxErrors);
+        var relationKeyBudget = new NpoiRelationKeyBudget(
+            request.ResourceLimits?.MaxTrackedRelationKeys);
         var sourceLocations = request.Relations.Count == 0
             ? null
             : new Dictionary<object, SourceLocation>(ReferenceObjectComparer.Instance);
@@ -832,7 +992,8 @@ public sealed class NpoiExcelImporter : IExcelImporter, IExcelEntityImporter,
                     errors.MarkTruncated();
                     break;
                 }
-                NpoiRelationBinder.Bind(root, relation, errors, sourceLocations, cancellationToken);
+                NpoiRelationBinder.Bind(root, relation, errors, sourceLocations, relationKeyBudget,
+                    cancellationToken);
             }
         }
         NpoiFailureWorkbookWriter.Write(workbook, request.FailureOptions, errors.Errors, resolvedSheetRequests,

@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using System.Threading.Tasks;
 using Bing.Offices.Exceptions;
 using Bing.Offices.IO;
 using NPOI.SS.UserModel;
@@ -10,6 +11,81 @@ namespace Bing.Offices.Imports;
 /// </summary>
 internal static class NpoiFailureWorkbookWriter
 {
+    /// <summary>
+    /// 异步写出失败工作簿，并保持文件提交和目标流复制的异步边界。
+    /// </summary>
+    /// <param name="workbook">原始导入工作簿。</param>
+    /// <param name="options">失败工作簿输出选项。</param>
+    /// <param name="errors">已收集的导入错误。</param>
+    /// <param name="resolvedSheetRequests">实际解析 Sheet 名称到请求的映射。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <param name="fileExportCommitter">文件路径输出使用的提交服务；为空时使用默认实现。</param>
+    /// <param name="requiredRowsBySheet">实体布局要求保留的零基结构行；通用 Workbook 为 null。</param>
+    /// <param name="workbookAlreadyFiltered">工作簿已由调用方按失败行筛选时跳过再次复制。</param>
+    internal static async Task WriteAsync(IWorkbook workbook, ExcelImportFailureOptions options,
+        IReadOnlyCollection<ExcelImportError> errors,
+        IReadOnlyDictionary<string, ExcelSheetImportRequest> resolvedSheetRequests,
+        CancellationToken cancellationToken, IFileExportCommitter fileExportCommitter = null,
+        IReadOnlyDictionary<string, IReadOnlyList<int>> requiredRowsBySheet = null,
+        bool workbookAlreadyFiltered = false)
+    {
+        if (options == null || options.Mode == ExcelImportFailureWorkbookMode.None || errors.Count == 0)
+            return;
+        cancellationToken.ThrowIfCancellationRequested();
+        using var serialized = new MemoryStream();
+        Write(workbook, options, errors, resolvedSheetRequests, cancellationToken,
+            new SystemFailureWorkbookFileSystem(), serialized, fileExportCommitter: null,
+            requiredRowsBySheet: requiredRowsBySheet,
+            workbookAlreadyFiltered: workbookAlreadyFiltered);
+        serialized.Position = 0;
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(options.DestinationPath))
+            {
+                await (fileExportCommitter ?? new DefaultFileExportCommitter()).CommitAsync(
+                    options.DestinationPath,
+                    (destination, token) => CopySerializedAsync(serialized, destination, token),
+                    cancellationToken, "FailureWorkbook").ConfigureAwait(false);
+            }
+            else
+            {
+                await CopySerializedAsync(serialized, options.Destination, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (BingOfficesException)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException
+            && exception is not StackOverflowException)
+        {
+            throw new BingOfficesImportException("失败工作簿异步复制到目标流失败。", exception, "NPOI",
+                BingOfficesStage.Write);
+        }
+    }
+
+    /// <summary>
+    /// 将已序列化的失败工作簿异步复制到目标流。
+    /// </summary>
+    /// <param name="source">已定位到开头的序列化流。</param>
+    /// <param name="destination">接收内容的目标流。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>表示复制操作的任务。</returns>
+    private static async Task CopySerializedAsync(Stream source, Stream destination,
+        CancellationToken cancellationToken)
+    {
+        if (destination == null || !destination.CanWrite)
+            throw new ArgumentException("失败工作簿目标流不可写入。", nameof(destination));
+        source.Position = 0;
+        await source.CopyToAsync(destination, 81920, cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+    }
+
     /// <summary>
     /// 根据失败选项写出失败工作簿；没有配置失败产物或没有错误时不执行任何操作。
     /// </summary>
@@ -36,27 +112,33 @@ internal static class NpoiFailureWorkbookWriter
     /// <param name="fileSystem">临时文件系统适配器。</param>
     /// <param name="destinationOverride">可选的异步 staging 目标流。</param>
     /// <param name="fileExportCommitter">文件路径输出使用的提交服务；为空时使用默认实现。</param>
+    /// <param name="requiredRowsBySheet">实体布局要求保留的零基结构行；通用 Workbook 为 null。</param>
+    /// <param name="workbookAlreadyFiltered">工作簿已由调用方按失败行筛选时跳过再次复制。</param>
     internal static void Write(IWorkbook workbook, ExcelImportFailureOptions options,
         IReadOnlyCollection<ExcelImportError> errors,
         IReadOnlyDictionary<string, ExcelSheetImportRequest> resolvedSheetRequests,
         CancellationToken cancellationToken, IFailureWorkbookFileSystem fileSystem,
-        Stream destinationOverride = null, IFileExportCommitter fileExportCommitter = null)
+        Stream destinationOverride = null, IFileExportCommitter fileExportCommitter = null,
+        IReadOnlyDictionary<string, IReadOnlyList<int>> requiredRowsBySheet = null,
+        bool workbookAlreadyFiltered = false)
     {
         if (options == null || options.Mode == ExcelImportFailureWorkbookMode.None || errors.Count == 0)
             return;
         if (fileSystem == null)
             throw new ArgumentNullException(nameof(fileSystem));
         cancellationToken.ThrowIfCancellationRequested();
-        NpoiFailureWorkbookPreflight.Validate(workbook, errors, resolvedSheetRequests, options);
+        NpoiFailureWorkbookPreflight.Validate(workbook, errors, resolvedSheetRequests, options,
+            requiredRowsBySheet);
         IWorkbook outputWorkbook = workbook;
         IWorkbook independentWorkbook = null;
         try
         {
             try
             {
-                if (options.Mode == ExcelImportFailureWorkbookMode.ErrorRowsOnly)
+                if (options.Mode == ExcelImportFailureWorkbookMode.ErrorRowsOnly
+                    && !workbookAlreadyFiltered)
                     outputWorkbook = independentWorkbook = NpoiFailureWorkbookCopier.CreateErrorRowsWorkbook(workbook, errors,
-                        resolvedSheetRequests, options, cancellationToken);
+                        resolvedSheetRequests, options, cancellationToken, requiredRowsBySheet);
                 else
                     NpoiFailureWorkbookAnnotationWriter.AnnotateErrors(outputWorkbook, errors,
                         options.CommentConflictPolicy);

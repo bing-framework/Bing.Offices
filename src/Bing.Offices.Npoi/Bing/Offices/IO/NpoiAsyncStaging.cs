@@ -35,6 +35,10 @@ internal sealed class NpoiAsyncStaging : INpoiAsyncStaging
     /// </summary>
     private FileStream _writeFile;
     /// <summary>
+    /// 承载刷新后用于读取的临时文件流，避免重复打开同一文件。
+    /// </summary>
+    private FileStream _readFile;
+    /// <summary>
     /// 为混合策略公开并负责阈值迁移的写入包装流。
     /// </summary>
     private readonly Stream _hybridWriteStream;
@@ -94,7 +98,7 @@ internal sealed class NpoiAsyncStaging : INpoiAsyncStaging
         if (_writeFile != null)
         {
             await _writeFile.FlushAsync(cancellationToken).ConfigureAwait(false);
-            _writeFile.Dispose();
+            _readFile = _writeFile;
             _writeFile = null;
         }
         else
@@ -122,6 +126,13 @@ internal sealed class NpoiAsyncStaging : INpoiAsyncStaging
             return;
         }
 
+        if (_readFile != null)
+        {
+            _readFile.Position = 0;
+            await _readFile.CopyToAsync(destination, 81920, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
         using var readFile = new FileStream(_path, FileMode.Open, FileAccess.Read, FileShare.Read,
             81920, FileOptions.Asynchronous | FileOptions.SequentialScan);
         await readFile.CopyToAsync(destination, 81920, cancellationToken).ConfigureAwait(false);
@@ -145,6 +156,16 @@ internal sealed class NpoiAsyncStaging : INpoiAsyncStaging
             cleanupException = exception;
         }
         _writeFile = null;
+        try
+        {
+            _readFile?.Dispose();
+        }
+        catch (Exception exception) when (exception is IOException
+            || exception is UnauthorizedAccessException)
+        {
+            cleanupException ??= exception;
+        }
+        _readFile = null;
         try
         {
             _memory?.Dispose();

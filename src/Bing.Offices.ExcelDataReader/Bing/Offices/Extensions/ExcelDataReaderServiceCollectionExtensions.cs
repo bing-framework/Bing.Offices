@@ -1,6 +1,7 @@
 ﻿using Bing.Offices.Conversions;
 using Bing.Offices.ExcelDataReader;
 using Bing.Offices.Imports;
+using Bing.Offices.IO;
 using Bing.Offices.Mappings;
 using Bing.Offices.Providers;
 using Bing.Offices.Validations;
@@ -30,10 +31,14 @@ public static class ExcelDataReaderServiceCollectionExtensions
             provider.GetServices<IExcelValidationRule>(),
             provider.GetServices<IExcelValueConverter>(),
             provider.GetServices<INamedExcelValidationRule>(),
-            provider.GetService<IExcelMappingPlanFactory>()));
+            provider.GetService<IExcelMappingPlanFactory>(),
+            null,
+            provider.GetRequiredService<IFileExportCommitter>()));
         services.TryAddTransient<IExcelImporter>(provider =>
             provider.GetRequiredService<ExcelDataReaderExcelImporter>());
         services.TryAddTransient<IExcelBatchImporter>(provider =>
+            provider.GetRequiredService<ExcelDataReaderExcelImporter>());
+        services.TryAddTransient<IExcelWorkbookBatchImporter>(provider =>
             provider.GetRequiredService<ExcelDataReaderExcelImporter>());
         return services;
     }

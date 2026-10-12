@@ -1,8 +1,10 @@
 ﻿using System.Globalization;
+using System.Runtime.CompilerServices;
 using Bing.Offices.Conversions;
 using Bing.Offices.Validations;
 using NPOI.HSSF.UserModel;
 using NPOI.SS.UserModel;
+using NPOI.SS.Util;
 
 namespace Bing.Offices.Imports;
 
@@ -11,6 +13,12 @@ namespace Bing.Offices.Imports;
 /// </summary>
 internal static class NpoiWorkbookValidationPipeline
 {
+    /// <summary>
+    /// 保存当前导入 Workbook 中已解析的名称列表，Workbook 回收后缓存随之释放。
+    /// </summary>
+    private static readonly ConditionalWeakTable<IWorkbook, NamedListWorkbookCache> NamedListCaches =
+        new ConditionalWeakTable<IWorkbook, NamedListWorkbookCache>();
+
     /// <summary>
     /// 校验一行的 Workbook 原生规则，并按调用方模式收集错误。
     /// </summary>
@@ -25,22 +33,25 @@ internal static class NpoiWorkbookValidationPipeline
     /// <param name="unsupportedFeaturePolicy">不支持的原生校验规则的处理策略。</param>
     /// <param name="errors">接收工作簿校验错误的收集器。</param>
     /// <param name="isDate1904">当前工作簿是否使用 1904 日期系统。</param>
-    /// <returns>当前行所有可执行规则均通过时为 true。</returns>
+    /// <param name="cancellationToken">用于取消名称列表解析的令牌。</param>
+    /// <returns>当前行所有规则均通过时为 <see langword="true" />；存在失败或不支持规则时为 <see langword="false" />。</returns>
     public static bool Validate(IRow row, IReadOnlyDictionary<int, ExcelColumnPlan> columns,
         ValidationRangeIndex validationIndex, ISheet sheet, string sheetName, int rowIndex,
         ExcelWhitespacePolicy bodyWhitespace, ExcelValidationFailureMode validationFailureMode,
         ExcelUnsupportedFeaturePolicy unsupportedFeaturePolicy, ExcelImportErrorCollector errors,
-        bool isDate1904)
+        bool isDate1904, CancellationToken cancellationToken)
     {
         var valid = true;
         foreach (var column in columns)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var cell = row.GetCell(column.Key);
             var cellValue = NpoiExcelImporter.ReadCellValue(cell, isDate1904);
             var value = NpoiExcelImporter.NormalizeText(cellValue.Text, bodyWhitespace);
             foreach (var validation in validationIndex.Get(rowIndex, column.Key))
             {
-                if (ValidateValue(validation, cellValue, value, sheet, isDate1904, out var message))
+                if (ValidateValue(validation, cellValue, value, sheet, isDate1904,
+                        cancellationToken, out var message))
                     continue;
                 errors.Add(new ExcelImportError(ExcelImportErrorCode.WorkbookValidation, message, sheetName,
                     rowIndex + 1, column.Key + 1, column.Value.Property.Name, column.Value.DynamicDefinition?.Key
@@ -58,6 +69,29 @@ internal static class NpoiWorkbookValidationPipeline
     }
 
     /// <summary>
+    /// 使用 Workbook 原生规则校验单个实体单元格，并复用当前工作簿的名称列表缓存。
+    /// </summary>
+    /// <param name="validation">应用于当前单元格的原生校验规则。</param>
+    /// <param name="cellValue">保留原始类型信息的单元格值。</param>
+    /// <param name="normalizedValue">按调用方空白策略规范化后的单元格文本。</param>
+    /// <param name="sheet">当前单元格所属工作表。</param>
+    /// <param name="isDate1904">当前工作簿是否使用 1904 日期系统。</param>
+    /// <param name="cancellationToken">用于取消名称列表解析的令牌。</param>
+    /// <param name="message">校验失败或规则不支持时返回的说明。</param>
+    /// <returns>规则通过时为 <see langword="true" />；失败或不支持时为 <see langword="false" />。</returns>
+    internal static bool ValidateCell(IDataValidation validation, ExcelCellValue cellValue,
+        string normalizedValue, ISheet sheet, bool isDate1904,
+        CancellationToken cancellationToken, out string message)
+    {
+        if (validation == null)
+            throw new ArgumentNullException(nameof(validation));
+        if (sheet == null)
+            throw new ArgumentNullException(nameof(sheet));
+        return ValidateValue(validation, cellValue, normalizedValue, sheet, isDate1904,
+            cancellationToken, out message);
+    }
+
+    /// <summary>
     /// 按照单个原生数据校验约束验证已规范化的单元格值。
     /// </summary>
     /// <param name="validation">NPOI 提供的数据校验规则。</param>
@@ -65,10 +99,12 @@ internal static class NpoiWorkbookValidationPipeline
     /// <param name="value">按正文空白策略规范化后的文本值。</param>
     /// <param name="sheet">解析列表区域时使用的当前工作表。</param>
     /// <param name="isDate1904">当前工作簿是否使用 1904 日期系统。</param>
+    /// <param name="cancellationToken">用于取消名称列表解析的令牌。</param>
     /// <param name="message">校验失败或不支持时返回的说明消息。</param>
     /// <returns>规则通过时为 true。</returns>
     private static bool ValidateValue(IDataValidation validation, ExcelCellValue cellValue,
-        string value, ISheet sheet, bool isDate1904, out string message)
+        string value, ISheet sheet, bool isDate1904, CancellationToken cancellationToken,
+        out string message)
     {
         var constraint = validation.ValidationConstraint;
         value ??= string.Empty;
@@ -90,9 +126,9 @@ internal static class NpoiWorkbookValidationPipeline
         }
         if (type == NPOI.SS.UserModel.ValidationType.LIST)
         {
-            if (!TryGetExplicitListValues(constraint, sheet, out var values))
+            if (!TryGetExplicitListValues(constraint, sheet, cancellationToken, out var values))
                 return Unsupported(out message);
-            if (values.Contains(value, StringComparer.Ordinal))
+            if (values.Contains(value))
             {
                 message = null;
                 return true;
@@ -149,40 +185,54 @@ internal static class NpoiWorkbookValidationPipeline
     /// </summary>
     /// <param name="constraint">原生列表校验约束。</param>
     /// <param name="currentSheet">解析未限定区域时使用的工作表。</param>
+    /// <param name="cancellationToken">用于取消名称列表解析的令牌。</param>
     /// <param name="values">成功时返回允许值集合。</param>
     /// <returns>支持并成功解析列表规则时为 true。</returns>
-    private static bool TryGetExplicitListValues(IDataValidationConstraint constraint, ISheet currentSheet,
-        out string[] values)
+    private static bool TryGetExplicitListValues(IDataValidationConstraint constraint,
+        ISheet currentSheet, CancellationToken cancellationToken, out HashSet<string> values)
     {
         var formula = constraint.Formula1?.Replace("&#34;", "\"").Replace("&quot;", "\"")
             .Replace("\\\"", "\"").Trim();
         if (!string.IsNullOrWhiteSpace(formula)
-            && TryGetCellRangeValues(formula, currentSheet, out values))
+            && TryGetCellRangeValues(formula, currentSheet, out var rangeValues))
+        {
+            values = new HashSet<string>(rangeValues, StringComparer.Ordinal);
             return true;
+        }
+        if (!string.IsNullOrWhiteSpace(formula)
+            && (formula.StartsWith("=", StringComparison.Ordinal) || IsNameToken(formula)))
+            return TryGetNamedListValues(formula, currentSheet, out values, cancellationToken);
+        var explicitValues = constraint.ExplicitListValues;
+        if (explicitValues != null && explicitValues.Length > 0)
+        {
+            if (explicitValues.Length == 1 && (explicitValues[0].Contains(":") || explicitValues[0].Contains("!")))
+            {
+                values = null;
+                return false;
+            }
+            if (explicitValues.Length == 1 && explicitValues[0].Contains(","))
+                explicitValues = SplitExplicitList(explicitValues[0]);
+            values = new HashSet<string>(explicitValues, StringComparer.Ordinal);
+            return values.Count > 0;
+        }
         if (string.IsNullOrWhiteSpace(formula))
         {
             values = null;
             return false;
         }
-        values = constraint.ExplicitListValues;
-        if (values != null && values.Length > 0)
-        {
-            if (values.Length == 1 && (values[0].Contains(":") || values[0].Contains("!")))
-            {
-                values = null;
-                return false;
-            }
-            if (values.Length == 1 && values[0].Contains(","))
-                values = SplitExplicitList(values[0]);
-            return values.Length > 0;
-        }
         if (formula.StartsWith("=", StringComparison.Ordinal))
+        {
+            values = null;
             return false;
+        }
         if (!(formula.StartsWith("\"", StringComparison.Ordinal) && formula.EndsWith("\"",
                 StringComparison.Ordinal)))
+        {
+            values = null;
             return false;
-        values = SplitExplicitList(formula.Trim('\"'));
-        return values.Length > 0;
+        }
+        values = new HashSet<string>(SplitExplicitList(formula.Trim('\"')), StringComparer.Ordinal);
+        return values.Count > 0;
     }
 
     /// <summary>
@@ -232,7 +282,7 @@ internal static class NpoiWorkbookValidationPipeline
         var sheetName = separator < 0 ? null : expression.Substring(0, separator).Trim('\'');
         var range = separator < 0 ? expression : expression.Substring(separator + 1);
         var parts = range.Split(':');
-        if (parts.Length != 2)
+        if (parts.Length < 1 || parts.Length > 2)
             return false;
         ISheet sheet = currentSheet;
         if (!string.IsNullOrWhiteSpace(sheetName))
@@ -243,8 +293,10 @@ internal static class NpoiWorkbookValidationPipeline
         }
         try
         {
-            var first = new NPOI.SS.Util.CellReference(parts[0].Trim());
-            var last = new NPOI.SS.Util.CellReference(parts[1].Trim());
+            var first = new CellReference(parts[0].Trim());
+            var last = parts.Length == 1 ? first : new CellReference(parts[1].Trim());
+            if (first.Row < 0 || first.Col < 0 || last.Row < first.Row || last.Col < first.Col)
+                return false;
             var result = new List<string>();
             for (var rowIndex = first.Row; rowIndex <= last.Row; rowIndex++)
             {
@@ -258,6 +310,297 @@ internal static class NpoiWorkbookValidationPipeline
         catch (ArgumentException)
         {
             return false;
+        }
+    }
+
+    /// <summary>
+    /// 解析并缓存当前工作簿中定义名称指向的一维有界区域。
+    /// </summary>
+    /// <param name="formula">列表校验中的名称表达式。</param>
+    /// <param name="currentSheet">引用名称的当前工作表。</param>
+    /// <param name="values">成功时返回名称区域中的允许值。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>名称引用受支持且解析成功时为 true。</returns>
+    private static bool TryGetNamedListValues(string formula, ISheet currentSheet, out HashSet<string> values,
+        CancellationToken cancellationToken = default)
+    {
+        values = null;
+        var name = formula.Trim();
+        if (name.StartsWith("=", StringComparison.Ordinal))
+            name = name.Substring(1).Trim();
+        if (!IsNameToken(name))
+            return false;
+
+        var workbook = currentSheet.Workbook;
+        var cache = NamedListCaches.GetValue(workbook, _ => new NamedListWorkbookCache());
+        var sheetIndex = workbook.GetSheetIndex(currentSheet);
+        var result = cache.GetOrAdd(sheetIndex, name,
+            () => ResolveNamedList(workbook, sheetIndex, name, cancellationToken));
+        values = result.Values;
+        return result.IsSupported;
+    }
+
+    /// <summary>
+    /// 检查名称列表导出来源是否受支持。
+    /// </summary>
+    /// <param name="sheet">名称列表所属的工作表。</param>
+    /// <param name="name">名称列表名称。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>名称来源受支持时为 <see langword="true" />；否则为 <see langword="false" />。</returns>
+    internal static bool IsSupportedNamedListSource(ISheet sheet, string name, CancellationToken cancellationToken)
+        => TryGetNamedListValues(name, sheet, out _, cancellationToken);
+
+    /// <summary>
+    /// 按局部优先规则解析名称；无效局部名称会遮蔽同名全局名称。
+    /// </summary>
+    /// <param name="workbook">名称所在的工作簿。</param>
+    /// <param name="sheetIndex">当前校验工作表的索引。</param>
+    /// <param name="nameText">待解析的名称。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>成功时返回允许值；名称缺失或引用不受支持时返回 Unsupported。</returns>
+    private static NamedListResult ResolveNamedList(IWorkbook workbook, int sheetIndex, string nameText,
+        CancellationToken cancellationToken)
+    {
+        var matches = workbook.GetAllNames().Where(item => string.Equals(item.NameName, nameText,
+            StringComparison.OrdinalIgnoreCase)).ToArray();
+        var local = matches.Where(item => item.SheetIndex == sheetIndex).ToArray();
+        IName selected;
+        if (local.Length > 0)
+        {
+            if (local.Length != 1)
+                return NamedListResult.Unsupported;
+            selected = local[0];
+        }
+        else
+        {
+            var global = matches.Where(item => item.SheetIndex < 0).ToArray();
+            if (global.Length != 1)
+                return NamedListResult.Unsupported;
+            selected = global[0];
+        }
+
+        if (!TryParseBoundedAbsoluteRange(selected.RefersToFormula, workbook, sheetIndex,
+                out var rangeSheet, out var firstRow, out var lastRow, out var firstColumn,
+                out var lastColumn))
+            return NamedListResult.Unsupported;
+
+        var values = new List<string>();
+        for (var rowIndex = firstRow; rowIndex <= lastRow; rowIndex++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var row = rangeSheet.GetRow(rowIndex);
+            for (var columnIndex = firstColumn; columnIndex <= lastColumn; columnIndex++)
+            {
+                var cell = row?.GetCell(columnIndex);
+                if (cell?.CellType == CellType.Formula)
+                    return NamedListResult.Unsupported;
+                if (cell != null)
+                    values.Add(NpoiExcelImporter.GetRawStringValue(cell));
+            }
+        }
+        return new NamedListResult(true, new HashSet<string>(values, StringComparer.Ordinal));
+    }
+
+    /// <summary>
+    /// 解析名称公式中的绝对单格、单行或单列区域。
+    /// </summary>
+    /// <param name="formula">名称的引用公式。</param>
+    /// <param name="workbook">名称所在的工作簿。</param>
+    /// <param name="currentSheetIndex">名称引用未限定工作表时使用的索引。</param>
+    /// <param name="rangeSheet">引用目标工作表。</param>
+    /// <param name="firstRow">区域起始零基行号。</param>
+    /// <param name="lastRow">区域结束零基行号。</param>
+    /// <param name="firstColumn">区域起始零基列号。</param>
+    /// <param name="lastColumn">区域结束零基列号。</param>
+    /// <returns>公式严格匹配受支持区域格式时为 true。</returns>
+    private static bool TryParseBoundedAbsoluteRange(string formula, IWorkbook workbook,
+        int currentSheetIndex, out ISheet rangeSheet, out int firstRow, out int lastRow,
+        out int firstColumn, out int lastColumn)
+    {
+        rangeSheet = null;
+        firstRow = lastRow = firstColumn = lastColumn = 0;
+        if (string.IsNullOrWhiteSpace(formula))
+            return false;
+
+        var expression = formula.Trim();
+        if (expression.StartsWith("=", StringComparison.Ordinal))
+            expression = expression.Substring(1).Trim();
+        if (expression.Length == 0)
+            return false;
+
+        var separator = -1;
+        var quoted = false;
+        for (var index = 0; index < expression.Length; index++)
+        {
+            var current = expression[index];
+            if (current == '\'')
+            {
+                if (quoted && index + 1 < expression.Length && expression[index + 1] == '\'')
+                    index++;
+                else
+                    quoted = !quoted;
+            }
+            else if (!quoted)
+            {
+                if (current == '!' && separator < 0)
+                    separator = index;
+                else if (current is '[' or ']' or ',' or '(' or ')' or ';' or '!')
+                    return false;
+            }
+        }
+        if (quoted)
+            return false;
+        if (separator >= 0)
+        {
+            var sheetToken = expression.Substring(0, separator).Trim();
+            string sheetName;
+            if (sheetToken.StartsWith("'", StringComparison.Ordinal))
+            {
+                if (sheetToken.Length < 2 || !sheetToken.EndsWith("'", StringComparison.Ordinal))
+                    return false;
+                sheetName = sheetToken.Substring(1, sheetToken.Length - 2).Replace("''", "'");
+            }
+            else
+            {
+                if (sheetToken.IndexOf('\'') >= 0 || sheetToken.IndexOf(':') >= 0)
+                    return false;
+                sheetName = sheetToken;
+            }
+            if (string.IsNullOrWhiteSpace(sheetName))
+                return false;
+            rangeSheet = workbook.GetSheet(sheetName);
+            if (rangeSheet == null)
+                return false;
+            expression = expression.Substring(separator + 1).Trim();
+        }
+        else
+        {
+            rangeSheet = workbook.GetSheetAt(currentSheetIndex);
+        }
+
+        var parts = expression.Split(':');
+        if (parts.Length < 1 || parts.Length > 2
+            || !IsAbsoluteCellReference(parts[0].Trim())
+            || (parts.Length == 2 && !IsAbsoluteCellReference(parts[1].Trim())))
+            return false;
+
+        try
+        {
+            var first = new CellReference(parts[0].Trim());
+            var last = parts.Length == 1 ? first : new CellReference(parts[1].Trim());
+            var version = workbook.SpreadsheetVersion;
+            if (first.Row < 0 || first.Col < 0 || last.Row < first.Row || last.Col < first.Col
+                || last.Row > version.LastRowIndex || last.Col > version.LastColumnIndex
+                || (first.Row != last.Row && first.Col != last.Col))
+                return false;
+            firstRow = first.Row;
+            lastRow = last.Row;
+            firstColumn = first.Col;
+            lastColumn = last.Col;
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 判断文本是否是单一 Excel 名称，而非公式或区域表达式。
+    /// </summary>
+    /// <param name="value">名称表达式。</param>
+    /// <returns>文本符合名称 token 语法时为 true。</returns>
+    private static bool IsNameToken(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+        var expression = value.Trim();
+        if (expression.StartsWith("=", StringComparison.Ordinal))
+            expression = expression.Substring(1).Trim();
+        if (expression.Length == 0
+            || !(char.IsLetter(expression[0]) || expression[0] == '_' || expression[0] == '\\'))
+            return false;
+        return expression.Skip(1).All(character => char.IsLetterOrDigit(character)
+            || character == '_' || character == '.' || character == '\\');
+    }
+
+    /// <summary>
+    /// 判断引用是否同时固定了列和行。
+    /// </summary>
+    /// <param name="address">A1 地址。</param>
+    /// <returns>绝对单元格引用时为 true。</returns>
+    private static bool IsAbsoluteCellReference(string address)
+    {
+        if (string.IsNullOrEmpty(address) || address[0] != '$')
+            return false;
+        var rowMarker = address.IndexOf('$', 1);
+        if (rowMarker < 2 || rowMarker == address.Length - 1)
+            return false;
+        if (address.Substring(1, rowMarker - 1).Any(character => !char.IsLetter(character)))
+            return false;
+        return address.Substring(rowMarker + 1).All(char.IsDigit)
+            && address[rowMarker + 1] != '0';
+    }
+
+    /// <summary>
+    /// 表示名称解析成功或不受支持的缓存结果。
+    /// </summary>
+    private sealed class NamedListResult
+    {
+        /// <summary>
+        /// 初始化一个 <see cref="NamedListResult" /> 类型的实例。
+        /// </summary>
+        /// <param name="isSupported">引用是否受支持。</param>
+        /// <param name="values">区域中的列表值。</param>
+        internal NamedListResult(bool isSupported, HashSet<string> values)
+        {
+            IsSupported = isSupported;
+            Values = values;
+        }
+
+        /// <summary>
+        /// 获取名称引用是否受支持。
+        /// </summary>
+        internal bool IsSupported { get; }
+        /// <summary>
+        /// 获取名称区域中的列表值。
+        /// </summary>
+        internal HashSet<string> Values { get; }
+        /// <summary>
+        /// 获取无法安全解析的名称引用结果。
+        /// </summary>
+        internal static NamedListResult Unsupported { get; } = new NamedListResult(false, null);
+    }
+
+    /// <summary>
+    /// 缓存当前工作簿中名称解析和允许值扫描结果。
+    /// </summary>
+    private sealed class NamedListWorkbookCache
+    {
+        /// <summary>
+        /// 保存按当前工作表和名称区分的解析结果。
+        /// </summary>
+        private readonly Dictionary<string, NamedListResult> _results =
+            new Dictionary<string, NamedListResult>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// 获取名称缓存项；首次访问时解析并缓存成功或 Unsupported 结果。
+        /// </summary>
+        /// <param name="sheetIndex">当前工作表索引。</param>
+        /// <param name="name">待解析名称。</param>
+        /// <param name="factory">创建缓存值的委托。</param>
+        /// <returns>名称解析结果。</returns>
+        internal NamedListResult GetOrAdd(int sheetIndex, string name, Func<NamedListResult> factory)
+        {
+            var key = sheetIndex.ToString(CultureInfo.InvariantCulture) + ":" + name;
+            lock (_results)
+            {
+                if (_results.TryGetValue(key, out var result))
+                    return result;
+                result = factory();
+                _results.Add(key, result);
+                return result;
+            }
         }
     }
 

@@ -6,6 +6,7 @@ using NPOI.SS.Util;
 using NPOI.XSSF.UserModel;
 using Bing.Offices.Exceptions;
 using Bing.Offices.Internals;
+using Bing.Offices.Npoi.Exports.PivotTables;
 
 namespace Bing.Offices.Exports;
 
@@ -20,6 +21,16 @@ internal static class NpoiReportWriter
     /// <param name="request">当前操作请求。</param>
     internal static void Validate(ExcelWorkbookExportRequest request)
     {
+        if (request.PreserveTemplatePivotTables || request.PivotTableUpdates.Count > 0)
+        {
+            if (!ExcelPivotTemplatePreserver.IsPreserveTemplate(request))
+                throw Unsupported("NPOI 当前仅支持显式 XLSX 模板透视保留，或全部/部分模板透视更新；新建与其它更新形状不支持。",
+                    BingOfficesStage.Preflight);
+            if (ExcelPivotTemplatePreserver.IsPreserveOnly(request))
+                return;
+        }
+        if (request.PivotTables.Count > 0 && request.Format != ExcelFormat.Xlsx)
+            throw Unsupported("NPOI 透视表仅支持 XLSX 新建。", BingOfficesStage.Preflight);
         var isXls = request.Format == ExcelFormat.Xls;
         var maxRows = isXls
             ? SpreadsheetVersion.EXCEL97.LastRowIndex + 1
@@ -38,6 +49,73 @@ internal static class NpoiReportWriter
                 || definition.Type == ExcelConditionalFormatType.IconSet))
             throw Unsupported("NPOI 的 XLS/HSSF 分支不支持 ColorScale、DataBar 或 IconSet。",
                 BingOfficesStage.Preflight);
+    }
+
+    /// <summary>
+    /// 预检全部来源并创建完整缓存的原生透视表。
+    /// </summary>
+    /// <param name="workbook">已经写入全部业务工作表的工作簿。</param>
+    /// <param name="request">包含透视定义的导出请求。</param>
+    /// <param name="token">取消令牌。</param>
+    /// <returns>随工作簿序列化的完整缓存记录。</returns>
+    internal static IReadOnlyList<NpoiPivotCacheRecords> ApplyPivotTables(IWorkbook workbook,
+        ExcelWorkbookExportRequest request, CancellationToken token)
+    {
+        if (request.PivotTables.Count == 0)
+            return Array.Empty<NpoiPivotCacheRecords>();
+        return ApplyPivotTables(workbook, request.PivotTables, token, rejectExistingParts: true);
+    }
+
+    /// <summary>
+    /// 使用指定定义创建透视表及其完整缓存。
+    /// </summary>
+    /// <param name="workbook">已经写入全部业务工作表的工作簿。</param>
+    /// <param name="definitions">待创建的透视定义。</param>
+    /// <param name="token">取消令牌。</param>
+    /// <returns>随工作簿序列化的完整缓存记录。</returns>
+    internal static IReadOnlyList<NpoiPivotCacheRecords> ApplyPivotTables(IWorkbook workbook,
+        IReadOnlyList<ExcelPivotTableDefinition> definitions, CancellationToken token)
+    {
+        return ApplyPivotTables(workbook, definitions, token, rejectExistingParts: false);
+    }
+
+    private static IReadOnlyList<NpoiPivotCacheRecords> ApplyPivotTables(IWorkbook workbook,
+        IReadOnlyList<ExcelPivotTableDefinition> definitions, CancellationToken token,
+        bool rejectExistingParts)
+    {
+        if (definitions == null || definitions.Count == 0)
+            return Array.Empty<NpoiPivotCacheRecords>();
+        token.ThrowIfCancellationRequested();
+        if (workbook is not XSSFWorkbook xssf)
+            throw Unsupported("NPOI 透视表需要 XSSF 工作簿。", BingOfficesStage.Preflight);
+        if (rejectExistingParts)
+        {
+            foreach (var part in xssf.Package.GetParts())
+            {
+                token.ThrowIfCancellationRequested();
+                var name = part.PartName.Name.TrimStart('/');
+                if (ExcelPivotTemplateParts.IsPivotPart(name, part.ContentType))
+                    throw Unsupported("NPOI 当前不支持保留或更新已有透视模板。", BingOfficesStage.Preflight);
+            }
+        }
+        var targets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var sources = new List<NpoiPivotSourcePlan>();
+        foreach (var definition in definitions)
+        {
+            token.ThrowIfCancellationRequested();
+            if (!targets.Add(definition.TargetSheet) || workbook.GetSheet(definition.TargetSheet) != null)
+                throw new BingOfficesConfigurationException($"透视表目标 Sheet 已存在: {definition.TargetSheet}",
+                    stage: BingOfficesStage.Preflight);
+            sources.Add(NpoiPivotSourceValidator.Validate(xssf, definition, token));
+        }
+        // 全部来源和目标预检通过后创建，避免后续定义失败留下半个透视。
+        var records = new List<NpoiPivotCacheRecords>();
+        foreach (var source in sources)
+        {
+            token.ThrowIfCancellationRequested();
+            records.Add(NpoiPivotTableWriter.Create(xssf, source, token));
+        }
+        return records.AsReadOnly();
     }
 
     /// <summary>
@@ -91,6 +169,18 @@ internal static class NpoiReportWriter
         foreach (var conditional in request.ConditionalFormats)
             ApplyConditionalFormatting(sheet, conditional);
 
+        if (request.PrintLayout != null)
+            ApplyPrintLayout(sheet, request.PrintLayout);
+    }
+
+    /// <summary>
+    /// 建立工作表声明的名称范围。
+    /// </summary>
+    /// <param name="workbook">目标工作簿。</param>
+    /// <param name="sheet">声明名称的工作表。</param>
+    /// <param name="request">工作表请求。</param>
+    internal static void ApplyNamedRanges(IWorkbook workbook, ISheet sheet, ExcelSheetExportRequest request)
+    {
         foreach (var namedRange in request.NamedRanges)
         {
             var name = workbook.CreateName();
@@ -99,9 +189,6 @@ internal static class NpoiReportWriter
             name.NameName = namedRange.Name;
             name.RefersToFormula = ToFormula(sheet, namedRange);
         }
-
-        if (request.PrintLayout != null)
-            ApplyPrintLayout(sheet, request.PrintLayout);
     }
 
     /// <summary>

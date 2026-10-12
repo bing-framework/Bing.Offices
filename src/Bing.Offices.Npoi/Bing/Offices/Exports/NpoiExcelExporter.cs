@@ -7,7 +7,9 @@ using Bing.Offices.Conversions;
 using Bing.Offices.Entities;
 using Bing.Offices.Exceptions;
 using Bing.Offices.IO;
+using Bing.Offices.Internals;
 using Bing.Offices.Npoi.Entities;
+using Bing.Offices.Npoi.Exports;
 using Bing.Offices.Providers;
 using NPOI.SS.UserModel;
 using NPOI.XSSF.Streaming;
@@ -57,6 +59,7 @@ public sealed class NpoiExcelExporter : IExcelExporter, IExcelEntityExporter, IE
     public IReadOnlyList<string> Limitations { get; } = new[]
     {
         "XLSM、XLSB 和 ODS 在当前 NPOI Provider 中明确拒绝。",
+        "透视表支持 XLSX 新建、原样模板保留及带业务 Sheet 的透视部件桥接；UpdatePivotTable 支持全部或部分模板透视更新，共享缓存会为被更新消费者拆分新缓存；缓存刷新和其它更新形状暂不支持。",
         "公式重新计算只覆盖 NPOI 实际支持的函数集合。"
     };
     /// <inheritdoc />
@@ -65,7 +68,10 @@ public sealed class NpoiExcelExporter : IExcelExporter, IExcelEntityExporter, IE
         | ExcelProviderFeatures.AutoFilter | ExcelProviderFeatures.FreezePanes
         | ExcelProviderFeatures.ConditionalFormatting | ExcelProviderFeatures.NamedRanges
         | ExcelProviderFeatures.PrintLayout | ExcelProviderFeatures.FormulaText
-        | ExcelProviderFeatures.FormulaCachedValues;
+        | ExcelProviderFeatures.FormulaCachedValues | ExcelProviderFeatures.NamedListValidation
+        | ExcelProviderFeatures.SheetProtection | ExcelProviderFeatures.CascadeListValidation
+        | ExcelProviderFeatures.PivotTables | ExcelProviderFeatures.AdvancedPivotTables
+        | ExcelProviderFeatures.TemplatePivotTables;
     /// <inheritdoc />
     public bool Supports(ExcelProviderFeatures features) => (Features & features) == features;
     /// <summary>
@@ -180,7 +186,7 @@ public sealed class NpoiExcelExporter : IExcelExporter, IExcelEntityExporter, IE
         ValidateEntityDestination(entity, layout, destination);
         try
         {
-            ExportEntityCore(entity, layout, destination, null, cancellationToken);
+            ExportEntityCore(entity, layout, destination, null, cancellationToken, flushDestination: true);
         }
         catch (OperationCanceledException)
         {
@@ -216,7 +222,7 @@ public sealed class NpoiExcelExporter : IExcelExporter, IExcelEntityExporter, IE
         try
         {
             staging = _asyncStagingFactory.Create("bing-offices-entity-async-");
-            ExportEntityCore(entity, layout, staging.WriteStream, null, cancellationToken);
+            ExportEntityCore(entity, layout, staging.WriteStream, null, cancellationToken, flushDestination: false);
             await staging.FlushAsync(cancellationToken).ConfigureAwait(false);
             await staging.CopyToAsync(destination, cancellationToken).ConfigureAwait(false);
         }
@@ -269,9 +275,17 @@ public sealed class NpoiExcelExporter : IExcelExporter, IExcelEntityExporter, IE
     {
         if (string.IsNullOrWhiteSpace(path))
             throw new ArgumentException("目标文件路径不能为空。", nameof(path));
-        _fileExportCommitter.Commit(path,
-            destination => ExportEntity(entity, layout, destination, cancellationToken),
-            cancellationToken, "Excel entity");
+        try
+        {
+            _fileExportCommitter.Commit(path,
+                destination => ExportEntity(entity, layout, destination, cancellationToken),
+                cancellationToken, "Excel entity");
+        }
+        catch (BingOfficesFileCommitException exception)
+        {
+            _exceptionDispatcher.Observe(exception);
+            throw;
+        }
     }
 
     /// <inheritdoc />
@@ -280,9 +294,17 @@ public sealed class NpoiExcelExporter : IExcelExporter, IExcelEntityExporter, IE
     {
         if (string.IsNullOrWhiteSpace(path))
             throw new ArgumentException("目标文件路径不能为空。", nameof(path));
-        await _fileExportCommitter.CommitAsync(path,
-            (destination, token) => ExportEntityAsync(entity, layout, destination, token),
-            cancellationToken, "Excel entity").ConfigureAwait(false);
+        try
+        {
+            await _fileExportCommitter.CommitAsync(path,
+                (destination, token) => ExportEntityAsync(entity, layout, destination, token),
+                cancellationToken, "Excel entity").ConfigureAwait(false);
+        }
+        catch (BingOfficesFileCommitException exception)
+        {
+            _exceptionDispatcher.Observe(exception);
+            throw;
+        }
     }
 
     /// <inheritdoc />
@@ -295,7 +317,7 @@ public sealed class NpoiExcelExporter : IExcelExporter, IExcelEntityExporter, IE
             throw new ArgumentNullException(nameof(template));
         try
         {
-            ExportEntityCore(entity, layout, destination, template, cancellationToken);
+            ExportEntityCore(entity, layout, destination, template, cancellationToken, flushDestination: true);
         }
         catch (OperationCanceledException)
         {
@@ -334,7 +356,7 @@ public sealed class NpoiExcelExporter : IExcelExporter, IExcelEntityExporter, IE
         try
         {
             staging = _asyncStagingFactory.Create("bing-offices-entity-template-async-");
-            ExportEntityCore(entity, layout, staging.WriteStream, template, cancellationToken);
+            ExportEntityCore(entity, layout, staging.WriteStream, template, cancellationToken, flushDestination: false);
             await staging.FlushAsync(cancellationToken).ConfigureAwait(false);
             await staging.CopyToAsync(destination, cancellationToken).ConfigureAwait(false);
         }
@@ -390,8 +412,10 @@ public sealed class NpoiExcelExporter : IExcelExporter, IExcelEntityExporter, IE
     /// <param name="destination">接收工作簿内容的目标流。</param>
     /// <param name="template">可选的模板配置。</param>
     /// <param name="cancellationToken">用于取消导出的令牌。</param>
+    /// <param name="flushDestination">是否在同步序列化完成时刷新目标流。</param>
     private void ExportEntityCore<TEntity>(TEntity entity, ExcelEntityLayout<TEntity> layout, Stream destination,
-        ExcelEntityTemplateOptions template, CancellationToken cancellationToken) where TEntity : class, new()
+        ExcelEntityTemplateOptions template, CancellationToken cancellationToken, bool flushDestination)
+        where TEntity : class, new()
     {
         IWorkbook workbook = null;
         try
@@ -400,7 +424,23 @@ public sealed class NpoiExcelExporter : IExcelExporter, IExcelEntityExporter, IE
                 ? ExcelHelper.PrepareWorkbook(ExcelFormat.Xlsx)
                 : NPOI.SS.UserModel.WorkbookFactory.Create(new NpoiNonDisposingStream(template.Template));
             _entityExecutor.Write(workbook, entity, layout, template != null, cancellationToken);
-            workbook.Write(new NpoiNonDisposingStream(destination, cancellationToken), false);
+            NpoiLookupListWriter.Apply(workbook, layout.LookupLists, cancellationToken);
+            var cascadeMaps = NpoiCascadeListWriter.Apply(workbook, layout.CascadeLists, cancellationToken);
+            foreach (var pair in layout.DataValidations)
+            {
+                var sheet = workbook.GetSheet(pair.Key) ?? throw new BingOfficesConfigurationException(
+                    $"实体校验缺少工作表: {pair.Key}", stage: BingOfficesStage.Plan);
+                NpoiSheetContentWriter.ApplyValidations(workbook, sheet, pair.Value, cancellationToken,
+                    cascadeMaps);
+            }
+            foreach (var pair in layout.Protections)
+            {
+                var sheet = workbook.GetSheet(pair.Key) ?? throw new BingOfficesConfigurationException(
+                    $"实体保护缺少工作表: {pair.Key}", stage: BingOfficesStage.Plan);
+                NpoiSheetProtectionWriter.Apply(workbook, sheet, pair.Value, cancellationToken);
+            }
+            NpoiSheetContentWriter.Write(workbook, layout.DataValidations,
+                new NpoiNonDisposingStream(destination, cancellationToken, flushDestination), cancellationToken);
         }
         finally
         {
@@ -433,6 +473,17 @@ public sealed class NpoiExcelExporter : IExcelExporter, IExcelEntityExporter, IE
     /// <inheritdoc />
     public void Export(ExcelWorkbookExportRequest request, Stream destination,
         CancellationToken cancellationToken = default)
+        => ExportCore(request, destination, cancellationToken, flushDestination: true);
+
+    /// <summary>
+    /// 同步构建工作簿并写入目标流。
+    /// </summary>
+    /// <param name="request">工作簿导出请求。</param>
+    /// <param name="destination">接收工作簿内容的目标流。</param>
+    /// <param name="cancellationToken">写入过程中检查的取消令牌。</param>
+    /// <param name="flushDestination">是否在同步序列化完成时刷新目标流。</param>
+    private void ExportCore(ExcelWorkbookExportRequest request, Stream destination,
+        CancellationToken cancellationToken, bool flushDestination)
     {
         if (request == null)
             throw new ArgumentNullException(nameof(request));
@@ -447,6 +498,14 @@ public sealed class NpoiExcelExporter : IExcelExporter, IExcelEntityExporter, IE
 
         try
         {
+            if (ExcelPivotTemplatePreserver.IsPreserveOnly(request))
+            {
+                ExcelPivotTemplatePreserver.Copy(request, destination, "NPOI", cancellationToken);
+                return;
+            }
+            using var templateBridge = ExcelPivotTemplateBridge.Create(request, "NPOI", cancellationToken);
+            using var generated = templateBridge == null ? null : ExcelPivotTemplateBridge.OpenGeneratedFile();
+            var workbookDestination = generated ?? destination;
             var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var sheetRequest in request.Sheets)
             {
@@ -474,23 +533,56 @@ public sealed class NpoiExcelExporter : IExcelExporter, IExcelEntityExporter, IE
                 throw new BingOfficesConfigurationException("Excel 导出映射配置无效。", exception,
                     BingOfficesStage.Plan);
             }
-            using var workbook = CreateWorkbook(request, CanUseStreamingWorkbook(request, planBySheet));
+            using var workbook = CreateWorkbook(request, CanUseStreamingWorkbook(request, planBySheet),
+                templateBridge?.Template);
+            if (request.Template == null)
+                foreach (var sheetRequest in request.Sheets)
+                    workbook.CreateSheet(sheetRequest.Name);
+            foreach (var sheetRequest in request.Sheets)
+                NpoiReportWriter.ApplyNamedRanges(workbook, workbook.GetSheet(sheetRequest.Name)
+                    ?? throw new BingOfficesConfigurationException($"模板缺少请求的 Sheet: {sheetRequest.Name}",
+                        stage: BingOfficesStage.Plan), sheetRequest);
+            var reservedSheetNames = request.PivotTables.Select(pivot => pivot.TargetSheet).ToArray();
+            NpoiLookupListWriter.Apply(workbook, request.LookupLists, cancellationToken, reservedSheetNames);
+            var cascadeMaps = NpoiCascadeListWriter.Apply(workbook, request.CascadeLists, cancellationToken, reservedSheetNames);
             foreach (var sheetRequest in request.Sheets)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 WriteSheet(workbook, sheetRequest, request.Template != null, cancellationToken,
                     planBySheet[sheetRequest]);
             }
+            foreach (var sheetRequest in request.Sheets)
+                NpoiSheetContentWriter.ApplyValidations(workbook, workbook.GetSheet(sheetRequest.Name),
+                    sheetRequest.DataValidations, cancellationToken, cascadeMaps);
+            foreach (var sheetRequest in request.Sheets)
+                if (sheetRequest.Protection != null)
+                    NpoiSheetProtectionWriter.Apply(workbook, workbook.GetSheet(sheetRequest.Name),
+                        sheetRequest.Protection, cancellationToken);
 
+            var updateDefinitions = templateBridge?.HasUpdates == true
+                ? templateBridge.CreateProviderUpdateDefinitions()
+                : Array.Empty<ExcelPivotTableDefinition>();
+            var pivotRecords = templateBridge?.HasUpdates == true
+                ? NpoiReportWriter.ApplyPivotTables(workbook,
+                    updateDefinitions.Concat(request.PivotTables).ToArray(), cancellationToken)
+                : NpoiReportWriter.ApplyPivotTables(workbook, request, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                NpoiSheetContentWriter.Write(workbook, request, new NpoiNonDisposingStream(destination, cancellationToken), cancellationToken);
+                NpoiSheetContentWriter.Write(workbook,
+                    request.Sheets.ToDictionary(sheet => sheet.Name, sheet => sheet.DataValidations, StringComparer.OrdinalIgnoreCase),
+                    pivotRecords, new NpoiNonDisposingStream(workbookDestination, cancellationToken, flushDestination),
+                    cancellationToken);
             }
             catch (Exception exception) when (cancellationToken.IsCancellationRequested
                 && exception.GetBaseException() is OperationCanceledException)
             {
                 throw new OperationCanceledException(cancellationToken);
+            }
+            if (templateBridge != null)
+            {
+                generated.Position = 0;
+                templateBridge.Merge(generated, destination, cancellationToken);
             }
             cancellationToken.ThrowIfCancellationRequested();
         }
@@ -573,7 +665,7 @@ public sealed class NpoiExcelExporter : IExcelExporter, IExcelEntityExporter, IE
         try
         {
             staging = _asyncStagingFactory.Create("bing-offices-excel-async-");
-            Export(request, staging.WriteStream, cancellationToken);
+            ExportCore(request, staging.WriteStream, cancellationToken, flushDestination: false);
             await staging.FlushAsync(cancellationToken).ConfigureAwait(false);
             await staging.CopyToAsync(destination, cancellationToken).ConfigureAwait(false);
         }
@@ -656,11 +748,13 @@ public sealed class NpoiExcelExporter : IExcelExporter, IExcelEntityExporter, IE
     /// </summary>
     /// <param name="request">包含格式、模板流和元数据的导出请求。</param>
     /// <param name="useStreaming">是否为大型纯列表创建 SXSSF 流式工作簿。</param>
+    /// <param name="templateOverride">可选的已暂存模板流。</param>
     /// <returns>已准备好的 NPOI 工作簿。</returns>
     private static NPOI.SS.UserModel.IWorkbook CreateWorkbook(ExcelWorkbookExportRequest request,
-        bool useStreaming)
+        bool useStreaming, Stream templateOverride = null)
     {
-        if (request.Template == null)
+        var template = templateOverride ?? request.Template;
+        if (template == null)
         {
             if (useStreaming)
             {
@@ -669,9 +763,9 @@ public sealed class NpoiExcelExporter : IExcelExporter, IExcelEntityExporter, IE
             }
             return ExcelHelper.PrepareWorkbook(request.Format, request.Metadata);
         }
-        if (!request.Template.CanRead)
+        if (!template.CanRead)
             throw new ArgumentException("模板流不可读取。", nameof(request));
-        var workbook = NPOI.SS.UserModel.WorkbookFactory.Create(new NpoiNonDisposingStream(request.Template));
+        var workbook = NPOI.SS.UserModel.WorkbookFactory.Create(new NpoiNonDisposingStream(template));
         if (request.MetadataSpecified)
             ExcelHelper.ApplyWorkbookMetadata(workbook, request.Metadata);
         return workbook;
@@ -700,7 +794,8 @@ public sealed class NpoiExcelExporter : IExcelExporter, IExcelEntityExporter, IE
     private static bool CanUseStreamingWorkbook(ExcelWorkbookExportRequest request,
         IReadOnlyDictionary<ExcelSheetExportRequest, IExcelMappingPlan> plans)
     {
-        if (request.Template != null || request.Format != ExcelFormat.Xlsx || request.Sheets.Count == 0)
+        if (request.Template != null || request.Format != ExcelFormat.Xlsx || request.Sheets.Count == 0
+            || request.LookupLists.Count != 0 || request.CascadeLists.Count != 0 || request.PivotTables.Count != 0)
             return false;
 
         foreach (var sheet in request.Sheets)
@@ -709,6 +804,7 @@ public sealed class NpoiExcelExporter : IExcelExporter, IExcelEntityExporter, IE
                 || (sheet.HeaderRows?.Count ?? 0) != 0 || (sheet.Charts?.Count ?? 0) != 0
                 || sheet.ColumnWidth != null
                 || sheet.Images.Count != 0 || sheet.DataValidations.Count != 0
+                || sheet.Protection != null
                 || sheet.Tables.Count != 0 || sheet.AutoFilters.Count != 0
                 || sheet.FreezePane != null || sheet.ConditionalFormats.Count != 0
                 || sheet.NamedRanges.Count != 0 || sheet.PrintLayout != null

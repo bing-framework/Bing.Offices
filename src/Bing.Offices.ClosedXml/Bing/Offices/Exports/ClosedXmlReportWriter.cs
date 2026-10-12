@@ -1,5 +1,6 @@
 ﻿using ClosedXML.Excel;
 using Bing.Offices.Exceptions;
+using Bing.Offices.ClosedXml.Exports.PivotTables;
 
 using Bing.Offices.Internals;
 
@@ -18,11 +19,151 @@ internal static class ClosedXmlReportWriter
     {
         ExcelReportPreflight.Validate(request, "ClosedXML", 1048576, 16384,
             supportsFreezeOrigin: false);
+        if (request.PivotTables.Count > 0 && request.Format != ExcelFormat.Xlsx)
+            throw Unsupported("ClosedXML 透视表仅支持 XLSX。", BingOfficesStage.Preflight);
+        foreach (var pivot in request.PivotTables)
+        {
+            if (pivot.SourceRange.EndRow >= 1048576 || pivot.SourceRange.EndColumn >= 16384
+                || (long)pivot.TargetRow + 2 > 1048576 || (long)pivot.TargetColumn + 2 > 16384)
+                throw new BingOfficesConfigurationException("透视表区域超出 XLSX 边界。",
+                    stage: BingOfficesStage.Preflight);
+        }
         var invalid = request.Sheets.Select(sheet => sheet.PrintLayout?.ScalePercent)
             .FirstOrDefault(scale => scale.HasValue && (scale.Value < 10 || scale.Value > 400));
         if (invalid.HasValue)
             throw new BingOfficesConfigurationException("打印缩放百分比必须在 10 到 400 之间。",
                 stage: BingOfficesStage.Preflight);
+    }
+
+    /// <summary>
+    /// 创建工作簿透视表。
+    /// </summary>
+    /// <param name="workbook">目标工作簿。</param>
+    /// <param name="request">导出请求。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    internal static void ApplyPivotTables(XLWorkbook workbook, ExcelWorkbookExportRequest request,
+        CancellationToken cancellationToken)
+    {
+        ApplyPivotTables(workbook, request.PivotTables, cancellationToken);
+    }
+
+    /// <summary>
+    /// 使用指定定义创建透视表及其完整缓存。
+    /// </summary>
+    /// <param name="workbook">目标工作簿。</param>
+    /// <param name="definitions">待创建的透视定义。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    internal static void ApplyPivotTables(XLWorkbook workbook,
+        IReadOnlyList<ExcelPivotTableDefinition> definitions,
+        CancellationToken cancellationToken)
+    {
+        var sources = new List<(ExcelPivotTableDefinition Definition, IXLRange Range,
+            IReadOnlyDictionary<string, IReadOnlyList<XLCellValue>> Filters)>();
+        foreach (var definition in definitions ?? Array.Empty<ExcelPivotTableDefinition>())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (workbook.Worksheets.Any(sheet => string.Equals(sheet.Name, definition.TargetSheet,
+                    StringComparison.OrdinalIgnoreCase)))
+                throw new BingOfficesConfigurationException($"透视表目标 Sheet 已存在: {definition.TargetSheet}",
+                    stage: BingOfficesStage.Preflight);
+            var source = workbook.Worksheet(definition.SourceSheet);
+            var range = ToRange(source, definition.SourceRange);
+            var filters = ClosedXmlPivotSourceValidator.Validate(range, definition, cancellationToken);
+            sources.Add((definition, range, filters));
+        }
+
+        // 全部来源和空间预算通过后才创建缓存与透视，避免后续定义失败留下半成品。
+        foreach (var (definition, range, filters) in sources)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var target = workbook.Worksheets.Add(definition.TargetSheet);
+            var table = target.PivotTables.Add(definition.Name,
+                target.Cell(definition.TargetRow + 1, definition.TargetColumn + 1), range);
+            table.ShowGrandTotalsColumns = true;
+            table.ShowGrandTotalsRows = true;
+            if (definition.ValueFields.Count == 0)
+            {
+                table.RowLabels.Add(definition.RowField);
+                table.Values.Add(definition.ValueField).SetSummaryFormula(XLPivotSummary.Sum);
+            }
+            else
+                ApplyAdvancedPivot(table, definition, filters, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// 应用高级透视的字段与聚合配置。
+    /// </summary>
+    /// <param name="table">已创建的透视表。</param>
+    /// <param name="definition">已预检的不可变配置。</param>
+    /// <param name="filters">匹配来源实际字面值的筛选选项。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    private static void ApplyAdvancedPivot(IXLPivotTable table, ExcelPivotTableDefinition definition,
+        IReadOnlyDictionary<string, IReadOnlyList<XLCellValue>> filters,
+        CancellationToken cancellationToken)
+    {
+        table.Layout = XLPivotLayout.Tabular;
+        table.Subtotals = XLPivotSubtotals.AtBottom;
+        table.FilterAreaOrder = XLFilterAreaOrder.DownThenOver;
+        foreach (var field in definition.RowFields)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ApplyAxisField(table.RowLabels.Add(field.Field), field);
+        }
+        foreach (var field in definition.ColumnFields)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ApplyAxisField(table.ColumnLabels.Add(field.Field), field);
+        }
+        foreach (var definitionValue in definition.ValueFields)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var value = table.Values.Add(definitionValue.Field, definitionValue.Caption)
+                .SetSummaryFormula(definitionValue.Aggregation switch
+                {
+                    ExcelPivotAggregation.Sum => XLPivotSummary.Sum,
+                    ExcelPivotAggregation.Count => XLPivotSummary.Count,
+                    ExcelPivotAggregation.Average => XLPivotSummary.Average,
+                    ExcelPivotAggregation.Minimum => XLPivotSummary.Minimum,
+                    ExcelPivotAggregation.Maximum => XLPivotSummary.Maximum,
+                    _ => throw new ArgumentOutOfRangeException(nameof(definitionValue.Aggregation))
+                });
+            if (definitionValue.NumberFormat != null)
+            {
+                value.NumberFormat.SetFormat(definitionValue.NumberFormat);
+                // SetFormat 保留内建编号但丢弃自定义文本，后者通过公开属性完整保存。
+                if (value.NumberFormat.NumberFormatId < 0)
+                    value.NumberFormat.Format = definitionValue.NumberFormat;
+            }
+        }
+        foreach (var definitionFilter in definition.Filters)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var filter = table.ReportFilters.Add(definitionFilter.Field);
+            foreach (var value in filters[definitionFilter.Field])
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                filter.AddSelectedValue(value);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 应用轴字段的排序与小计配置。
+    /// </summary>
+    /// <param name="field">目标行或列字段。</param>
+    /// <param name="definition">公共轴描述。</param>
+    private static void ApplyAxisField(IXLPivotField field, ExcelPivotAxisFieldDefinition definition)
+    {
+        field.SortType = definition.SortOrder switch
+        {
+            ExcelPivotSortOrder.Default => XLPivotSortType.Default,
+            ExcelPivotSortOrder.Ascending => XLPivotSortType.Ascending,
+            ExcelPivotSortOrder.Descending => XLPivotSortType.Descending,
+            _ => throw new ArgumentOutOfRangeException(nameof(definition.SortOrder))
+        };
+        if (definition.SubtotalMode == ExcelPivotSubtotalMode.Automatic)
+            field.AddSubtotal(XLSubtotalFunction.Automatic);
     }
 
     /// <summary>
@@ -70,6 +211,19 @@ internal static class ClosedXmlReportWriter
         foreach (var conditional in request.ConditionalFormats)
             ApplyConditionalFormat(worksheet, conditional);
 
+        if (request.PrintLayout != null)
+            ApplyPrintLayout(worksheet, request.PrintLayout);
+    }
+
+    /// <summary>
+    /// 建立工作表声明的名称范围。
+    /// </summary>
+    /// <param name="workbook">目标工作簿。</param>
+    /// <param name="worksheet">声明名称的工作表。</param>
+    /// <param name="request">工作表请求。</param>
+    internal static void ApplyNamedRanges(XLWorkbook workbook, IXLWorksheet worksheet,
+        ExcelSheetExportRequest request)
+    {
         foreach (var namedRange in request.NamedRanges)
         {
             var range = worksheet.Range(namedRange.Address);
@@ -80,9 +234,6 @@ internal static class ClosedXmlReportWriter
             else
                 throw Unsupported("ClosedXML 名称范围的 Sheet 引用必须与当前 Sheet 一致。", BingOfficesStage.Preflight);
         }
-
-        if (request.PrintLayout != null)
-            ApplyPrintLayout(worksheet, request.PrintLayout);
     }
 
     /// <summary>

@@ -286,6 +286,7 @@ public sealed class MiniExcelExcelExporter : IExcelExporter, IExcelProviderFeatu
         }).ToArray();
         var knownDynamicKeys = new HashSet<string>(dynamicColumns.Select(column => column.Key),
             StringComparer.OrdinalIgnoreCase);
+        var culture = request.Culture ?? CultureInfo.InvariantCulture;
 
         var rowNumber = request.DataRowStartIndex + 1;
         foreach (var value in request.Data)
@@ -293,14 +294,15 @@ public sealed class MiniExcelExcelExporter : IExcelExporter, IExcelProviderFeatu
             cancellationToken.ThrowIfCancellationRequested();
             if (value == null)
                 throw new ArgumentException($"Sheet {request.Name} 包含 null 数据项。", nameof(request));
-            var row = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+            var row = new Dictionary<string, object>(fixedBindings.Length + dynamicColumns.Length,
+                StringComparer.OrdinalIgnoreCase);
             var propertyIndex = 0;
             foreach (var binding in fixedBindings)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var raw = binding.Property.GetValue(value);
                 row[binding.Column.Title] = MiniExcelValueAdapter.ConvertTo(raw, binding.Column, binding.Property,
-                    request.Name, rowNumber, propertyIndex + 1, request.Culture ?? CultureInfo.InvariantCulture);
+                    request.Name, rowNumber, propertyIndex + 1, culture);
                 propertyIndex++;
             }
 
@@ -317,8 +319,7 @@ public sealed class MiniExcelExcelExporter : IExcelExporter, IExcelProviderFeatu
                 object raw = null;
                 dynamicValues?.TryGetValue(column.Key, out raw);
                 row[column.Title] = MiniExcelValueAdapter.ConvertDynamicTo(raw, column,
-                    request.Name, rowNumber, propertyIndex + 1,
-                    request.Culture ?? CultureInfo.InvariantCulture);
+                    request.Name, rowNumber, propertyIndex + 1, culture);
                 propertyIndex++;
             }
             yield return row;
@@ -378,6 +379,20 @@ public sealed class MiniExcelExcelExporter : IExcelExporter, IExcelProviderFeatu
     /// <param name="request">待校验的工作簿导出请求。</param>
     private static void ValidateRequest(ExcelWorkbookExportRequest request)
     {
+        if (request.PreserveTemplatePivotTables || request.PivotTableUpdates.Count > 0)
+            throw new BingOfficesUnsupportedFeatureException("MiniExcel 不支持保留或更新透视模板。",
+                provider: "MiniExcel", operation: BingOfficesOperation.Export,
+                stage: BingOfficesStage.Preflight);
+        if (request.PivotTables.Count > 0)
+            throw new BingOfficesUnsupportedFeatureException("MiniExcel 不支持透视表导出。",
+                provider: "MiniExcel", operation: BingOfficesOperation.Export,
+                stage: BingOfficesStage.Preflight);
+        if (request.Sheets.Any(sheet => sheet.Protection != null))
+            throw new BingOfficesUnsupportedFeatureException("MiniExcel 不支持工作表保护导出。",
+                provider: "MiniExcel", operation: BingOfficesOperation.Export, stage: BingOfficesStage.Preflight);
+        if (request.LookupLists.Count > 0 || request.CascadeLists.Count > 0)
+            throw new BingOfficesUnsupportedFeatureException("MiniExcel 不支持字典下拉模板导出。",
+                provider: "MiniExcel", operation: BingOfficesOperation.Export, stage: BingOfficesStage.Preflight);
         if (request.Sheets.Any(sheet => sheet.Images.Count > 0 || sheet.DataValidations.Count > 0))
             throw new BingOfficesUnsupportedFeatureException("MiniExcel 不支持公共图片或原生数据校验导出。",
                 provider: "MiniExcel", operation: BingOfficesOperation.Export, stage: BingOfficesStage.Preflight);

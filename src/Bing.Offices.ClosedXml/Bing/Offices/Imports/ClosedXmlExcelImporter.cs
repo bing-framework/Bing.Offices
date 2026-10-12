@@ -54,6 +54,30 @@ public sealed class ClosedXmlExcelImporter : IExcelImporter, IExcelEntityImporte
     private readonly IFileExportCommitter _fileExportCommitter;
 
     /// <summary>
+    /// 实体布局失败输出使用的空 Workbook 请求映射。
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, ExcelSheetImportRequest>
+        EmptyResolvedSheetRequests = new Dictionary<string, ExcelSheetImportRequest>(
+            StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// 获取实体布局执行器，供 Provider 内部批次路径复用。
+    /// </summary>
+    internal ClosedXmlEntityLayoutExecutor EntityExecutor => _entityExecutor;
+
+    /// <summary>
+    /// 获取失败工作簿使用的文件提交服务。
+    /// </summary>
+    internal IFileExportCommitter FileExportCommitter => _fileExportCommitter;
+
+    /// <summary>
+    /// 观察 Provider 内部批次路径产生的公共异常。
+    /// </summary>
+    /// <param name="exception">待观察的异常。</param>
+    internal void ObserveException(BingOfficesException exception)
+        => _exceptionDispatcher.Observe(exception);
+
+    /// <summary>
     /// 初始化一个 <see cref="ClosedXmlExcelImporter" /> 类型的实例。
     /// </summary>
     /// <remarks>
@@ -172,7 +196,7 @@ public sealed class ClosedXmlExcelImporter : IExcelImporter, IExcelEntityImporte
     /// <inheritdoc />
     public bool SupportsCompleteWorkbookImport => true;
     /// <inheritdoc />
-    public bool SupportsBatchImport => false;
+    public bool SupportsBatchImport => true;
     /// <inheritdoc />
     public bool SupportsCompleteWorkbookExport => false;
     /// <inheritdoc />
@@ -185,7 +209,8 @@ public sealed class ClosedXmlExcelImporter : IExcelImporter, IExcelEntityImporte
     /// <inheritdoc />
     public ExcelProviderFeatures Features => ExcelProviderFeatures.TemplateEditing
         | ExcelProviderFeatures.WorkbookEditing | ExcelProviderFeatures.FormulaText
-        | ExcelProviderFeatures.FormulaCachedValues;
+        | ExcelProviderFeatures.FormulaCachedValues | ExcelProviderFeatures.NamedListValidation
+        | ExcelProviderFeatures.MultiSheetBatchImport | ExcelProviderFeatures.EntityLayoutBatchImport;
     /// <inheritdoc />
     public bool Supports(ExcelProviderFeatures features) => (Features & features) == features;
 
@@ -211,8 +236,12 @@ public sealed class ClosedXmlExcelImporter : IExcelImporter, IExcelEntityImporte
             var isDate1904 = ExcelXlsxZipPreflight.GetDate1904(buffered, cancellationToken);
             using var admission = _admission.Acquire(cancellationToken, BingOfficesOperation.Import);
             using var workbook = new XLWorkbook(buffered);
-            return _entityExecutor.Read(workbook, layout, requireTemplateMerges: false,
-                isDate1904, limits, options.ValidationFailureMode, cancellationToken);
+            var result = _entityExecutor.Read(workbook, layout, requireTemplateMerges: false,
+                isDate1904, limits, options.ValidationFailureMode, options.ValidationMode,
+                options.UnsupportedFeaturePolicy, cancellationToken);
+            WriteEntityFailureWorkbook(workbook, layout, options.FailureOptions, result.Errors,
+                cancellationToken);
+            return result;
         }
         catch (OperationCanceledException)
         {
@@ -259,8 +288,12 @@ public sealed class ClosedXmlExcelImporter : IExcelImporter, IExcelEntityImporte
                 .AcquireAsync(cancellationToken, BingOfficesOperation.Import)
                 .ConfigureAwait(false);
             using var workbook = new XLWorkbook(buffer);
-            return _entityExecutor.Read(workbook, layout, requireTemplateMerges: false,
-                isDate1904, limits, options.ValidationFailureMode, cancellationToken);
+            var result = _entityExecutor.Read(workbook, layout, requireTemplateMerges: false,
+                isDate1904, limits, options.ValidationFailureMode, options.ValidationMode,
+                options.UnsupportedFeaturePolicy, cancellationToken);
+            await WriteEntityFailureWorkbookAsync(workbook, layout, options.FailureOptions,
+                result.Errors, cancellationToken).ConfigureAwait(false);
+            return result;
         }
         catch (OperationCanceledException)
         {
@@ -299,15 +332,19 @@ public sealed class ClosedXmlExcelImporter : IExcelImporter, IExcelEntityImporte
         try
         {
             ValidateEntitySource(source, layout, cancellationToken);
-            ValidateEntityTemplate(template, layout, cancellationToken);
+            ValidateEntityTemplate(template, layout, limits, cancellationToken);
             var buffered = BufferSource(source, limits, cancellationToken);
             ExcelXlsxZipPreflight.Validate(buffered, limits, Provider, requireZip: true,
                 cancellationToken: cancellationToken, includePictures: true);
             var isDate1904 = ExcelXlsxZipPreflight.GetDate1904(buffered, cancellationToken);
             using var admission = _admission.Acquire(cancellationToken, BingOfficesOperation.Import);
             using var workbook = new XLWorkbook(buffered);
-            return _entityExecutor.Read(workbook, layout, requireTemplateMerges: false,
-                isDate1904, limits, options.ValidationFailureMode, cancellationToken);
+            var result = _entityExecutor.Read(workbook, layout, requireTemplateMerges: false,
+                isDate1904, limits, options.ValidationFailureMode, options.ValidationMode,
+                options.UnsupportedFeaturePolicy, cancellationToken);
+            WriteEntityFailureWorkbook(workbook, layout, options.FailureOptions, result.Errors,
+                cancellationToken);
+            return result;
         }
         catch (OperationCanceledException)
         {
@@ -352,7 +389,7 @@ public sealed class ClosedXmlExcelImporter : IExcelImporter, IExcelEntityImporte
         try
         {
             ValidateEntitySource(source, layout, cancellationToken);
-            await ValidateEntityTemplateAsync(template, layout, cancellationToken).ConfigureAwait(false);
+            await ValidateEntityTemplateAsync(template, layout, limits, cancellationToken).ConfigureAwait(false);
             await using var buffer = await BufferSourceAsync(source, limits, cancellationToken)
                 .ConfigureAwait(false);
             ExcelXlsxZipPreflight.Validate(buffer, limits, Provider, requireZip: true,
@@ -362,8 +399,12 @@ public sealed class ClosedXmlExcelImporter : IExcelImporter, IExcelEntityImporte
                 .AcquireAsync(cancellationToken, BingOfficesOperation.Import)
                 .ConfigureAwait(false);
             using var workbook = new XLWorkbook(buffer);
-            return _entityExecutor.Read(workbook, layout, requireTemplateMerges: false,
-                isDate1904, limits, options.ValidationFailureMode, cancellationToken);
+            var result = _entityExecutor.Read(workbook, layout, requireTemplateMerges: false,
+                isDate1904, limits, options.ValidationFailureMode, options.ValidationMode,
+                options.UnsupportedFeaturePolicy, cancellationToken);
+            await WriteEntityFailureWorkbookAsync(workbook, layout, options.FailureOptions,
+                result.Errors, cancellationToken).ConfigureAwait(false);
+            return result;
         }
         catch (OperationCanceledException)
         {
@@ -389,6 +430,98 @@ public sealed class ClosedXmlExcelImporter : IExcelImporter, IExcelEntityImporte
         }
     }
 
+    /// <summary>
+    /// 写出实体导入失败工作簿。
+    /// </summary>
+    /// <param name="workbook">实体导入使用的原始工作簿。</param>
+    /// <param name="layout">实体布局。</param>
+    /// <param name="options">失败工作簿输出选项。</param>
+    /// <param name="errors">实体导入错误集合。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    private void WriteEntityFailureWorkbook<TEntity>(XLWorkbook workbook,
+        ExcelEntityLayout<TEntity> layout, ExcelImportFailureOptions options,
+        IReadOnlyCollection<ExcelImportError> errors, CancellationToken cancellationToken)
+        where TEntity : class, new()
+    {
+        var requiredRows = options != null
+            && options.Mode != ExcelImportFailureWorkbookMode.None
+            && errors.Count > 0
+            ? BuildFailureWorkbookRequiredRows(workbook, layout, cancellationToken)
+            : null;
+        using var artifact = ClosedXmlFailureWorkbookWriter.Create(workbook, options, errors,
+            EmptyResolvedSheetRequests, cancellationToken, requiredRows);
+        if (artifact == null)
+            return;
+        if (!string.IsNullOrWhiteSpace(options.DestinationPath))
+            _fileExportCommitter.Commit(options.DestinationPath,
+                destination => artifact.CopyTo(destination, cancellationToken), cancellationToken,
+                "FailureWorkbook");
+        else
+            artifact.CopyTo(options.Destination, cancellationToken);
+    }
+
+    /// <summary>
+    /// 异步写出实体导入失败工作簿。
+    /// </summary>
+    /// <param name="workbook">实体导入使用的原始工作簿。</param>
+    /// <param name="layout">实体布局。</param>
+    /// <param name="options">失败工作簿输出选项。</param>
+    /// <param name="errors">实体导入错误集合。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>表示输出操作的任务。</returns>
+    private async Task WriteEntityFailureWorkbookAsync<TEntity>(XLWorkbook workbook,
+        ExcelEntityLayout<TEntity> layout, ExcelImportFailureOptions options,
+        IReadOnlyCollection<ExcelImportError> errors, CancellationToken cancellationToken)
+        where TEntity : class, new()
+    {
+        var requiredRows = options != null
+            && options.Mode != ExcelImportFailureWorkbookMode.None
+            && errors.Count > 0
+            ? BuildFailureWorkbookRequiredRows(workbook, layout, cancellationToken)
+            : null;
+        using var artifact = ClosedXmlFailureWorkbookWriter.Create(workbook, options, errors,
+            EmptyResolvedSheetRequests, cancellationToken, requiredRows);
+        if (artifact == null)
+            return;
+        if (!string.IsNullOrWhiteSpace(options.DestinationPath))
+            await _fileExportCommitter.CommitAsync(options.DestinationPath,
+                (destination, token) => artifact.CopyToAsync(destination, token), cancellationToken,
+                "FailureWorkbook").ConfigureAwait(false);
+        else
+            await artifact.CopyToAsync(options.Destination, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// 为前向实体批次写出失败工作簿。
+    /// </summary>
+    /// <typeparam name="TEntity">聚合对象类型。</typeparam>
+    /// <param name="workbook">原始导入工作簿。</param>
+    /// <param name="layout">实体布局。</param>
+    /// <param name="options">失败工作簿输出选项。</param>
+    /// <param name="errors">实体导入错误集合。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    internal void WriteEntityFailureWorkbookForBatch<TEntity>(XLWorkbook workbook,
+        ExcelEntityLayout<TEntity> layout, ExcelImportFailureOptions options,
+        IReadOnlyCollection<ExcelImportError> errors,
+        CancellationToken cancellationToken) where TEntity : class, new()
+        => WriteEntityFailureWorkbook(workbook, layout, options, errors, cancellationToken);
+
+    /// <summary>
+    /// 异步为前向实体批次写出失败工作簿。
+    /// </summary>
+    /// <typeparam name="TEntity">聚合对象类型。</typeparam>
+    /// <param name="workbook">原始导入工作簿。</param>
+    /// <param name="layout">实体布局。</param>
+    /// <param name="options">失败工作簿输出选项。</param>
+    /// <param name="errors">实体导入错误集合。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>表示输出操作的任务。</returns>
+    internal Task WriteEntityFailureWorkbookForBatchAsync<TEntity>(XLWorkbook workbook,
+        ExcelEntityLayout<TEntity> layout, ExcelImportFailureOptions options,
+        IReadOnlyCollection<ExcelImportError> errors,
+        CancellationToken cancellationToken) where TEntity : class, new()
+        => WriteEntityFailureWorkbookAsync(workbook, layout, options, errors, cancellationToken);
+
     /// <inheritdoc />
     public ExcelWorkbookImportResult<TWorkbook> Import<TWorkbook>(Stream source,
         ExcelWorkbookImportRequest<TWorkbook> request, CancellationToken cancellationToken = default)
@@ -408,7 +541,7 @@ public sealed class ClosedXmlExcelImporter : IExcelImporter, IExcelEntityImporte
             ExcelXlsxZipPreflight.Validate(buffered, limits, Provider, requireZip: true,
                 cancellationToken: cancellationToken, includePictures: true);
             ValidateRequest(request);
-            ValidateFailureWorkbookInput(buffered, request);
+            ValidateFailureWorkbookInput(buffered, request, cancellationToken);
             using var admission = _admission.Acquire(cancellationToken, BingOfficesOperation.Import);
             var result = ImportBufferedWorkbook(buffered, request, cancellationToken, out var failureArtifact);
             using (failureArtifact)
@@ -476,7 +609,7 @@ public sealed class ClosedXmlExcelImporter : IExcelImporter, IExcelEntityImporte
             ExcelXlsxZipPreflight.Validate(buffer, limits, Provider, requireZip: true,
                 cancellationToken: cancellationToken, includePictures: true);
             ValidateRequest(request);
-            ValidateFailureWorkbookInput(buffer, request);
+            ValidateFailureWorkbookInput(buffer, request, cancellationToken);
             await using var admission = await _admission
                 .AcquireAsync(cancellationToken, BingOfficesOperation.Import)
                 .ConfigureAwait(false);
@@ -562,6 +695,8 @@ public sealed class ClosedXmlExcelImporter : IExcelImporter, IExcelEntityImporte
         var root = new TWorkbook();
         var sheetResults = new List<ExcelSheetImportResult>();
         var workbookErrors = new List<ExcelImportError>();
+        var relationKeyBudget = new ClosedXmlRelationKeyBudget(
+            request.ResourceLimits?.MaxTrackedRelationKeys);
         var resolvedSheetRequests = new Dictionary<string, ExcelSheetImportRequest>(
             StringComparer.OrdinalIgnoreCase);
         var totalRows = 0;
@@ -583,10 +718,11 @@ public sealed class ClosedXmlExcelImporter : IExcelImporter, IExcelEntityImporte
                 workbookErrors, isDate1904, cancellationToken);
             sheetResults.Add(result);
         }
-        ClosedXmlRelationCoordinator.Bind(root, request.Relations, workbookErrors,
-            request.ResourceLimits?.MaxErrors, cancellationToken);
+        var relationErrorsTruncated = ClosedXmlRelationCoordinator.Bind(root, request.Relations,
+            workbookErrors, request.ResourceLimits?.MaxErrors, relationKeyBudget, cancellationToken);
         var importResult = new ExcelWorkbookImportResult<TWorkbook>(root, sheetResults,
-            workbookErrors.ToArray(), request.ResourceLimits?.MaxErrors.HasValue == true
+            workbookErrors.ToArray(), relationErrorsTruncated
+                || request.ResourceLimits?.MaxErrors.HasValue == true
                 && workbookErrors.Count >= request.ResourceLimits.MaxErrors.Value,
             request.ResourceLimits?.MaxErrors);
         failureArtifact = ClosedXmlFailureWorkbookWriter.Create(workbook, request.FailureOptions,
@@ -600,14 +736,16 @@ public sealed class ClosedXmlExcelImporter : IExcelImporter, IExcelEntityImporte
     /// <typeparam name="TEntity">实体类型。</typeparam>
     /// <param name="template">实体模板选项。</param>
     /// <param name="layout">实体布局。</param>
+    /// <param name="limits">实体导入资源限制。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     private void ValidateEntityTemplate<TEntity>(ExcelEntityTemplateOptions template,
-        ExcelEntityLayout<TEntity> layout, CancellationToken cancellationToken)
+        ExcelEntityLayout<TEntity> layout, ExcelResourceLimits limits, CancellationToken cancellationToken)
         where TEntity : class, new()
     {
         if (!template.Template.CanRead)
             throw new ArgumentException("实体模板流不可读取。", nameof(template));
-        ClosedXmlTemplatePreflight.Validate(template.Template, BingOfficesOperation.Import);
+        ClosedXmlTemplatePreflight.Validate(template.Template, BingOfficesOperation.Import,
+            cancellationToken, limits);
         if (template.Template.CanSeek)
             template.Template.Position = 0;
         using var admission = _admission.Acquire(cancellationToken, BingOfficesOperation.Import);
@@ -621,14 +759,16 @@ public sealed class ClosedXmlExcelImporter : IExcelImporter, IExcelEntityImporte
     /// <typeparam name="TEntity">实体类型。</typeparam>
     /// <param name="template">实体模板选项。</param>
     /// <param name="layout">实体布局。</param>
+    /// <param name="limits">实体导入资源限制。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     private async Task ValidateEntityTemplateAsync<TEntity>(ExcelEntityTemplateOptions template,
-        ExcelEntityLayout<TEntity> layout, CancellationToken cancellationToken)
+        ExcelEntityLayout<TEntity> layout, ExcelResourceLimits limits, CancellationToken cancellationToken)
         where TEntity : class, new()
     {
         if (!template.Template.CanRead)
             throw new ArgumentException("实体模板流不可读取。", nameof(template));
-        ClosedXmlTemplatePreflight.Validate(template.Template, BingOfficesOperation.Import);
+        ClosedXmlTemplatePreflight.Validate(template.Template, BingOfficesOperation.Import,
+            cancellationToken, limits);
         if (template.Template.CanSeek)
             template.Template.Position = 0;
         await using var admission = await _admission
@@ -655,6 +795,112 @@ public sealed class ClosedXmlExcelImporter : IExcelImporter, IExcelEntityImporte
         if (layout == null)
             throw new ArgumentNullException(nameof(layout));
         cancellationToken.ThrowIfCancellationRequested();
+    }
+
+    /// <summary>
+    /// 收集实体失败工作簿需要保留的固定和列表结构行。
+    /// </summary>
+    /// <typeparam name="TEntity">实体类型。</typeparam>
+    /// <param name="workbook">已打开的实体工作簿。</param>
+    /// <param name="layout">实体布局。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>按工作表分组的工作表行号结构快照。</returns>
+    private static IReadOnlyDictionary<string, IReadOnlyList<int>> BuildFailureWorkbookRequiredRows<TEntity>(
+        XLWorkbook workbook, ExcelEntityLayout<TEntity> layout, CancellationToken cancellationToken)
+        where TEntity : class, new()
+    {
+        var rows = new Dictionary<string, SortedSet<int>>(StringComparer.OrdinalIgnoreCase);
+
+        void Add(string sheetName, int row)
+        {
+            if (row < 0)
+                return;
+            if (!rows.TryGetValue(sheetName, out var sheetRows))
+            {
+                sheetRows = new SortedSet<int>();
+                rows.Add(sheetName, sheetRows);
+            }
+            sheetRows.Add(row + 1);
+        }
+
+        void AddRange(string sheetName, int firstRow, int lastRow)
+        {
+            for (var row = firstRow; row <= lastRow; row++)
+                Add(sheetName, row);
+        }
+
+        foreach (var cell in layout.Cells)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var reference = cell.AnchorName == null
+                ? cell.Reference
+                : ResolveNamedAnchor(workbook, cell.SheetName, cell.AnchorName);
+            Add(cell.SheetName, reference.Row);
+        }
+        foreach (var region in layout.ListRegions.Where(item => item.IncludeHeader))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var start = region.AnchorName == null
+                ? region.Start
+                : ResolveNamedAnchor(workbook, region.SheetName, region.AnchorName);
+            Add(region.SheetName, start.Row);
+        }
+        foreach (var merge in layout.Merges)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            AddRange(merge.SheetName, merge.Range.First.Row, merge.Range.Last.Row);
+        }
+        foreach (var region in layout.ListRegions)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!workbook.Worksheets.TryGetWorksheet(region.SheetName, out var sheet))
+                continue;
+            if (region.PageHeader != null)
+            {
+                AddRange(region.SheetName, region.PageHeader.SourceRange.First.Row,
+                    region.PageHeader.SourceRange.Last.Row);
+            }
+            if (region.Footer != null || region.GroupSubtotal != null
+                || region.PageSubtotal != null || region.PageHeader != null
+                || region.PageFooter != null)
+            {
+                var lastRow = region.End?.Row ?? sheet.LastRowUsed()?.RowNumber() - 1
+                    ?? region.Start.Row;
+                foreach (var span in ClosedXmlEntityLayoutExecutor.FindFooterSkipSpans(sheet, region,
+                    region.Start.Row + (region.IncludeHeader ? 1 : 0), lastRow, cancellationToken))
+                    AddRange(region.SheetName, span.StartRow, span.EndRow);
+            }
+        }
+
+        return rows.ToDictionary(pair => pair.Key,
+            pair => (IReadOnlyList<int>)Array.AsReadOnly(pair.Value.ToArray()),
+            StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// 解析实体失败输出所需的模板命名锚点。
+    /// </summary>
+    /// <param name="workbook">已打开的实体工作簿。</param>
+    /// <param name="sheetName">布局声明的工作表名称。</param>
+    /// <param name="anchorName">命名锚点名称。</param>
+    /// <returns>命名锚点的零基坐标。</returns>
+    private static ExcelEntityCellReference ResolveNamedAnchor(XLWorkbook workbook, string sheetName,
+        string anchorName)
+    {
+        var sheet = workbook.Worksheets.FirstOrDefault(item => string.Equals(item.Name, sheetName,
+            StringComparison.OrdinalIgnoreCase));
+        if (sheet == null || !ClosedXmlWorkbookValidationPipeline.TryResolveNamedRange(sheet, anchorName,
+                out var range) || range == null)
+            throw new BingOfficesConfigurationException(
+                $"模板缺少或无法解析命名锚点: {sheetName}!{anchorName}", stage: BingOfficesStage.Plan);
+        var first = range.RangeAddress.FirstAddress;
+        var last = range.RangeAddress.LastAddress;
+        if (first.RowNumber != last.RowNumber || first.ColumnNumber != last.ColumnNumber
+            || !string.Equals(range.Worksheet.Name, sheet.Name, StringComparison.OrdinalIgnoreCase))
+            throw new BingOfficesConfigurationException(
+                $"模板命名锚点必须引用当前 Sheet 的单个单元格: {sheetName}!{anchorName}",
+                stage: BingOfficesStage.Plan);
+        return ExcelEntityCellReference.Parse(first.ToString());
     }
 
     /// <summary>
@@ -732,12 +978,18 @@ public sealed class ClosedXmlExcelImporter : IExcelImporter, IExcelEntityImporte
                 stage: BingOfficesStage.Plan);
         var sourceRows = new List<int>();
         var sheetErrors = new List<ExcelImportError>();
-        var duplicateValues = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
         var limits = workbookRequest.ResourceLimits;
-        var unique = new UniqueTracker(duplicateValues, limits?.MaxTrackedUniqueValues,
-            CreateStringComparer(limits?.UniqueComparison ?? StringComparison.OrdinalIgnoreCase));
-        var configuredValidationEnabled = workbookRequest.ValidationMode == ExcelImportValidationMode.ConfiguredRules
-            || workbookRequest.ValidationMode == ExcelImportValidationMode.ConfiguredAndWorkbook;
+        var validationEnabled = workbookRequest.ValidationMode != ExcelImportValidationMode.Disabled;
+        var tracksUnique = validationEnabled
+            && (bindings.Any(binding => binding.Column.IsUnique)
+                || dynamicBindings.Any(binding => binding.Column.IsUnique));
+        var duplicateValues = tracksUnique
+            ? new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase)
+            : null;
+        var unique = tracksUnique
+            ? new UniqueTracker(duplicateValues, limits?.MaxTrackedUniqueValues,
+                CreateStringComparer(limits?.UniqueComparison ?? StringComparison.OrdinalIgnoreCase))
+            : null;
         var workbookValidationEnabled = workbookRequest.ValidationMode == ExcelImportValidationMode.WorkbookRules
             || workbookRequest.ValidationMode == ExcelImportValidationMode.ConfiguredAndWorkbook;
         for (var row = dataRow; row <= lastRow; row++)
@@ -754,7 +1006,7 @@ public sealed class ClosedXmlExcelImporter : IExcelImporter, IExcelEntityImporte
             totalRows++;
             var item = Activator.CreateInstance(sheetRequest.ItemType);
             var valid = true;
-            if (configuredValidationEnabled)
+            if (unique != null)
                 unique.BeginRow();
             var dynamicValues = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
             foreach (var binding in bindings)
@@ -868,7 +1120,7 @@ public sealed class ClosedXmlExcelImporter : IExcelImporter, IExcelEntityImporte
                 AddItem(target, item);
                 sourceRows.Add(row - 1);
             }
-            if (configuredValidationEnabled)
+            if (unique != null)
             {
                 if (valid)
                     unique.CommitRow();
@@ -1329,13 +1581,15 @@ public sealed class ClosedXmlExcelImporter : IExcelImporter, IExcelEntityImporte
     /// <typeparam name="TWorkbook">Workbook 根模型类型。</typeparam>
     /// <param name="buffered">已缓冲且可定位的 XLSX 流。</param>
     /// <param name="request">Workbook 导入请求。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
     private static void ValidateFailureWorkbookInput<TWorkbook>(Stream buffered,
-        ExcelWorkbookImportRequest<TWorkbook> request) where TWorkbook : class, new()
+        ExcelWorkbookImportRequest<TWorkbook> request, CancellationToken cancellationToken) where TWorkbook : class, new()
     {
         if (request.FailureOptions == null
             || request.FailureOptions.Mode == ExcelImportFailureWorkbookMode.None)
             return;
-        ClosedXmlTemplatePreflight.Validate(buffered, BingOfficesOperation.Import);
+        ClosedXmlTemplatePreflight.Validate(buffered, BingOfficesOperation.Import,
+            cancellationToken, request.ResourceLimits);
         buffered.Position = 0;
     }
 

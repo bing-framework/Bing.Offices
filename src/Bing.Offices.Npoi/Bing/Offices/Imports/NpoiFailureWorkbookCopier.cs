@@ -2,7 +2,9 @@
 using Bing.Offices.Metadata;
 using Bing.Offices.Npoi.Extensions;
 using NPOI.HSSF.UserModel;
+using NPOI.SS.Formula;
 using NPOI.SS.UserModel;
+using NPOI.SS.Util;
 using NPOI.XSSF.UserModel;
 
 namespace Bing.Offices.Imports;
@@ -20,10 +22,12 @@ internal static class NpoiFailureWorkbookCopier
     /// <param name="resolvedSheetRequests">实际工作表到请求的映射。</param>
     /// <param name="options">失败工作簿输出与诊断选项。</param>
     /// <param name="cancellationToken">复制过程中检查的取消令牌。</param>
+    /// <param name="requiredRowsBySheet">实体布局要求保留的零基结构行；通用 Workbook 为 null。</param>
     /// <returns>与原始格式匹配的错误行工作簿。</returns>
     internal static IWorkbook CreateErrorRowsWorkbook(IWorkbook source, IReadOnlyCollection<ExcelImportError> errors,
         IReadOnlyDictionary<string, ExcelSheetImportRequest> resolvedSheetRequests,
-        ExcelImportFailureOptions options, CancellationToken cancellationToken)
+        ExcelImportFailureOptions options, CancellationToken cancellationToken,
+        IReadOnlyDictionary<string, IReadOnlyList<int>> requiredRowsBySheet = null)
     {
         var destination = source is NPOI.HSSF.UserModel.HSSFWorkbook
             ? (IWorkbook)new NPOI.HSSF.UserModel.HSSFWorkbook()
@@ -31,6 +35,18 @@ internal static class NpoiFailureWorkbookCopier
         var groups = errors.Where(error => error.RowIndex > 1)
             .GroupBy(error => error.SheetName, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.OrdinalIgnoreCase);
+        var rowMaps = new Dictionary<string, IReadOnlyDictionary<int, int>>(
+            StringComparer.OrdinalIgnoreCase);
+        var validationSheets = new List<(ISheet Source, ISheet Destination,
+            IReadOnlyDictionary<int, int> RowMap)>();
+        if (requiredRowsBySheet != null)
+        {
+            foreach (var sheetName in requiredRowsBySheet.Keys)
+            {
+                if (!groups.ContainsKey(sheetName))
+                    groups.Add(sheetName, new List<ExcelImportError>());
+            }
+        }
         foreach (var group in groups)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -41,13 +57,18 @@ internal static class NpoiFailureWorkbookCopier
             var headerRowIndex = resolvedSheetRequests.TryGetValue(sourceSheet.SheetName, out var request)
                 ? request.HeaderRowIndex
                 : sourceSheet.FirstRowNum;
-            var sourceRows = new HashSet<int>(group.Value.Select(error => error.RowIndex - 1))
-        {
-            headerRowIndex
-        };
+            var sourceRows = new HashSet<int>(group.Value.Select(error => error.RowIndex - 1));
+            if (group.Value.Count > 0)
+                sourceRows.Add(headerRowIndex);
+            if (requiredRowsBySheet != null
+                && requiredRowsBySheet.TryGetValue(sourceSheet.SheetName, out var requiredRows))
+            {
+                sourceRows.UnionWith(requiredRows);
+            }
             var rowMap = sourceRows.OrderBy(index => index)
                 .Select((sourceRow, targetRow) => (sourceRow, targetRow))
                 .ToDictionary(item => item.sourceRow, item => item.targetRow);
+            rowMaps[sourceSheet.SheetName] = rowMap;
             var styleCache = new Dictionary<short, ICellStyle>();
             foreach (var pair in rowMap)
             {
@@ -56,14 +77,237 @@ internal static class NpoiFailureWorkbookCopier
                     destination, styleCache, options);
             }
             CopySheetMetadata(sourceSheet, destinationSheet, sourceRows);
-            AddFailureColumns(destinationSheet, group.Value, rowMap,
-                sourceSheet.GetRow(headerRowIndex)?.LastCellNum ?? 0);
+            if (group.Value.Count > 0)
+            {
+                AddFailureColumns(destinationSheet, group.Value, rowMap,
+                    sourceRows.Select(row => (int)(sourceSheet.GetRow(row)?.LastCellNum ?? 0))
+                        .DefaultIfEmpty(0).Max());
+            }
             CopyMergedRegions(sourceSheet, destinationSheet, rowMap);
-            CopyDataValidations(sourceSheet, destinationSheet, rowMap, cancellationToken);
+            validationSheets.Add((sourceSheet, destinationSheet, rowMap));
             CopyPictures(sourceSheet, destinationSheet, rowMap, cancellationToken);
         }
+        CopyDefinedNames(source, destination, rowMaps, cancellationToken);
+        foreach (var item in validationSheets)
+            CopyDataValidations(item.Source, item.Destination, item.RowMap, cancellationToken);
         return destination;
     }
+
+    /// <summary>
+    /// 复制能够完整映射到保留行的一维定义名称。
+    /// </summary>
+    /// <param name="source">稀疏源工作簿。</param>
+    /// <param name="destination">错误行目标工作簿。</param>
+    /// <param name="rowMaps">源工作表到目标行的映射。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    private static void CopyDefinedNames(IWorkbook source, IWorkbook destination,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<int, int>> rowMaps,
+        CancellationToken cancellationToken)
+    {
+        if (source is not HSSFWorkbook || destination == null || rowMaps == null
+            || rowMaps.Count == 0)
+            return;
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var sourceName in source.GetAllNames())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (sourceName == null || string.IsNullOrWhiteSpace(sourceName.NameName)
+                || !TryParseDefinedNameFormula(sourceName.RefersToFormula, source,
+                    sourceName.SheetIndex, out var sourceSheet, out var firstRow,
+                    out var lastRow, out var firstColumn, out var lastColumn)
+                || !rowMaps.TryGetValue(sourceSheet.SheetName, out var rowMap)
+                || !TryMapDefinedNameRows(rowMap, firstRow, lastRow,
+                    cancellationToken, out var outputFirstRow, out var outputLastRow))
+                continue;
+
+            var localSheetIndex = -1;
+            if (sourceName.SheetIndex >= 0)
+            {
+                if (sourceName.SheetIndex >= source.NumberOfSheets)
+                    continue;
+                var localSheet = source.GetSheetAt(sourceName.SheetIndex);
+                localSheetIndex = destination.GetSheetIndex(localSheet.SheetName);
+                if (localSheetIndex < 0)
+                    continue;
+            }
+            var key = sourceName.NameName + "\u001f" + localSheetIndex;
+            if (!seen.Add(key))
+                continue;
+            var first = AbsoluteCellReference(outputFirstRow, firstColumn);
+            var last = AbsoluteCellReference(outputLastRow, lastColumn);
+            var destinationName = destination.CreateName();
+            destinationName.NameName = sourceName.NameName;
+            destinationName.SheetIndex = localSheetIndex;
+            destinationName.RefersToFormula = QuoteDefinedNameSheet(sourceSheet.SheetName)
+                + "!" + first;
+            if (!string.Equals(first, last, StringComparison.Ordinal))
+                destinationName.RefersToFormula += ":" + last;
+        }
+    }
+
+    /// <summary>
+    /// 解析单个一维绝对定义名称引用。
+    /// </summary>
+    /// <param name="formula">定义名称公式。</param>
+    /// <param name="workbook">源工作簿。</param>
+    /// <param name="currentSheetIndex">未限定工作表时使用的局部作用域。</param>
+    /// <param name="rangeSheet">引用的源工作表。</param>
+    /// <param name="firstRow">起始零基行号。</param>
+    /// <param name="lastRow">结束零基行号。</param>
+    /// <param name="firstColumn">起始零基列号。</param>
+    /// <param name="lastColumn">结束零基列号。</param>
+    /// <returns>公式受支持时返回 <see langword="true" />。</returns>
+    private static bool TryParseDefinedNameFormula(string formula, IWorkbook workbook,
+        int currentSheetIndex, out ISheet rangeSheet, out int firstRow, out int lastRow,
+        out int firstColumn, out int lastColumn)
+    {
+        rangeSheet = null;
+        firstRow = lastRow = firstColumn = lastColumn = 0;
+        if (string.IsNullOrWhiteSpace(formula) || workbook == null)
+            return false;
+        var expression = formula.Trim();
+        if (expression.StartsWith("=", StringComparison.Ordinal))
+            expression = expression.Substring(1).Trim();
+        var separator = -1;
+        var quoted = false;
+        for (var index = 0; index < expression.Length; index++)
+        {
+            var current = expression[index];
+            if (current == '\'')
+            {
+                if (quoted && index + 1 < expression.Length && expression[index + 1] == '\'')
+                    index++;
+                else
+                    quoted = !quoted;
+            }
+            else if (!quoted)
+            {
+                if (current == '!' && separator < 0)
+                    separator = index;
+                else if (current is '[' or ']' or ',' or '(' or ')' or ';' or '!')
+                    return false;
+            }
+        }
+        if (quoted)
+            return false;
+        if (separator >= 0)
+        {
+            var sheetToken = expression.Substring(0, separator).Trim();
+            var sheetName = sheetToken;
+            if (sheetToken.StartsWith("'", StringComparison.Ordinal))
+            {
+                if (sheetToken.Length < 2 || !sheetToken.EndsWith("'", StringComparison.Ordinal))
+                    return false;
+                sheetName = sheetToken.Substring(1, sheetToken.Length - 2).Replace("''", "'",
+                    StringComparison.Ordinal);
+            }
+            if (string.IsNullOrWhiteSpace(sheetName))
+                return false;
+            rangeSheet = workbook.GetSheet(sheetName);
+            if (rangeSheet == null)
+                return false;
+            expression = expression.Substring(separator + 1).Trim();
+        }
+        else
+        {
+            if (currentSheetIndex < 0 || currentSheetIndex >= workbook.NumberOfSheets)
+                return false;
+            rangeSheet = workbook.GetSheetAt(currentSheetIndex);
+        }
+        var parts = expression.Split(':');
+        if (parts.Length < 1 || parts.Length > 2
+            || !IsAbsoluteCellReference(parts[0].Trim())
+            || (parts.Length == 2 && !IsAbsoluteCellReference(parts[1].Trim())))
+            return false;
+        try
+        {
+            var first = new CellReference(parts[0].Trim());
+            var last = parts.Length == 1 ? first : new CellReference(parts[1].Trim());
+            if (first.Row < 0 || first.Col < 0 || last.Row < first.Row || last.Col < first.Col
+                || last.Row > workbook.SpreadsheetVersion.LastRowIndex
+                || last.Col > workbook.SpreadsheetVersion.LastColumnIndex
+                || (first.Row != last.Row && first.Col != last.Col))
+                return false;
+            firstRow = first.Row;
+            lastRow = last.Row;
+            firstColumn = first.Col;
+            lastColumn = last.Col;
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 判断地址是否为固定的 A1 单元格引用。
+    /// </summary>
+    /// <param name="address">待判断地址。</param>
+    /// <returns>地址固定行列时返回 <see langword="true" />。</returns>
+    private static bool IsAbsoluteCellReference(string address)
+    {
+        if (string.IsNullOrEmpty(address) || address[0] != '$')
+            return false;
+        var rowMarker = address.IndexOf('$', 1);
+        if (rowMarker < 2 || rowMarker == address.Length - 1)
+            return false;
+        return address.Substring(1, rowMarker - 1).All(char.IsLetter)
+            && address.Substring(rowMarker + 1).All(char.IsDigit)
+            && address[rowMarker + 1] != '0';
+    }
+
+    /// <summary>
+    /// 将定义名称的源行映射为目标行。
+    /// </summary>
+    /// <param name="rowMap">源行到目标行的映射。</param>
+    /// <param name="firstRow">起始源行。</param>
+    /// <param name="lastRow">结束源行。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <param name="firstOutputRow">起始目标行。</param>
+    /// <param name="lastOutputRow">结束目标行。</param>
+    /// <returns>区域完整保留且连续时返回 <see langword="true" />。</returns>
+    private static bool TryMapDefinedNameRows(IReadOnlyDictionary<int, int> rowMap,
+        int firstRow, int lastRow, CancellationToken cancellationToken,
+        out int firstOutputRow, out int lastOutputRow)
+    {
+        firstOutputRow = lastOutputRow = 0;
+        if (rowMap == null || firstRow < 0 || lastRow < firstRow)
+            return false;
+        if (!rowMap.TryGetValue(firstRow, out firstOutputRow))
+            return false;
+        if (firstRow == lastRow)
+        {
+            lastOutputRow = firstOutputRow;
+            return true;
+        }
+        for (var sourceRow = firstRow + 1; sourceRow <= lastRow; sourceRow++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!rowMap.TryGetValue(sourceRow, out var outputRow)
+                || outputRow != firstOutputRow + sourceRow - firstRow)
+                return false;
+            lastOutputRow = outputRow;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// 创建定义名称公式中的绝对 A1 地址。
+    /// </summary>
+    /// <param name="row">零基行号。</param>
+    /// <param name="column">零基列号。</param>
+    /// <returns>绝对 A1 地址。</returns>
+    private static string AbsoluteCellReference(int row, int column)
+        => new CellReference(row, column, true, true).FormatAsString();
+
+    /// <summary>
+    /// 将工作表名称编码为定义名称公式前缀。
+    /// </summary>
+    /// <param name="sheetName">工作表名称。</param>
+    /// <returns>带单引号的工作表名称。</returns>
+    private static string QuoteDefinedNameSheet(string sheetName)
+        => "'" + (sheetName ?? string.Empty).Replace("'", "''", StringComparison.Ordinal) + "'";
 
     /// <summary>
     /// 复制行高、隐藏状态、单元格值、样式、超链接和批注。
@@ -267,9 +511,9 @@ internal static class NpoiFailureWorkbookCopier
     /// <param name="sheet">目标错误行工作表。</param>
     /// <param name="errors">当前工作表的错误集合。</param>
     /// <param name="rowMap">源零基行号到目标零基行号的映射。</param>
-    /// <param name="sourceColumn">源表头之后的起始列索引。</param>
+    /// <param name="sourceColumn">源内容之后的起始列索引。</param>
     private static void AddFailureColumns(ISheet sheet, IReadOnlyCollection<ExcelImportError> errors,
-        IReadOnlyDictionary<int, int> rowMap, short sourceColumn)
+        IReadOnlyDictionary<int, int> rowMap, int sourceColumn)
     {
         var startColumn = Math.Max(0, (int)sourceColumn);
         var header = sheet.GetRow(0) ?? sheet.CreateRow(0);
@@ -349,7 +593,14 @@ internal static class NpoiFailureWorkbookCopier
                     copied.CreatePromptBox(validation.PromptBoxTitle, validation.PromptBoxText);
                 copied.SuppressDropDownArrow = validation.SuppressDropDownArrow;
                 copied.ErrorStyle = validation.ErrorStyle;
-                destination.AddValidationData(copied);
+                try
+                {
+                    destination.AddValidationData(copied);
+                }
+                catch (FormulaParseException)
+                {
+                    // 命名列表来源未随错误行复制时，跳过无法解析的规则，避免破坏失败工作簿输出。
+                }
             }
         }
     }

@@ -37,7 +37,8 @@ internal sealed class NpoiImportSheetExecutor
     /// <param name="runtime">当前导入运行时状态。</param>
     /// <param name="cancellationToken">逐行导入过程中检查的取消令牌。</param>
     /// <param name="sourceRows">接收成功实体对应源行索引的集合；为空时不记录。</param>
-    internal void Execute<T>(ISheet sheet, ExcelImportExecutionOptions<T> options, ICollection<T> items,
+    /// <returns>当前区域已提交的唯一值数量。</returns>
+    internal int Execute<T>(ISheet sheet, ExcelImportExecutionOptions<T> options, ICollection<T> items,
         ExcelImportErrorCollector errors, ExcelImportRuntime runtime, CancellationToken cancellationToken,
         ICollection<int> sourceRows = null) where T : class, new()
     {
@@ -61,7 +62,7 @@ internal sealed class NpoiImportSheetExecutor
             {
                 errors.Add(new ExcelImportError(ExcelImportErrorCode.ResourceLimit, exception.Message,
                     errorSheetName, options.HeaderRowIndex + 1, 0, null));
-                return;
+                return 0;
             }
         }
         var workbookValidations = options.ValidationMode == ExcelImportValidationMode.WorkbookRules
@@ -70,10 +71,15 @@ internal sealed class NpoiImportSheetExecutor
             : Array.Empty<IDataValidation>();
         var validationIndex = ValidationRangeIndex.Create(workbookValidations, options.DataRowIndex, sheet.LastRowNum,
             0, Math.Max(0, header.LastCellNum - 1));
-        var duplicateValues = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
-        var uniqueTracker = new UniqueTracker(duplicateValues, options.MaxTrackedUniqueValues,
-            CreateStringComparer(options.UniqueComparison));
         var configuredValidationEnabled = IsConfiguredValidationEnabled(options.ValidationMode);
+        var tracksUnique = configuredValidationEnabled && columns.Values.Any(column => column.IsUnique);
+        var duplicateValues = tracksUnique
+            ? new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase)
+            : null;
+        var uniqueTracker = tracksUnique
+            ? new UniqueTracker(duplicateValues, options.MaxTrackedUniqueValues,
+                CreateStringComparer(options.UniqueComparison))
+            : null;
         for (var rowIndex = options.DataRowIndex; rowIndex <= sheet.LastRowNum; rowIndex++)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -106,14 +112,14 @@ internal sealed class NpoiImportSheetExecutor
                 }
                 continue;
             }
-            if (configuredValidationEnabled)
+            if (uniqueTracker != null)
                 uniqueTracker.BeginRow();
             var workbookValid = NpoiWorkbookValidationPipeline.Validate(row, columns, validationIndex, sheet,
                 errorSheetName, rowIndex, options.BodyWhitespace, options.ValidationFailureMode,
-                options.UnsupportedFeaturePolicy, errors, options.IsDate1904);
+                options.UnsupportedFeaturePolicy, errors, options.IsDate1904, cancellationToken);
             if (!workbookValid)
             {
-                if (configuredValidationEnabled)
+                if (uniqueTracker != null)
                     uniqueTracker.RollbackRow();
                 if (errors.IsLimitReached)
                 {
@@ -126,7 +132,7 @@ internal sealed class NpoiImportSheetExecutor
                     errorSheetName, rowIndex, options.ValidationFailureMode, options.Culture, options.BodyWhitespace, errors,
                     options.IsDate1904))
             {
-                uniqueTracker.RollbackRow();
+                uniqueTracker?.RollbackRow();
                 if (errors.IsLimitReached)
                 {
                     errors.MarkTruncated();
@@ -136,22 +142,24 @@ internal sealed class NpoiImportSheetExecutor
             }
             if (_rowMaterializer.TryCreateItem(row, columns, duplicateValues, uniqueTracker, errorSheetName,
                     rowIndex, options.ValidationFailureMode, configuredValidationEnabled, errors, options.Culture,
-                    options.BodyWhitespace, options.DynamicTargetGetter, imageIndex, options.IsDate1904,
+                    options.BodyWhitespace, options.DynamicTargetGetter, options.DynamicTargetSetter,
+                    imageIndex, options.IsDate1904,
                     out T item))
             {
                 items.Add(item);
                 sourceRows?.Add(rowIndex);
-                if (configuredValidationEnabled)
+                if (uniqueTracker != null)
                     uniqueTracker.CommitRow();
             }
-            else if (configuredValidationEnabled)
-                uniqueTracker.RollbackRow();
+            else
+                uniqueTracker?.RollbackRow();
             if (errors.IsLimitReached)
             {
                 errors.MarkTruncated();
                 break;
             }
         }
+        return uniqueTracker?.TrackedValueCount ?? 0;
     }
 
     /// <summary>
@@ -173,6 +181,22 @@ internal sealed class NpoiImportSheetExecutor
     private static IReadOnlyDictionary<int, ExcelColumnPlan> CreateColumns<T>(IRow header,
         ExcelImportExecutionOptions<T> options) where T : class, new()
     {
+        var headers = header.Cells.ToDictionary(cell => cell.ColumnIndex,
+            cell => NpoiExcelImporter.GetRawStringValue(cell));
+        return CreateColumns(headers, options);
+    }
+
+    /// <summary>
+    /// 根据前向解析器提供的表头文本创建列执行计划。
+    /// </summary>
+    /// <typeparam name="T">导入实体类型。</typeparam>
+    /// <param name="headers">按零基列索引排列的表头文本。</param>
+    /// <param name="options">当前实体类型的导入执行选项。</param>
+    /// <returns>按零基列索引排列的列执行计划。</returns>
+    internal static IReadOnlyDictionary<int, ExcelColumnPlan> CreateColumns<T>(
+        IReadOnlyDictionary<int, string> headers, ExcelImportExecutionOptions<T> options)
+        where T : class, new()
+    {
         var map = options.MappingPlan;
         if (map == null)
             throw new BingOfficesConfigurationException("工作表导入计划不可用。",
@@ -182,7 +206,8 @@ internal sealed class NpoiImportSheetExecutor
         var dynamicProperties = map.Columns.Where(property => property.IsDynamicColumn
             || dynamicPropertyNames.Contains(property.Name)).ToList();
         var dynamicPlans = map.DynamicColumns;
-        if (dynamicPropertyNames.Count == 0 && dynamicProperties.Count > 1)
+        if (dynamicPropertyNames.Count == 0 && dynamicProperties.Count > 1
+            && (options.DynamicColumnPropertyNames == null || options.DynamicColumnPropertyNames.Count == 0))
             throw new BingOfficesConfigurationException(
                 $"导入模板 {typeof(T).FullName} 只能声明一个动态列属性。", stage: BingOfficesStage.Plan);
         var fixedProperties = map.Columns.Where(property => !property.Ignored && !property.IsDynamicColumn
@@ -191,11 +216,11 @@ internal sealed class NpoiImportSheetExecutor
         var headerNames = new HashSet<string>(options.HeaderComparison == ExcelNameComparison.Ordinal
             ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase);
         var columns = new Dictionary<int, ExcelColumnPlan>();
-        foreach (var headerCell in header.Cells)
+        foreach (var headerCell in headers)
         {
-            if (options.ReadColumnRange != null && !options.ReadColumnRange.Contains(headerCell.ColumnIndex))
+            if (options.ReadColumnRange != null && !options.ReadColumnRange.Contains(headerCell.Key))
                 continue;
-            var headerName = NpoiExcelImporter.NormalizeText(NpoiExcelImporter.GetRawStringValue(headerCell),
+            var headerName = NpoiExcelImporter.NormalizeText(headerCell.Value,
                 options.HeaderWhitespace);
             if (string.IsNullOrWhiteSpace(headerName))
                 continue;
@@ -241,21 +266,21 @@ internal sealed class NpoiImportSheetExecutor
                 : isDynamic ? dynamicPlan.ValueConverters : property.ValueConverters;
             var validationBindings = isDynamic && dynamicPlan != null
                 ? dynamicPlan.ValidationBindings : property.ValidationBindings;
-            columns[headerCell.ColumnIndex] = new ExcelColumnPlan(headerName, property, isDynamic,
-                headerCell.ColumnIndex, dynamicDefinition, null, valueConverters, validationBindings,
+            columns[headerCell.Key] = new ExcelColumnPlan(headerName, property, isDynamic,
+                headerCell.Key, dynamicDefinition, null, valueConverters, validationBindings,
                 reflectionProperty: reflectionProperty, isUnique: dynamicPlan?.IsUnique,
                 uniqueIgnoreEmpty: dynamicPlan?.UniqueIgnoreEmpty ?? true);
         }
         if (options.RequireExpectedHeaders)
         {
             var missing = fixedProperties.Where(property => !columns.Values.Any(column => column.Property == property)
-                && (options.ReadColumnRange == null || !header.Cells.Any(cell =>
-                    !options.ReadColumnRange.Contains(cell.ColumnIndex)
-                    && (string.Equals(NpoiExcelImporter.NormalizeText(NpoiExcelImporter.GetRawStringValue(cell),
+                && (options.ReadColumnRange == null || !headers.Any(cell =>
+                    !options.ReadColumnRange.Contains(cell.Key)
+                    && (string.Equals(NpoiExcelImporter.NormalizeText(cell.Value,
                             options.HeaderWhitespace), property.Title, ToStringComparison(options.HeaderComparison))
                         || property.Aliases.Any(alias => string.Equals(
-                            NpoiExcelImporter.NormalizeText(NpoiExcelImporter.GetRawStringValue(cell),
-                                options.HeaderWhitespace), alias, ToStringComparison(options.HeaderComparison)))))))
+                            NpoiExcelImporter.NormalizeText(cell.Value, options.HeaderWhitespace), alias,
+                            ToStringComparison(options.HeaderComparison)))))))
                 .ToList();
             if (missing.Any())
                 throw new NpoiSheetStructureException($"导入的表格不存在列：{string.Join(",", missing.Select(property => property.Title))}");

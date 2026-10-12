@@ -41,7 +41,7 @@ public sealed class SpreadCheetahStreamingExcelExporter : IExcelStreamingExporte
     private readonly IFileExportCommitter _fileExportCommitter;
 
     /// <summary>
-    /// 初始化一个 <see cref="SpreadCheetahStreamingExcelExporter"/> 类型的实例。
+    /// 初始化一个 <see cref="SpreadCheetahStreamingExcelExporter" /> 类型的实例。
     /// </summary>
     /// <param name="mappingPlanFactory">映射计划工厂；为 null 时使用默认工厂。</param>
     /// <param name="fileExportCommitter">文件提交服务；为 null 时使用默认服务。</param>
@@ -902,6 +902,14 @@ public sealed class SpreadCheetahStreamingExcelExporter : IExcelStreamingExporte
     /// <param name="request">工作簿或工作表导出请求。</param>
     private static void ValidateRequest(ExcelWorkbookExportRequest request)
     {
+        if (request.PreserveTemplatePivotTables || request.PivotTableUpdates.Count > 0)
+            throw Unsupported("不支持保留或更新透视模板。");
+        if (request.PivotTables.Count > 0)
+            throw Unsupported("不支持透视表导出。");
+        if (request.Sheets.Any(sheet => sheet.Protection != null))
+            throw Unsupported("不支持工作表保护导出。");
+        if (request.LookupLists.Count > 0 || request.CascadeLists.Count > 0)
+            throw Unsupported("不支持字典下拉模板导出。");
         if (request.Format != ExcelFormat.Xlsx)
             throw Unsupported("仅支持 XLSX 格式。");
         if (request.Template != null)
@@ -913,6 +921,8 @@ public sealed class SpreadCheetahStreamingExcelExporter : IExcelStreamingExporte
         {
             if (sheet == null)
                 throw new ArgumentException("Workbook 包含 null Sheet。", nameof(request));
+            if (sheet.DataValidations.Any(rule => rule.ListSourceName != null))
+                throw Unsupported("不支持名称列表下拉模板导出。");
             if (string.IsNullOrWhiteSpace(sheet.Name))
                 throw new BingOfficesConfigurationException("Sheet 名称不能为空。", stage: BingOfficesStage.Plan);
             if (!sheetNames.Add(sheet.Name))
@@ -1212,7 +1222,7 @@ public sealed class SpreadCheetahStreamingExcelExporter : IExcelStreamingExporte
     private sealed class BindingSet
     {
         /// <summary>
-        /// 初始化一个 <see cref="BindingSet"/> 类型的实例。
+        /// 初始化一个 <see cref="BindingSet" /> 类型的实例。
         /// </summary>
         /// <param name="columns">有序导出列绑定集合。</param>
         public BindingSet(IReadOnlyList<ColumnBinding> columns)
@@ -1238,7 +1248,7 @@ public sealed class SpreadCheetahStreamingExcelExporter : IExcelStreamingExporte
     private sealed class ColumnBinding
     {
         /// <summary>
-        /// 初始化一个 <see cref="ColumnBinding"/> 类型的实例。
+        /// 初始化一个 <see cref="ColumnBinding" /> 类型的实例。
         /// </summary>
         /// <param name="title">导出列标题。</param>
         /// <param name="property">固定列对应的实体属性。</param>
@@ -1308,7 +1318,7 @@ public sealed class SpreadCheetahStreamingExcelExporter : IExcelStreamingExporte
         private readonly Stream _inner;
 
         /// <summary>
-        /// 初始化一个 <see cref="NonDisposingStream"/> 类型的实例。
+        /// 初始化一个 <see cref="NonDisposingStream" /> 类型的实例。
         /// </summary>
         /// <param name="inner">由调用方负责释放的底层流。</param>
         public NonDisposingStream(Stream inner) => _inner = inner;

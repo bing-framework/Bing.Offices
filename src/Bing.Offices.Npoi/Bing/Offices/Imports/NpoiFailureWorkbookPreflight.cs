@@ -17,10 +17,12 @@ internal static class NpoiFailureWorkbookPreflight
     /// <param name="errors">待写入失败工作簿的导入错误集合。</param>
     /// <param name="resolvedSheetRequests">按实际工作表名称索引的导入请求。</param>
     /// <param name="options">失败工作簿输出及资源限制选项。</param>
+    /// <param name="requiredRowsBySheet">实体布局要求保留的零基结构行；通用 Workbook 为 null。</param>
     internal static void Validate(IWorkbook source,
         IReadOnlyCollection<ExcelImportError> errors,
         IReadOnlyDictionary<string, ExcelSheetImportRequest> resolvedSheetRequests,
-        ExcelImportFailureOptions options)
+        ExcelImportFailureOptions options,
+        IReadOnlyDictionary<string, IReadOnlyList<int>> requiredRowsBySheet = null)
     {
         if (options.Mode != ExcelImportFailureWorkbookMode.ErrorRowsOnly)
             return;
@@ -49,9 +51,19 @@ internal static class NpoiFailureWorkbookPreflight
 
         var groups = errors.Where(error => error.RowIndex > 1)
             .GroupBy(error => error.SheetName, StringComparer.OrdinalIgnoreCase);
+        var groupedRows = groups.ToDictionary(group => group.Key, group => group.ToList(),
+            StringComparer.OrdinalIgnoreCase);
+        if (requiredRowsBySheet != null)
+        {
+            foreach (var sheetName in requiredRowsBySheet.Keys)
+            {
+                if (!groupedRows.ContainsKey(sheetName))
+                    groupedRows.Add(sheetName, new List<ExcelImportError>());
+            }
+        }
         long estimatedCells = 0;
         long estimatedObjects = pictureEstimate.Count;
-        foreach (var group in groups)
+        foreach (var group in groupedRows)
         {
             var sourceSheet = source.GetSheet(group.Key);
             if (sourceSheet == null)
@@ -59,10 +71,14 @@ internal static class NpoiFailureWorkbookPreflight
             var headerRowIndex = resolvedSheetRequests.TryGetValue(sourceSheet.SheetName, out var request)
                 ? request.HeaderRowIndex
                 : sourceSheet.FirstRowNum;
-            var sourceRows = new HashSet<int>(group.Select(error => error.RowIndex - 1))
+            var sourceRows = new HashSet<int>(group.Value.Select(error => error.RowIndex - 1));
+            if (group.Value.Count > 0)
+                sourceRows.Add(headerRowIndex);
+            if (requiredRowsBySheet != null
+                && requiredRowsBySheet.TryGetValue(sourceSheet.SheetName, out var requiredRows))
             {
-                headerRowIndex
-            };
+                sourceRows.UnionWith(requiredRows);
+            }
             var groupCells = sourceRows.Sum(row => Math.Max(0,
                 (int)(sourceSheet.GetRow(row)?.LastCellNum ?? 0)));
             estimatedCells += groupCells;

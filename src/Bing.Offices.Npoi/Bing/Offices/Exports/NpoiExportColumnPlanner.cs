@@ -94,7 +94,9 @@ internal static class NpoiExportColumnPlanner
             return AppendCalculatedColumns(columns, calculatedColumns);
         var dynamicReflectionProperty = ResolveProperty<T>(dynamicProperty.Name);
         var definitions = (dynamicColumns ?? Array.Empty<ExcelDynamicColumnDefinition>())
-            .OrderBy(definition => definition.Order)
+            .OrderBy(definition => GetPhysicalIndex(definition).HasValue ? 1 : 0)
+            .ThenBy(definition => GetPhysicalIndex(definition) ?? int.MaxValue)
+            .ThenBy(definition => definition.Order)
             .ThenBy(definition => definition.Key, StringComparer.Ordinal)
             .ToList();
         foreach (var definition in definitions)
@@ -174,7 +176,9 @@ internal static class NpoiExportColumnPlanner
 
         var definitions = (dynamicColumns ?? Array.Empty<ExcelDynamicColumnDefinition>())
             .Select((definition, index) => new { Definition = definition, Index = index })
-            .OrderBy(item => item.Definition.Order)
+            .OrderBy(item => GetPhysicalIndex(item.Definition).HasValue ? 1 : 0)
+            .ThenBy(item => GetPhysicalIndex(item.Definition) ?? int.MaxValue)
+            .ThenBy(item => item.Definition.Order)
             .ThenBy(item => item.Index)
             .Select(item => item.Definition)
             .ToList();
@@ -323,6 +327,14 @@ internal static class NpoiExportColumnPlanner
         }
         columns.Add(column);
     }
+
+    /// <summary>
+    /// 获取动态列声明的绝对物理索引。
+    /// </summary>
+    /// <param name="definition">动态列定义。</param>
+    /// <returns>显式物理索引；未声明时返回 <see langword="null" />。</returns>
+    private static int? GetPhysicalIndex(ExcelDynamicColumnDefinition definition) =>
+        definition?.PhysicalColumnIndex ?? definition?.Placement?.PhysicalColumnIndex;
 
     /// <summary>
     /// 合并映射计划和请求级样式以生成导出动态列定义。

@@ -70,6 +70,10 @@ internal sealed class ExcelImportExecutionOptions<T> where T : class, new()
     /// </summary>
     internal Func<object, object> DynamicTargetGetter { get; set; }
     /// <summary>
+    /// 获取或设置将动态列值写回实体动态字典组的委托。
+    /// </summary>
+    internal Action<object, IReadOnlyDictionary<string, object>> DynamicTargetSetter { get; set; }
+    /// <summary>
     /// 获取或设置实体布局显式动态列组使用的属性名称集合。
     /// </summary>
     internal IReadOnlySet<string> DynamicPropertyNames { get; set; }

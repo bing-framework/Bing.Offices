@@ -6,6 +6,7 @@ using Bing.Offices.ClosedXml.Internals;
 using Bing.Offices.Conversions;
 using Bing.Offices.Formula;
 using Bing.Offices.ClosedXml.Formula;
+using Bing.Offices.ClosedXml.Entities;
 using Bing.Offices.Entities;
 using Bing.Offices.Exceptions;
 using Bing.Offices.Exports;
@@ -60,6 +61,10 @@ public static class ExcelClosedXmlServiceCollectionExtensions
             provider.GetServices<IBingOfficesExceptionObserver>(),
             provider.GetRequiredService<IFileExportCommitter>(),
             provider.GetRequiredService<IClosedXmlWorkbookAdmission>()));
+        services.TryAddTransient<IExcelWorkbookBatchImporter>(provider =>
+            new ClosedXmlWorkbookBatchImporter((ClosedXmlExcelImporter)provider.GetRequiredService<IExcelImporter>()));
+        services.TryAddTransient<IExcelEntityBatchImporter>(provider =>
+            new ClosedXmlEntityBatchImporter((ClosedXmlExcelImporter)provider.GetRequiredService<IExcelImporter>()));
         services.TryAddTransient<IExcelExporter>(provider => new ClosedXmlExcelExporter(
             provider.GetServices<IExcelValueConverter>(),
             provider.GetService<IExcelMappingPlanFactory>(),

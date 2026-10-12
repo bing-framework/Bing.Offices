@@ -3,10 +3,10 @@
 namespace Bing.Offices.Imports;
 
 /// <summary>
-/// NPOI 的 XLSX ZIP 预检适配器。
+/// NPOI 的 XLSX ZIP 与 HSSF 工作簿预检适配器。
 /// </summary>
 /// <remarks>
-/// 预检逻辑由项目编译链接的共享 XLSX ZIP/XML 实现提供。
+/// XLSX 预检逻辑由项目编译链接的共享 ZIP/XML 实现提供；HSSF 结构限制由事件模型扫描。
 /// </remarks>
 internal static class NpoiXlsxZipPreflight
 {
@@ -17,9 +17,12 @@ internal static class NpoiXlsxZipPreflight
     /// <param name="limits">ZIP/XML 资源限制；为 null 时跳过限制检查。</param>
     /// <param name="cancellationToken">用于取消预检的令牌。</param>
     /// <remarks>
-    /// 非 ZIP 流由 NPOI 继续处理；启用资源限制且输入为 ZIP 时执行共享的条目、大小和 XML 安全检查。
+    /// XLSX ZIP 使用共享条目、大小和 XML 安全检查；配置结构预算时，HSSF OLE2 使用 BIFF 事件扫描。
     /// </remarks>
     internal static void Validate(Stream source, ExcelResourceLimits limits,
-        CancellationToken cancellationToken = default) =>
+        CancellationToken cancellationToken = default)
+    {
         ExcelXlsxZipPreflight.Validate(source, limits, "NPOI", requireZip: false, cancellationToken);
+        NpoiHssfWorkbookPreflight.Validate(source, limits, cancellationToken);
+    }
 }

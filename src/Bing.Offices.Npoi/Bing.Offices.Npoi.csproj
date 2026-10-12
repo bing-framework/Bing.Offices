@@ -20,6 +20,49 @@ Bing是一个.net core平台下的应用框架，旨在于提升小型团队的�
   <ItemGroup>
     <Compile Include="..\provider-shared\ExcelXlsxZipPreflight.cs"
              Link="Bing\Offices\Imports\ExcelXlsxZipPreflight.cs" />
+    <Compile Include="..\provider-shared\ExcelWorkbookBatchProjection.cs"
+             Link="Bing\Offices\Imports\ExcelWorkbookBatchProjection.cs" />
+    <Compile Include="..\provider-shared\ExcelEntityBatchProjection.cs"
+             Link="Bing\Offices\Entities\ExcelEntityBatchProjection.cs" />
+    <Compile Include="..\provider-shared\ExcelEntityRowPlan.cs"
+             Link="Bing\Offices\Entities\ExcelEntityRowPlan.cs" />
+    <Compile Include="..\provider-shared\ExcelEntityPageAnchorNames.cs"
+             Link="Bing\Offices\Entities\ExcelEntityPageAnchorNames.cs" />
+    <Compile Include="..\provider-shared\ExcelEntitySubtotalImportScanner.cs"
+             Link="Bing\Offices\Entities\ExcelEntitySubtotalImportScanner.cs" />
+    <Compile Include="..\provider-shared\ExcelEntityPageHeaderImportValidation.cs"
+             Link="Bing\Offices\Entities\ExcelEntityPageHeaderImportValidation.cs" />
+    <Compile Include="..\provider-shared\ExcelEntityForwardRelationTracker.cs"
+             Link="Bing\Offices\Entities\ExcelEntityForwardRelationTracker.cs" />
+    <Compile Include="..\provider-shared\ExcelEntityForwardFooterBoundary.cs"
+             Link="Bing\Offices\Entities\ExcelEntityForwardFooterBoundary.cs" />
+    <Compile Include="..\provider-shared\ExcelForwardXlsxReader.cs"
+             Link="Bing\Offices\Internals\ExcelForwardXlsxReader.cs" />
+    <Compile Include="..\provider-shared\ExcelForwardXlsxSharedStrings.cs"
+             Link="Bing\Offices\Internals\ExcelForwardXlsxSharedStrings.cs" />
+    <Compile Include="..\Bing.Offices.ExcelDataReader\Bing\Offices\ExcelDataReader\ExcelXlsxWorkbookValidation.cs"
+             Link="Bing\Offices\Internals\ExcelXlsxWorkbookValidation.cs" />
+    <Compile Include="..\Bing.Offices.ExcelDataReader\Bing\Offices\ExcelDataReader\ExcelDataReaderFailureWorkbookCapture.cs"
+             Link="Bing\Offices\Internals\ExcelDataReaderFailureWorkbookCapture.cs" />
+    <Compile Include="..\Bing.Offices.ExcelDataReader\Bing\Offices\ExcelDataReader\ExcelDataReaderFailureWorkbookWriter.cs"
+             Link="Bing\Offices\Internals\ExcelDataReaderFailureWorkbookWriter.cs" />
+    <Compile Include="..\provider-shared\ExcelDataReaderAnnotatedOriginalWriterUnavailable.cs"
+             Link="Bing\Offices\Internals\ExcelDataReaderAnnotatedOriginalWriterUnavailable.cs" />
+    <Compile Include="..\provider-shared\ExcelForwardXlsxFailureWorkbookWriter.cs"
+             Link="Bing\Offices\Internals\ExcelForwardXlsxFailureWorkbookWriter.cs" />
+    <Compile Include="..\provider-shared\ExcelPivotTemplateParts.cs" Link="Bing\Offices\Exports\PivotTables\ExcelPivotTemplateParts.cs" />
+    <Compile Include="..\provider-shared\ExcelPivotTemplateRelationship.cs" Link="Bing\Offices\Exports\PivotTables\ExcelPivotTemplateRelationship.cs" />
+    <Compile Include="..\provider-shared\ExcelPivotTemplateCache.cs" Link="Bing\Offices\Exports\PivotTables\ExcelPivotTemplateCache.cs" />
+    <Compile Include="..\provider-shared\ExcelPivotTemplateEntry.cs" Link="Bing\Offices\Exports\PivotTables\ExcelPivotTemplateEntry.cs" />
+    <Compile Include="..\provider-shared\ExcelPivotTemplatePackage.cs" Link="Bing\Offices\Exports\PivotTables\ExcelPivotTemplatePackage.cs" />
+    <Compile Include="..\provider-shared\ExcelPivotTemplateManifest.cs" Link="Bing\Offices\Exports\PivotTables\ExcelPivotTemplateManifest.cs" />
+    <Compile Include="..\provider-shared\ExcelPivotTemplateSource.cs" Link="Bing\Offices\Exports\PivotTables\ExcelPivotTemplateSource.cs" />
+    <Compile Include="..\provider-shared\ExcelPivotTemplateSnapshot.cs" Link="Bing\Offices\Exports\PivotTables\ExcelPivotTemplateSnapshot.cs" />
+    <Compile Include="..\provider-shared\ExcelPivotTemplatePreserver.cs" Link="Bing\Offices\Exports\PivotTables\ExcelPivotTemplatePreserver.cs" />
+    <Compile Include="..\provider-shared\ExcelPivotTemplateBridge.cs" Link="Bing\Offices\Exports\PivotTables\ExcelPivotTemplateBridge.cs" />
+    <Compile Include="..\provider-shared\ExcelPivotTemplateArchive.cs" Link="Bing\Offices\Exports\PivotTables\ExcelPivotTemplateArchive.cs" />
+    <Compile Include="..\provider-shared\ExcelPivotTemplateUpdate.cs" Link="Bing\Offices\Exports\PivotTables\ExcelPivotTemplateUpdate.cs" />
+    <Compile Include="..\provider-shared\ExcelPivotTemplatePlan.cs" Link="Bing\Offices\Exports\PivotTables\ExcelPivotTemplatePlan.cs" />
     <Compile Include="..\provider-shared\ExcelReportPreflight.cs"
              Link="Bing\Offices\Internals\ExcelReportPreflight.cs" />
   </ItemGroup>

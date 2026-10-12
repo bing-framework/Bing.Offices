@@ -27,6 +27,126 @@ namespace Bing.Offices.Npoi.Entities;
 internal static class NpoiEntityLayoutSupport
 {
     /// <summary>
+    /// 获取映射计划中声明的动态字典属性。
+    /// </summary>
+    /// <typeparam name="TItem">列表项类型。</typeparam>
+    /// <param name="mapping">列表项映射计划。</param>
+    /// <returns>按映射顺序排列的动态字典属性。</returns>
+    internal static IReadOnlyList<PropertyInfo> GetDynamicProperties<TItem>(IExcelMappingPlan mapping)
+        where TItem : class, new()
+    {
+        var columns = (mapping?.Columns ?? Array.Empty<IExcelMappingColumn>())
+            .Where(column => column.IsDynamicColumn).ToArray();
+        var properties = columns.Select(column => typeof(TItem).GetProperty(column.Name,
+                BindingFlags.Instance | BindingFlags.Public))
+            .ToArray();
+        for (var index = 0; index < properties.Length; index++)
+        {
+            var property = properties[index];
+            if (property == null || !property.CanRead || !property.CanWrite
+                || !typeof(IDictionary<string, object>).IsAssignableFrom(property.PropertyType))
+                throw new BingOfficesConfigurationException(
+                    $"动态列属性必须是可读写的 IDictionary<string, object>: {columns[index].Name}",
+                    stage: BingOfficesStage.Plan);
+        }
+        return properties;
+    }
+
+    /// <summary>
+    /// 创建动态列 Key 到隐式字典属性名称的归属映射。
+    /// </summary>
+    /// <param name="mapping">列表项映射计划。</param>
+    /// <param name="properties">实体动态字典属性。</param>
+    /// <returns>动态列 Key 到属性名称的映射；单字典时为空。</returns>
+    internal static IReadOnlyDictionary<string, string> CreateDynamicPropertyNames(
+        IExcelMappingPlan mapping, IReadOnlyList<PropertyInfo> properties)
+    {
+        if (properties == null || properties.Count <= 1)
+            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (mapping?.DynamicColumns == null || mapping.DynamicColumns.Count == 0)
+            throw new BingOfficesConfigurationException(
+                "多个隐式动态字典必须为每个动态列指定 TargetPropertyName。", stage: BingOfficesStage.Plan);
+        var propertyNames = properties.ToDictionary(property => property.Name, StringComparer.OrdinalIgnoreCase);
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var column in mapping.DynamicColumns)
+        {
+            if (string.IsNullOrWhiteSpace(column.TargetPropertyName))
+                throw new BingOfficesConfigurationException(
+                    $"多个动态字典属性时，动态列 {column.Key} 必须指定 TargetPropertyName。",
+                    stage: BingOfficesStage.Plan);
+            if (!propertyNames.ContainsKey(column.TargetPropertyName))
+                throw new BingOfficesConfigurationException(
+                    $"动态列 {column.Key} 的目标属性不是实体动态字典: {column.TargetPropertyName}",
+                    stage: BingOfficesStage.Plan);
+            if (!result.TryAdd(column.Key, column.TargetPropertyName))
+                throw new BingOfficesConfigurationException(
+                    $"动态列 Key 重复或归属不明确: {column.Key}", stage: BingOfficesStage.Plan);
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// 合并一个列表项的多个隐式动态字典。
+    /// </summary>
+    /// <param name="item">列表项。</param>
+    /// <param name="properties">动态字典属性。</param>
+    /// <returns>按动态列 Key 合并的字典。</returns>
+    internal static IDictionary<string, object> MergeImplicitDynamicValues(object item,
+        IReadOnlyList<PropertyInfo> properties)
+    {
+        var values = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+        foreach (var property in properties ?? Array.Empty<PropertyInfo>())
+        {
+            if (property.GetValue(item) is not IDictionary<string, object> source)
+                continue;
+            foreach (var pair in source)
+            {
+                if (!values.TryAdd(pair.Key, pair.Value))
+                    throw new BingOfficesConfigurationException(
+                        $"多个动态字典包含重复 Key: {pair.Key}", stage: BingOfficesStage.Validate);
+            }
+        }
+        return values;
+    }
+
+    /// <summary>
+    /// 将隐式动态列值写回其目标字典属性。
+    /// </summary>
+    /// <param name="item">当前列表项。</param>
+    /// <param name="propertyNames">动态列 Key 到目标属性名称的映射。</param>
+    /// <param name="values">当前行的动态列值。</param>
+    internal static void ApplyImplicitDynamicValues(object item,
+        IReadOnlyDictionary<string, string> propertyNames,
+        IReadOnlyDictionary<string, object> values)
+    {
+        foreach (var pair in values)
+        {
+            if (propertyNames == null || !propertyNames.TryGetValue(pair.Key, out var propertyName))
+                throw new BingOfficesConfigurationException(
+                    $"动态列未找到目标字典属性: {pair.Key}", stage: BingOfficesStage.Plan);
+            var property = item.GetType().GetProperty(propertyName,
+                BindingFlags.Instance | BindingFlags.Public);
+            if (property == null || !property.CanWrite
+                || !typeof(IDictionary<string, object>).IsAssignableFrom(property.PropertyType))
+                throw new BingOfficesConfigurationException(
+                    $"动态列目标属性不可写入: {propertyName}", stage: BingOfficesStage.Plan);
+            var target = property.GetValue(item) as IDictionary<string, object>;
+            if (target == null)
+            {
+                object instance = property.PropertyType.IsInterface || property.PropertyType.IsAbstract
+                    ? new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+                    : Activator.CreateInstance(property.PropertyType);
+                if (instance is not IDictionary<string, object> created)
+                    throw new BingOfficesConfigurationException(
+                        $"实体动态列属性无法创建字典实例: {propertyName}", stage: BingOfficesStage.Plan);
+                property.SetValue(item, created);
+                target = created;
+            }
+            target[pair.Key] = pair.Value;
+        }
+    }
+
+    /// <summary>
     /// 识别模板命名锚点引用的单元格或单格区域。
     /// </summary>
     private static readonly Regex NamedAnchorFormula = new Regex(
@@ -124,6 +244,10 @@ internal static class NpoiEntityLayoutSupport
         {
             var reference = cell.AnchorName == null ? cell.Reference :
                 ResolveNamedAnchor(workbook, cell.SheetName, cell.AnchorName).Reference;
+            if (region.PageHeader != null && reference.Equals(region.PageHeader.Marker))
+                throw new BingOfficesConfigurationException(
+                    $"固定单元格与重复页眉标记重叠: {cell.SheetName}!{reference.Address}",
+                    stage: BingOfficesStage.Plan);
             if (reference.Row >= region.Start.Row && reference.Column >= region.Start.Column
                 && (!region.End.HasValue || (reference.Row <= region.End.Value.Row
                     && reference.Column <= region.End.Value.Column)))
@@ -890,12 +1014,33 @@ internal static class NpoiEntityLayoutSupport
     /// <typeparam name="TEntity">聚合对象类型。</typeparam>
     /// <param name="sheet">源工作表。</param>
     /// <param name="region">列表区域定义。</param>
+    /// <param name="lastRow">列表区域的零基末行。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>按起始行排序且不重叠的跳过行段。</returns>
     internal static IReadOnlyList<(int StartRow, int EndRow)> FindFooterSkipSpans<TEntity>(
-        ISheet sheet, ExcelEntityListRegion<TEntity> region) where TEntity : class, new()
+        ISheet sheet, ExcelEntityListRegion<TEntity> region, int lastRow,
+        CancellationToken cancellationToken) where TEntity : class, new()
     {
         var firstRow = region.Start.Row + (region.IncludeHeader ? 1 : 0);
-        var lastRow = region.End?.Row ?? sheet.LastRowNum;
+        if ((region.GroupSubtotal != null || region.PageHeader != null || region.PageFooter != null)
+            && region.PageBreakRows.HasValue)
+        {
+            var finalMarker = region.Footer == null ? (int?)null : FindFooterMarkerRow(sheet, region);
+            var detailEnd = finalMarker.HasValue
+                ? finalMarker.Value - region.Footer.GapRows : lastRow + 1;
+            var combined = ExcelEntitySubtotalImportScanner.FindSpans(region, firstRow, detailEnd,
+                row => NpoiExcelImporter.NormalizeText(
+                    NpoiExcelImporter.GetRawStringValue(sheet.GetRow(row)?.GetCell(region.Start.Column)),
+                    ExcelWhitespacePolicy.Trim),
+                row => region.PageHeader == null ? null : NpoiExcelImporter.NormalizeText(
+                    NpoiExcelImporter.GetRawStringValue(sheet.GetRow(row)?.GetCell(
+                        region.PageHeader.Marker.Column)), ExcelWhitespacePolicy.Trim),
+                cancellationToken).ToList();
+            if (finalMarker.HasValue)
+                combined.Add((detailEnd,
+                    finalMarker.Value + GetFooterHeight(region.Footer) - 1));
+            return combined;
+        }
         var spans = new List<(int StartRow, int EndRow)>();
         var pageSubtotal = region.PageSubtotal;
         if (pageSubtotal != null && region.PageBreakRows is int rowsPerPage)

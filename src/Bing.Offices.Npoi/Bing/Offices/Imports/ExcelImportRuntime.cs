@@ -30,6 +30,13 @@ internal sealed class ExcelImportRuntime
     internal int? MaxRows { get; }
 
     /// <summary>
+    /// 获取当前工作簿剩余的数据行配额。
+    /// </summary>
+    internal long? RemainingRows => MaxRows.HasValue
+        ? Math.Max(0L, (long)MaxRows.Value - _rowCount)
+        : null;
+
+    /// <summary>
     /// 获取是否已达到数据行数上限。
     /// </summary>
     internal bool RowLimitReached => MaxRows.HasValue && _rowCount >= MaxRows.Value;

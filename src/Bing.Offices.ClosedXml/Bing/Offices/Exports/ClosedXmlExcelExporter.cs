@@ -4,12 +4,14 @@ using System.Reflection;
 using Bing.Offices.Attributes;
 using Bing.Offices.ClosedXml.Entities;
 using Bing.Offices.ClosedXml.Internals;
+using Bing.Offices.ClosedXml.Exports.PivotTables;
 using Bing.Offices.Configurations;
 using Bing.Offices.Conversions;
 using Bing.Offices.Entities;
 using Bing.Offices.Exceptions;
 using Bing.Offices.Exports;
 using Bing.Offices.IO;
+using Bing.Offices.Internals;
 using Bing.Offices.Mappings;
 using Bing.Offices.Providers;
 using ClosedXML.Excel;
@@ -131,6 +133,7 @@ public sealed class ClosedXmlExcelExporter : IExcelExporter, IExcelEntityExporte
     public IReadOnlyList<string> Limitations { get; } = new[]
     {
         "XLS、XLSB、XLSM、ODS 和加密工作簿在当前 ClosedXML Provider 中明确拒绝。",
+        "透视表支持 XLSX 新建、原样模板保留及带业务 Sheet 的透视部件桥接；UpdatePivotTable 支持全部或部分模板透视更新，共享缓存会为被更新消费者拆分新缓存；缓存刷新和其它更新形状暂不支持。",
         "公式重新计算受 ClosedXML 函数矩阵限制。"
     };
     /// <inheritdoc />
@@ -139,7 +142,11 @@ public sealed class ClosedXmlExcelExporter : IExcelExporter, IExcelEntityExporte
         | ExcelProviderFeatures.AutoFilter | ExcelProviderFeatures.FreezePanes
         | ExcelProviderFeatures.ConditionalFormatting | ExcelProviderFeatures.NamedRanges
         | ExcelProviderFeatures.PrintLayout | ExcelProviderFeatures.FormulaText
-        | ExcelProviderFeatures.FormulaCachedValues;
+        | ExcelProviderFeatures.FormulaCachedValues | ExcelProviderFeatures.NamedListValidation
+        | ExcelProviderFeatures.SheetProtection | ExcelProviderFeatures.CascadeListValidation
+        | ExcelProviderFeatures.PivotTables
+        | ExcelProviderFeatures.AdvancedPivotTables
+        | ExcelProviderFeatures.TemplatePivotTables;
     /// <inheritdoc />
     public bool Supports(ExcelProviderFeatures features) => (Features & features) == features;
 
@@ -330,7 +337,7 @@ public sealed class ClosedXmlExcelExporter : IExcelExporter, IExcelEntityExporte
         try
         {
             ValidateArguments(request, destination, cancellationToken);
-            ValidateRequest(request);
+            ValidateRequest(request, cancellationToken);
             using var admission = _admission.Acquire(cancellationToken, BingOfficesOperation.Export);
             ExportWorkbookCore(request, destination, cancellationToken);
         }
@@ -376,12 +383,20 @@ public sealed class ClosedXmlExcelExporter : IExcelExporter, IExcelEntityExporte
         try
         {
             ValidateArguments(request, destination, cancellationToken);
-            ValidateRequest(request);
-            await using var buffer = new MemoryStream();
+            ValidateRequest(request, cancellationToken);
+            await using Stream buffer = ExcelPivotTemplateBridge.IsRequired(request)
+                ? (Stream)ExcelPivotTemplateBridge.OpenAsyncOutputFile()
+                : new MemoryStream();
             await using (var admission = await _admission
                 .AcquireAsync(cancellationToken, BingOfficesOperation.Export)
                 .ConfigureAwait(false))
             {
+                if (ExcelPivotTemplatePreserver.IsPreserveOnly(request))
+                {
+                    await ExcelPivotTemplatePreserver.CopyAsync(request, destination, Provider,
+                        cancellationToken).ConfigureAwait(false);
+                    return;
+                }
                 ExportWorkbookCore(request, buffer, cancellationToken);
             }
             buffer.Position = 0;
@@ -522,12 +537,28 @@ public sealed class ClosedXmlExcelExporter : IExcelExporter, IExcelEntityExporte
             {
                 if (!template.Template.CanRead)
                     throw new ArgumentException("实体模板流不可读取。", nameof(template));
-                ClosedXmlTemplatePreflight.Validate(template.Template);
+                ClosedXmlTemplatePreflight.Validate(template.Template, cancellationToken: cancellationToken);
                 if (template.Template.CanSeek)
                     template.Template.Position = 0;
                 workbook = new XLWorkbook(template.Template);
             }
             _entityExecutor.Write(workbook, entity, layout, template != null, cancellationToken);
+            ClosedXmlLookupListWriter.Apply(workbook, layout.LookupLists, cancellationToken);
+            var cascadeMaps = ClosedXmlCascadeListWriter.Apply(workbook, layout.CascadeLists,
+                cancellationToken);
+            foreach (var pair in layout.DataValidations)
+            {
+                var sheet = FindWorksheet(workbook, pair.Key) ?? throw new BingOfficesConfigurationException(
+                    $"实体校验缺少工作表: {pair.Key}", stage: BingOfficesStage.Plan);
+                ClosedXmlSheetContentWriter.ApplyValidations(workbook, sheet, pair.Value,
+                    cancellationToken, cascadeMaps);
+            }
+            foreach (var pair in layout.Protections)
+            {
+                var sheet = FindWorksheet(workbook, pair.Key) ?? throw new BingOfficesConfigurationException(
+                    $"实体保护缺少工作表: {pair.Key}", stage: BingOfficesStage.Plan);
+                ClosedXmlSheetProtectionWriter.Apply(sheet, pair.Value, cancellationToken);
+            }
             cancellationToken.ThrowIfCancellationRequested();
             workbook.SaveAs(destination);
             cancellationToken.ThrowIfCancellationRequested();
@@ -547,8 +578,28 @@ public sealed class ClosedXmlExcelExporter : IExcelExporter, IExcelEntityExporte
     private void ExportWorkbookCore(ExcelWorkbookExportRequest request, Stream destination,
         CancellationToken cancellationToken)
     {
-        using var workbook = CreateWorkbook(request);
+        if (ExcelPivotTemplatePreserver.IsPreserveOnly(request))
+        {
+            ExcelPivotTemplatePreserver.Copy(request, destination, Provider, cancellationToken);
+            return;
+        }
+        using var templateBridge = ExcelPivotTemplateBridge.Create(request, Provider, cancellationToken);
+        using var generated = templateBridge == null ? null : ExcelPivotTemplateBridge.OpenGeneratedFile();
+        var workbookDestination = generated ?? destination;
+        using var workbook = CreateWorkbook(request, templateBridge?.Template);
         ApplyMetadata(workbook, request);
+        if (request.Template == null)
+            foreach (var sheetRequest in request.Sheets)
+                workbook.Worksheets.Add(sheetRequest.Name);
+        foreach (var sheetRequest in request.Sheets)
+            ClosedXmlReportWriter.ApplyNamedRanges(workbook,
+                FindWorksheet(workbook, sheetRequest.Name) ?? throw new BingOfficesConfigurationException(
+                    $"模板缺少请求的 Sheet: {sheetRequest.Name}", stage: BingOfficesStage.Plan), sheetRequest);
+        var reservedSheetNames = request.PivotTables.Select(pivot => pivot.TargetSheet).ToArray();
+        ClosedXmlLookupListWriter.Apply(workbook, request.LookupLists, cancellationToken,
+            reservedSheetNames);
+        var cascadeMaps = ClosedXmlCascadeListWriter.Apply(workbook, request.CascadeLists,
+            cancellationToken, reservedSheetNames);
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var sheetRequest in request.Sheets)
         {
@@ -558,8 +609,37 @@ public sealed class ClosedXmlExcelExporter : IExcelExporter, IExcelEntityExporte
                 throw new ArgumentException($"Workbook 包含重复 Sheet 名称: {sheetRequest.Name}");
             WriteSheet(workbook, sheetRequest, request.Template != null, cancellationToken);
         }
+        var updateDefinitions = templateBridge?.HasUpdates == true
+            ? templateBridge.CreateProviderUpdateDefinitions()
+            : Array.Empty<ExcelPivotTableDefinition>();
+        if (templateBridge?.HasUpdates == true)
+            ClosedXmlReportWriter.ApplyPivotTables(workbook,
+                updateDefinitions.Concat(request.PivotTables).ToArray(), cancellationToken);
+        else
+            ClosedXmlReportWriter.ApplyPivotTables(workbook, request, cancellationToken);
+        foreach (var sheetRequest in request.Sheets)
+            ClosedXmlSheetContentWriter.ApplyValidations(workbook,
+                FindWorksheet(workbook, sheetRequest.Name), sheetRequest.DataValidations,
+                cancellationToken, cascadeMaps);
+        foreach (var sheetRequest in request.Sheets)
+            if (sheetRequest.Protection != null)
+                ClosedXmlSheetProtectionWriter.Apply(FindWorksheet(workbook, sheetRequest.Name),
+                    sheetRequest.Protection, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
-        workbook.SaveAs(destination);
+        var hasGeneratedPivots = request.PivotTables.Count > 0 || templateBridge?.HasUpdates == true;
+        using var savedWorkbook = hasGeneratedPivots ? new MemoryStream() : null;
+        workbook.SaveAs(savedWorkbook ?? workbookDestination);
+        if (savedWorkbook != null)
+        {
+            savedWorkbook.Position = 0;
+            ClosedXmlPivotCacheNormalizer.Normalize(savedWorkbook, workbookDestination, cancellationToken);
+        }
+        cancellationToken.ThrowIfCancellationRequested();
+        if (templateBridge != null)
+        {
+            generated.Position = 0;
+            templateBridge.Merge(generated, destination, cancellationToken);
+        }
         cancellationToken.ThrowIfCancellationRequested();
     }
 
@@ -589,16 +669,18 @@ public sealed class ClosedXmlExcelExporter : IExcelExporter, IExcelEntityExporte
     /// 按请求创建新工作簿或从模板加载工作簿。
     /// </summary>
     /// <param name="request">Workbook 导出请求。</param>
+    /// <param name="templateOverride">可选的已暂存模板流。</param>
     /// <returns>待写入的 ClosedXML 工作簿。</returns>
-    private XLWorkbook CreateWorkbook(ExcelWorkbookExportRequest request)
+    private XLWorkbook CreateWorkbook(ExcelWorkbookExportRequest request, Stream templateOverride = null)
     {
-        if (request.Template == null)
+        var template = templateOverride ?? request.Template;
+        if (template == null)
             return new XLWorkbook();
-        if (!request.Template.CanRead)
+        if (!template.CanRead)
             throw new ArgumentException("模板流不可读取。", nameof(request));
-        if (request.Template.CanSeek)
-            request.Template.Position = 0;
-        return new XLWorkbook(request.Template);
+        if (template.CanSeek)
+            template.Position = 0;
+        return new XLWorkbook(template);
     }
 
     /// <summary>
@@ -951,14 +1033,24 @@ public sealed class ClosedXmlExcelExporter : IExcelExporter, IExcelEntityExporte
     /// 校验 Workbook 导出请求的 ClosedXML 支持边界。
     /// </summary>
     /// <param name="request">Workbook 导出请求。</param>
-    private static void ValidateRequest(ExcelWorkbookExportRequest request)
+    /// <param name="cancellationToken">取消令牌。</param>
+    private static void ValidateRequest(ExcelWorkbookExportRequest request, CancellationToken cancellationToken)
     {
+        if (request.PreserveTemplatePivotTables || request.PivotTableUpdates.Count > 0)
+        {
+            if (!ExcelPivotTemplatePreserver.IsPreserveTemplate(request))
+                throw Unsupported("ClosedXML 当前仅支持显式 XLSX 模板透视保留，或全部/部分模板透视更新；新建与其它更新形状不支持。",
+                    BingOfficesStage.Preflight);
+            if (ExcelPivotTemplatePreserver.IsPreserveOnly(request))
+                return;
+        }
         ExcelSheetContent.Validate(request);
         if (request.Format != ExcelFormat.Xlsx)
             throw Unsupported("ClosedXML Provider 仅支持 XLSX。", BingOfficesStage.Preflight);
         ClosedXmlReportWriter.Validate(request);
-        if (request.Template != null)
-            ClosedXmlTemplatePreflight.Validate(request.Template);
+        if (request.Template != null && !ExcelPivotTemplatePreserver.IsPreserveTemplate(request))
+            ClosedXmlTemplatePreflight.Validate(request.Template, cancellationToken: cancellationToken,
+                limits: request.ResourceLimits);
         if (request.Charts().Count > 0)
             throw Unsupported("ClosedXML Provider 第一版不创建图表。", BingOfficesStage.Preflight);
         foreach (var sheet in request.Sheets)

@@ -13,6 +13,10 @@ internal sealed class ExcelImportErrorCollector
     /// </summary>
     private readonly ExcelImportErrorCollector _parent;
     /// <summary>
+    /// 将子收集器中的临时坐标映射为源工作表坐标。
+    /// </summary>
+    private readonly Func<ExcelImportError, ExcelImportError> _transform;
+    /// <summary>
     /// 根收集器允许保留的最大错误数量。
     /// </summary>
     private readonly int? _maxErrors;
@@ -34,16 +38,27 @@ internal sealed class ExcelImportErrorCollector
     /// 初始化一个 <see cref="ExcelImportErrorCollector" /> 类型的实例。
     /// </summary>
     /// <param name="parent">负责全局限制的父级收集器。</param>
-    private ExcelImportErrorCollector(ExcelImportErrorCollector parent)
+    /// <param name="transform">将临时工作表错误映射为源工作表错误的委托。</param>
+    private ExcelImportErrorCollector(ExcelImportErrorCollector parent,
+        Func<ExcelImportError, ExcelImportError> transform)
     {
         _parent = parent;
+        _transform = transform;
     }
 
     /// <summary>
     /// 创建用于单个工作表的子收集器。
     /// </summary>
     /// <returns>与当前根收集器共享限制的子收集器。</returns>
-    internal ExcelImportErrorCollector CreateChild() => new(this);
+    internal ExcelImportErrorCollector CreateChild() => new(this, null);
+
+    /// <summary>
+    /// 创建将错误坐标映射回源工作表的子收集器。
+    /// </summary>
+    /// <param name="transform">错误坐标映射委托。</param>
+    /// <returns>共享全局数量限制的子收集器。</returns>
+    internal ExcelImportErrorCollector CreateChild(Func<ExcelImportError, ExcelImportError> transform) =>
+        new(this, transform);
 
     /// <summary>
     /// 获取当前收集器视图可见的错误。
@@ -99,6 +114,7 @@ internal sealed class ExcelImportErrorCollector
             return false;
         if (_parent != null)
         {
+            error = _transform?.Invoke(error) ?? error;
             if (!_parent.Add(error))
                 return false;
             _errors.Add(error);

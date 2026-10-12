@@ -13,16 +13,23 @@ internal sealed class NpoiNonDisposingStream : Stream
     /// 在写入或刷新边界检查的取消令牌。
     /// </summary>
     private readonly CancellationToken _cancellationToken;
+    /// <summary>
+    /// 指示是否将刷新请求转发到底层流。
+    /// </summary>
+    private readonly bool _flushUnderlying;
 
     /// <summary>
     /// 初始化一个 <see cref="NpoiNonDisposingStream" /> 类型的实例。
     /// </summary>
     /// <param name="inner">由调用方负责释放的底层流。</param>
     /// <param name="cancellationToken">写入和刷新期间检查的取消令牌。</param>
-    public NpoiNonDisposingStream(Stream inner, CancellationToken cancellationToken = default)
+    /// <param name="flushUnderlying">是否将 Flush 和 Dispose 的刷新请求转发到底层流。</param>
+    public NpoiNonDisposingStream(Stream inner, CancellationToken cancellationToken = default,
+        bool flushUnderlying = true)
     {
         _inner = inner;
         _cancellationToken = cancellationToken;
+        _flushUnderlying = flushUnderlying;
     }
 
     /// <inheritdoc />
@@ -39,7 +46,8 @@ internal sealed class NpoiNonDisposingStream : Stream
     public override void Flush()
     {
         _cancellationToken.ThrowIfCancellationRequested();
-        _inner.Flush();
+        if (_flushUnderlying)
+            _inner.Flush();
     }
     /// <inheritdoc />
     public override int Read(byte[] buffer, int offset, int count) => _inner.Read(buffer, offset, count);
@@ -55,10 +63,10 @@ internal sealed class NpoiNonDisposingStream : Stream
         _cancellationToken.ThrowIfCancellationRequested();
     }
     /// <inheritdoc />
-    /// <remarks>释放包装器时刷新底层流，但不关闭由调用方拥有的底层流。</remarks>
+    /// <remarks>释放包装器时按配置刷新可写底层流，但不关闭由调用方拥有的底层流。</remarks>
     protected override void Dispose(bool disposing)
     {
-        if (disposing)
+        if (disposing && _flushUnderlying && _inner.CanWrite)
             _inner.Flush();
         base.Dispose(disposing);
     }
