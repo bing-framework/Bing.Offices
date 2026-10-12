@@ -42,6 +42,13 @@ public sealed class EntityLayoutProviderContractTest
     }
 
     [Fact]
+    public void PageHeaders_ShouldRoundTrip()
+    {
+        EntityLayoutProviderContractSuite.VerifyPageHeaders(
+            CreateProviderExporter(), CreateProviderImporter());
+    }
+
+    [Fact]
     public void GroupSubtotal_ShouldRoundTrip()
     {
         EntityLayoutProviderContractSuite.VerifyGroupSubtotal(
@@ -86,7 +93,7 @@ public sealed class EntityLayoutProviderContractTest
 
 替换 `CreateProviderExporter` 和 `CreateProviderImporter` 的示意实现，并将每个入口放入测试框架的独立测试中。模板断言失败会抛出带场景名称的 `InvalidOperationException`；Provider 自身抛出的异常仍按原类型透传。
 
-已有源码链接方式仍可使用：将 `tests/Bing.Offices.Testing/Entities/EntityLayoutProviderContractSuite.cs` 作为 `Compile` 项加入测试工程。不要同时链接源码和引用合同包，否则会定义两个同名类型。
+已有源码链接方式仍可使用：将 `tests/Bing.Offices.Testing/Entities/EntityLayoutProviderContractSuite.cs` 和 `tests/Bing.Offices.Testing/Entities/EntityPageHeaderProviderContract.cs` 一同作为 `Compile` 项加入测试工程。不要同时链接源码和引用合同包，否则会定义两个同名类型。
 
 ## 合同范围
 
@@ -94,10 +101,19 @@ public sealed class EntityLayoutProviderContractTest
 - `VerifyAttributeAndNamedAnchors` 检查属性式固定单元格、`CellNamed` 与 `ListRegionNamed` 在 XLSX 模板中的导入导出往返。
 - `VerifyNamedListFixedCellCollision` 检查命名列表按模板实际地址与固定单元格冲突时的 Plan 配置错误及目标流保护。
 - `VerifyPageSubtotal` 检查分页小计及最终合计的单元格值，并验证导入跳过小计行。
+- `VerifyPageHeaders` 检查空、单、多页的实际页眉、页码、复制页表头和明细往返；同时检查目标占用时的输出保护及 marker 不匹配时的原始坐标。
 - `VerifyGroupSubtotal` 检查每个连续分组的小计及最终合计，并验证导入跳过小计行。
 - `VerifyFooterFormulas` 检查显式 Footer 公式、连续明细求和及跨小计明细求和公式的单元格类型/公式文本、空与非空明细及导入边界；连续求和与中间小计冲突时在布局阶段拒绝。
 - `VerifyAsync` 检查异步往返、预取消、目标内容保护和调用方流所有权。
 
-七项入口以 XLSX 格式为前提。模板锚点合同需要 Provider 支持 Entity Layout 模板导入导出；分页小计、分组小计和 Footer 公式入口只对明确实现相应行为的 Provider 运行。不支持时，应单独测试公开能力声明和拒绝行为，不能通过跳过合同掩盖能力缺口。`VerifyFooterFormulas` 要求 Provider 将公式写入真实公式单元格，并支持 `FormulaSumContiguousRowsAbove` 与 `FormulaSumDetailRowsAbove` 的空/非空明细语义；它不验证公式引擎的计算结果。连续求和只适用于尾部上方连续的明细行，跨分页或分组小计时使用仅汇总实际明细行的 `FormulaSumDetailRowsAbove`。
+八项入口以 XLSX 格式为前提。模板锚点合同需要 Provider 支持 Entity Layout 模板导入导出；分页小计、实际重复页眉、分组小计和 Footer 公式入口只对明确实现相应行为的 Provider 运行。不支持时，应单独测试公开能力声明和拒绝行为，不能通过跳过合同掩盖能力缺口。`IExcelEntityImporter` 不提供资源限制选项重载，因此输入限额由官方 Provider 合同测试使用各自公开重载验证；NPOI 在 `Open` 阶段、ClosedXML 在 `Preflight` 阶段报告资源超限。`VerifyFooterFormulas` 要求 Provider 将公式写入真实公式单元格，并支持 `FormulaSumContiguousRowsAbove` 与 `FormulaSumDetailRowsAbove` 的空/非空明细语义；它不验证公式引擎的计算结果。连续求和只适用于尾部上方连续的明细行，跨分页或分组小计时使用仅汇总实际明细行的 `FormulaSumDetailRowsAbove`。
 
 此源码模板验证可移植的 Entity Layout 行为，不覆盖所有 Provider 特有行为。特别是 XLS/HSSF 的格式支持、边界和失败情形仍需由 Provider 自己的测试覆盖；NPOI 的 XLS 测试不能由这里的 XLSX 合同替代。
+
+## F-001 独立逐页锚点职责
+
+独立逐页锚点使用现有 Entity Layout SPI：在同一列表区域先配置 `PageBreak`，再按需要配置 `PageHeaderNamed`、`PageFooter` 或 `PageFooterNamed`。这些入口覆盖空页、单页、整页、首页和末页；每页 Footer 在该页明细及小计之后、分页边界之前写入，末页 Footer 位于最终 Footer 之前。名称表示逻辑页锚点，不等同于 Excel 打印机生成的物理纸页；导入通过 marker 列扫描并跳过页眉、签字区和小计。
+
+`ExcelEntityPageAnchorStaleNamePolicy` 的 `Reject` 与 `RemoveObsolete` 只改变当前名称系列中合法旧单格名称的处理。跨 Sheet、二维区域、公式、失效引用或同名多作用域歧义始终是写入前的结构化配置错误，不能由清理策略放过；失败时输入模板及已有输出仍保持原状。最终 `FormulaSumDetailRowsAbove` 只引用实际明细行段，排除签字数字、分页/分组小计及空白行。
+
+当前直接职责测试按 Provider 分开覆盖 NPOI 的 XLS/HSSF、XLSX/XSSF 和 ClosedXML 的 XLSX，包括完整结构、名称、marker 原坐标、公式边界、模板名称策略、取消、目标锁定和流所有权。对应证据位于 `EntityIndependentPageAnchorModelTest`、`EntityIndependentPageAnchorTest`、`EntityIndependentPageAnchorResourcesTest` 和各 Provider 的 Boundary 测试；本节不新增虚构的合同入口，也不将未运行的门禁记为通过。MiniExcel、SpreadCheetah 和 ExcelDataReader 未因此获得 Entity Layout 能力声明。

@@ -184,6 +184,71 @@ public sealed class PurchaseLine
 
 明细已经按仓库或业务分类连续排序时，可以追加 `GroupSubtotal` 写入分组小计；它复用 Footer 的聚合单元格和样式，导入会跳过小计行。该能力依赖相邻分组顺序，不会替业务层重新排序。
 
-需要按打印页输出中间小计时，在同一列表区域配置 `PageBreak(rowsPerPage)` 和 `PageSubtotal`。分页小计只对存在下一页的完整明细页生效，最后一页继续使用普通 `Footer`；导入会识别 marker 并跳过小计区域。分页小计与 `GroupSubtotal` 互斥，NPOI 的 XLS/XLSX 和 ClosedXML 的 XLSX 均支持。
+需要按打印页输出中间小计时，在同一列表区域配置 `PageBreak(rowsPerPage)` 和 `PageSubtotal`。分页小计只对存在下一页的完整明细页生效，最后一页继续使用普通 `Footer`；导入会识别 marker 并跳过小计区域。可同时配置 `GroupSubtotal`：页容量只计算明细，同一边界先写分组小计再写分页小计。NPOI 的 XLS/XLSX 和 ClosedXML 的 XLSX 均支持。
 
-模板中如需通过工作簿名称定位最终合计行，将原有 `Footer("合计", ...)` 改为 `FooterNamed("OrderTotal", "合计", ...)`。导出时，NPOI 的 XLS/XLSX 和 ClosedXML 的 XLSX 会把 `OrderTotal` 指向本次最终 marker 单元格；模板中同名、同 Sheet 的单格名称随明细长度更新，缺失时创建。导入仍使用 marker 文本，分页小计与分组小计不使用该名称。名称属于工作簿或目标 Sheet；跨 Sheet、范围名称或重名在导出预检中返回 Plan 配置错误。
+旧单据若只在打印时重复已有表头，可在 Entity 布局上调用 `PrintTitleRows("明细", "1:3")`，无需移动明细行。旧代码若逐页复制单据头，则在同一列表区域配置 `PageBreak` 和 `PageHeader("A1:D3", "A1", "页眉", header => header.Cell("D1", page => $"第 {page.PageNumber}/{page.PageCount} 页"))`；示例要求列表表头从 `B3` 开始，首 页源区域末行紧邻首个明细行。`PageHeader` 会在后续逻辑页插入可供导入跳过的实体行，页容量仍只统计明细。同一 Sheet 的两种模式互斥，包括模板已有的打印标题；每个 Sheet 至多一个实际重复页眉区域，可同时配置不重叠的普通列表。迁移模板时需确认页眉的 marker、完整表头、合并区域及预留目标行没有冲突；公式只保留文本，不复制图片和图表。详见 [Entity 分页与重复页眉](dynamic-columns.md#重复打印标题与实际页眉)。
+
+旧 NPOI 代码若仅为按地区汇总金额而手动创建透视表，可在 Workbook 构建时增加 `PivotTable(new ExcelPivotTableDefinition { ... })`，将来源 Sheet、含表头的有界区域、行字段、数值字段与目标 Sheet 显式声明。ClosedXML XLSX 与 NPOI XLSX 支持新建基础及高级透视；高级透视的客户端数值 Count 尚未完成验收。NPOI XLS/HSSF 不支持该公共透视请求，迁移前先核对 Provider 与文件格式。示例和边界见 [Workbook 透视表](pivot-tables.md)。
+### Entity 独立逐页锚点迁移
+
+旧代码需要在每个逻辑页保存独立页眉或签字区时，先配置 `PageBreak`，再选择 `PageHeaderNamed`、`PageFooter` 或 `PageFooterNamed`。下面沿用本页已有的 `PurchaseOrder`/`PurchaseLine` DTO；它是可编译的布局片段，名称策略显式使用默认安全值：
+
+```csharp
+var layout = ExcelEntity.Layout<PurchaseOrder>(builder => builder
+    .ListRegion("采购单", "A5", order => order.Lines, region => region
+        .PageBreak(20)
+        .PageHeaderNamed("Head", "A1:H5", "A1", "页眉")
+        .PageFooterNamed("Sign", "签字", footer => footer
+            .GapRows(1)
+            .Cell("B1", lines => lines.Count)
+            .Cell("A2", "审核"),
+            ExcelEntityPageAnchorStaleNamePolicy.Reject)
+        .Footer("合计", footer => footer
+            .Cell("C1", lines => lines.Sum(line => line.Quantity * line.UnitPrice),
+                numberFormat: "0.00"))));
+
+var order = new PurchaseOrder
+{
+    Lines = new List<PurchaseLine>
+    {
+        new PurchaseLine { Name = "键盘", Quantity = 2, UnitPrice = 12.5m },
+        new PurchaseLine { Name = "鼠标", Quantity = 3, UnitPrice = 7m }
+    }
+};
+foreach (var useXls in new[] { true, false })
+{
+    using IWorkbook templateWorkbook = useXls ? new HSSFWorkbook() : new XSSFWorkbook();
+    templateWorkbook.CreateSheet("采购单");
+    using var template = new MemoryStream();
+    templateWorkbook.Write(template, true);
+    template.Position = 0;
+    using var output = new MemoryStream();
+    new NpoiExcelExporter().ExportForTemplate(order, layout,
+        new ExcelEntityTemplateOptions(template, leaveOpen: true), output);
+
+    output.Position = 0;
+    var imported = new NpoiExcelImporter().ImportEntity(output, layout);
+    if (!imported.IsSuccess || !order.Lines.Select(line => (line.Name, line.Quantity, line.UnitPrice))
+        .SequenceEqual(imported.Entity.Lines.Select(line => (line.Name, line.Quantity, line.UnitPrice))))
+        throw new InvalidOperationException("逐页锚点示例读回失败。");
+    using var workbook = WorkbookFactory.Create(new MemoryStream(output.ToArray(), writable: false));
+    var sheet = workbook.GetSheet("采购单");
+    if (sheet.LastRowNum != 10 || sheet.GetRow(8).GetCell(0).StringCellValue != "签字"
+        || sheet.GetRow(8).GetCell(1).NumericCellValue != 2
+        || sheet.GetRow(9).GetCell(0).StringCellValue != "审核"
+        || sheet.GetRow(10).GetCell(2).NumericCellValue != 46
+        || !new[] { "Head_001", "Sign_001" }.OrderBy(name => name)
+            .SequenceEqual(workbook.GetAllNames().Select(name => name.NameName).OrderBy(name => name)))
+        throw new InvalidOperationException("逐页签字区结构不符合预期。");
+}
+```
+
+此例默认在 `A5` 写入列表表头、从第 6 行写明细，因此页眉源范围必须结束于第 5 行；`A1:H5` 同时预留了单据头和完整表头宽度。最终金额按明细的数量乘单价计算，签字区不参与聚合。需要原生公式时，继续使用已有 `FormulaSumDetailRowsAbove` 并明确实际明细金额列。
+
+`PageHeaderNamed` 与 `PageFooterNamed` 按逻辑页生成首个、末个以及空/单页名称；每页 Footer 在最终 Footer 之前写入，marker 列仍是导入扫描边界。模板清理策略 `RemoveObsolete` 只允许删除当前系列中合法且未使用的旧单格名称；跨 Sheet、二维、公式、失效或同名多作用域引用仍拒绝并保护输入模板及旧输出。NPOI 的 XLS/HSSF、XLSX/XSSF 与 ClosedXML 的 XLSX 有本阶段职责测试；这里不把 WPS、LibreOffice、MiniExcel、SpreadCheetah 或 ExcelDataReader 的验证状态扩大为支持，也不宣称未运行的门禁已通过。
+
+透视来源区域只接受字面值。旧代码若依赖读取来源单元格时隐式计算公式，应先由应用或显式计算接口求值，再将结果写入来源；本入口会拒绝来源内任何公式及 Excel 错误，包括带新鲜、过期或缺失缓存的模板公式。求和字段须为真实数值，数字文本、日期和布尔值不能隐式参与求和；来源错误通过 `ConfigurationInvalid/Preflight` 返回原始一基行列。公开签名保持兼容，此处收紧输入行为，升级时需要检查来源数据。
+
+迁移时还需区分完整透视缓存与普通汇总单元格。本入口没有写出无客户端静态汇总；本机 Excel 的历史客户端夹具仅验证了基础透视新建后的首次显示、显式刷新和保存重开，不覆盖高级透视；高级透视（尤其文本 Count）尚未完成客户端验收，也不据此承诺 WPS/LibreOffice 或所有 Excel 版本。来源值更新后不要只依赖刷新标志位，需由客户端显式刷新并核对结果。可运行的包消费者与维护步骤见 [透视探针](../../build/PivotClientProbe/README.md)。
+
+模板中如需通过工作簿名称定位最终合计行，将原有 `Footer("合计", ...)` 改为 `FooterNamed("OrderTotal", "合计", ...)`。导出时，NPOI 的 XLS/XLSX 和 ClosedXML 的 XLSX 会把 `OrderTotal` 指向本次最终 marker 单元格；模板中同名、同 Sheet 的单格名称随明细长度更新，缺失时创建。需要定位每个非末页小计时，使用 `PageSubtotalNamed("PageTotal", "页小计", ...)`，生成 `PageTotal_001` 起的逐页名称。页数缩短后模板若保留未使用的同系列名称会报 Plan 错误，需同步清理模板。导入仍使用 marker 文本；名称属于工作簿或目标 Sheet，跨 Sheet、范围名称或重名在导出预检中返回 Plan 配置错误。

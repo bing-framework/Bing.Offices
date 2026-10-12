@@ -11,7 +11,7 @@ Bing.Offices是Bing应用框架的 Excel 导入导出类库。
 - NPOI `WorkbookFactory.Create`、Workbook DOM 操作和 `workbook.Write` 没有异步 API，因此 Excel Async 不承诺 DOM 阶段完全异步，也不使用 `Task.Run` 伪装异步。
 - NPOI-specific 扩展位于 `Bing.Offices.Npoi.Extensions`；provider-neutral 文件/字节扩展位于 `Bing.Offices.Extensions`。
 - MiniExcel-specific 扩展位于 `Bing.Offices.MiniExcel.Extensions`；应用启动时选择一个 Excel Provider，业务代码继续依赖 `IExcelImporter`/`IExcelExporter`。
-- ClosedXML-specific 注册扩展位于 `Bing.Offices.ClosedXml.Extensions`；它面向富 XLSX 报表、模板、样式、合并、公式保存和基础 Entity Layout，不承诺 XLS、图表、PivotTable 或复杂 Entity/模板结构。
+- ClosedXML-specific 注册扩展位于 `Bing.Offices.ClosedXml.Extensions`；它支持富 XLSX 报表、Entity Layout、单行字段求和透视表及已有 XLSX 透视模板保留/更新，不承诺 XLS、图表或客户端刷新结果。具体支持范围见 [Provider 能力与边界](docs/excel/09-providers.md)。
 
 ## Nuget Packages
 |Nuget|版本号|说明|
@@ -21,7 +21,7 @@ Bing.Offices是Bing应用框架的 Excel 导入导出类库。
 |Bing.Offices.Npoi|[![NuGet Badge](https://buildstats.info/nuget/Bing.Offices.Npoi?includePreReleases=true)](https://www.nuget.org/packages/Bing.Offices.Npoi)|
 |Bing.Offices.MiniExcel|独立的 XLSX 流式 Provider；发布后按版本选择使用|
 |Bing.Offices.ClosedXml|ClosedXML 富 XLSX Provider；发布后按版本选择使用|
-|Bing.Offices.ExcelDataReader|只读 XLS/XLSX/XLSB Provider；支持完整导入和单 Sheet 分批导入，不提供导出|
+|Bing.Offices.ExcelDataReader|只读 XLS/XLSX/XLSB Provider；支持完整导入及单 Sheet、多 Sheet 分批导入，不提供导出或失败工作簿|
 |Bing.Offices.SpreadCheetah|只创建新 XLSX 的前向流式导出 Provider；不读取、不编辑模板|
 |Bing.Offices.AsposeCells|可选商业 Provider；提供 PDF/图片渲染、公式计算、XLSM/ODS/加密转换；宿主负责许可证|
 
@@ -33,6 +33,7 @@ Bing.Offices是Bing应用框架的 Excel 导入导出类库。
 - ClosedXML 基础 XLSX 导入导出、公式保存/读回、模板样式保留、合并和真实文件提交
 - MiniExcel Provider 的常规 XLSX 导入导出；100K 行受控探针已验证，500K/1M 和生产机器峰值仍为 `NOT_VERIFIED`
 - 公共报表模型（表格、筛选、冻结、条件格式、名称范围和打印布局）已接入 NPOI/ClosedXML；SpreadCheetah 仅实现前向模型可表达的子集
+- ClosedXML XLSX 透视表支持一个行字段、一个 Sum 值字段和完整缓存；本机 Excel 首次显示、显式刷新、保存重开已有真实验证，WPS/LibreOffice 尚未验证。详见 [透视表合同](docs/excel/pivot-tables.md)。
 - Sheet 级 PNG/JPEG 图片和原生数据校验已接入 NPOI、ClosedXML、SpreadCheetah；MiniExcel 在预检阶段拒绝。图片仅接受调用方字节，不下载或自动读取文件。
 - SpreadCheetah 固定列和动态列复用 Mapping Plan、ValueMap、命名 Converter；批次串行写入，默认 1,000 行，不预取下一批。图片请求使用磁盘暂存以适配 JPEG 和精确像素锚点。
 - 公式文本、缓存值和重新计算已拆分为独立合同；NPOI/ClosedXML 只读取已验证缓存，Aspose.Cells 的完整计算与渲染属于独立商业扩展

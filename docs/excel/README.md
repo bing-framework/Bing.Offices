@@ -14,7 +14,7 @@ NPOI 导入会先把输入复制到受 `MaxInputBytes` 约束的内存流，再�
 
 MiniExcel 与 ClosedXML 都是与 NPOI 并列的独立 XLSX Provider。它们复用同一套 Workbook Request、Mapping Plan、Converter、Validation、错误结果和文件提交契约，不引入第二套 Provider-specific Request、Mapping Profile 或业务 Attribute。通过 `services.AddBingOfficesMiniExcel()` 或 `services.AddBingOfficesClosedXml()` 注册后，业务代码仍只依赖 `IExcelImporter` 与 `IExcelExporter`。默认服务解析由 `TryAdd` 和注册顺序决定；这不是按请求动态切换 Provider 的 API。若需在同一应用按报表选择完整工作簿或前向流式导出，应显式构造 Core 的 `ExcelWorkbookExportStrategy` 并传入所需接口。
 
-`Bing.Offices.ExcelDataReader` 是独立的只读 Provider，支持 XLS、XLSX、XLSB 固定列导入和单 Sheet 的 `IExcelBatchImporter`。它只注册导入服务，不提供导出器；需要导出、模板、图片或 Workbook 原生校验时选择其他 Provider。批量导入使用串行回调，已交付批次不回滚，完整边界见 [Provider 能力矩阵](09-providers.md)。
+`Bing.Offices.Npoi` 和 `Bing.Offices.ClosedXml` 注册完整 Workbook 的 `IExcelWorkbookBatchImporter`，批次按源文件物理工作表顺序交付；它们先完成 DOM 导入并提交可选的失败工作簿，再开始批次回调，因此回调异常不会撤销已经提交的失败产物。NPOI 支持 XLS/XLSX，ClosedXML 支持 XLSX。`Bing.Offices.ExcelDataReader` 仍是独立的只读 Provider，支持 XLS、XLSX、XLSB 固定列和动态列批量导入、Workbook 多 Sheet 关系绑定、单 Sheet 的 `IExcelBatchImporter` 以及 Workbook 多 Sheet 的 `IExcelWorkbookBatchImporter`。完整 Workbook、单 Sheet 分批和 Workbook 分批入口支持 `ErrorRowsOnly`：前向读取时暂存失败行，生成带错误摘要的最小 XLSX，保留受支持的单元格样式子集，以及失败来源表数据列的显式列宽和隐藏状态；新加的 `__Errors` 列不继承源列属性，并沿用取消、流所有权和文件提交契约。XLSX 条件格式仅在表头与失败行保持源坐标、规则区域完整保留且不依赖差异样式时复制，行压缩或区域不完整时于预检阶段返回结构化 `UnsupportedFeature`，需要完整保真时使用 `AnnotatedOriginal`。分批入口在批次回调完成后提交失败产物，回调异常不会继续生成该产物。XLSX 输入还支持 `AnnotatedOriginal`：保留源 ZIP 部件，在原坐标写入错误批注并追加摘要；XLS/XLSB 输入仍返回结构化 `UnsupportedFeature`，需要 DOM 级其他修改时使用 NPOI 或 ClosedXML Provider。XLSX 批量路径还支持有限的 Workbook 原生校验；完整导入的原生校验、XLS/XLSB 原生校验以及导出、模板、图片仍使用 NPOI 或 ClosedXML Provider。批量导入使用串行回调，已交付批次不回滚，完整边界见 [Provider 能力矩阵](09-providers.md)。
 
 `Bing.Offices.SpreadCheetah` 是独立的只写前向 Provider，注册后只提供 `IExcelStreamingExporter`。它创建新的 XLSX，按请求中的数据序列前向写入并保持串行背压，不打开已有 Workbook、不编辑模板，也不自动降级到 DOM Provider。大数据规模需要结合容器资源和实际批次探针评估。
 
@@ -22,7 +22,9 @@ MiniExcel 与 ClosedXML 都是与 NPOI 并列的独立 XLSX Provider。它们复
 
 `Bing.Offices.AsposeCells` 是独立的可选商业扩展包。它不进入 Core 依赖图，宿主通过 `AddBingOfficesAsposeCells` 配置许可证和字体目录后，才可使用 PDF/页面图片渲染、公式处理、XLSM/ODS/加密转换。缺少许可证、字体严格模式不满足或请求超出格式边界时，Provider 在预检阶段返回结构化 `UnsupportedFeature`；密码不进入日志和诊断。
 
-ClosedXML 适合富 XLSX 报表、模板样式、合并、公式保存和 Entity Layout（固定 Cell、属性式 Cell、命名锚点、多个 List Region、动态列组、计算列、连续分组小计、分页小计、水平分页符、Footer、Merge、Relations）。NPOI 与 ClosedXML 均支持 Entity List Region 的单字典和多分组动态列、导出计算列、连续分组小计、分页小计、水平分页符、命名锚点以及可变明细尾部；MiniExcel、SpreadCheetah 和 ExcelDataReader 不声明该能力。第一版明确不支持 XLS、Chart、PivotTable、XLSM 宏保留和完整 Excel Formula Engine；公式读取通过独立 `IExcelFormulaProcessor` 暴露，详见 [Provider 能力矩阵](09-providers.md)。
+ClosedXML 适合富 XLSX 报表、模板样式、合并、公式保存和 Entity Layout（固定 Cell、属性式 Cell、命名锚点、多个 List Region、动态列组、计算列、连续分组小计、分页小计、水平分页符、重复打印标题、实际复制页眉、Footer、Merge、Relations）。NPOI 与 ClosedXML 均支持 Entity List Region 的单字典和多分组动态列、导出计算列、连续分组小计、分页小计、水平分页符、命名锚点、重复标题、实际页眉以及可变明细尾部；MiniExcel、SpreadCheetah 和 ExcelDataReader 不声明该能力。实际页眉与重复打印标题在同一 Sheet 互斥，示例见 [Entity 分页与重复页眉](dynamic-columns.md#重复打印标题与实际页眉)。ClosedXML XLSX 的基础 [Workbook 透视表](pivot-tables.md) 已验收；NPOI XLSX 已接入基础/高级原生透视及完整缓存，当前高级客户端文本 Count 验收仍未通过；NPOI 与 ClosedXML 的已有 XLSX 透视模板保留/更新主链声明 `ExcelProviderFeatures.TemplatePivotTables`，不代表客户端刷新结果。Chart、XLSM 宏保留和完整 Excel Formula Engine 仍不支持；公式读取通过独立 `IExcelFormulaProcessor` 暴露，详见 [Provider 能力矩阵](09-providers.md)。
+
+NPOI 和 ClosedXML 还提供隐藏的 `IExcelEntityBatchImporter` Provider SPI。`Complete` 模式先完成完整 Entity Layout 导入，再按 List Region 投影同步或异步批次；`SummaryOnly` 或显式 `Forward` 会对受支持布局使用受限前向解析，不保留最终实体集合或关系导航集合。固定单元格、关系和其他无法归属区域的错误通过诊断批次返回；不支持的布局在读取前返回结构化配置错误。NPOI 支持 XLS/HSSF 与 XLSX/XSSF，ClosedXML 支持 XLSX；两者都保留调用方输入流和模板 `LeaveOpen` 契约。
 
 下方完整 Workbook 能力列表以 NPOI Provider 为基准；MiniExcel 只承诺 [Provider 能力矩阵](09-providers.md) 中已验证的常规 XLSX、映射、转换、校验、动态列和关系能力，其余请求必须按结构化 `UnsupportedFeature` fail-fast。
 
@@ -50,7 +52,10 @@ exporter.Export(request, stream);
 - [mapping-profile.md](mapping-profile.md)：Profile 与映射优先级
 - [mapping-json-xml.md](mapping-json-xml.md)：JSON/XML 映射文档
 - [import-validation.md](import-validation.md)：Workbook 原生校验、配置校验和错误收集
-- [dynamic-columns.md](dynamic-columns.md)：动态列与物理布局
+- [sheet-protection.md](sheet-protection.md)：工作表保护与可填写区域
+- [cascade-lookups.md](cascade-lookups.md)：商品类别等两级联动填写字典
+- [dynamic-columns.md](dynamic-columns.md)：动态列、Entity 分页与重复页眉
+- [pivot-tables.md](pivot-tables.md)：Workbook 透视来源、缓存生命周期与客户端验证
 - [entity-provider-contracts.md](entity-provider-contracts.md)：将 Entity Layout 合同源码模板接入 Provider 测试
 - [entity-layout-analyzers.md](entity-layout-analyzers.md)：Entity Layout 常量配置的编译期诊断
 - [exceptions-and-observers.md](exceptions-and-observers.md)：异常分类、Observer 与文件提交边界

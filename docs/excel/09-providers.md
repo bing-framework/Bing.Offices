@@ -227,3 +227,22 @@ MiniExcel 历史 100K 受控往返探针写入根 `artifacts/benchmarks/`；该 
 MiniExcel 的目标是降低常规 XLSX 的 Workbook DOM 和峰值内存，但不等于零分配或无限数据规模。仍需应用级内存/CPU 限制，并使用 `ExcelResourceLimits`、最大错误数、最大唯一值和文件提交策略。跨行 Unique 的 Dictionary/HashSet 生命周期应随一次导入结束，不能成为进程级无限增长状态。
 
 NPOI 和 MiniExcel 不应在同一个请求上同时构建 Workbook。发布入口如需并发限制，应在调用 Provider 前共享进程级 `SemaphoreSlim`；Provider 选择和并发门禁属于应用组合根职责。性能与资源结论必须来自真实文件/Stream 测试和 Benchmark，不能以第三方库的宣传吞吐替代证据。
+
+## Forward Entity 增量能力
+
+NPOI HSSF/XLS 的 `SummaryOnly + ErrorRowsOnly` 稀疏失败工作簿会保留投影阶段捕获的显式列宽、隐藏列、行高和隐藏行状态，并复制完全位于保留表头或失败行集合内的合并区域；跨越未保留成功行的合并会被跳过。低保留路径还保留捕获到的字体、对齐、索引色纯色填充、标准四边框、数字格式和保护状态；复杂字体、图案填充、斜线或复杂边框、公式和图片仍不属于该契约。固定单元格错误也会按投影快照写入稀疏工作簿，只有快照不完整或元数据无法安全重建时才回退 DOM。
+HSSF/XLS 低保留输出还会重建投影阶段捕获的安全一维绝对定义名称：单格名称以及行或列范围在目标行全部保留时按错误行压缩映射，并保留全局或局部 Sheet 作用域；公式名称、外部引用、隐藏名称、二维区域和未完整保留范围继续跳过。若投影检测到 HSSF 原生 Data Validation，稀疏路径会主动回退已有 HSSF DOM 错误行复制器；复制区域能够完整映射时保留校验及提示属性，无法完整映射时按跨行对象规则跳过，不生成失效规则。HSSF/XLS Forward 的导入校验模式仍不执行 Workbook 原生规则，`WorkbookRules` 和 `ConfiguredAndWorkbook` 继续在预检阶段拒绝。
+
+XLSX `SummaryOnly + ErrorRowsOnly` 的低保留失败工作簿会保留来源表的显式列宽和隐藏列状态，以及捕获到的字体、对齐、索引色纯色填充、标准四边框、数字格式和保护状态；有界同表区域中的字面量列表和数值边界校验会随保留失败行重映射，引用已捕获 Sheet 的单行或单列绝对定义名称在目标行全部保留时也会重映射。单元格/外部/动态公式、二维区域、隐藏字典及其他无法安全重映射的名称或规则继续跳过，避免产生失效的 Sheet、行列和公式引用。条件格式不会被转换为静态样式；当表头和失败行保持源行坐标、每个 `sqref` 范围完整落在已保留行列内且规则不依赖差异样式时，写出器直接复制原始条件格式 XML；样式表没有差异样式定义时，默认 `dxfId="0"` 会先规范化移除。行压缩、范围超出保留区域或规则元数据不完整时，在预检阶段返回结构化 `UnsupportedFeature`；需要完整模板元数据和条件格式时继续使用 `AnnotatedOriginal` 或完整结果路径。
+
+NPOI 的 XLS/HSSF、XLSX/XSSF 和 ClosedXML 的 XLSX Forward 实体批次均支持单列表最终 `Footer`。读取器按 Footer 的 marker 截断明细，跳过 `GapRows` 和尾部内容，并保留成功明细的原始物理行号；缺失、重复、过早 marker 以及显式区域结束地址溢出会在计划阶段返回结构化配置错误。Footer 后的物理行只用于发现重复 marker，不会被物化为明细。NPOI 的 HSSF 路径仍通过受限 XLSX 投影复用相同语义。
+
+同一 Forward 列表还支持 `PageBreak(rowsPerPage).PageSubtotal(...)`。读取器按物理行号校验每个完整页的明细容量，跳过分页小计的 `GapRows` 和完整小计占用行，再继续读取下一页；最终 `Footer` 可以同时配置，末页不要求分页小计。分页小计缺失、错位、重复、位于末页之后、超出显式 `End` 或占用区域与最终尾部冲突时，读取前返回结构化 Plan 配置错误。NPOI 的 XLS/HSSF、XLSX/XSSF 和 ClosedXML 的 XLSX 均复用该边界语义，批次中的源行号仍对应原工作表物理行。
+
+不分页的单列表还支持连续 `GroupSubtotal(...)` 与最终 `Footer` 组合。分组小计 marker 前必须存在至少一行物理明细，读取器跳过分组小计的 `GapRows` 和完整占用行；小计体内重复 marker、marker 位于明细起始处或占用区域超出显式 `End` 时返回 Plan 配置错误。Forward 允许 `GroupSubtotal + PageFooter`，组可以跨逻辑页，读取器按页容量先裁剪分组小计再裁剪每页尾部；`GroupSubtotal + PageSubtotal` 以及没有 `PageFooter` 的 `GroupSubtotal + PageBreak` 仍返回结构化不支持错误。
+
+Forward 的最终 Footer、分页小计与分组小计直测覆盖 NPOI XLS/XLSX、ClosedXML XLSX、同步/异步、两行小计区域、源行号和 marker 边界。NPOI XLSX 与 ClosedXML XLSX Forward 还会在读取前扫描 worksheet 的合并元数据，允许布局声明且源文件确实存在的合并区域；缺失合并或损坏的合并地址返回结构化 Plan/Preflight 错误。该支持只用于布局预检和固定单元格的已完成布局归一，不复制模板样式或未声明合并；NPOI HSSF/XLS 仍明确拒绝合并。NPOI XLSX/XSSF 与 ClosedXML XLSX Forward 还执行有限的工作簿原生数据校验，顺序为原生校验、值转换、配置校验，固定单元格和明细行均保留源坐标；HSSF/XLS 因投影不保留原生规则而明确拒绝。Forward 完整结果模式已在所有受支持的 NPOI/ClosedXML 路径执行公共 `HasMany` 关系绑定，关系错误沿用错误上限和源行坐标；`SummaryOnly` 使用有界父键跟踪器验证关系，不保留子实体或导航集合，缺失关系和关系键资源上限仍返回结构化错误。XLSX Forward 的 `SummaryOnly + ErrorRowsOnly` 会只保留来源表头和失败行，并序列化保留受支持单元格样式子集的最小错误工作簿；条件格式在表头与失败行保持源坐标且规则范围完整落在保留区域、规则不依赖差异样式时会原样复制，行压缩或范围不完整时在预检阶段返回结构化 `UnsupportedFeature`；NPOI HSSF/XLS 在同一组合下会从投影快照构造稀疏 HSSFWorkbook，保留列宽、隐藏列、行高、隐藏行、字体、对齐、索引色纯色填充、标准四边框、数字格式、保护状态及完全位于保留行中的合并区域，无法覆盖的固定字段错误回退原有 DOM；复杂字体、图案填充、斜线或复杂边框、公式、图片和复杂模板对象仍不复制。`Complete`、`AnnotatedOriginal` 和其他组合仍使用原有 DOM 失败输出路径。低保留错误输出的资源异常保留实际 Provider 名称，便于定位 NPOI、ClosedXML 与 ExcelDataReader 的边界。分页与分组小计组合、模板样式/合并复制及其他复杂布局仍在预检阶段拒绝，不会隐式退回 Buffered DOM。
+
+Forward 现支持受限的实际重复页眉导入。列表区域必须同时声明 `PageBreak(rowsPerPage)` 和 `End`，页眉不得与分页小计、分组小计、最终 Footer 或逐页 Footer 组合；读取器按页容量跳过后续页复制的页眉，并保留明细原始物理行号。首页 marker、复制页 marker 和复制页列表表头会在行流中校验，缺失、错位或标题被改动时返回原始工作表坐标。NPOI XLSX/XSSF、NPOI HSSF/XLS 与 ClosedXML XLSX 均支持同步和异步路径；HSSF/XLS 输入先通过受限事件转换投影为 XLSX，页眉只保留单元格值、行号和必要格式，复杂模板对象仍按既有边界拒绝。打印标题行仍属于工作表元数据，不能通过该受限页眉入口替代。实际页眉与 `GroupSubtotal + PageFooter` 仍互斥。
+
+Forward `SummaryOnly` 只保留批次统计、结构化错误和工作表诊断；最终 `Result.Entity` 是新的空聚合对象，不再留存固定单元格值或成功明细。批次回调仍接收读取期间填充了固定字段的实体，因此需要业务对象时应在回调中消费或复制；需要完整聚合结果时继续使用 `Complete`。
