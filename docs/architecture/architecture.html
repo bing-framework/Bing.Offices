@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bing.Offices 系统架构图</title>
+<style>
+  :root{
+    --bg:#f6f8fa;
+    --panel:#ffffff;
+    --ink:#1f2328;
+    --ink-2:#59636e;
+    --ink-3:#818b98;
+    --line:#d1d9e0;
+    --line-2:#e4e8ed;
+    --blue:#0a66c2;
+    --blue-bg:#eaf3fd;
+    --green:#1a7f37;
+    --green-bg:#eaf6ec;
+    --amber:#9a6700;
+    --amber-bg:#fff8e5;
+    --purple:#6639ba;
+    --purple-bg:#f3eefc;
+    --rose:#b3254a;
+    --rose-bg:#fdeff2;
+    --slate:#3d444d;
+    --slate-bg:#f0f2f5;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    font-size:14px;
+    line-height:1.65;
+  }
+  .wrap{max-width:1220px;margin:0 auto;padding:32px 24px 80px;}
+
+  header.hero{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:28px 32px;
+    margin-bottom:24px;
+  }
+  header.hero h1{margin:0 0 6px;font-size:26px;letter-spacing:-.2px;}
+  header.hero .sub{color:var(--ink-2);font-size:14px;}
+  header.hero .meta{margin-top:14px;display:flex;flex-wrap:wrap;gap:8px;}
+  .chip{
+    display:inline-block;padding:3px 10px;border-radius:999px;
+    font-size:12px;background:var(--slate-bg);color:var(--slate);
+    border:1px solid var(--line-2);font-weight:500;
+  }
+  .chip.blue{background:var(--blue-bg);color:var(--blue);border-color:#cfe3f8;}
+  .chip.green{background:var(--green-bg);color:var(--green);border-color:#cdebd3;}
+  .chip.amber{background:var(--amber-bg);color:var(--amber);border-color:#f3e2b8;}
+  .chip.rose{background:var(--rose-bg);color:var(--rose);border-color:#f6d3dc;}
+
+  nav.toc{
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    padding:16px 22px;margin-bottom:24px;
+  }
+  nav.toc ol{margin:0;padding-left:22px;columns:2;column-gap:32px;}
+  nav.toc li{margin:3px 0;}
+  nav.toc a{color:var(--blue);text-decoration:none;}
+  nav.toc a:hover{text-decoration:underline;}
+
+  section.card{
+    background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:24px 28px 28px;margin-bottom:22px;
+  }
+  section.card > h2{
+    margin:0 0 4px;font-size:19px;
+    display:flex;align-items:center;gap:10px;
+  }
+  .num{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:26px;height:26px;border-radius:8px;font-size:13px;
+    background:var(--blue);color:#fff;font-weight:600;flex:none;
+  }
+  section.card > p.lead{color:var(--ink-2);margin:6px 0 18px;}
+  .fig{border:1px solid var(--line-2);border-radius:var(--radius);background:#fff;padding:8px;}
+  .fig svg{display:block;width:100%;height:auto;}
+  figcaption{color:var(--ink-3);font-size:12.5px;margin-top:10px;}
+
+  table{border-collapse:collapse;width:100%;font-size:13px;margin-top:6px;}
+  th,td{border:1px solid var(--line-2);padding:7px 10px;text-align:left;vertical-align:top;}
+  th{background:var(--slate-bg);font-weight:600;}
+  td code,li code,p code{
+    background:#f1f3f6;border:1px solid var(--line-2);border-radius:4px;
+    padding:1px 5px;font-size:12.5px;
+    font-family:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;
+  }
+  .note{
+    border-left:3px solid var(--amber);background:var(--amber-bg);
+    padding:10px 14px;border-radius:0 8px 8px 0;margin-top:16px;color:#5c4200;font-size:13px;
+  }
+  .note strong{color:#4a3500;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+  @media (max-width:860px){.grid2{grid-template-columns:1fr;}nav.toc ol{columns:1;}}
+  footer{color:var(--ink-3);font-size:12.5px;text-align:center;padding-top:20px;}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px;font-size:12.5px;color:var(--ink-2);}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .swatch{width:12px;height:12px;border-radius:3px;border:1px solid var(--line);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <h1>Bing.Offices 系统架构图</h1>
+  <div class="sub">Excel / CSV 导入导出引擎 · 分层架构 · 核心模块 · 数据流</div>
+  <div class="meta">
+    <span class="chip blue">Abstractions · netstandard2.0</span>
+    <span class="chip green">Core · netstandard2.0</span>
+    <span class="chip amber">Npoi · net6.0 / net8.0</span>
+    <span class="chip">NPOI 33.x · CsvHelper 33.1.0</span>
+    <span class="chip rose">包身份 2.0.0</span>
+  </div>
+  <p style="margin:16px 0 0;color:var(--ink-2);font-size:13.5px;">
+    配套文字版设计文档：<a href="./README.md" style="color:var(--blue);">README.md</a>（核心模块、数据流、缓存、安全矩阵、扩展点、测试门槛、已知风险）
+  </p>
+</header>
+
+<nav class="toc">
+  <ol>
+    <li><a href="#fig1">分层架构与依赖方向</a></li>
+    <li><a href="#fig2">映射配置优先级与 Plan 编译</a></li>
+    <li><a href="#fig3">Excel 导入数据流</a></li>
+    <li><a href="#fig4">Excel 导出数据流</a></li>
+    <li><a href="#fig5">文件原子提交</a></li>
+    <li><a href="#fig6">缓存与并发</a></li>
+  </ol>
+</nav>
+
+<!-- ============ 1. 分层架构 ============ -->
+<section class="card" id="fig1">
+  <h2><span class="num">1</span>分层架构与依赖方向</h2>
+  <p class="lead">依赖严格单向：<code>Npoi → Core → Abstractions</code>。NPOI 类型（<code>IWorkbook</code> / <code>ISheet</code> / <code>ICell</code>）不出现在任何公共契约中，这是「Provider 可替换」的全部实现手段。</p>
+  <div class="fig">
+    <svg viewBox="0 0 1160 800" role="img" aria-label="分层架构图">
+      <defs>
+        <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="#59636e"/>
+        </marker>
+        <marker id="arb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="#0a66c2"/>
+        </marker>
+      </defs>
+
+      <!-- 调用方 -->
+      <rect x="280" y="26" width="600" height="56" rx="10" fill="#f0f2f5" stroke="#d1d9e0"/>
+      <text x="580" y="50" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328">调用方 · ASP.NET Core / 控制台 / 后台任务</text>
+      <text x="580" y="70" text-anchor="middle" font-size="12" fill="#59636e">services.AddBingOfficesNpoi()</text>
+      <line x1="580" y1="82" x2="580" y2="118" stroke="#59636e" stroke-width="1.6" marker-end="url(#ar)"/>
+      <text x="592" y="105" font-size="11.5" fill="#59636e">IExcelImporter / IExcelExporter / ICsvImporter / ICsvExporter</text>
+
+      <!-- L2 Npoi -->
+      <rect x="40" y="122" width="1080" height="176" rx="12" fill="#fff8e5" stroke="#e3cc90"/>
+      <text x="62" y="146" font-size="13" font-weight="700" fill="#9a6700">L2 · Bing.Offices.Npoi</text>
+      <text x="250" y="146" font-size="11.5" fill="#9a6700">Provider 适配层（唯一依赖 NPOI 的程序集） · net6.0; net8.0</text>
+
+      <rect x="60" y="162" width="248" height="112" rx="8" fill="#ffffff" stroke="#e3cc90"/>
+      <text x="76" y="184" font-size="12.5" font-weight="600" fill="#1f2328">Imports/</text>
+      <text x="76" y="204" font-size="11" fill="#59636e">NpoiExcelImporter 编排</text>
+      <text x="76" y="221" font-size="11" fill="#59636e">ImportPlanBuilder · SheetExecutor</text>
+      <text x="76" y="238" font-size="11" fill="#59636e">RowMaterializer · RelationBinder</text>
+      <text x="76" y="255" font-size="11" fill="#59636e">WorkbookValidation · FailureWorkbook*</text>
+
+      <rect x="324" y="162" width="248" height="112" rx="8" fill="#ffffff" stroke="#e3cc90"/>
+      <text x="340" y="184" font-size="12.5" font-weight="600" fill="#1f2328">Exports/</text>
+      <text x="340" y="204" font-size="11" fill="#59636e">NpoiExcelExporter 编排</text>
+      <text x="340" y="221" font-size="11" fill="#59636e">ExportPlanBuilder · ColumnPlanner</text>
+      <text x="340" y="238" font-size="11" fill="#59636e">SheetWriter · StyleCache</text>
+      <text x="340" y="255" font-size="11" fill="#59636e">图表（仅 XLSX）</text>
+
+      <rect x="588" y="162" width="248" height="112" rx="8" fill="#ffffff" stroke="#e3cc90"/>
+      <text x="604" y="184" font-size="12.5" font-weight="600" fill="#1f2328">Imports/NpoiXlsxZipPreflight</text>
+      <text x="604" y="204" font-size="11" fill="#59636e">ZIP 炸弹 / XXE 防护</text>
+      <text x="604" y="221" font-size="11" fill="#59636e">条目数 · 解压字节 · 压缩比</text>
+      <text x="604" y="238" font-size="11" fill="#59636e">路径穿越 · 重复 entry</text>
+      <text x="604" y="255" font-size="11" fill="#59636e">XML 字符数 / 嵌套深度</text>
+
+      <rect x="852" y="162" width="248" height="112" rx="8" fill="#ffffff" stroke="#e3cc90"/>
+      <text x="868" y="184" font-size="12.5" font-weight="600" fill="#1f2328">Extensions/ · Resolvers/</text>
+      <text x="868" y="204" font-size="11" fill="#59636e">7 个 NPOI 扩展容器</text>
+      <text x="868" y="221" font-size="11" fill="#59636e">ExcelNpoiServiceCollectionExtensions</text>
+      <text x="868" y="238" font-size="11" fill="#59636e">ColorResolver</text>
+      <text x="868" y="255" font-size="11" fill="#59636e">NpoiStreamCopier · NpoiAsyncStaging</text>
+
+      <line x1="580" y1="298" x2="580" y2="336" stroke="#59636e" stroke-width="1.6" marker-end="url(#ar)"/>
+      <text x="592" y="322" font-size="11.5" fill="#59636e">IExcelMappingPlanFactory → CreateWorkbook&lt;T&gt;()</text>
+
+      <!-- L1 Core -->
+      <rect x="40" y="340" width="1080" height="176" rx="12" fill="#eaf6ec" stroke="#a9d9b4"/>
+      <text x="62" y="364" font-size="13" font-weight="700" fill="#1a7f37">L1 · Bing.Offices.Core</text>
+      <text x="228" y="364" font-size="11.5" fill="#1a7f37">Provider-neutral 引擎层 · netstandard2.0</text>
+
+      <rect x="60" y="380" width="196" height="112" rx="8" fill="#ffffff" stroke="#a9d9b4"/>
+      <text x="74" y="402" font-size="12.5" font-weight="600" fill="#1f2328">Mappings/</text>
+      <text x="74" y="422" font-size="10.5" fill="#59636e">ExcelMappingPlanFactory</text>
+      <text x="74" y="439" font-size="10.5" fill="#59636e">ExcelMappingPlanCacheKey</text>
+      <text x="74" y="456" font-size="10.5" fill="#59636e">ExcelTypeMapFactory</text>
+      <text x="74" y="473" font-size="10.5" fill="#59636e">ExcelMappingColumn</text>
+
+      <rect x="270" y="380" width="196" height="112" rx="8" fill="#ffffff" stroke="#a9d9b4"/>
+      <text x="284" y="402" font-size="12.5" font-weight="600" fill="#1f2328">Configurations/</text>
+      <text x="284" y="422" font-size="10.5" fill="#59636e">MappingConfigurationLoader</text>
+      <text x="284" y="439" font-size="10.5" fill="#59636e">ExcelMappingTextReader</text>
+      <text x="284" y="456" font-size="10.5" fill="#59636e">DocumentValidator</text>
+      <text x="284" y="473" font-size="10.5" fill="#59636e">JSON / XML v2</text>
+
+      <rect x="480" y="380" width="196" height="112" rx="8" fill="#ffffff" stroke="#a9d9b4"/>
+      <text x="494" y="402" font-size="12.5" font-weight="600" fill="#1f2328">Csv/</text>
+      <text x="494" y="422" font-size="10.5" fill="#59636e">CsvEntityImporter</text>
+      <text x="494" y="439" font-size="10.5" fill="#59636e">CsvEntityExporter</text>
+      <text x="494" y="456" font-size="10.5" fill="#59636e">CsvHeaderBinder</text>
+      <text x="494" y="473" font-size="10.5" fill="#59636e">CsvPropertyBinding</text>
+
+      <rect x="690" y="380" width="196" height="112" rx="8" fill="#ffffff" stroke="#a9d9b4"/>
+      <text x="704" y="402" font-size="12.5" font-weight="600" fill="#1f2328">IO/ · Validations/</text>
+      <text x="704" y="422" font-size="10.5" fill="#59636e">AtomicFileCommitter</text>
+      <text x="704" y="439" font-size="10.5" fill="#59636e">DefaultFileExportCommitter</text>
+      <text x="704" y="456" font-size="10.5" fill="#59636e">ExcelValidationRules</text>
+      <text x="704" y="473" font-size="10.5" fill="#59636e">（默认 7 条规则）</text>
+
+      <rect x="900" y="380" width="196" height="112" rx="8" fill="#ffffff" stroke="#a9d9b4"/>
+      <text x="914" y="402" font-size="12.5" font-weight="600" fill="#1f2328">Exceptions/ · Dates/</text>
+      <text x="914" y="422" font-size="10.5" fill="#59636e">ExceptionDispatcher</text>
+      <text x="914" y="439" font-size="10.5" fill="#59636e">ExcelDateParser</text>
+      <text x="914" y="456" font-size="10.5" fill="#59636e">Extensions/</text>
+      <text x="914" y="473" font-size="10.5" fill="#59636e">PlanFactoryProvider（组合根）</text>
+
+      <line x1="580" y1="516" x2="580" y2="554" stroke="#59636e" stroke-width="1.6" marker-end="url(#ar)"/>
+      <text x="592" y="540" font-size="11.5" fill="#59636e">契约 · DTO · 策略 · 异常</text>
+
+      <!-- L0 Abstractions -->
+      <rect x="40" y="558" width="1080" height="176" rx="12" fill="#eaf3fd" stroke="#9cc6ee"/>
+      <text x="62" y="582" font-size="13" font-weight="700" fill="#0a66c2">L0 · Bing.Offices.Abstractions</text>
+      <text x="292" y="582" font-size="11.5" fill="#0a66c2">契约层（无第三方实现依赖） · netstandard2.0</text>
+
+      <rect x="60" y="598" width="163" height="112" rx="8" fill="#ffffff" stroke="#9cc6ee"/>
+      <text x="72" y="620" font-size="12" font-weight="600" fill="#1f2328">Imports/</text>
+      <text x="72" y="639" font-size="10" fill="#59636e">IExcelImporter</text>
+      <text x="72" y="655" font-size="10" fill="#59636e">WorkbookImportRequest</text>
+      <text x="72" y="671" font-size="10" fill="#59636e">ExcelImportError(Code)</text>
+      <text x="72" y="687" font-size="10" fill="#59636e">ExcelResourceLimits</text>
+
+      <rect x="235" y="598" width="163" height="112" rx="8" fill="#ffffff" stroke="#9cc6ee"/>
+      <text x="247" y="620" font-size="12" font-weight="600" fill="#1f2328">Exports/</text>
+      <text x="247" y="639" font-size="10" fill="#59636e">IExcelExporter</text>
+      <text x="247" y="655" font-size="10" fill="#59636e">ExcelExport.Workbook</text>
+      <text x="247" y="671" font-size="10" fill="#59636e">SheetExportBuilder&lt;T&gt;</text>
+      <text x="247" y="687" font-size="10" fill="#59636e">ExcelChartDefinition</text>
+
+      <rect x="410" y="598" width="163" height="112" rx="8" fill="#ffffff" stroke="#9cc6ee"/>
+      <text x="422" y="620" font-size="12" font-weight="600" fill="#1f2328">Configurations/</text>
+      <text x="422" y="639" font-size="10" fill="#59636e">ExcelMappingConfiguration</text>
+      <text x="422" y="655" font-size="10" fill="#59636e">ExcelMappingDocument</text>
+      <text x="422" y="671" font-size="10" fill="#59636e">MappingConfigurationMerger</text>
+      <text x="422" y="687" font-size="10" fill="#59636e">MappingProfileRegistry</text>
+
+      <rect x="585" y="598" width="163" height="112" rx="8" fill="#ffffff" stroke="#9cc6ee"/>
+      <text x="597" y="620" font-size="12" font-weight="600" fill="#1f2328">Providers/</text>
+      <text x="597" y="639" font-size="10" fill="#59636e">IExcelMappingPlanFactory</text>
+      <text x="597" y="655" font-size="10" fill="#59636e">IExcelMappingPlan</text>
+      <text x="597" y="671" font-size="10" fill="#59636e">IExcelMappingColumn</text>
+      <text x="597" y="687" font-size="10" fill="#59636e">UniqueTracker</text>
+
+      <rect x="760" y="598" width="163" height="112" rx="8" fill="#ffffff" stroke="#9cc6ee"/>
+      <text x="772" y="620" font-size="12" font-weight="600" fill="#1f2328">Conversions/</text>
+      <text x="772" y="639" font-size="10" fill="#59636e">IExcelValueConverter</text>
+      <text x="772" y="655" font-size="10" fill="#59636e">ExcelCellValue</text>
+      <text x="772" y="671" font-size="10" fill="#59636e">ExcelCellKind</text>
+      <text x="772" y="687" font-size="10" fill="#59636e">ExcelConversionContext</text>
+
+      <rect x="935" y="598" width="163" height="112" rx="8" fill="#ffffff" stroke="#9cc6ee"/>
+      <text x="947" y="620" font-size="12" font-weight="600" fill="#1f2328">Validations/ · IO/</text>
+      <text x="947" y="639" font-size="10" fill="#59636e">IExcelValidationRule</text>
+      <text x="947" y="655" font-size="10" fill="#59636e">IExcelValidationBinding</text>
+      <text x="947" y="671" font-size="10" fill="#59636e">IFileExportCommitter</text>
+      <text x="947" y="687" font-size="10" fill="#59636e">Exceptions/ · Styles/ · Csv/</text>
+
+      <!-- 依赖方向注记 -->
+      <line x1="1060" y1="210" x2="1060" y2="430" stroke="#0a66c2" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#arb)"/>
+      <text x="1070" y="300" font-size="10.5" fill="#0a66c2" transform="rotate(90 1070 300)">依赖方向（禁止反向）</text>
+    </svg>
+  </div>
+  <figcaption>图 1 · 三层架构。<span style="color:#9a6700">黄色</span> = NPOI 适配（net6.0/net8.0）；<span style="color:#1a7f37">绿色</span> = Provider-neutral 引擎（netstandard2.0）；<span style="color:#0a66c2">蓝色</span> = 纯契约（netstandard2.0）。</figcaption>
+</section>
+
+<!-- ============ 2. 映射配置与 Plan 编译 ============ -->
+<section class="card" id="fig2">
+  <h2><span class="num">2</span>映射配置优先级与 Plan 编译流水线</h2>
+  <p class="lead">四级来源经<b>唯一合并算法</b>收敛，再由 Plan 编译器固化为不可变计划并入缓存。任何上游模块都不得自行合并配置。</p>
+  <div class="fig">
+    <svg viewBox="0 0 1160 720" role="img" aria-label="映射配置与计划编译流水线">
+      <defs>
+        <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="#59636e"/>
+        </marker>
+      </defs>
+
+      <!-- 左：五类来源 -->
+      <text x="40" y="30" font-size="13" font-weight="700" fill="#1f2328">映射来源（优先级 低 → 高）</text>
+
+      <rect x="40" y="48" width="300" height="52" rx="8" fill="#f0f2f5" stroke="#d1d9e0"/>
+      <text x="56" y="70" font-size="12" font-weight="600" fill="#1f2328">Convention / Default</text>
+      <text x="56" y="88" font-size="11" fill="#59636e">约定回退（UseConventionFallback）</text>
+
+      <rect x="40" y="110" width="300" height="52" rx="8" fill="#eaf3fd" stroke="#9cc6ee"/>
+      <text x="56" y="132" font-size="12" font-weight="600" fill="#1f2328">Attribute · 特性标注</text>
+      <text x="56" y="150" font-size="11" fill="#59636e">ExcelTypeMapFactory.Create&lt;T&gt;() 反射</text>
+
+      <rect x="40" y="172" width="300" height="52" rx="8" fill="#f3eefc" stroke="#c9b3ec"/>
+      <text x="56" y="194" font-size="12" font-weight="600" fill="#1f2328">Profile · 强类型配置</text>
+      <text x="56" y="212" font-size="11" fill="#59636e">ProfileDescriptorFactory → FluentSetting</text>
+
+      <rect x="40" y="234" width="300" height="52" rx="8" fill="#fff8e5" stroke="#e3cc90"/>
+      <text x="56" y="256" font-size="12" font-weight="600" fill="#1f2328">JSON / XML Document（v2）</text>
+      <text x="56" y="274" font-size="11" fill="#59636e">ConfigurationLoader · 1MB 上限 · 禁 DTD</text>
+
+      <rect x="40" y="296" width="300" height="52" rx="8" fill="#fdeff2" stroke="#f0bccc"/>
+      <text x="56" y="318" font-size="12" font-weight="600" fill="#1f2328">Request Fluent · 调用方代码</text>
+      <text x="56" y="336" font-size="11" fill="#59636e">Import/ExportMappingBuilder.Build()</text>
+
+      <!-- 合并 -->
+      <line x1="340" y1="173" x2="404" y2="173" stroke="#59636e" stroke-width="1.6" marker-end="url(#ar2)"/>
+      <line x1="340" y1="323" x2="404" y2="250" stroke="#59636e" stroke-width="1.6" marker-end="url(#ar2)"/>
+      <line x1="340" y1="74" x2="404" y2="200" stroke="#d1d9e0" stroke-width="1.4" marker-end="url(#ar2)"/>
+      <line x1="340" y1="136" x2="404" y2="210" stroke="#59636e" stroke-width="1.6" marker-end="url(#ar2)"/>
+
+      <rect x="410" y="130" width="240" height="90" rx="10" fill="#f0f2f5" stroke="#3d444d" stroke-width="1.4"/>
+      <text x="530" y="156" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1f2328">MappingConfigurationMerger</text>
+      <text x="530" y="176" text-anchor="middle" font-size="11" fill="#59636e">Merge(lower, higher, sourceKind)</text>
+      <text x="530" y="194" text-anchor="middle" font-size="11" fill="#59636e">Clear / Reset · MergeColumn</text>
+      <text x="530" y="211" text-anchor="middle" font-size="11" fill="#59636e">动态列 Append / Replace · Style / Layout</text>
+
+      <line x1="650" y1="175" x2="714" y2="175" stroke="#59636e" stroke-width="1.6" marker-end="url(#ar2)"/>
+
+      <rect x="720" y="130" width="400" height="90" rx="10" fill="#eaf6ec" stroke="#1a7f37" stroke-width="1.4"/>
+      <text x="920" y="156" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1a7f37">ExcelMappingPlanFactory（唯一生效点）</text>
+      <text x="920" y="177" text-anchor="middle" font-size="11" fill="#59636e">ResolveDocument&lt;T&gt;() → 三次 Merge → CreatePlan&lt;T&gt;()</text>
+      <text x="920" y="196" text-anchor="middle" font-size="11" fill="#59636e">CreateWorkbook&lt;T&gt;() → ExcelMappingWorkbookPlan</text>
+      <text x="920" y="213" text-anchor="middle" font-size="11" fill="#59636e">Singleton · 容量 256 · Lazy(ExecutionAndPublication)</text>
+
+      <!-- 编译细节 -->
+      <line x1="920" y1="220" x2="920" y2="258" stroke="#59636e" stroke-width="1.6" marker-end="url(#ar2)"/>
+
+      <rect x="40" y="264" width="1080" height="440" rx="12" fill="#ffffff" stroke="#d1d9e0"/>
+      <text x="60" y="290" font-size="13" font-weight="700" fill="#1f2328">Plan 编译器内部展开</text>
+
+      <!-- 编译步骤 -->
+      <rect x="60" y="306" width="220" height="76" rx="8" fill="#eaf6ec" stroke="#a9d9b4"/>
+      <text x="74" y="328" font-size="12" font-weight="600" fill="#1f2328">ExcelTypeMapFactory</text>
+      <text x="74" y="346" font-size="10.5" fill="#59636e">静态 ConcurrentDictionary</text>
+      <text x="74" y="362" font-size="10.5" fill="#59636e">ApplyConfiguration 覆盖 +</text>
+      <text x="74" y="376" font-size="10.5" fill="#59636e">重复标题校验</text>
+
+      <line x1="280" y1="344" x2="316" y2="344" stroke="#59636e" stroke-width="1.5" marker-end="url(#ar2)"/>
+
+      <rect x="322" y="306" width="200" height="76" rx="8" fill="#eaf6ec" stroke="#a9d9b4"/>
+      <text x="336" y="328" font-size="12" font-weight="600" fill="#1f2328">ExcelTypeMap&lt;T&gt;</text>
+      <text x="336" y="346" font-size="10.5" fill="#59636e">IReadOnlyList</text>
+      <text x="336" y="362" font-size="10.5" fill="#59636e">&lt;ExcelPropertyMap&gt;</text>
+      <text x="336" y="376" font-size="10.5" fill="#59636e">不可变</text>
+
+      <line x1="522" y1="344" x2="558" y2="344" stroke="#59636e" stroke-width="1.5" marker-end="url(#ar2)"/>
+
+      <rect x="564" y="306" width="250" height="76" rx="8" fill="#eaf6ec" stroke="#a9d9b4"/>
+      <text x="578" y="328" font-size="12" font-weight="600" fill="#1f2328">CreateColumn / CreateDynamicColumn</text>
+      <text x="578" y="346" font-size="10.5" fill="#59636e">Getter / Setter / Property / Attributes</text>
+      <text x="578" y="362" font-size="10.5" fill="#59636e">ValueConverters ← BindingResolver</text>
+      <text x="578" y="376" font-size="10.5" fill="#59636e">ValidationBindings ← BindValidationRules</text>
+
+      <line x1="814" y1="344" x2="850" y2="344" stroke="#59636e" stroke-width="1.5" marker-end="url(#ar2)"/>
+
+      <rect x="856" y="306" width="244" height="76" rx="8" fill="#eaf3fd" stroke="#9cc6ee"/>
+      <text x="870" y="328" font-size="12" font-weight="600" fill="#1f2328">IExcelMappingPlan（不可变）</text>
+      <text x="870" y="346" font-size="10.5" fill="#59636e">Columns · DynamicColumns</text>
+      <text x="870" y="362" font-size="10.5" fill="#59636e">Style · Layout</text>
+      <text x="870" y="376" font-size="10.5" fill="#59636e">ProfileName · ModelAlias</text>
+
+      <!-- 缓存键 -->
+      <rect x="60" y="400" width="1040" height="96" rx="8" fill="#fff8e5" stroke="#e3cc90"/>
+      <text x="76" y="424" font-size="12" font-weight="700" fill="#9a6700">缓存键 ExcelMappingPlanCacheKey.Create&lt;T&gt;</text>
+      <text x="76" y="448" font-size="11" fill="#59636e">TenantId  +  ModelType.AssemblyQualifiedName  +  Direction  +  ConfigurationVersion  +  合并后 Configuration</text>
+      <text x="76" y="470" font-size="11" fill="#59636e">→ JsonSerializer(DefaultIgnoreCondition = Never) → SHA-256 → Base64</text>
+      <text x="76" y="490" font-size="11" fill="#59636e">宿主：ConcurrentDictionary&lt;string, Lazy&lt;IExcelMappingPlan&gt;&gt; + ConcurrentQueue&lt;string&gt;（近似 FIFO 淘汰，容量 256，无 TTL）</text>
+
+      <!-- 混淆提示 -->
+      <rect x="60" y="512" width="1040" height="76" rx="8" fill="#fdeff2" stroke="#f0bccc"/>
+      <text x="76" y="536" font-size="12" font-weight="700" fill="#b3254a">易混淆点</text>
+      <text x="76" y="558" font-size="11" fill="#59636e">Npoi 侧 NpoiWorkbookPlanKeyBuilder <tspan font-weight="700" fill="#b3254a">不是缓存</tspan>，仅用于 NpoiImport/ExportPlanBuilder 的 GroupBy 分组；</text>
+      <text x="76" y="576" font-size="11" fill="#59636e">键 = itemType.AssemblyQualifiedName + 文档 JSON + 单方向 request 配置 JSON（"|" 拼接）。</text>
+
+      <rect x="60" y="604" width="1040" height="84" rx="8" fill="#f0f2f5" stroke="#d1d9e0"/>
+      <text x="76" y="628" font-size="12" font-weight="700" fill="#1f2328">配置快照语义</text>
+      <text x="76" y="650" font-size="11" fill="#59636e">MappingConfigurationCloner / MappingDocumentCloner 保证：构建后的配置是<b>独立快照</b>，修改输入集合并<b>不</b>影响已构建的映射。</text>
+      <text x="76" y="670" font-size="11" fill="#59636e">MappingProfileRegistry 唯一键 = (ProfileName, Direction, ModelType)，重复注册<b>直接抛异常</b>，不由 DI 注册顺序覆盖；方向缺失不静默回退。</text>
+    </svg>
+  </div>
+  <figcaption>图 2 · 配置合并与计划编译。虚线箭头表示最低优先级的约定回退路径。</figcaption>
+</section>
+
+<!-- ============ 3. 导入数据流 ============ -->
+<section class="card" id="fig3">
+  <h2><span class="num">3</span>Excel 导入数据流</h2>
+  <p class="lead">11 步严格时序。注意：输入被完整复制进 <code>MemoryStream</code> 后才建立 DOM，<code>MaxInputBytes</code> 保护的是<b>原始输入字节</b>，不等于解压后 DOM 峰值保护。</p>
+  <div class="fig">
+    <svg viewBox="0 0 1160 900" role="img" aria-label="导入数据流时序图">
+      <defs>
+        <marker id="ar3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="#59636e"/>
+        </marker>
+      </defs>
+
+      <!-- 主干 -->
+      <rect x="40" y="24" width="420" height="50" rx="8" fill="#f0f2f5" stroke="#d1d9e0"/>
+      <text x="58" y="46" font-size="12" font-weight="600" fill="#1f2328">Step 1 · 参数守卫</text>
+      <text x="58" y="64" font-size="10.5" fill="#59636e">source / request 非空 · CanRead · ThrowIfCancellationRequested</text>
+
+      <line x1="250" y1="74" x2="250" y2="98" stroke="#59636e" stroke-width="1.5" marker-end="url(#ar3)"/>
+      <rect x="40" y="100" width="420" height="50" rx="8" fill="#fff8e5" stroke="#e3cc90"/>
+      <text x="58" y="122" font-size="12" font-weight="600" fill="#1f2328">Step 2 · 输入缓冲 NpoiStreamCopier</text>
+      <text x="58" y="140" font-size="10.5" fill="#59636e">Copy / CopyAsync → MemoryStream；每块累加校验 MaxInputBytes（默认 128 MiB）</text>
+
+      <line x1="250" y1="150" x2="250" y2="174" stroke="#59636e" stroke-width="1.5" marker-end="url(#ar3)"/>
+      <rect x="40" y="176" width="420" height="50" rx="8" fill="#fdeff2" stroke="#f0bccc"/>
+      <text x="58" y="198" font-size="12" font-weight="600" fill="#1f2328">Step 3 · ZIP 预检 NpoiXlsxZipPreflight</text>
+      <text x="58" y="216" font-size="10.5" fill="#59636e">条目数 / 解压字节 / 压缩比 / 路径穿越 / 重复 entry / XML 深度</text>
+
+      <line x1="250" y1="226" x2="250" y2="250" stroke="#59636e" stroke-width="1.5" marker-end="url(#ar3)"/>
+      <rect x="40" y="252" width="420" height="50" rx="8" fill="#f0f2f5" stroke="#d1d9e0"/>
+      <text x="58" y="274" font-size="12" font-weight="600" fill="#1f2328">Step 4 · 建立 DOM</text>
+      <text x="58" y="292" font-size="10.5" fill="#59636e">WorkbookFactory.Create(bufferedSource) · IsDate1904()（同步阶段）</text>
+
+      <line x1="250" y1="302" x2="250" y2="326" stroke="#59636e" stroke-width="1.5" marker-end="url(#ar3)"/>
+      <rect x="40" y="328" width="420" height="50" rx="8" fill="#f0f2f5" stroke="#d1d9e0"/>
+      <text x="58" y="350" font-size="12" font-weight="600" fill="#1f2328">Step 5 · 建立容器</text>
+      <text x="58" y="368" font-size="10.5" fill="#59636e">new TWorkbook() · Sheet 结果列表 · ExcelImportErrorCollector(MaxErrors)</text>
+
+      <line x1="250" y1="378" x2="250" y2="402" stroke="#59636e" stroke-width="1.5" marker-end="url(#ar3)"/>
+      <rect x="40" y="404" width="420" height="50" rx="8" fill="#f0f2f5" stroke="#d1d9e0"/>
+      <text x="58" y="426" font-size="12" font-weight="600" fill="#1f2328">Step 6 · 解析 Sheet</text>
+      <text x="58" y="444" font-size="10.5" fill="#59636e">ResolveSheet / ResolveSheetIndex（重复物理 Sheet 抛 ArgumentException）</text>
+
+      <line x1="250" y1="454" x2="250" y2="478" stroke="#59636e" stroke-width="1.5" marker-end="url(#ar3)"/>
+      <rect x="40" y="480" width="420" height="50" rx="8" fill="#eaf6ec" stroke="#a9d9b4"/>
+      <text x="58" y="502" font-size="12" font-weight="600" fill="#1f2328">Step 7 · 建计划 NpoiImportPlanBuilder</text>
+      <text x="58" y="520" font-size="10.5" fill="#59636e">→ IExcelMappingPlanFactory.CreateWorkbook&lt;T&gt;（Plan 缓存命中则复用）</text>
+
+      <line x1="250" y1="530" x2="250" y2="554" stroke="#59636e" stroke-width="1.5" marker-end="url(#ar3)"/>
+
+      <!-- Step 8 展开 -->
+      <rect x="40" y="556" width="1080" height="250" rx="10" fill="#eaf6ec" stroke="#1a7f37" stroke-width="1.4"/>
+      <text x="60" y="580" font-size="12.5" font-weight="700" fill="#1a7f37">Step 8 · 逐 Sheet 执行 NpoiImportSheetExecutor.Execute</text>
+
+      <rect x="60" y="592" width="230" height="60" rx="8" fill="#ffffff" stroke="#a9d9b4"/>
+      <text x="74" y="614" font-size="11.5" font-weight="600" fill="#1f2328">L2 结构 / 表头</text>
+      <text x="74" y="632" font-size="10.5" fill="#59636e">CreateColumns&lt;T&gt;</text>
+      <text x="74" y="646" font-size="10.5" fill="#59636e">重复列 / 缺列 / 超 MaxReadColumns</text>
+
+      <line x1="290" y1="622" x2="322" y2="622" stroke="#59636e" stroke-width="1.5" marker-end="url(#ar3)"/>
+      <rect x="328" y="592" width="230" height="60" rx="8" fill="#ffffff" stroke="#a9d9b4"/>
+      <text x="342" y="614" font-size="11.5" font-weight="600" fill="#1f2328">索引与追踪器</text>
+      <text x="342" y="632" font-size="10.5" fill="#59636e">图片索引 · ValidationRangeIndex</text>
+      <text x="342" y="646" font-size="10.5" fill="#59636e">UniqueTracker</text>
+
+      <line x1="558" y1="622" x2="590" y2="622" stroke="#59636e" stroke-width="1.5" marker-end="url(#ar3)"/>
+      <rect x="596" y="592" width="230" height="60" rx="8" fill="#ffffff" stroke="#a9d9b4"/>
+      <text x="610" y="614" font-size="11.5" font-weight="600" fill="#1f2328">L3 Workbook 原生校验</text>
+      <text x="610" y="632" font-size="10.5" fill="#59636e">LIST / TEXT_LENGTH / INTEGER</text>
+      <text x="610" y="646" font-size="10.5" fill="#59636e">DECIMAL / DATE / TIME</text>
+
+      <line x1="826" y1="622" x2="858" y2="622" stroke="#59636e" stroke-width="1.5" marker-end="url(#ar3)"/>
+      <rect x="864" y="592" width="236" height="60" rx="8" fill="#ffffff" stroke="#a9d9b4"/>
+      <text x="878" y="614" font-size="11.5" font-weight="600" fill="#1f2328">L4 原始值规则校验</text>
+      <text x="878" y="632" font-size="10.5" fill="#59636e">ValidateRawValues（转换之前）</text>
+      <text x="878" y="646" font-size="10.5" fill="#59636e">Required / Regex / MaxLength / MaxValue</text>
+
+      <!-- 逐行循环 -->
+      <rect x="60" y="668" width="1040" height="52" rx="8" fill="#ffffff" stroke="#a9d9b4"/>
+      <text x="76" y="690" font-size="11.5" font-weight="600" fill="#1f2328">逐行循环（每行检查 CancellationToken）</text>
+      <text x="76" y="708" font-size="10.5" fill="#59636e">空行判定 → TryConsumeRow（MaxRows）→ L3 原生校验 → L4 原始值校验 → TryCreateItem（转换 → L5 规则 → 唯一性 → 落值）</text>
+
+      <rect x="60" y="732" width="1040" height="58" rx="8" fill="#fff8e5" stroke="#e3cc90"/>
+      <text x="76" y="754" font-size="11.5" font-weight="600" fill="#9a6700">错误收集 ExcelImportErrorCollector</text>
+      <text x="76" y="772" font-size="10.5" fill="#59636e">ExcelImportError(Code, Message, SheetName, RowIndex, ColumnIndex, PropertyName, ColumnKey, Header, RawValue, FirstRowNumber)</text>
+      <text x="76" y="786" font-size="10.5" fill="#59636e">行列为一基；根收集器受 MaxErrors 限流，达到上限 MarkTruncated；每个 Sheet 用 CreateChild() 取 Sheet 视图</text>
+
+      <line x1="250" y1="806" x2="250" y2="828" stroke="#59636e" stroke-width="1.5" marker-end="url(#ar3)"/>
+      <rect x="40" y="830" width="510" height="54" rx="8" fill="#f0f2f5" stroke="#d1d9e0"/>
+      <text x="58" y="852" font-size="12" font-weight="600" fill="#1f2328">Step 9 · NpoiRelationBinder.Bind</text>
+      <text x="58" y="870" font-size="10.5" fill="#59636e">显式父子关系绑定 → Relationship 错误码</text>
+
+      <rect x="580" y="830" width="520" height="54" rx="8" fill="#fdeff2" stroke="#f0bccc"/>
+      <text x="598" y="852" font-size="12" font-weight="600" fill="#1f2328">Step 10 · NpoiFailureWorkbookWriter.Write（可选）</text>
+      <text x="598" y="870" font-size="10.5" fill="#59636e">Preflight → Copier / AnnotationWriter → _ImportErrors 摘要 → 受限序列化 → 清理</text>
+
+      <!-- 右侧：错误码 -->
+      <rect x="500" y="24" width="620" height="204" rx="10" fill="#ffffff" stroke="#d1d9e0"/>
+      <text x="518" y="48" font-size="12.5" font-weight="700" fill="#1f2328">ExcelImportErrorCode 取值</text>
+      <g font-size="11" fill="#59636e">
+        <text x="518" y="72">InvalidInput · InvalidHeader · ValueConversion · Validation</text>
+        <text x="518" y="92">MaxLength · MaxValue · Relationship · WorkbookValidation · ResourceLimit</text>
+      </g>
+      <text x="518" y="126" font-size="12.5" font-weight="700" fill="#1f2328">校验层次（L0 → L6）</text>
+      <g font-size="11" fill="#59636e">
+        <text x="518" y="148">L0 配置构造期　ExcelImport.Build() · 参数合法性</text>
+        <text x="518" y="167">L1 计划期　　　NpoiImportPlanBuilder · BingOfficesConfigurationException</text>
+        <text x="518" y="186">L2 结构/表头　 　NpoiSheetStructureException → InvalidHeader</text>
+        <text x="518" y="205">L3–L6 见下方执行链路</text>
+      </g>
+
+      <rect x="500" y="248" width="620" height="300" rx="10" fill="#ffffff" stroke="#d1d9e0"/>
+      <text x="518" y="272" font-size="12.5" font-weight="700" fill="#1f2328">Step 11 · 返回结果</text>
+      <g font-size="11" fill="#59636e">
+        <text x="518" y="296">ExcelWorkbookImportResult&lt;TWorkbook&gt;</text>
+        <text x="530" y="316">├─ Workbook : TWorkbook　　　（根模型）</text>
+        <text x="530" y="336">├─ Sheets : IReadOnlyList&lt;ExcelSheetImportResult&gt;</text>
+        <text x="530" y="356">├─ Errors : 结构化错误集合</text>
+        <text x="530" y="376">├─ ErrorsTruncated : bool</text>
+        <text x="530" y="396">├─ MaxErrors : int?</text>
+        <text x="530" y="416">└─ IsSuccess : bool</text>
+      </g>
+      <text x="518" y="448" font-size="12.5" font-weight="700" fill="#1f2328">取消检查点</text>
+      <g font-size="11" fill="#59636e">
+        <text x="518" y="470">入口 → 每块复制前后 → ZIP 预检每条目/每次 Read</text>
+        <text x="518" y="489">→ 每 Sheet → 每行 → 每张图片 → 关系绑定三阶段</text>
+        <text x="518" y="508">→ 失败工作簿复制 / 序列化 / 清理</text>
+        <text x="518" y="530">统一抛 OperationCanceledException（token 已归一化）</text>
+      </g>
+    </svg>
+  </div>
+  <figcaption>图 3 · 导入数据流。绿色区块为 Provider-neutral 引擎能力，黄色为防护/错误收集，粉色为可选失败工作簿回写。</figcaption>
+</section>
+
+<!-- ============ 4. 导出数据流 ============ -->
+<section class="card" id="fig4">
+  <h2><span class="num">4</span>Excel 导出数据流</h2>
+  <p class="lead">S1–S7 严格时序。<code>ExportToFile</code> / <code>ExportToFileAsync</code> 在 S1–S7 之外包裹原子提交；直接写调用方 Stream 不提供回滚保证。</p>
+  <div class="fig">
+    <svg viewBox="0 0 1160 700" role="img" aria-label="导出数据流时序图">
+      <defs>
+        <marker id="ar4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="#59636e"/>
+        </marker>
+      </defs>
+
+      <rect x="40" y="24" width="520" height="56" rx="8" fill="#eaf3fd" stroke="#9cc6ee"/>
+      <text x="58" y="46" font-size="12" font-weight="600" fill="#1f2328">ExcelWorkbookExportRequest</text>
+      <text x="58" y="64" font-size="10.5" fill="#59636e">ExcelExport.Workbook(w =&gt; w.Metadata(...).UseTemplate(...).AddSheet("订单", orders, ...))</text>
+
+      <line x1="300" y1="80" x2="300" y2="104" stroke="#59636e" stroke-width="1.5" marker-end="url(#ar4)"/>
+      <rect x="40" y="106" width="520" height="56" rx="8" fill="#f0f2f5" stroke="#d1d9e0"/>
+      <text x="58" y="128" font-size="12" font-weight="600" fill="#1f2328">S1 · 目标校验</text>
+      <text x="58" y="146" font-size="10.5" fill="#59636e">目标可写 · ValidateSheetName（≤31 字符、非法字符、重名）</text>
+
+      <line x1="300" y1="162" x2="300" y2="186" stroke="#59636e" stroke-width="1.5" marker-end="url(#ar4)"/>
+      <rect x="40" y="188" width="520" height="66" rx="8" fill="#fff8e5" stroke="#e3cc90"/>
+      <text x="58" y="210" font-size="12" font-weight="600" fill="#1f2328">S2 · CreateWorkbook</text>
+      <text x="58" y="228" font-size="10.5" fill="#59636e">无模板 → ExcelHelper.PrepareWorkbook(format, metadata)</text>
+      <text x="58" y="245" font-size="10.5" fill="#59636e">有模板 → WorkbookFactory.Create(NpoiNonDisposingStream)；仅 MetadataSpecified 时应用元数据</text>
+
+      <line x1="300" y1="254" x2="300" y2="278" stroke="#59636e" stroke-width="1.5" marker-end="url(#ar4)"/>
+      <rect x="40" y="280" width="520" height="66" rx="8" fill="#eaf6ec" stroke="#a9d9b4"/>
+      <text x="58" y="302" font-size="12" font-weight="600" fill="#1f2328">S3 · NpoiExportPlanBuilder.Create</text>
+      <text x="58" y="320" font-size="10.5" fill="#59636e">NpoiWorkbookPlanKeyBuilder 分组 → 反射分派 → CreateWorkbook&lt;T&gt;</text>
+      <text x="58" y="337" font-size="10.5" fill="#59636e">回填 Dictionary&lt;Sheet, IExcelMappingPlan&gt;；异常 → BingOfficesConfigurationException(Plan)</text>
+
+      <line x1="300" y1="346" x2="300" y2="370" stroke="#59636e" stroke-width="1.5" marker-end="url(#ar4)"/>
+      <rect x="40" y="372" width="520" height="66" rx="8" fill="#eaf6ec" stroke="#a9d9b4"/>
+      <text x="58" y="394" font-size="12" font-weight="600" fill="#1f2328">S4 · 逐 Sheet WriteTypedSheet&lt;T&gt;</text>
+      <text x="58" y="412" font-size="10.5" fill="#59636e">取/建 Sheet · Hidden · 索引校验 · ResolveTemplateOrigin（命名区域 → row/col）</text>
+      <text x="58" y="429" font-size="10.5" fill="#59636e">CreateDynamicDefinition · CreateColumns&lt;T&gt; · ValidateDynamicColumns</text>
+
+      <line x1="300" y1="438" x2="300" y2="462" stroke="#59636e" stroke-width="1.5" marker-end="url(#ar4)"/>
+      <rect x="40" y="464" width="520" height="70" rx="8" fill="#eaf6ec" stroke="#a9d9b4"/>
+      <text x="58" y="486" font-size="12" font-weight="600" fill="#1f2328">S5 · NpoiExportSheetWriter.Write&lt;T&gt;</text>
+      <text x="58" y="504" font-size="10.5" fill="#59636e">表头 + WriteCustomHeaders → 逐行逐列 WriteCell（Getter → ConvertTo → WriteValue）</text>
+      <text x="58" y="521" font-size="10.5" fill="#59636e">→ ApplyRequestStyles → ApplyHeaderStyle → ApplyWrapText → ApplyColumnWidths → MergeColumns → CreateCharts</text>
+
+      <line x1="300" y1="534" x2="300" y2="558" stroke="#59636e" stroke-width="1.5" marker-end="url(#ar4)"/>
+      <rect x="40" y="560" width="520" height="56" rx="8" fill="#f0f2f5" stroke="#d1d9e0"/>
+      <text x="58" y="582" font-size="12" font-weight="600" fill="#1f2328">S6 · workbook.Write(NpoiNonDisposingStream(dest, ct), false)</text>
+      <text x="58" y="600" font-size="10.5" fill="#59636e">S7 · finally 按 LeaveTemplateOpen 释放模板流</text>
+
+      <!-- 右侧面板 -->
+      <rect x="596" y="24" width="524" height="180" rx="10" fill="#ffffff" stroke="#d1d9e0"/>
+      <text x="614" y="48" font-size="12.5" font-weight="700" fill="#1f2328">列规划 NpoiExportColumnPlanner.CreateColumns&lt;T&gt;</text>
+      <g font-size="11" fill="#59636e">
+        <text x="614" y="72">1. 收集非 Ignored 固定列（跳过动态容器属性）</text>
+        <text x="614" y="92">2. 取唯一的 IsDynamicColumn 属性</text>
+        <text x="614" y="112">3. 动态列按 Order → Key 排序落位：</text>
+        <text x="626" y="132">① PhysicalColumnIndex（越界抛异常）</text>
+        <text x="626" y="152">② Placement.Before / After（按 Key FindIndex）</text>
+        <text x="626" y="172">③ 否则尾部 Add</text>
+      </g>
+
+      <rect x="596" y="216" width="524" height="150" rx="10" fill="#ffffff" stroke="#d1d9e0"/>
+      <text x="614" y="240" font-size="12.5" font-weight="700" fill="#1f2328">ExcelColumnPlan（不可变列计划）</text>
+      <g font-size="11" fill="#59636e">
+        <text x="614" y="262">持 Getter / Setter、IsDynamic / IsMerged / IsUnique</text>
+        <text x="614" y="282">Formatter / DecimalScale / ValueMap、转换器、Header/BodyStyle</text>
+        <text x="614" y="302">ConvertTo / ConvertFrom / WriteValue</text>
+        <text x="614" y="326" font-weight="600" fill="#1f2328">物理定位</text>
+        <text x="614" y="346">列 = originColumn + columnIndex</text>
+        <text x="614" y="362">行 = originRow + HeaderRowIndex / DataRowStartIndex</text>
+      </g>
+
+      <rect x="596" y="378" width="524" height="128" rx="10" fill="#fff8e5" stroke="#e3cc90"/>
+      <text x="614" y="402" font-size="12.5" font-weight="700" fill="#9a6700">模板语义</text>
+      <g font-size="11" fill="#59636e">
+        <text x="614" y="424">PreserveTemplate（默认）保留模板样式与批注，只写值</text>
+        <text x="626" y="440">（公式会被值覆盖）</text>
+        <text x="614" y="462">ReplaceTemplate 写前重置为 GetCellStyleAt(0)</text>
+        <text x="626" y="478">并 RemoveCellComment</text>
+        <text x="614" y="498">元数据：非模板必应用；模板仅 MetadataSpecified</text>
+      </g>
+
+      <rect x="596" y="518" width="524" height="98" rx="10" fill="#fdeff2" stroke="#f0bccc"/>
+      <text x="614" y="542" font-size="12.5" font-weight="700" fill="#b3254a">NpoiStyleCache</text>
+      <g font-size="11" fill="#59636e">
+        <text x="614" y="564">存储：ConditionalWeakTable&lt;IWorkbook, Cache&gt; —— 随工作簿 GC 回收</text>
+        <text x="614" y="584">键：CreateKey(style) 确定性串 / baseStyle.Index 组合 / 字体键</text>
+        <text x="614" y="604">线程安全：4 个字典各自 lock，按工作簿隔离</text>
+      </g>
+    </svg>
+  </div>
+  <figcaption>图 4 · 导出数据流。图表生成（Column / Line / Pie）要求 <code>workbook is XSSFWorkbook</code>，仅支持 XLSX。</figcaption>
+</section>
+
+<!-- ============ 5. 原子提交 ============ -->
+<section class="card" id="fig5">
+  <h2><span class="num">5</span>文件原子提交</h2>
+  <p class="lead"><code>IFileExportCommitter</code> → <code>DefaultFileExportCommitter</code> → <code>AtomicFileCommitter</code>。注意最终提交点的第二次取消复查 —— 这是「取消不损坏已有目标文件」的关键。</p>
+  <div class="fig">
+    <svg viewBox="0 0 1160 420" role="img" aria-label="文件原子提交流程">
+      <defs>
+        <marker id="ar5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="#59636e"/>
+        </marker>
+      </defs>
+
+      <rect x="30" y="120" width="160" height="66" rx="8" fill="#eaf3fd" stroke="#9cc6ee"/>
+      <text x="110" y="146" text-anchor="middle" font-size="12" font-weight="600" fill="#1f2328">temp = path.Guid.tmp</text>
+      <text x="110" y="166" text-anchor="middle" font-size="10.5" fill="#59636e">同目录临时文件</text>
+
+      <line x1="190" y1="153" x2="222" y2="153" stroke="#59636e" stroke-width="1.5" marker-end="url(#ar5)"/>
+      <rect x="228" y="120" width="150" height="66" rx="8" fill="#fff8e5" stroke="#e3cc90"/>
+      <text x="303" y="146" text-anchor="middle" font-size="12" font-weight="600" fill="#1f2328">取消检查 ①</text>
+      <text x="303" y="166" text-anchor="middle" font-size="10.5" fill="#59636e">写前</text>
+
+      <line x1="378" y1="153" x2="410" y2="153" stroke="#59636e" stroke-width="1.5" marker-end="url(#ar5)"/>
+      <rect x="416" y="120" width="170" height="66" rx="8" fill="#f0f2f5" stroke="#d1d9e0"/>
+      <text x="501" y="146" text-anchor="middle" font-size="12" font-weight="600" fill="#1f2328">CreateFile</text>
+      <text x="501" y="166" text-anchor="middle" font-size="10.5" fill="#59636e">CreateNew, None, Async</text>
+
+      <line x1="586" y1="153" x2="618" y2="153" stroke="#59636e" stroke-width="1.5" marker-end="url(#ar5)"/>
+      <rect x="624" y="120" width="170" height="66" rx="8" fill="#f0f2f5" stroke="#d1d9e0"/>
+      <text x="709" y="146" text-anchor="middle" font-size="12" font-weight="600" fill="#1f2328">write(...)</text>
+      <text x="709" y="166" text-anchor="middle" font-size="10.5" fill="#59636e">写入全部内容</text>
+
+      <line x1="794" y1="153" x2="826" y2="153" stroke="#59636e" stroke-width="1.5" marker-end="url(#ar5)"/>
+      <rect x="832" y="120" width="170" height="66" rx="8" fill="#f0f2f5" stroke="#d1d9e0"/>
+      <text x="917" y="146" text-anchor="middle" font-size="12" font-weight="600" fill="#1f2328">Flush(true)</text>
+      <text x="917" y="166" text-anchor="middle" font-size="10.5" fill="#59636e">flushToDisk</text>
+
+      <line x1="1002" y1="153" x2="1034" y2="153" stroke="#59636e" stroke-width="1.5" marker-end="url(#ar5)"/>
+      <rect x="1040" y="120" width="94" height="66" rx="8" fill="#fff8e5" stroke="#e3cc90"/>
+      <text x="1087" y="146" text-anchor="middle" font-size="12" font-weight="600" fill="#1f2328">取消 ②</text>
+      <text x="1087" y="166" text-anchor="middle" font-size="10.5" fill="#59636e">替换前</text>
+
+      <path d="M1087,186 L1087,214 L110,214 L110,240" fill="none" stroke="#59636e" stroke-width="1.5" marker-end="url(#ar5)"/>
+      <rect x="30" y="242" width="300" height="66" rx="8" fill="#eaf6ec" stroke="#1a7f37"/>
+      <text x="180" y="268" text-anchor="middle" font-size="12" font-weight="600" fill="#1a7f37">Exists ? File.Replace : File.Move</text>
+      <text x="180" y="288" text-anchor="middle" font-size="10.5" fill="#59636e">temp = null（标记成功）</text>
+
+      <line x1="330" y1="275" x2="366" y2="275" stroke="#59636e" stroke-width="1.5" marker-end="url(#ar5)"/>
+      <rect x="372" y="242" width="330" height="66" rx="8" fill="#fdeff2" stroke="#f0bccc"/>
+      <text x="537" y="264" text-anchor="middle" font-size="12" font-weight="600" fill="#b3254a">失败 / 取消 → Cleanup 删除 temp</text>
+      <text x="537" y="284" text-anchor="middle" font-size="10.5" fill="#59636e">内容期异常原样抛；其余包 BingOfficesFileCommitException</text>
+      <text x="537" y="300" text-anchor="middle" font-size="10.5" fill="#59636e">清理失败只写 exception.Data，不覆盖主异常</text>
+
+      <rect x="30" y="330" width="1104" height="74" rx="8" fill="#f0f2f5" stroke="#d1d9e0"/>
+      <text x="48" y="352" font-size="12" font-weight="700" fill="#1f2328">保证与已知缺口</text>
+      <text x="48" y="372" font-size="11" fill="#59636e"><tspan font-weight="600" fill="#1a7f37">保证：</tspan>导出失败或取消不会截断已有目标文件；直接写调用方 Stream <tspan font-weight="600" fill="#b3254a">无</tspan>回滚保证。</text>
+      <text x="48" y="392" font-size="11" fill="#59636e"><tspan font-weight="600" fill="#b3254a">缺口：</tspan>Exists→Replace/Move 存在 TOCTOU 竞态 · File.Replace 跨卷/锁定/不支持 FS 会失败 · 无目录 fsync，崩溃残留 .tmp · 取消只在边界检查，写入中途不可中断。</text>
+    </svg>
+  </div>
+  <figcaption>图 5 · 原子提交流程与边界。</figcaption>
+</section>
+
+<!-- ============ 6. 缓存与并发 ============ -->
+<section class="card" id="fig6">
+  <h2><span class="num">6</span>缓存、并发与资源防护</h2>
+  <p class="lead">引擎共享状态基本并发安全，但 <code>ExcelMappingPlanFactory</code> 注册为 Singleton，其缓存为<b>进程级共享</b>。</p>
+
+  <h3 style="font-size:14px;margin:18px 0 6px;">缓存矩阵</h3>
+  <table>
+    <thead><tr><th>缓存</th><th>位置</th><th>键</th><th>并发机制</th><th>淘汰</th></tr></thead>
+    <tbody>
+      <tr><td>Mapping Plan</td><td><code>ExcelMappingPlanFactory</code> 实例字段</td><td>SHA-256(Base64) 复合键</td><td><code>ConcurrentDictionary</code> + <code>Lazy(ExecutionAndPublication)</code></td><td>近似 FIFO，容量 256，<b>无 TTL</b></td></tr>
+      <tr><td>TypeMap 反射</td><td><code>ExcelTypeMapFactory</code> 静态</td><td><code>Type</code></td><td><code>ConcurrentDictionary</code></td><td><b>无淘汰</b></td></tr>
+      <tr><td>转换器能力</td><td><code>ExcelValueConverterBindingResolver</code></td><td>—</td><td><code>ConditionalWeakTable</code></td><td>GC 驱动</td></tr>
+      <tr><td>NPOI 样式</td><td><code>NpoiStyleCache</code></td><td>属性串 / <code>baseStyle.Index</code> 组合</td><td><code>ConditionalWeakTable</code> + 4 个 <code>lock</code></td><td>随 Workbook GC</td></tr>
+      <tr><td>导出委托</td><td><code>NpoiExcelExporter</code></td><td>Sheet 类型</td><td><code>ConcurrentDictionary</code></td><td>无</td></tr>
+      <tr><td>Profile Registry</td><td><code>MappingProfileRegistry</code></td><td><code>(Name, Direction, ModelType)</code></td><td><code>Dictionary</code> + <code>lock</code></td><td>无（重复注册抛异常）</td></tr>
+    </tbody>
+  </table>
+
+  <h3 style="font-size:14px;margin:22px 0 6px;">资源限制与安全防护（默认值）</h3>
+  <table>
+    <thead><tr><th>防护项</th><th>默认值</th><th>生效位置</th></tr></thead>
+    <tbody>
+      <tr><td><code>MaxInputBytes</code></td><td>128 MiB</td><td><code>NpoiStreamCopier</code></td></tr>
+      <tr><td><code>MaxRows</code> / <code>MaxErrors</code></td><td>无限</td><td>SheetExecutor / ErrorCollector</td></tr>
+      <tr><td><code>MaxPictures</code> / <code>MaxPictureBytes</code> / <code>MaxTotalPictureBytes</code></td><td>无限</td><td>图片索引 / <code>ExcelImportRuntime</code></td></tr>
+      <tr><td><code>MaxTrackedUniqueValues</code></td><td>无限</td><td><code>UniqueTracker</code></td></tr>
+      <tr><td><code>MaxZipEntries</code></td><td>10 000</td><td rowspan="7"><code>NpoiXlsxZipPreflight</code></td></tr>
+      <tr><td><code>MaxZipEntryUncompressedBytes</code></td><td>64 MiB</td></tr>
+      <tr><td><code>MaxZipTotalUncompressedBytes</code></td><td>512 MiB</td></tr>
+      <tr><td><code>MaxZipCompressionRatio</code></td><td>1000</td></tr>
+      <tr><td><code>MaxSharedStringsBytes</code> / <code>MaxStylesBytes</code></td><td>64 MiB / 16 MiB</td></tr>
+      <tr><td><code>MaxWorksheetBytes</code> / <code>MaxTotalWorksheetBytes</code></td><td>64 MiB / 256 MiB</td></tr>
+      <tr><td><code>MaxXmlCharacters</code> / <code>MaxXmlDepth</code></td><td>64 MiB / 256</td></tr>
+      <tr><td>CSV 公式注入</td><td><code>Escape</code></td><td><code>CsvFormulaInjectionPolicy</code></td></tr>
+      <tr><td>XML 映射文档外部实体</td><td>禁止</td><td><code>DtdProcessing.Prohibit</code> + <code>XmlResolver = null</code></td></tr>
+      <tr><td>映射文档文本长度</td><td>1 MB</td><td><code>ExcelMappingTextReader.ReadLimitedText</code></td></tr>
+    </tbody>
+  </table>
+
+  <div class="note">
+    <strong>部署提示：</strong>处理不受信任文件时，除上述限额，还应设置<b>进程内存 / CPU 配额</b>。
+    已知缺口：<code>MaxInputBytes</code> 与 <code>MaxSerializedBytes</code> 都<b>不</b>覆盖解压后 DOM 的峰值；
+    <b>未被映射的图片不会进入图片限制器的扫描范围</b>。
+  </div>
+</section>
+
+<footer>
+  Bing.Offices · 架构图册 · 生成于项目主干（包身份 2.0.0）· 文字版设计文档见 <a href="./README.md" style="color:#0a66c2;">README.md</a>
+</footer>
+
+</div>
+</body>
+</html>
