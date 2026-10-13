@@ -13,6 +13,7 @@
     <Compile Remove="ApiSnapshot\**\*.cs" />
     <Compile Remove="StreamingProbe\**\*.cs" />
     <Compile Remove="GoldenFixtures\**\*.cs" />
+    <Compile Remove="PivotClientProbe\**\*.cs" />
   </ItemGroup>
 
 </Project>

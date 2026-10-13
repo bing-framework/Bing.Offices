@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net6.0;net8.0</TargetFrameworks>
+    <OutputType>Exe</OutputType>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+  <Target Name="ValidatePackageVersion" BeforeTargets="Restore;Build">
+    <Error Condition="'$(BingOfficesPackageVersion)' == ''" Text="Supply BingOfficesPackageVersion from the validated local packages." />
+  </Target>
+  <ItemGroup>
+    <PackageReference Include="Bing.Offices.ClosedXml" Version="$(BingOfficesPackageVersion)" />
+    <PackageReference Include="Bing.Offices.Npoi" Version="$(BingOfficesPackageVersion)" />
+  </ItemGroup>
+</Project>
