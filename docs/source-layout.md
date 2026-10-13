@@ -1,5 +1,7 @@
 # 源码目录与命名空间
 
+生产代码由 9 个项目组成：`Bing.Offices.Abstractions`、`Bing.Offices.Core`、6 个 Excel Provider/扩展项目和 `Bing.Offices.Analyzers`。项目职责、依赖和公开入口见[项目模块与实现边界](project-modules.md)。
+
 `Bing.Offices.Abstractions` 按能力组织契约源码。目录用于定位实现；公开类型的命名空间由兼容性要求决定，不随文件夹层级变化。
 
 | 目录 | 内容 | 公开命名空间 |

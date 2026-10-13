@@ -1,8 +1,8 @@
- Excel Provider 能力与边界
+# Excel Provider 能力与边界
 
 ## Provider 选择
 
-`Bing.Offices.Abstractions` 和 `Bing.Offices.Core` 提供公共契约及 Mapping Plan；`Bing.Offices.Npoi`、`Bing.Offices.MiniExcel`、`Bing.Offices.ClosedXml` 与只读的 `Bing.Offices.ExcelDataReader` 是并列 Provider。应用启动时选择一个 Provider：
+`Bing.Offices.Abstractions` 和 `Bing.Offices.Core` 提供公共契约及 Mapping Plan。`Bing.Offices.Npoi`、`Bing.Offices.MiniExcel`、`Bing.Offices.ClosedXml` 与只读的 `Bing.Offices.ExcelDataReader` 是核心数据 Provider；`Bing.Offices.SpreadCheetah` 只提供前向流式导出，`Bing.Offices.AsposeCells` 只提供商业渲染、转换和公式等独立服务。应用启动时按职责选择注册入口：
 
 ```csharp
 services.AddBingOfficesNpoi();
@@ -12,7 +12,17 @@ services.AddBingOfficesMiniExcel();
 services.AddBingOfficesClosedXml();
 // 只读导入（不注册 IExcelExporter）
 services.AddBingOfficesExcelDataReader();
+// 可与完整 Provider 并存的前向流式导出
+services.AddBingOfficesSpreadCheetah();
+// 可选商业渲染、转换和公式服务
+services.AddBingOfficesAsposeCells(options => { /* 许可证与字体配置 */ });
 ```
+
+同一个 `IServiceCollection` 中的公共服务使用 `TryAdd`，核心数据 Provider 仍按先注册优先解析。SpreadCheetah 注册 `IExcelStreamingExporter`，Aspose.Cells 注册渲染、转换、公式和能力描述接口，不会伪装成完整的 `IExcelImporter`/`IExcelExporter`。
+
+### NPOI XLSX 图表
+
+NPOI 的 XLSX 导出已实现柱状图、折线图和单系列饼图。类别与数值系列通过列 Key、标题或属性名解析，`StartRow`/`EndRow` 可限制使用的数据行，图表锚点使用零基行列坐标。饼图只允许一个系列；列不存在、范围无效或 XLS/HSSF 请求会在导出时明确失败。ClosedXML、MiniExcel 与 SpreadCheetah 当前不支持公共图表请求，不能静默忽略。
 
 ### 按报表选择完整工作簿或前向流式导出
 
