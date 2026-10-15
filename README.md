@@ -33,6 +33,20 @@ Bing.Offices是Bing应用框架的 Excel 导入导出类库。
 - [系统架构与设计文档](docs/architecture/README.md)
 - [系统架构图册](docs/architecture/architecture.html)
 
+## 文档自动化
+
+- [文档自动化方案设计](docs/doc-automation/README.md)
+- [docgen 使用指南](tools/docgen/README.md)
+- 本地生成目录：`docs/generated/`（Markdown 和图表）、`artifacts/docs/`（DOCX / XLSX / PPTX / PDF），均由 Git 忽略
+- 一键生成：`python tools/docgen/run.py all`（5 类文档 × 5 种格式 = 25 个产物）
+
+本地校验命令（未通过返回非 0；本次未接入 CI）：
+
+| 命令 | 作用 |
+|---|---|
+| `python tools/docgen/run.py gate` | 质量门禁：XML 注释覆盖率、提交规范符合率 |
+| `python tools/docgen/run.py docs-check` | 文档腐化防护：文档示例必须来自 `Bing.Offices.Docs.Tests` 中可编译的源码且逐字一致 |
+
 ## 依赖类库
 - [Bing.Utils](https://github.com/bing-framework/Bing.NetCore)
 - [NPOI](https://github.com/tonyqus/npoi)

@@ -278,6 +278,7 @@ ai_docs/tasks/**/artifacts/**
 packages.lock.json
 
 # Docgen: 文档自动化流水线
+/docs/generated/
 tools/docgen/.venv/
 tools/docgen/**/__pycache__/
 artifacts/docs/
