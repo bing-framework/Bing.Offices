@@ -28,6 +28,11 @@ Bing.Offices是Bing应用框架的 Excel 导入导出类库。
 
 - [高级 Excel 导入导出](docs/excel/README.md)
 
+## 架构文档
+
+- [系统架构与设计文档](docs/architecture/README.md)
+- [系统架构图册](docs/architecture/architecture.html)
+
 ## 依赖类库
 - [Bing.Utils](https://github.com/bing-framework/Bing.NetCore)
 - [NPOI](https://github.com/tonyqus/npoi)
