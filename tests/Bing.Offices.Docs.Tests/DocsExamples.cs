@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using Bing.Offices.Attributes;
@@ -14,12 +14,14 @@ namespace Bing.Offices.Docs.Tests;
 
 internal static class DocsExamples
 {
+    // docgen:sample name=ExportWorkbook title=导出一个工作簿
     internal static void ReadmeExport(IExcelExporter exporter, Stream stream, IEnumerable<OrderExport> orders)
     {
         var request = ExcelExport.Workbook(workbook => workbook.AddSheet("订单", orders));
         exporter.Export(request, stream);
     }
 
+    // docgen:sample name=MappingProfile title=用 Profile 声明导入导出映射
     internal static ProfileDescriptor Profile()
     {
         var services = new ServiceCollection();
@@ -32,6 +34,7 @@ internal static class DocsExamples
         return descriptor;
     }
 
+    // docgen:sample name=JsonXmlMapping title=用 JSON / XML 映射文档驱动导入
     internal static ExcelMappingDocument JsonXml(string json)
     {
         var document = ExcelMappingConfigurationLoader.FromJsonDocument(json);
@@ -41,12 +44,14 @@ internal static class DocsExamples
         return document;
     }
 
+    // docgen:sample name=CsvValidation title=CSV 导入并触发实体验证
     internal static CsvImportResult<ValidatedRow> Validation(Stream source, ICsvImporter importer)
     {
         var result = importer.Import<ValidatedRow>(source);
         return result;
     }
 
+    // docgen:sample name=AspnetCoreUpload title=ASP.NET Core 上传接口中导入工作簿
     internal static IResult Upload(IFormFile file, IExcelImporter importer)
     {
         try
@@ -63,6 +68,7 @@ internal static class DocsExamples
         }
     }
 
+    // docgen:sample name=DynamicColumns title=导入动态列到字典
     internal static CsvImportResult<DynamicRow> Dynamic(Stream input, ICsvImporter importer)
     {
         var result = importer.Import<DynamicRow>(input);
