@@ -1,0 +1,10 @@
+{
+  "$comment": "文档流水线质量门禁阈值。缺失本文件时回落 gates.py 内置默认值。实测基线（2026-09）：注释覆盖率 95.2%（Abstractions 96.0 / Core 92.1 / Npoi 92.6），提交规范符合率约 77%。",
+  "commentCoverage": {
+    "min": 90.0,
+    "minPerAssembly": 85.0
+  },
+  "conventionalCommits": {
+    "min": 70.0
+  }
+}

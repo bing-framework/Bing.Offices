@@ -1,0 +1,13 @@
+# 文档自动化流水线依赖
+#
+# 安装：
+#   python -m venv .venv-docgen
+#   .venv-docgen/Scripts/pip install -r tools/docgen/requirements.txt
+#
+# 说明：部分依赖包含原生扩展，优先使用适配当前 Python 的预编译包。
+
+python-docx>=1.1.2      # DOCX 生成
+openpyxl>=3.1.5         # XLSX 生成（含 Office 原生图表）
+python-pptx>=1.0.2      # PPTX 生成（含 Office 原生图表）
+matplotlib>=3.9.0       # DOCX / Markdown / PDF 的位图图表
+reportlab>=4.0.0        # PDF 生成（内置 Adobe CJK CID 字体，无需外部字体文件）
