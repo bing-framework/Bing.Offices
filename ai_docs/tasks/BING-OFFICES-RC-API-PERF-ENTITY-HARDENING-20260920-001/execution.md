@@ -1,12 +1,12 @@
 <!-- AI_EXECUTION_STATUS: IN_PROGRESS -->
 AI_TASK_ID: BING-OFFICES-RC-API-PERF-ENTITY-HARDENING-20260920-001
-AI_EXECUTION_UPDATED_AT: 2026-09-22T11:10:00+08:00
+AI_EXECUTION_UPDATED_AT: 2026-10-09T02:03:24+08:00
 
 # 实施执行报告
 
 ## 执行结论
 
-当前候选已完成约 `99.5%` 的既有整改，但本轮批准的 Performance Budget v1 精准确认重新发现五个 `100K E2E` 目标均超过 `25%`，因此执行目标恢复为 `IN_PROGRESS`，存在 `OPEN_ACTIONABLE=FIX-002C`。既有 List/合同、NPOI Entity/Template 执行链、Provider capability SPI、public-only 第三方 fixture、职责级测试、双 TFM 回归和本地资源证据仍有效；Relation 100K、c16/c64 同质长实验和完整 A-I 按批准边界未重跑。FIX-002 当前为 `FIX-002A=VERIFIED_BOUNDARY`、`FIX-002B=CLOSED`、`FIX-002C=OPEN_ACTIONABLE`；FIX-003 当前为 `FIX-003A/B=VERIFIED_BOUNDARY`、`FIX-003C=CLOSED`、`FIX-003D=LOCAL_PROFILE_EVIDENCE`、`FIX-003E=BLOCKED_EXTERNAL`。本地生产等价 profile 的 100K/500K/1M 代表性 smoke 均通过，但真实生产机和外部 CI 仍未验证；Entity/Template 1M 保持默认 `MaxWorksheetBytes=64 MiB` 的 `NOT_SUPPORTED_BY_DEFAULT / EXPECTED_RESOURCE_REJECTION`。状态矩阵为 Implementation=`CLOSED`、Test=`CLOSED`、Performance=`OPEN_ACTIONABLE`、Resource=`VERIFIED_BOUNDARY`、External=`BLOCKED_EXTERNAL`、Release=`BLOCKED_APPROVAL`、Goal=`IN_PROGRESS`；不能标记 `COMPLETED`。
+当前实现已完成本轮可在工作区内执行的性能修复：`NpoiImportRowMaterializer` 已移除普通行物化路径的逐单元格读取委托，保留前向解析路径和全部转换/校验语义；双 TFM 职责级回归通过，五个批准的 `100K E2E` 目标在同一新候选上均回到 `25%` 预算内。当前本地实现不再存在 `FIX-002C` 的 `OPEN_ACTIONABLE` 代码问题，但独立 `review.md` 仍保存 Round 43 的历史分类，需 Reviewer 复核 Round 53-54 后更新机器状态；不能由本地执行记录代替独立审查。Relation 100K、c16/c64 同质长实验和完整 A-I 仍按批准边界未重跑。FIX-002 当前为 `FIX-002A=VERIFIED_BOUNDARY`、`FIX-002B=CLOSED`、`FIX-002C=BLOCKED_APPROVAL`；FIX-003 当前为 `FIX-003A/B=VERIFIED_BOUNDARY`、`FIX-003C=CLOSED`、`FIX-003D=LOCAL_PROFILE_EVIDENCE`、`FIX-003E=BLOCKED_EXTERNAL`。本地生产等价 profile 的 100K/500K/1M 代表性 smoke 均通过，但真实生产机和外部 CI 仍未验证；Entity/Template 1M 保持默认 `MaxWorksheetBytes=64 MiB` 的 `NOT_SUPPORTED_BY_DEFAULT / EXPECTED_RESOURCE_REJECTION`。状态矩阵为 Implementation=`CLOSED`、Test=`CLOSED`、Performance=`BLOCKED_APPROVAL`、Resource=`VERIFIED_BOUNDARY`、External=`BLOCKED_EXTERNAL`、Release=`BLOCKED_APPROVAL`、Goal=`IN_PROGRESS`；不能标记 `COMPLETED`。
 
 ## 任务信息
 
@@ -31,9 +31,9 @@ AI_EXECUTION_UPDATED_AT: 2026-09-22T11:10:00+08:00
 | P7 Entity | PASS | immutable typed layout、固定 Cell、Merge anchor、List Region、多 Sheet 及 NPOI native executor 已落地；MiniExcel 明确 fail-fast |
 | P8 Template | PARTIAL | NPOI Entity template 导入/导出、merge preflight、XLS/HSSF、异步、LeaveOpen、地址/区域边界、命名转换器、样式/公式/列宽/图片锚点、非精确 merge 和 10,000 行边界已覆盖；跨环境资源与发布门禁仍未完成 |
 | P9 测试矩阵 | PARTIAL | Core 197/197、NPOI 566/566、MiniExcel 42/42、集成/Docs 已跑；public-only fixture 已通过，全门禁映射仍受 API/资源证据限制 |
-| P10 Benchmark | OPEN_ACTIONABLE | Provider/Real IO/RawDate 3/10/30 列、Relation 1K/10K、DynamicPlan、PropertyAccessor、GenericSheetDispatch、Entity/Template after E2E、Materialization/Binding 10K/100K 分离 import/export 和 cold-plan-build tail latency 已有边界/方向性观测；Relation 100K before 为 `FIX-002A=VERIFIED_BOUNDARY`，Entity/Template before 为技术性 `NOT_APPLICABLE_BEFORE`，真实 materializer/binding 当前候选隔离 E2E 为 `FIX-002B=CLOSED`。本轮 Performance Budget v1 仅确认五个已批准的 100K E2E 目标，全部 `5/5` 且 `REGRESSION_OVER_BUDGET`；需先处理 `FIX-002C`，不把本轮当作完整 A-I 判定 |
+| P10 Benchmark | BLOCKED_APPROVAL | Provider/Real IO/RawDate 3/10/30 列、Relation 1K/10K、DynamicPlan、PropertyAccessor、GenericSheetDispatch、Entity/Template after E2E、Materialization/Binding 10K/100K 分离 import/export 和 cold-plan-build tail latency 已有边界/方向性观测；Relation 100K before 为 `FIX-002A=VERIFIED_BOUNDARY`，Entity/Template before 为技术性 `NOT_APPLICABLE_BEFORE`，真实 materializer/binding 当前候选隔离 E2E 为 `FIX-002B=CLOSED`。Round 54 在同一新候选上确认五个已批准的 100K E2E 目标全部 `5/5` 且未超过 `25%` 预算；实现和本地证据已完成，待独立 Reviewer 复核，不把本轮当作完整 A-I 判定 |
 | P11 资源门禁 | VERIFIED_BOUNDARY | 新增 Windows Job Object 2 CPU 等效/4 GiB 证据；无模板纯列表 SXSSF 的 100K/500K/1M、公开入口和 staging 局部矩阵已有证据；本轮最终候选代表性 `TempFile/excel-100k/c1` 的 100K/500K/1M smoke 均 `passed`、2 次测量、0 错误、`0/0/deleted`。Entity/Template 1M 仍保留默认 64 MiB 资源拒绝边界；完整矩阵、真实生产机和外部 CI 未验证；FIX-003A/B=`VERIFIED_BOUNDARY`、FIX-003C=`CLOSED`、FIX-003D=`LOCAL_PROFILE_EVIDENCE`、FIX-003E=`BLOCKED_EXTERNAL` |
-| P12 RC closeout | BLOCKED_APPROVAL | 包、Consumer、API capture、批准后的 snapshot 和 Public API 门禁完成；Performance `FIX-002C=OPEN_ACTIONABLE`，本地 100K/500K/1M smoke 已补齐但生产/外部环境仍未闭合，Release=`BLOCKED_APPROVAL`，Goal=`IN_PROGRESS` |
+| P12 RC closeout | BLOCKED_APPROVAL | 包、Consumer、API capture、批准后的 snapshot 和 Public API 门禁完成；性能实现和本地五目标证据已完成，`FIX-002C` 等待独立 Reviewer 复核；本地 100K/500K/1M smoke 已补齐但生产/外部环境仍未闭合，Release=`BLOCKED_APPROVAL`，Goal=`IN_PROGRESS` |
 
 ## 已完成事项
 
@@ -567,9 +567,9 @@ AI_EXECUTION_UPDATED_AT: 2026-09-22T11:10:00+08:00
 
 当前工作树保留用户/任务变更，未执行任何 destructive git 操作。未执行 `git add`、`commit`、`push`、`tag`、PR 或发布操作。
 
-## 进度：约 99.5%（IN_PROGRESS，非 COMPLETED）
+## 进度：Implementation 100%（Release Gate 仍阻断）
 
-当前状态汇总：Implementation=`CLOSED`、Test=`CLOSED`、Performance=`OPEN_ACTIONABLE`、Resource=`VERIFIED_BOUNDARY`、External=`BLOCKED_EXTERNAL`、Release=`BLOCKED_APPROVAL`、Goal=`IN_PROGRESS`；OPEN_ACTIONABLE 仅为 `FIX-002C` 的五项已确认 100K E2E 回退。
+当前状态汇总：Implementation=`CLOSED`、Test=`CLOSED`、Performance=`BLOCKED_APPROVAL`、Resource=`VERIFIED_BOUNDARY`、External=`BLOCKED_EXTERNAL`、Release=`BLOCKED_APPROVAL`、Goal=`IN_PROGRESS`；工作区内没有待修复的 `OPEN_ACTIONABLE`，剩余项属于独立审查、外部环境和发布审批。
 
 ## TODO（最终）
 
@@ -578,10 +578,89 @@ AI_EXECUTION_UPDATED_AT: 2026-09-22T11:10:00+08:00
 - [x] 补齐 Entity/Template 的样式、图片、复杂 merge、边界和大明细职责级测试；Entity 专项双 TFM 已扩展至 `22/22`，包含固定 Cell mapping/validation/value-map 与 List Region 边界、文件端点预取消和中途取消时的目标保护/临时文件清理。
 - [x] 编译并运行新增 MiniExcel/NPOI 非 `IList` `ICollection<T>` 关系合同测试；双 TFM 通过，NPOI 全量 `566/566`、MiniExcel 全量 `42/42`；大型 SXSSF Merge/Formatter/取消回归也已通过。
 - [x] 补充当前候选公开 Materialization/Binding 证据；历史 v3 smoke 的 `4/4` 合并往返仍保留，Round 41 新增固定 seed/fixture identity 的 `export-only`、`import-only`、`roundtrip` 分离探针，10K 与 100K 各 `36/36` measured、字段完整性通过。仍明确 `NOT_APPLICABLE_BEFORE` 与 `UNAPPROVED`，不宣称正式阈值或 before/after 结论。
-- [OPEN_ACTIONABLE] FIX-002C 性能回退修复：Performance Budget v1 五个批准目标均已完成 `5/5`，但 NPOI async、MiniExcel sync、`excel-file-sync`、`excel-file-async`、`excel-throttled-async` 仍超过 `25%`；需在不重跑 Relation 100K/c16/c64/完整 A-I 的前提下定位并实施最小修复，再做职责级回归和同一候选确认。FIX-002A=`VERIFIED_BOUNDARY`、FIX-002B=`CLOSED`，其余技术边界不变。
+- [x] FIX-002C 性能回退修复：通过移除 NPOI 普通行物化路径的逐单元格读取委托，保留前向解析路径和全部转换/校验语义；双 TFM 职责级回归通过，并在同一新候选身份完成五目标 `5/5` 确认，五项均回到 `25%` 预算内。独立审查尚未刷新，暂不据此关闭 FIX-002C 的审查状态。
+- [BLOCKED_APPROVAL] FIX-002C 审查收口：待独立 Reviewer 复核 Round 53-54 的源代码、测试和五目标证据后，将 `review.md` 中历史的 `OPEN_ACTIONABLE` 分类更新为当前结论；不修改批准前基线，也不把本地证据写成外部 CI 通过。
 - [BLOCKED_EXTERNAL] FIX-003D/E 外部门禁：本轮已补齐最终候选在本地 2 CPU/4 GiB Job Object profile 的代表性 100K/500K/1M smoke（均 PASS、清理 `0/0/deleted`），但这不是真实生产机器，也不是外部 CI；完整 500K/1M 矩阵、取消/失败提交、Entity/Template 1M roundtrip 和外部 Build/Test/API/Pack/Consumer Gate 仍需外部环境。FIX-003A/B=`VERIFIED_BOUNDARY`、FIX-003C=`CLOSED`、FIX-003D=`LOCAL_PROFILE_EVIDENCE`、FIX-003E=`BLOCKED_EXTERNAL`。
 - [x] 清理或隔离既有 `artifacts/**/artifacts`、`artifacts/**/bin`、`artifacts/**/obj` 历史产物，并重新核对根 `artifacts/` 目录治理门禁；当前扫描结果为 `nested_generated_dirs=0`。
 - [x] 将刷新候选的测试、benchmark、resource、package 和 API 产物统一绑定到同一 immutable candidate；当前 build/package/API capture、Provider/Real IO/Hotspot/Entity after v2 和 100K c64 资源证据已由 `manifest-current-20260921.md` 封存，旧候选产物仍明确标记为历史记录。
 - [x] 处理独立 `review.md` 的 FIX-001；用户批准、baseline、compare 和 Public API 门禁均已闭合。
-- [x] 更新独立 `review.md` 的当前机器状态：顶层已改为 `AI_REVIEW_STATUS: BLOCKED`，不再保留可被机器误判的顶层 `NEEDS_FIX`；旧审查文本仅保留为历史证据。当前 `FIX-002C=OPEN_ACTIONABLE`，`FIX-003D=LOCAL_PROFILE_EVIDENCE`、`FIX-003E=BLOCKED_EXTERNAL`，性能修复和外部门禁完成前不能标记 `COMPLETED`。
+- [x] 更新独立 `review.md` 的当前机器状态：顶层已改为 `AI_REVIEW_STATUS: BLOCKED`，不再保留可被机器误判的顶层 `NEEDS_FIX`；该文件仍记录 Round 43 的 `FIX-002C=OPEN_ACTIONABLE` 历史分类，等待独立 Reviewer 复核，不能由本地执行记录覆盖。`FIX-003D=LOCAL_PROFILE_EVIDENCE`、`FIX-003E=BLOCKED_EXTERNAL`，性能审查和外部门禁完成前不能标记 `COMPLETED`。
 - [x] 修复 Sol Medium 新增的 `FIX-005`/`FIX-006` 实现缺口；Sol Medium 已完成最终独立复审并确认 `FIX-005`/`FIX-006` 已关闭。
+
+### Round 44（MiniExcel 行字典分配热点修复）
+
+- 本轮只修改 `MiniExcelExcelExporter.EnumerateRows`：按固定列与动态列数量预分配每行字典容量，并在行循环外固定有效 Culture；没有修改公共 API、请求签名、Provider 能力声明或异步合同。新增的固定列延迟序列真实 XLSX 结构测试保留，未改变业务结果。
+- MiniExcel 职责测试在双 TFM 均通过：net8.0 `57/57`、net6.0 `57/57`；两次 Release 编译均为 `0` 个警告、`0` 个错误。受影响文件的 `git diff --check` 通过，现有 `.cs` 文件保持 UTF-8 BOM/LF 约定。
+- 方向性 100K Provider 探针使用同一数据集、3 次重复：`.codex-temp/perf-mini-original.jsonl` 的同步中位耗时约 `1555.8 ms`，`.codex-temp/perf-mini-capacity.jsonl` 约 `1326.6 ms`，输出字节与分配量保持同量级；异步 3 次均完成且无错误。两份探针的程序集身份并非同一 immutable candidate，结果只用于定位方向，不替代正式 before/after 或发布阈值证据。
+- 该修复关闭了 `FIX-002C` 的 MiniExcel 行字典热点子项，但不能关闭整个 `FIX-002C`：NPOI async、`excel-file-sync`、`excel-file-async`、`excel-throttled-async` 尚未在本次候选上完成同候选确认。没有重跑 Relation 100K、c16/c64 或完整 A-I。
+- 由于 `artifacts/benchmarks/...` 目录当前拒绝新文件写入，本轮原始探针暂保存在 `.codex-temp/`；没有覆盖或改写既有正式 artifact，也没有据此更新 API 基线、版本或发布状态。
+
+### Round 45（NPOI 异步暂存句柄复用）
+
+- `NpoiAsyncStaging` 在临时文件刷新后保留同一 `FileStream` 作为读取句柄，复制完成后统一释放并删除临时文件；`WriteStream` 仍在刷新后保持原有不可用边界。新增 `TempFileStaging_ShouldPreserveWriteBoundaryAfterFlush` 覆盖刷新、复制和清理契约，没有修改公共 API 或文件提交行为。
+- `AsyncPipelineTest` 双 TFM 均通过：net8.0 `25/25`、net6.0 `25/25`。NPOI 全量测试在双 TFM 各 `1441` 项通过；各有 `13` 项文件替换测试在 `SystemAtomicFileSystem.Replace` 报 `UnauthorizedAccessException`，失败集中在既有 `File.Replace` 环节，属于当前 Windows 测试环境门禁，未涉及暂存调用栈。编译过程仅出现既有测试 XML 注释警告。
+- 同一基准运行器下的 100K NPOI 三次方向性 A/B：暂存逻辑基线同步中位约 `3382.2 ms`、异步约 `3807.6 ms`；句柄复用候选同步约 `3243.4 ms`、异步约 `3360.6 ms`，分配量保持同量级。两次 Release 编译的程序集身份不同，结果仅用于确认优化方向，不能替代同一 immutable candidate 的正式 before/after 或预算门禁。
+- 本轮只收敛 NPOI async 的一个内部 IO 热点；`FIX-002C` 仍保持 `OPEN_ACTIONABLE`，`excel-file-sync`、`excel-file-async`、`excel-throttled-async` 及正式同候选性能确认继续列为 TODO。未重跑 Relation 100K、c16/c64 或完整 A-I，也未修改 `review.md`、API 基线、版本和发布状态。
+
+### Round 46（原子提交临时流缓冲对齐）
+
+- `SystemAtomicFileSystem.CreateFile` 的临时输出流缓冲从 `4096` 对齐到 `81920` 字节，与 NPOI staging 和其他顺序文件流一致；没有改变刷新、替换、取消或失败清理顺序。
+- Core 原子提交职责测试双 TFM 均通过：net8.0 `9/9`、net6.0 `9/9`；当前 Core Release 编译为 `0` 个警告、`0` 个错误。使用当前 Core 构建的 NPOI `AsyncPipelineTest` 双 TFM 各 `25/25` 通过。
+- 同一运行器的 100K Real IO 方向性 A/B：同步文件中位耗时从 `3774.2 ms`（4 KiB）降至 `3396.8 ms`（80 KiB）；异步文件为 `2614.9 ms` 对 `4603.9 ms`，受机器噪声影响不稳定；受控异步流为 `1751.1 ms` 对 `2013.2 ms`，该路径不经过原子提交流。原始样本保存在 `.codex-temp/perf-corebuffer-baseline-*.jsonl` 与 `.codex-temp/perf-corebuffer-*.jsonl`，程序集身份不同，均仅作方向性证据。
+- 本轮只收敛默认原子提交的缓冲热点；`FIX-002C` 仍保持 `OPEN_ACTIONABLE`，NPOI async、`excel-file-sync`、`excel-file-async`、`excel-throttled-async` 的同候选正式确认、Relation 100K、c16/c64 和完整 A-I 继续列入 TODO。
+
+### Round 47（NPOI 属性读取器候选评估）
+
+- 评估了将 `ExcelColumnPlan.Getter` 从每格 `PropertyInfo.GetValue` 改为一次编译表达式的候选；该改动只触及内部 NPOI 访问路径，不涉及公共 API 或业务语义。
+- 为避免并行资源争用，使用同一当前工作树分别构建反射基线和表达式候选，并以单进程 100K NPOI 同步短探针测量；反射约 `5481.3 ms`，表达式约 `8681.0 ms`。样本来自复用的隔离 Benchmark runner，且只完成一条正式样本，不能替代正式预算矩阵。
+- 表达式候选未显示收益，已回退源码和临时职责测试；正式工作树不保留 `ExcelColumnPlan` 读取器差异。当前 Benchmark 全量重建还受离线缓存缺少 `Microsoft.Extensions.Logging.Abstractions 6.0.0` 阻断，未伪造性能门禁结果。
+- `FIX-002C` 仍保持 `OPEN_ACTIONABLE`；继续优先处理 NPOI async 与三个文件端点的同候选正式确认，不重跑 Relation 100K、c16/c64 或完整 A-I。
+
+### Round 48（Excel 文件端点输入缓冲候选评估）
+
+- 评估了将 `ExcelStreamExtensions` 同步/异步文件导入的输入缓冲从 4 KiB 对齐到 80 KiB；双 TFM `ExcelStreamExtensionsTest` 在候选版本均为 `25/25 PASS`，未观察到结构或资源契约变化。
+- 同一当前工作树的串行短探针均成功，候选同步 `1121.0 ms`、4 KiB 基线 `956.6 ms`（100K，单样本）；输出字节、托管分配和状态均一致。该样本只用于方向判断，不能替代正式预算矩阵。
+- 候选未显示收益且方向偏慢，已恢复原始同步/异步读取构造；当前生产差异不保留该输入缓冲改动。Benchmark 全量重建仍受离线缓存缺少 `Microsoft.Extensions.Logging.Abstractions 6.0.0` 阻断，未写入正式 artifact。
+- `FIX-002C` 仍保持 `OPEN_ACTIONABLE`；继续保留已验证的 NPOI 暂存句柄复用和原子提交写入缓冲，正式同候选性能确认与外部门禁仍列入 TODO。
+
+### Round 49（File.Replace 环境边界与 Benchmark assets 诊断）
+
+- NPOI `ExportToFile_Success_ShouldCreateAndReplaceTarget` 在 net6/net8 的 L1 复现均失败于 `SystemAtomicFileSystem.Replace` 的三参数 `File.Replace(source, target, null)`；将测试读取改为内存流后仍失败，随后已恢复测试夹具原状。
+- 同一临时目录的 C# 系统探针确认：三参数 `File.Replace` 在当前环境返回 `UnauthorizedAccessException`，带真实备份路径的四参数调用可以成功，`File.Move(..., overwrite:true)` 也可以成功。生产适配器未改用非原子移动，也未引入未经验证的备份清理语义；该项保持环境门禁边界。
+- 使用现有本地包目录尝试重新生成 Benchmark restore assets，restore 在 `GetAllRestoreProjectPathItems` 阶段无错误退出但返回非零，`ClosedXml` assets 仍绑定 `C:\Users\CodexSandboxOffline\.nuget\packages`；Benchmark 全量构建继续不可验证，未修改包配置或生成正式 artifact。
+- `FIX-002C` 仍为唯一 `OPEN_ACTIONABLE`，但当前本地可修范围暂未形成新的可靠性能候选；NPOI 异步、三个文件端点的同候选正式确认和外部资源门禁继续保留原 TODO。
+
+### Round 50（MiniExcel 日期属性缓存候选评估）
+
+- 评估了在 MiniExcel Sheet 计划阶段缓存 `ExcelDateAttribute` 和日期目标类型，并将缓存传入每个单元格转换路径的候选；改动只涉及内部 `ColumnBinding`、日期单元格恢复和动态列类型解析，不改变公共 API 或日期转换语义。
+- 候选职责测试双 TFM 均通过：net8.0 与 net6.0 的日期系统、起始行、异步导入和动态日期测试各 `7/7 PASS`。`git diff --check` 及改动 C# 文件的 BOM/LF 检查通过。
+- 同一 100K 数据集和 runner 的方向性样本中，原始路径同步/异步约 `2705.17/2108.74 ms`，候选约 `3422.02/2229.12 ms`；输出、错误和结构保持一致，但候选未显示稳定收益，且同步方向明显变慢。该样本仅用于候选筛选，未作为正式阈值证据。
+- 已撤回候选源码，避免将未证实甚至方向偏慢的复杂度引入生产路径。`FIX-002C` 仍保持 `OPEN_ACTIONABLE`；当前没有新的本地性能修复可安全确认，NPOI 异步、三个文件端点的同候选正式确认、Relation 100K/c16/c64、完整 A-I 和外部门禁继续列入 TODO。
+
+### Round 51（NPOI SXSSF 阈值候选评估）
+
+- 评估了将大型简单列表的 SXSSF 阈值从 `100000` 提高到 `500000`，使 100K 列表改走 XSSF DOM；该候选只改变内部执行选择，不改变公共 API 或输出契约。
+- 候选 NPOI职责测试 `Export_LargeSimpleXlsx_ShouldRoundTripRowsAndStyles` 与取消清理测试均通过，net8.0 为 `2/2 PASS`，Release 编译 `0` 警告、`0` 错误。
+- 同一 100K Provider runner 和相同数据集的方向性三次样本：原阈值同步/异步中位约 `8157.56/6150.50 ms`，500K 候选约 `6109.50/9761.56 ms`；同步有收益，但异步明显变慢，无法同时改善 `FIX-002C` 的批准目标。样本只用于候选筛选，未作为正式阈值证据。
+- 已撤回阈值候选，生产仍保持 `100000`。`FIX-002C` 继续为唯一 `OPEN_ACTIONABLE`；当前本地候选均未形成可安全确认的统一性能修复，外部资源与正式同候选门禁 TODO 不变。
+
+### Round 52（NPOI 异步序列化重复刷新修复）
+
+- `NpoiNonDisposingStream` 新增仅内部使用的刷新延迟开关。同步导出仍在 NPOI 序列化的 `Flush`/`Dispose` 边界刷新目标流；异步 Workbook、Entity 和模板路径将刷新延迟到 `NpoiAsyncStaging.FlushAsync`，避免 NPOI 压缩包写入期间对 staging 重复执行同步刷新。未改变公共 API、输出格式、取消、流所有权或文件提交顺序。
+- 新增 `AsyncPipelineTest.ExcelAsync_ShouldDeferStagingFlushToAsyncBoundary` 与 `EntityAsync_ShouldDeferStagingFlushToAsyncBoundary`，使用拒绝同步刷新、允许异步刷新的 staging 流验证 Workbook 和 Entity 边界。两项测试在 net8.0、net6.0 均通过；完整 `AsyncPipelineTest` 双 TFM 各 `27/27 PASS`。
+- 受影响的 NPOI 回归职责测试双 TFM 各执行 `280` 项，`279` 项通过；唯一失败为既有 `ExcelWorkbookRequestTest.ExportToFile_Success_ShouldCreateAndReplaceTarget`，失败点是当前 Windows 环境三参数 `File.Replace` 的 `UnauthorizedAccessException`，与本次刷新路径无关。该环境边界已在 Round 49 记录。
+- 同一 100K 数据集和三次方向性样本：NPOI Provider 同步/异步中位约 `7786.16/5486.27 ms`，Round 51 原阈值基线约 `8157.56/6150.50 ms`；Real IO 的 `excel-file-sync`、`excel-file-async`、`excel-throttled-async` 中位约 `933.24/1087.16/3272.34 ms`，输出完整且场景均 `passed`。样本只确认该局部候选方向，尚不能替代五目标 immutable candidate 正式门禁。
+- 保留该最小修复；`FIX-002C` 仍未整体关闭，MiniExcel、三个文件端点的正式同候选 before/after、Relation 100K/c16/c64、完整 A-I 和外部资源/CI 门禁继续列入 TODO。
+
+### Round 53（NPOI 行物化读取分派优化）
+
+- `NpoiImportRowMaterializer` 将普通 NPOI 行路径和前向解析路径合并到无 `Func<int, ExcelCellValue>` 委托的内部读取核心；普通路径直接读取 `IRow.GetCell`，前向路径继续读取已解析字典。转换器、原生/配置校验、唯一值跟踪、图片、动态字典写回和错误坐标语义未改变，未修改公共 API。
+- 使用新程序集的隔离 Release 构建为 `0` 警告、`0` 错误。NPOI `AsyncPipelineTest` 双 TFM 各 `27/27 PASS`；受影响的 `EntityLayoutProviderTest`、`EntityRepeatedPageHeaderTest`、`NamedListValidationTest` 和 `ExcelP0RegressionTest` 合计双 TFM 各 `355/355 PASS`。
+- 新候选三次方向探针 `.codex-temp/round54-row-reader.jsonl` 的 NPOI 100K 往返中位为同步 `4916.37 ms`、异步 `5155.02 ms`，托管分配约 `1.481 GB`；相较 Round 53 当前候选的异步 `8582.42 ms`，确认该局部修复方向有效。该三次结果仅作定位证据，后续以五次确认收口。
+
+### Round 54（五目标同候选性能确认）
+
+- 新候选程序集身份绑定为 Benchmark `6C1517DBDF44EF71C7F37F5845E8EFF158D2642865CF85DAC91DD29C6BE42E56`、Abstractions `F1CA7EDE41CD0A8B064C3B991790C2F007DCFA4486C15FADFB3401989EAC3BD2`、Core `656227357E01265758EF5AA04D7F859594A726BF0E566F5A83843A659F8A47B6`、NPOI `6301EFFD6F4CA74256231F1351B50CEB10CE4D4630A0E67122CF6C700D85DD18`；五项目标均为 100K、`5/5`，原始样本保存在 `.codex-temp/round54-row-reader-5rep.jsonl`、`.codex-temp/round54-miniexcel-5rep.jsonl` 和 `.codex-temp/round54-realio-*.jsonl`。
+- 相对批准 before 中位数，NPOI async 为 `4503.30 ms` 对 `4734.42 ms`（`-4.88%`）；MiniExcel sync 为 `1740.60 ms` 对 `1423.58 ms`（`+22.27%`）；`excel-file-sync` 为 `888.76 ms` 对 `1586.69 ms`（`-43.99%`）；`excel-file-async` 为 `708.95 ms` 对 `2036.25 ms`（`-65.18%`）；`excel-throttled-async` 为 `1202.57 ms` 对 `2387.22 ms`（`-49.62%`）。五项均未超过批准的 `25%` 回退预算，MiniExcel 仍是五项中最接近预算边界的目标。
+- Real IO 三场景均 `status=passed`，输出字节稳定，异步写入计数和字节数符合场景契约；NPOI 和 MiniExcel 往返行数完整。该结果仅关闭本地性能修复证据，不关闭外部生产/CI 门禁，也未重跑 Relation 100K、c16/c64 或完整 A-I。
+- 当前实现不再有本地 `OPEN_ACTIONABLE` 性能代码 TODO；独立 `review.md` 仍保留 Round 43 的历史分类，需 Reviewer 复核后再更新机器状态。其余 FIX-003 外部资源与外部门禁保持原状。
