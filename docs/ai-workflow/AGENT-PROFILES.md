@@ -1,6 +1,6 @@
 # Agent Runtime Profiles 使用说明
 
-V4.3 将 **模型选择 + 思考等级策略** 统一收敛到：
+V4.4 将 **模型选择 + 思考等级策略 + 执行模式** 统一收敛到：
 
 ```text
 .agents/agent-profiles.json
@@ -8,7 +8,7 @@ V4.3 将 **模型选择 + 思考等级策略** 统一收敛到：
 
 并新增初始化器：
 
-```bash
+```powershell
 node .agents/scripts/init-agent-profiles.mjs
 ```
 
@@ -18,7 +18,7 @@ node .agents/scripts/init-agent-profiles.mjs
 
 直接执行：
 
-```bash
+```powershell
 node .agents/scripts/init-agent-profiles.mjs
 ```
 
@@ -36,38 +36,26 @@ node .agents/scripts/init-agent-profiles.mjs
 
 使用均衡模式初始化：
 
-```bash
-node .agents/scripts/init-agent-profiles.mjs \
-  --preset balanced \
-  --yes
+```powershell
+node .agents/scripts/init-agent-profiles.mjs --preset balanced --yes
 ```
 
 如果已有配置并确认重新生成：
 
-```bash
-node .agents/scripts/init-agent-profiles.mjs \
-  --preset balanced \
-  --yes \
-  --force
+```powershell
+node .agents/scripts/init-agent-profiles.mjs --preset balanced --yes --force
 ```
 
 从现有下游 Agent 配置读取模型/思考等级后初始化：
 
-```bash
-node .agents/scripts/init-agent-profiles.mjs \
-  --preset balanced \
-  --from-existing \
-  --force
+```powershell
+node .agents/scripts/init-agent-profiles.mjs --preset balanced --from-existing --force
 ```
 
 只生成，不立即同步：
 
-```bash
-node .agents/scripts/init-agent-profiles.mjs \
-  --preset balanced \
-  --yes \
-  --force \
-  --no-sync
+```powershell
+node .agents/scripts/init-agent-profiles.mjs --preset balanced --yes --force --no-sync
 ```
 
 ## 3. 配置职责
@@ -158,7 +146,7 @@ CLI 校验错误
 
 查看：
 
-```bash
+```powershell
 node .agents/scripts/sync-agent-profiles.mjs --list
 ```
 
@@ -166,31 +154,31 @@ node .agents/scripts/sync-agent-profiles.mjs --list
 
 预览：
 
-```bash
+```powershell
 node .agents/scripts/sync-agent-profiles.mjs balanced --dry-run
 ```
 
 正式同步三边：
 
-```bash
+```powershell
 node .agents/scripts/sync-agent-profiles.mjs balanced
 ```
 
 只同步 Copilot：
 
-```bash
+```powershell
 node .agents/scripts/sync-agent-profiles.mjs balanced --target copilot
 ```
 
 只同步 Codex：
 
-```bash
+```powershell
 node .agents/scripts/sync-agent-profiles.mjs balanced --target codex
 ```
 
 只同步 Antigravity：
 
-```bash
+```powershell
 node .agents/scripts/sync-agent-profiles.mjs balanced --target antigravity
 ```
 
@@ -296,10 +284,14 @@ antigravity
 
 `sync-agent-profiles.mjs` 会把 executionMode 写入运行时报告；Codex TOML 使用注释记录，不写入未经当前环境确认的额外配置字段。
 
-真正的 Goal 目标由：
+Goal 阶段目标文本由：
 
-```bash
+```powershell
 node .agents/scripts/goal-task.mjs ...
 ```
 
-生成。
+该脚本只输出目标文本，不会启动原生 Goal、执行 Skill 或创建任务产物；调用者需将文本提交给对应 Harness。开始 Goal 或 Plan 执行前需读取用户级 `GOAL_RULES.md`；自动 Fix 仅在 `OPEN_ACTIONABLE > 0` 时允许，自动 Review/Fix 最多三轮。项目策略 `reviewLoop.maxRounds: 5` 不覆盖该限制。
+
+## 实现、依赖与限制
+
+配置结构见 `.agents/agent-profiles.json`，初始化由 `.agents/scripts/init-agent-profiles.mjs` 负责，同步由 `.agents/scripts/sync-agent-profiles.mjs` 生成 `.github/agents/`、`.codex/` 和 `.agents/agents/` 的 Harness 文件，并写运行时报告到 `.agents/runtime-profiles/`。Profile 和阶段安全策略分别配置在 `.agents/agent-profiles.json`、`.agents/workflow-policy.json`。脚本使用 Node.js ES Modules 和内置模块；仓库未声明最低 Node.js 版本或 npm 依赖。模型名和思考等级必须由目标 Harness 实际支持；Profile 中的 `effort` 可能只是期望值，`executionMode` 也不会自行启动 Goal。

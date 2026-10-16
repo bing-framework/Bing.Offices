@@ -57,15 +57,17 @@ taskId=<taskId>
 
 状态注册：
 
-```bash
+```powershell
 node .agents/scripts/task-state.mjs start <taskId> --source codex
 ```
 
 完成后：
 
-```bash
+```powershell
 node .agents/scripts/task-finish.mjs <taskId>
 ```
+
+`task-finish.mjs` 校验 `execution.md` 的终态机器元数据并收口任务；按 `.env.local`/进程环境中的通知配置，它也可能发送阶段通知。若要禁止该次通知，可传 `--no-notify`。
 
 ## 代码 Review
 
@@ -102,9 +104,9 @@ fixScope=recommended
 $review-code
 ```
 
-直到 PASS / PASS_WITH_ISSUES，或明确 BLOCKED。
+仅当 `OPEN_ACTIONABLE > 0` 时才开始新的自动 Fix。没有可执行 Finding、仅剩审批/外部阻塞或达到轮次上限时停止；自动 Review/Fix 最多三轮。
 
-## Goal / 目标推理
+## Goal 目标文本
 
 V4.4 把 Codex Goal 作为正式 executionMode。
 
@@ -116,9 +118,9 @@ V4.4 把 Codex Goal 作为正式 executionMode。
 }
 ```
 
-生成标准 Goal 目标：
+生成阶段目标文本：
 
-```bash
+```powershell
 node .agents/scripts/goal-task.mjs create-plan <taskId> --harness codex
 node .agents/scripts/goal-task.mjs execute-plan <taskId> --harness codex
 node .agents/scripts/goal-task.mjs review-code <taskId> --harness codex
@@ -127,11 +129,13 @@ node .agents/scripts/goal-task.mjs fix-review <taskId> --harness codex
 
 将生成的目标文本交给当前 Codex 的 Goal 入口。
 
+`goal-task.mjs` 只读取 Profile 和 `.agents/workflow-policy.json`，向标准输出写出目标文本（`--json` 可输出结构化结果）；它不会启动 Codex 原生 Goal、运行 Skill 或执法运行时间/Review 轮次。开始 Goal 或 Plan 执行前先读取用户级 `GOAL_RULES.md`（`$CODEX_HOME/GOAL_RULES.md`；未设置时为 `~/.codex/GOAL_RULES.md`）。该文件规定只有 `OPEN_ACTIONABLE` 才能进入下一轮自动 Fix，自动 Review/Fix 最多三轮；本地策略中的 `reviewLoop.maxRounds: 5` 不得覆盖此限制。
+
 原则：
 
 ```text
 Skill = WHAT / RULES / BOUNDARY
-Goal  = AUTONOMY / HORIZON / TARGET REASONING
+Goal  = 自主执行 / 持续时长 / 目标推理
 ```
 
 Goal 不替代 Skill。
@@ -140,7 +144,7 @@ Goal 不替代 Skill。
 
 同步：
 
-```bash
+```powershell
 node .agents/scripts/sync-agent-profiles.mjs balanced --target codex
 ```
 
@@ -153,3 +157,7 @@ node .agents/scripts/sync-agent-profiles.mjs balanced --target codex
 ```
 
 Codex 角色 TOML 会记录模型、model_reasoning_effort，并以注释记录 executionMode。
+
+## 实现与运行边界
+
+公共契约位于 `.agents/skills/`，任务状态由 `.agents/scripts/task-state.mjs`、`task-finish.mjs` 管理；Profile 同步由 `sync-agent-profiles.mjs` 生成 Codex TOML。脚本使用 Node.js ES Modules 和内置模块；仓库未声明最低 Node.js 版本或 npm 依赖。`executionMode=goal` 是同步出的角色策略，不会替代在 Codex 中手动启动原生 Goal。

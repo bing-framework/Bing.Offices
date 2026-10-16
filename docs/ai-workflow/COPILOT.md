@@ -1,4 +1,4 @@
-# Copilot V4.1 使用说明
+# Copilot 使用说明（V4.4）
 
 ## 1. Copilot Hook
 
@@ -46,15 +46,15 @@ Hook 会写入：
 
 Copilot Stop Hook 会：
 
-### Plan
+### 计划
 
 检测新的 `plan.md`，调用：
 
-```bash
+```powershell
 workflow-notify.mjs plan-created
 ```
 
-### Execute / Fix
+### 执行与修复
 
 如果 runtime 仍：
 
@@ -77,13 +77,13 @@ decision=block
 task-finish.mjs
 ```
 
-兜底 Finalize + 飞书。
+按通知配置执行兜底收口和飞书通知。
 
-### Review
+### 审查
 
 检测新的 `review.md`，调用：
 
-```bash
+```powershell
 workflow-notify.mjs review-completed
 ```
 
@@ -152,7 +152,7 @@ OPTIONAL
 
 Copilot 自定义 Agent 的 `model:` 由：
 
-```bash
+```powershell
 node .agents/scripts/sync-agent-profiles.mjs <profile> --target copilot
 ```
 
@@ -188,3 +188,9 @@ Copilot 也可以直接使用：
 ```
 
 之所以把 Prompt Adapter 改名，是为了避免与公共 Skill 的 Slash Command 同名冲突。
+
+## 实现、配置与边界
+
+Hook 入口由 `.github/hooks/ai-workflow.json` 注册，逻辑位于 `.agents/scripts/copilot-hook.mjs`；阶段通知和任务收口分别使用 `workflow-notify.mjs`、`task-finish.mjs`。Agent Profile 来自 `.agents/agent-profiles.json`，同步目标是 `.github/agents/`；可选通知读取 `.env.local` 或 `AI_WORKFLOW_ENV_FILE` 指定的环境文件，`AI_WORKFLOW_NOTIFY` 优先，`STOP_GUARD_NOTIFY` 仅作兼容回退。脚本使用 Node.js ES Modules 与内置模块，仓库未声明最低版本或 npm 依赖。
+
+此适配要求 VS Code 实际加载 Workspace Hooks；未加载时不会触发阶段检测。Stop Hook 只对仍处于 `IN_PROGRESS` 的活动任务请求有限续跑，重复 Stop 受 `stop_hook_active` 限制。Copilot Profile 的思考等级是记录的期望值，由 IDE/会话应用；本适配不启动原生 Goal。

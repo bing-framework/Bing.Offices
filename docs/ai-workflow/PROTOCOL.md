@@ -1,4 +1,4 @@
-# Universal Workflow V4.1 协议
+# Universal Workflow V4.4 协议
 
 ## execution.md
 
@@ -139,3 +139,7 @@ fixScope
 Git 安全边界
 workflow-policy.json
 ```
+
+开始 Goal 或 Plan 执行前读取用户级 `GOAL_RULES.md`（`$CODEX_HOME/GOAL_RULES.md`；未设置时为 `~/.codex/GOAL_RULES.md`）。只有 `OPEN_ACTIONABLE` finding 才允许进入下一轮自动 Fix；自动 Review/Fix 最多三轮。此上限高于 `.agents/workflow-policy.json` 中的 `reviewLoop.maxRounds: 5`，且 `goal-task.mjs` 不会自行启动或强制执行这些轮次。
+
+机器协议由 `.agents/scripts/task-state.mjs`、`task-finish.mjs` 和 `workflow-notify.mjs` 读取；阶段职责见 `.agents/skills/`，执行策略见 `.agents/workflow-policy.json`。这些脚本基于 Node.js ES Modules 与内置模块运行，仓库未声明最低版本或 npm 依赖。状态脚本只校验文件格式、任务标识和阶段状态，不会替代 Skill 的代码验收或 Review 判断。
