@@ -2,6 +2,7 @@
 using System.IO.Compression;
 using System.Text;
 using System.Xml;
+using Bing.Offices.Entities;
 
 namespace Bing.Offices;
 
@@ -28,12 +29,12 @@ internal sealed class ExcelForwardXlsxSharedStrings : IReadOnlyList<string>, IDi
     /// <summary>
     /// 磁盘索引的临时存储。
     /// </summary>
-    private readonly FileStream _storage;
+    private readonly Stream _storage;
 
     /// <summary>
     /// 磁盘偏移索引的临时存储。
     /// </summary>
-    private readonly FileStream _indexStorage;
+    private readonly Stream _indexStorage;
 
     /// <summary>
     /// 读取磁盘偏移索引。
@@ -66,7 +67,7 @@ internal sealed class ExcelForwardXlsxSharedStrings : IReadOnlyList<string>, IDi
     /// <param name="storage">字符串临时存储。</param>
     /// <param name="indexStorage">字符串偏移索引临时存储。</param>
     /// <param name="count">共享字符串数量。</param>
-    private ExcelForwardXlsxSharedStrings(FileStream storage, FileStream indexStorage, int count)
+    private ExcelForwardXlsxSharedStrings(Stream storage, Stream indexStorage, int count)
     {
         _storage = storage ?? throw new ArgumentNullException(nameof(storage));
         _indexStorage = indexStorage ?? throw new ArgumentNullException(nameof(indexStorage));
@@ -145,9 +146,13 @@ internal sealed class ExcelForwardXlsxSharedStrings : IReadOnlyList<string>, IDi
     /// <param name="entry">共享字符串部件。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <param name="temporaryDirectory">临时文件目录。</param>
+    /// <param name="temporaryStorage">与输入和中间文件共享的临时存储预算。</param>
+    /// <param name="createTemporaryFile">可选的内部文件创建入口，用于验证 IO 故障清理。</param>
     /// <returns>磁盘索引共享字符串。</returns>
     internal static ExcelForwardXlsxSharedStrings ReadDiskBacked(ZipArchiveEntry entry,
-        CancellationToken cancellationToken, string temporaryDirectory)
+        CancellationToken cancellationToken, string temporaryDirectory,
+        ExcelTemporaryStorageBudget temporaryStorage = null,
+        Func<string, FileOptions, Stream> createTemporaryFile = null)
     {
         if (entry == null)
             throw new ArgumentNullException(nameof(entry));
@@ -162,14 +167,15 @@ internal sealed class ExcelForwardXlsxSharedStrings : IReadOnlyList<string>, IDi
             $"bing-offices-forward-shared-text-{fileId}.bin");
         var indexPath = Path.Combine(temporaryDirectory,
             $"bing-offices-forward-shared-index-{fileId}.bin");
-        FileStream storage = null;
-        FileStream indexStorage = null;
+        Stream storage = null;
+        Stream indexStorage = null;
         try
         {
-            storage = new FileStream(storagePath, FileMode.CreateNew, FileAccess.ReadWrite,
-                FileShare.Read, 81920, FileOptions.DeleteOnClose | FileOptions.SequentialScan);
-            indexStorage = new FileStream(indexPath, FileMode.CreateNew, FileAccess.ReadWrite,
-                FileShare.Read, 81920, FileOptions.DeleteOnClose);
+            temporaryStorage ??= new ExcelTemporaryStorageBudget(null, null);
+            createTemporaryFile ??= (path, options) => temporaryStorage.CreateFile(path, options);
+            storage = createTemporaryFile(storagePath,
+                FileOptions.DeleteOnClose | FileOptions.SequentialScan);
+            indexStorage = createTemporaryFile(indexPath, FileOptions.DeleteOnClose);
             var valueCount = 0;
             using var indexWriter = new BinaryWriter(indexStorage, Utf8, leaveOpen: true);
             using var stream = entry.Open();
@@ -245,8 +251,9 @@ internal sealed class ExcelForwardXlsxSharedStrings : IReadOnlyList<string>, IDi
         }
         catch
         {
-            storage?.Dispose();
-            indexStorage?.Dispose();
+            // 清理故障不得阻止其他文件释放或掩盖原始解析/写入异常。
+            DisposeAfterFailure(storage);
+            DisposeAfterFailure(indexStorage);
             TryDelete(storagePath);
             TryDelete(indexPath);
             throw;
@@ -306,6 +313,15 @@ internal sealed class ExcelForwardXlsxSharedStrings : IReadOnlyList<string>, IDi
         {
             // 临时文件由 DeleteOnClose 负责兜底清理。
         }
+    }
+
+    /// <summary>
+    /// 故障退出时尽力释放单个临时流，原始异常由调用处继续传播。
+    /// </summary>
+    private static void DisposeAfterFailure(Stream stream)
+    {
+        try { stream?.Dispose(); }
+        catch { /* 继续清理另一文件及路径，不替换原始异常。 */ }
     }
 
     /// <summary>

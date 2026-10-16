@@ -24,6 +24,8 @@ Bing是一个.net core平台下的应用框架，旨在于提升小型团队的�
              Link="Bing\Offices\Imports\ExcelWorkbookBatchProjection.cs" />
     <Compile Include="..\provider-shared\ExcelEntityBatchProjection.cs"
              Link="Bing\Offices\Entities\ExcelEntityBatchProjection.cs" />
+    <Compile Include="..\provider-shared\ExcelTemporaryStorageBudget.cs"
+             Link="Bing\Offices\Entities\ExcelTemporaryStorageBudget.cs" />
     <Compile Include="..\provider-shared\ExcelEntityRowPlan.cs"
              Link="Bing\Offices\Entities\ExcelEntityRowPlan.cs" />
     <Compile Include="..\provider-shared\ExcelEntityPageAnchorNames.cs"

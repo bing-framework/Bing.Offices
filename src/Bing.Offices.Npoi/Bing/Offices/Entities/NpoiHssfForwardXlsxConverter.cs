@@ -9,6 +9,7 @@ using System.Xml;
 using Bing.Offices.ExcelDataReader;
 using Bing.Offices.Exceptions;
 using Bing.Offices.Imports;
+using Bing.Offices.Entities;
 using NPOI.HSSF.EventUserModel;
 using NPOI.HSSF.Model;
 using NPOI.HSSF.Record;
@@ -52,11 +53,13 @@ internal static class NpoiHssfForwardXlsxConverter
     /// <param name="cancellationToken">取消令牌。</param>
     /// <param name="failureCapture">可选的低保留失败工作簿捕获器。</param>
     /// <param name="requireNativeDataValidation">是否要求安全投影原生校验；不支持时失败。</param>
+    /// <param name="temporaryStorage">与源输入和后续解析共享的临时存储预算。</param>
     /// <returns>位于起始位置、由调用方负责释放的 XLSX 临时文件流。</returns>
-    internal static FileStream Convert(Stream source, IReadOnlyList<string> sheetNames,
+    internal static Stream Convert(Stream source, IReadOnlyList<string> sheetNames,
         ExcelResourceLimits limits, CancellationToken cancellationToken,
         ExcelDataReaderFailureWorkbookCapture failureCapture = null,
-        bool requireNativeDataValidation = false)
+        bool requireNativeDataValidation = false,
+        ExcelTemporaryStorageBudget temporaryStorage = null)
     {
         if (source == null)
             throw new ArgumentNullException(nameof(source));
@@ -70,11 +73,11 @@ internal static class NpoiHssfForwardXlsxConverter
         limits.Validate();
         cancellationToken.ThrowIfCancellationRequested();
 
-        var output = CreateTempBuffer();
+        var output = CreateTempBuffer(temporaryStorage);
         try
         {
-            var listener = new Listener(sheetNames, limits, cancellationToken, failureCapture,
-                requireNativeDataValidation);
+            using var listener = new Listener(sheetNames, limits, cancellationToken, failureCapture,
+                requireNativeDataValidation, temporaryStorage);
             var tracking = new FormatTrackingHSSFListener(listener);
             listener.SetFormatTracker(tracking);
             var request = new HSSFRequest();
@@ -94,7 +97,6 @@ internal static class NpoiHssfForwardXlsxConverter
             WritePackage(output, listener);
             output.Flush();
             output.Position = 0;
-            listener.Dispose();
             return output;
         }
         catch
@@ -107,7 +109,7 @@ internal static class NpoiHssfForwardXlsxConverter
     /// <summary>
     /// 写入最小的 XLSX 包结构。
     /// </summary>
-    private static void WritePackage(FileStream output, Listener listener)
+    private static void WritePackage(Stream output, Listener listener)
     {
         using var archive = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true);
         WriteXml(archive, "[Content_Types].xml", writer =>
@@ -495,12 +497,12 @@ internal static class NpoiHssfForwardXlsxConverter
     /// <summary>
     /// 创建由调用方负责释放并自动删除的转换输出文件。
     /// </summary>
-    private static FileStream CreateTempBuffer()
+    private static Stream CreateTempBuffer(ExcelTemporaryStorageBudget temporaryStorage)
     {
         var path = Path.Combine(Path.GetTempPath(),
             $"bing-offices-forward-hssf-{Guid.NewGuid():N}.xlsx");
-        return new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.Read,
-            81920, FileOptions.Asynchronous | FileOptions.SequentialScan | FileOptions.DeleteOnClose);
+        return (temporaryStorage ?? new ExcelTemporaryStorageBudget(null, "NPOI")).CreateFile(path,
+            FileOptions.Asynchronous | FileOptions.SequentialScan | FileOptions.DeleteOnClose);
     }
 
     /// <summary>
@@ -1006,10 +1008,12 @@ internal static class NpoiHssfForwardXlsxConverter
         private readonly List<ExcelDataReaderFailureConditionalFormatting>
             _conditionalFormattings = new();
 
+        private readonly ExcelTemporaryStorageBudget _temporaryStorage;
+
         internal Listener(IReadOnlyList<string> sheetNames, ExcelResourceLimits limits,
             CancellationToken cancellationToken,
             ExcelDataReaderFailureWorkbookCapture failureCapture,
-            bool requireNativeDataValidation)
+            bool requireNativeDataValidation, ExcelTemporaryStorageBudget temporaryStorage)
         {
             _requestedSheetNames = new HashSet<string>(sheetNames,
                 StringComparer.OrdinalIgnoreCase);
@@ -1017,6 +1021,7 @@ internal static class NpoiHssfForwardXlsxConverter
             _cancellationToken = cancellationToken;
             _failureCapture = failureCapture;
             _requireNativeDataValidation = requireNativeDataValidation;
+            _temporaryStorage = temporaryStorage;
         }
 
         internal IReadOnlyList<string> SheetNames => _selectedSheetNames;
@@ -1234,8 +1239,14 @@ internal static class NpoiHssfForwardXlsxConverter
         /// <inheritdoc />
         public void Dispose()
         {
+            Exception firstError = null;
             foreach (var sheet in _sheets)
-                sheet.Dispose();
+            {
+                try { sheet.Dispose(); }
+                catch (Exception exception) { firstError ??= exception; }
+            }
+            if (firstError != null)
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(firstError).Throw();
         }
 
         /// <summary>
@@ -1259,7 +1270,7 @@ internal static class NpoiHssfForwardXlsxConverter
                 _namedReferenceCells = _failureCapture != null
                     && _namedReferenceRanges.Count > 0
                     ? new Dictionary<int, Dictionary<int, object>>() : null;
-                _sheet = new SheetXmlBuffer();
+                _sheet = new SheetXmlBuffer(_temporaryStorage);
                 _columnMetadata = new Dictionary<int, (double Width, bool HasWidth, bool Hidden)>();
                 _rowMetadata = new Dictionary<int, (short Height, bool HasHeight, bool Hidden)>();
                 _mergeRegions = new List<(int FirstRow, int LastRow, int FirstColumn, int LastColumn)>();
@@ -2783,18 +2794,18 @@ internal static class NpoiHssfForwardXlsxConverter
     /// </summary>
     private sealed class SheetXmlBuffer : IDisposable
     {
-        private readonly FileStream _stream;
+        private readonly Stream _stream;
         private readonly XmlWriter _writer;
         private int _currentRow = -1;
         private bool _rowOpen;
         private bool _completed;
 
-        internal SheetXmlBuffer()
+        internal SheetXmlBuffer(ExcelTemporaryStorageBudget temporaryStorage)
         {
             var path = Path.Combine(Path.GetTempPath(),
                 $"bing-offices-forward-hssf-sheet-{Guid.NewGuid():N}.xml");
-            _stream = new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.Read,
-                81920, FileOptions.Asynchronous | FileOptions.SequentialScan | FileOptions.DeleteOnClose);
+            _stream = (temporaryStorage ?? new ExcelTemporaryStorageBudget(null, "NPOI")).CreateFile(path,
+                FileOptions.Asynchronous | FileOptions.SequentialScan | FileOptions.DeleteOnClose);
             _writer = XmlWriter.Create(_stream, new XmlWriterSettings
             {
                 Encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
@@ -2896,8 +2907,8 @@ internal static class NpoiHssfForwardXlsxConverter
         /// <inheritdoc />
         public void Dispose()
         {
-            _writer.Dispose();
-            _stream.Dispose();
+            try { _writer.Dispose(); }
+            finally { _stream.Dispose(); }
         }
 
         private void CloseRow()

@@ -17,6 +17,68 @@ namespace Bing.Offices.Tests;
 public sealed class ExcelForwardXlsxSharedStringsTest
 {
     /// <summary>
+    /// 正文流释放再次失败时仍清理索引文件，并保留最初的 XML 错误。
+    /// </summary>
+    [Fact]
+    public void ReadDiskBacked_WhenCleanupThrows_ShouldReleaseBothFilesAndPreserveParseError()
+    {
+        var directory = CreateTemporaryDirectory();
+        try
+        {
+            using var package = CreatePackage("<sst><si><t>broken</si></sst>");
+            using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+            var created = new List<DisposeFailureStream>();
+            var error = Assert.Throws<XmlException>(() => ExcelForwardXlsxSharedStrings.ReadDiskBacked(
+                archive.GetEntry("xl/sharedStrings.xml"), CancellationToken.None, directory,
+                createTemporaryFile: (path, options) =>
+                {
+                    var stream = new DisposeFailureStream(new FileStream(path, FileMode.CreateNew,
+                        FileAccess.ReadWrite, FileShare.Read, 81920, options), created.Count == 0);
+                    created.Add(stream);
+                    return stream;
+                }));
+            Assert.NotEmpty(error.Message);
+            Assert.Equal(2, created.Count);
+            Assert.All(created, stream => Assert.True(stream.WasDisposed));
+            Assert.Empty(Directory.GetFiles(directory));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    private sealed class DisposeFailureStream : Stream
+    {
+        private readonly Stream _inner;
+        private readonly bool _throwOnDispose;
+        internal DisposeFailureStream(Stream inner, bool throwOnDispose)
+        { _inner = inner; _throwOnDispose = throwOnDispose; }
+        internal bool WasDisposed { get; private set; }
+        public override bool CanRead => _inner.CanRead;
+        public override bool CanSeek => _inner.CanSeek;
+        public override bool CanWrite => _inner.CanWrite;
+        public override long Length => _inner.Length;
+        public override long Position { get => _inner.Position; set => _inner.Position = value; }
+        public override void Flush() => _inner.Flush();
+        public override int Read(byte[] buffer, int offset, int count) => _inner.Read(buffer, offset, count);
+        public override long Seek(long offset, SeekOrigin origin) => _inner.Seek(offset, origin);
+        public override void SetLength(long value) => _inner.SetLength(value);
+        public override void Write(byte[] buffer, int offset, int count) => _inner.Write(buffer, offset, count);
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                WasDisposed = true;
+                _inner.Dispose();
+                if (_throwOnDispose)
+                    throw new IOException("cleanup failed");
+            }
+            base.Dispose(disposing);
+        }
+    }
+
+    /// <summary>
     /// 验证大量短字符串的索引保存在磁盘且支持随机读取。
     /// </summary>
     [Fact]

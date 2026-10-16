@@ -113,7 +113,7 @@ internal sealed class NpoiEntityBatchImporter : IExcelEntityBatchImporter
     {
         if (options == null)
             throw new ArgumentNullException(nameof(options));
-        ValidateResultMode(options);
+        ValidateResultMode(options, template: true);
         if (ShouldUseForward(options))
         {
             var forwardOptions = ToForwardOptions(options);
@@ -159,7 +159,7 @@ internal sealed class NpoiEntityBatchImporter : IExcelEntityBatchImporter
     {
         if (options == null)
             throw new ArgumentNullException(nameof(options));
-        ValidateResultMode(options);
+        ValidateResultMode(options, template: true);
         if (ShouldUseForward(options))
         {
             var forwardOptions = ToForwardOptions(options);
@@ -206,12 +206,14 @@ internal sealed class NpoiEntityBatchImporter : IExcelEntityBatchImporter
         Action<ExcelEntityImportBatch<TEntity>> onBatch, CancellationToken cancellationToken)
         where TEntity : class, new()
     {
+        var temporaryStorage = new ExcelTemporaryStorageBudget(options.MaxTemporaryStorageBytes, "NPOI");
         using var input = NpoiForwardInputDetector.Open(source,
-            options.ImportOptions.ResourceLimits.MaxInputBytes, cancellationToken);
+            options.ImportOptions.ResourceLimits.MaxInputBytes, cancellationToken, temporaryStorage);
         if (input.IsHssf)
             return _forwardHssfImporter.Import(input.Stream, layout, options, onBatch,
-                cancellationToken);
-        return _forwardImporter.Import(input.Stream, layout, options, onBatch, cancellationToken);
+                cancellationToken, temporaryStorage);
+        return _forwardImporter.Import(input.Stream, layout, options, onBatch, cancellationToken,
+            temporaryStorage: temporaryStorage);
     }
 
     /// <summary>
@@ -222,14 +224,15 @@ internal sealed class NpoiEntityBatchImporter : IExcelEntityBatchImporter
         Func<ExcelEntityImportBatch<TEntity>, CancellationToken, Task> onBatch,
         CancellationToken cancellationToken) where TEntity : class, new()
     {
+        var temporaryStorage = new ExcelTemporaryStorageBudget(options.MaxTemporaryStorageBytes, "NPOI");
         await using var input = await NpoiForwardInputDetector.OpenAsync(source,
-            options.ImportOptions.ResourceLimits.MaxInputBytes, cancellationToken)
+            options.ImportOptions.ResourceLimits.MaxInputBytes, cancellationToken, temporaryStorage)
             .ConfigureAwait(false);
         if (input.IsHssf)
             return await _forwardHssfImporter.ImportAsync(input.Stream, layout, options, onBatch,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken, temporaryStorage).ConfigureAwait(false);
         return await _forwardImporter.ImportAsync(input.Stream, layout, options, onBatch,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken, temporaryStorage: temporaryStorage).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -255,13 +258,20 @@ internal sealed class NpoiEntityBatchImporter : IExcelEntityBatchImporter
         options.ParsingMode == ExcelEntityBatchParsingMode.Forward
             ? options
             : new ExcelEntityBatchImportOptions(options.BatchSize, options.ImportOptions,
-                ExcelEntityBatchParsingMode.Forward, options.ResultMode);
+                ExcelEntityBatchParsingMode.Forward, options.ResultMode, options.MaxTemporaryStorageBytes);
 
     /// <summary>
     /// 校验批次结果保留模式及前向失败输出限制。
     /// </summary>
-    private static void ValidateResultMode(ExcelEntityBatchImportOptions options)
+    private static void ValidateResultMode(ExcelEntityBatchImportOptions options, bool template = false)
     {
+        if (options.MaxTemporaryStorageBytes.HasValue
+            && (!ShouldUseForward(options) || template
+                || options.ImportOptions.FailureOptions != null
+                && options.ImportOptions.FailureOptions.Mode != ExcelImportFailureWorkbookMode.None))
+            throw new BingOfficesUnsupportedFeatureException(
+                "临时存储预算仅支持不带模板和失败工作簿输出的 Forward 或 SummaryOnly 实体批次。",
+                provider: "NPOI", operation: BingOfficesOperation.Import, stage: BingOfficesStage.Plan);
         if (ShouldUseForward(options)
             && options.ImportOptions.FailureOptions != null
             && options.ImportOptions.FailureOptions.Mode != ExcelImportFailureWorkbookMode.None

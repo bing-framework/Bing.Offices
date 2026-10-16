@@ -60,17 +60,18 @@ internal sealed class NpoiForwardXlsxEntityBatchImporter
         Action<ExcelEntityImportBatch<TEntity>> onBatch, CancellationToken cancellationToken,
         bool writeFailureWorkbook = true,
         ExcelDataReaderFailureWorkbookCapture failureCaptureOverride = null,
-        bool captureFixedCellFailures = true)
+        bool captureFixedCellFailures = true, ExcelTemporaryStorageBudget temporaryStorage = null)
         where TEntity : class, new()
     {
         ValidateRequest(source, layout, options, onBatch);
+        temporaryStorage ??= new ExcelTemporaryStorageBudget(options.MaxTemporaryStorageBytes, "NPOI");
         using var input = OpenSource(source, options.ImportOptions.ResourceLimits.MaxInputBytes,
-            cancellationToken);
+            cancellationToken, temporaryStorage);
         var failureCapture = writeFailureWorkbook
             ? CreateFailureCapture(options)
             : failureCaptureOverride;
         var result = ImportBuffered(input.Stream, layout, options, onBatch, cancellationToken,
-            failureCapture, captureFixedCellFailures);
+            failureCapture, captureFixedCellFailures, temporaryStorage);
         if (writeFailureWorkbook)
             WriteFailureWorkbook(input.Stream, options, result, cancellationToken, failureCapture);
         return result;
@@ -84,7 +85,7 @@ internal sealed class NpoiForwardXlsxEntityBatchImporter
         Func<ExcelEntityImportBatch<TEntity>, CancellationToken, Task> onBatch,
         CancellationToken cancellationToken, bool writeFailureWorkbook = true,
         ExcelDataReaderFailureWorkbookCapture failureCaptureOverride = null,
-        bool captureFixedCellFailures = true)
+        bool captureFixedCellFailures = true, ExcelTemporaryStorageBudget temporaryStorage = null)
         where TEntity : class, new()
     {
         if (source == null)
@@ -99,14 +100,15 @@ internal sealed class NpoiForwardXlsxEntityBatchImporter
             throw new ArgumentNullException(nameof(onBatch));
         ValidateBatchLayout(layout, options);
         ValidateResultMode(options);
+        temporaryStorage ??= new ExcelTemporaryStorageBudget(options.MaxTemporaryStorageBytes, "NPOI");
         await using var input = await OpenSourceAsync(source,
-            options.ImportOptions.ResourceLimits.MaxInputBytes, cancellationToken)
+            options.ImportOptions.ResourceLimits.MaxInputBytes, cancellationToken, temporaryStorage)
             .ConfigureAwait(false);
         var failureCapture = writeFailureWorkbook
             ? CreateFailureCapture(options)
             : failureCaptureOverride;
         var result = await ImportBufferedAsync(input.Stream, layout, options, onBatch,
-            cancellationToken, failureCapture, captureFixedCellFailures).ConfigureAwait(false);
+            cancellationToken, failureCapture, captureFixedCellFailures, temporaryStorage).ConfigureAwait(false);
         if (writeFailureWorkbook)
             await WriteFailureWorkbookAsync(input.Stream, options, result, cancellationToken,
                 failureCapture)
@@ -398,7 +400,7 @@ internal sealed class NpoiForwardXlsxEntityBatchImporter
         ExcelEntityLayout<TEntity> layout, ExcelEntityBatchImportOptions options,
         Action<ExcelEntityImportBatch<TEntity>> onBatch, CancellationToken cancellationToken,
         ExcelDataReaderFailureWorkbookCapture failureCapture = null,
-        bool captureFixedCellFailures = true)
+        bool captureFixedCellFailures = true, ExcelTemporaryStorageBudget temporaryStorage = null)
         where TEntity : class, new()
     {
         var limits = options.ImportOptions.ResourceLimits;
@@ -419,7 +421,8 @@ internal sealed class NpoiForwardXlsxEntityBatchImporter
             ExcelXlsxWorkbookValidation.LoadFailureMetadata(archive, cancellationToken));
         ValidateForwardMerges(archive, workbook, layout, cancellationToken);
         using var sharedStrings = ReadSharedStrings(archive, cancellationToken,
-            options.ResultMode == ExcelEntityBatchResultMode.SummaryOnly);
+            options.ResultMode == ExcelEntityBatchResultMode.SummaryOnly
+                || options.MaxTemporaryStorageBytes.HasValue, temporaryStorage);
         var styles = ReadStyles(archive, cancellationToken);
         var entity = new TEntity();
         var rowRuntime = new ExcelImportRuntime(limits);
@@ -491,7 +494,7 @@ internal sealed class NpoiForwardXlsxEntityBatchImporter
         Func<ExcelEntityImportBatch<TEntity>, CancellationToken, Task> onBatch,
         CancellationToken cancellationToken,
         ExcelDataReaderFailureWorkbookCapture failureCapture = null,
-        bool captureFixedCellFailures = true)
+        bool captureFixedCellFailures = true, ExcelTemporaryStorageBudget temporaryStorage = null)
         where TEntity : class, new()
     {
         // ZIP/XML 解析器本身是前向同步读取器；外围复制和批次回调保持真实异步。
@@ -513,7 +516,8 @@ internal sealed class NpoiForwardXlsxEntityBatchImporter
             ExcelXlsxWorkbookValidation.LoadFailureMetadata(archive, cancellationToken));
         ValidateForwardMerges(archive, workbook, layout, cancellationToken);
         using var sharedStrings = ReadSharedStrings(archive, cancellationToken,
-            options.ResultMode == ExcelEntityBatchResultMode.SummaryOnly);
+            options.ResultMode == ExcelEntityBatchResultMode.SummaryOnly
+                || options.MaxTemporaryStorageBytes.HasValue, temporaryStorage);
         var styles = ReadStyles(archive, cancellationToken);
         var entity = new TEntity();
         var rowRuntime = new ExcelImportRuntime(limits);
@@ -1807,11 +1811,11 @@ internal sealed class NpoiForwardXlsxEntityBatchImporter
     /// 打开可直接读取或需要暂存的输入流。
     /// </summary>
     private static ForwardInput OpenSource(Stream source, long? maxBytes,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, ExcelTemporaryStorageBudget temporaryStorage = null)
     {
         if (CanReadInPlace(source, maxBytes))
             return new ForwardInput(source, ownsStream: false);
-        var buffer = CreateTempBuffer();
+        var buffer = CreateTempBuffer(temporaryStorage);
         try
         {
             NpoiStreamCopier.Copy(source, buffer, cancellationToken, maxBytes);
@@ -1829,11 +1833,11 @@ internal sealed class NpoiForwardXlsxEntityBatchImporter
     /// 异步打开可直接读取或需要暂存的输入流。
     /// </summary>
     private static async Task<ForwardInput> OpenSourceAsync(Stream source, long? maxBytes,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, ExcelTemporaryStorageBudget temporaryStorage = null)
     {
         if (CanReadInPlace(source, maxBytes))
             return new ForwardInput(source, ownsStream: false);
-        var buffer = CreateTempBuffer();
+        var buffer = CreateTempBuffer(temporaryStorage);
         try
         {
             await NpoiStreamCopier.CopyAsync(source, buffer, cancellationToken, maxBytes)
@@ -1865,12 +1869,12 @@ internal sealed class NpoiForwardXlsxEntityBatchImporter
     /// <summary>
     /// 创建由流所有权自动清理的 Forward 输入暂存文件。
     /// </summary>
-    private static FileStream CreateTempBuffer()
+    private static Stream CreateTempBuffer(ExcelTemporaryStorageBudget temporaryStorage)
     {
         var path = Path.Combine(Path.GetTempPath(),
             $"bing-offices-forward-{Guid.NewGuid():N}.xlsx");
-        return new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.Read,
-            81920, FileOptions.Asynchronous | FileOptions.SequentialScan | FileOptions.DeleteOnClose);
+        return (temporaryStorage ?? new ExcelTemporaryStorageBudget(null, "NPOI")).CreateFile(path,
+            FileOptions.Asynchronous | FileOptions.SequentialScan | FileOptions.DeleteOnClose);
     }
 
     /// <summary>
@@ -2161,8 +2165,9 @@ internal sealed class NpoiForwardXlsxEntityBatchImporter
     /// 读取共享字符串表。
     /// </summary>
     private static ExcelForwardXlsxSharedStrings ReadSharedStrings(ZipArchive archive,
-        CancellationToken cancellationToken, bool diskBacked)
-        => ExcelForwardXlsxReader.ReadSharedStrings(archive, cancellationToken, diskBacked);
+        CancellationToken cancellationToken, bool diskBacked,
+        ExcelTemporaryStorageBudget temporaryStorage)
+        => ExcelForwardXlsxReader.ReadSharedStrings(archive, cancellationToken, diskBacked, temporaryStorage);
 
     /// <summary>
     /// 读取 XLSX 单元格样式与数字格式。

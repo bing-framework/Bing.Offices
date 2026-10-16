@@ -98,16 +98,18 @@ internal sealed class NpoiForwardHssfEntityBatchImporter
     /// </summary>
     internal ExcelEntityBatchImportSummary<TEntity> Import<TEntity>(Stream source,
         ExcelEntityLayout<TEntity> layout, ExcelEntityBatchImportOptions options,
-        Action<ExcelEntityImportBatch<TEntity>> onBatch, CancellationToken cancellationToken)
+        Action<ExcelEntityImportBatch<TEntity>> onBatch, CancellationToken cancellationToken,
+        ExcelTemporaryStorageBudget temporaryStorage = null)
         where TEntity : class, new()
     {
         ValidateRequest(source, layout, options, onBatch);
         var failureCapture = NpoiForwardXlsxEntityBatchImporter.CreateFailureCapture(options);
-        using var converted = Convert(source, layout, options, cancellationToken, failureCapture);
+        using var converted = Convert(source, layout, options, cancellationToken, failureCapture,
+            temporaryStorage);
         var result = _forwardImporter.Import(converted, layout, options, onBatch,
             cancellationToken, writeFailureWorkbook: false,
             failureCaptureOverride: failureCapture,
-            captureFixedCellFailures: true);
+            captureFixedCellFailures: true, temporaryStorage: temporaryStorage);
         _forwardImporter.WriteHssfFailureWorkbook(source, layout, options, result,
             cancellationToken, failureCapture);
         return result;
@@ -119,7 +121,8 @@ internal sealed class NpoiForwardHssfEntityBatchImporter
     internal async Task<ExcelEntityBatchImportSummary<TEntity>> ImportAsync<TEntity>(Stream source,
         ExcelEntityLayout<TEntity> layout, ExcelEntityBatchImportOptions options,
         Func<ExcelEntityImportBatch<TEntity>, CancellationToken, Task> onBatch,
-        CancellationToken cancellationToken) where TEntity : class, new()
+        CancellationToken cancellationToken, ExcelTemporaryStorageBudget temporaryStorage = null)
+        where TEntity : class, new()
     {
         if (source == null)
             throw new ArgumentNullException(nameof(source));
@@ -133,11 +136,12 @@ internal sealed class NpoiForwardHssfEntityBatchImporter
             throw new ArgumentNullException(nameof(onBatch));
         ValidateRequestOptions(layout, options);
         var failureCapture = NpoiForwardXlsxEntityBatchImporter.CreateFailureCapture(options);
-        await using var converted = Convert(source, layout, options, cancellationToken, failureCapture);
+        await using var converted = Convert(source, layout, options, cancellationToken, failureCapture,
+            temporaryStorage);
         var result = await _forwardImporter.ImportAsync(converted, layout, options, onBatch,
             cancellationToken, writeFailureWorkbook: false,
             failureCaptureOverride: failureCapture,
-            captureFixedCellFailures: true)
+            captureFixedCellFailures: true, temporaryStorage: temporaryStorage)
             .ConfigureAwait(false);
         await _forwardImporter.WriteHssfFailureWorkbookAsync(source, layout, options, result,
             cancellationToken, failureCapture).ConfigureAwait(false);
@@ -177,9 +181,10 @@ internal sealed class NpoiForwardHssfEntityBatchImporter
     /// <summary>
     /// 将 HSSF 输入转换为前向读取器使用的临时 XLSX。
     /// </summary>
-    private static FileStream Convert<TEntity>(Stream source, ExcelEntityLayout<TEntity> layout,
+    private static Stream Convert<TEntity>(Stream source, ExcelEntityLayout<TEntity> layout,
         ExcelEntityBatchImportOptions options, CancellationToken cancellationToken,
-        Bing.Offices.ExcelDataReader.ExcelDataReaderFailureWorkbookCapture failureCapture = null)
+        Bing.Offices.ExcelDataReader.ExcelDataReaderFailureWorkbookCapture failureCapture = null,
+        ExcelTemporaryStorageBudget temporaryStorage = null)
         where TEntity : class, new()
     {
         var sheetNames = layout.ListRegions.Select(region => region.SheetName)
@@ -190,6 +195,7 @@ internal sealed class NpoiForwardHssfEntityBatchImporter
         return NpoiHssfForwardXlsxConverter.Convert(source, sheetNames,
             options.ImportOptions.ResourceLimits, cancellationToken, failureCapture,
             options.ImportOptions.ValidationMode == ExcelImportValidationMode.WorkbookRules
-            || options.ImportOptions.ValidationMode == ExcelImportValidationMode.ConfiguredAndWorkbook);
+            || options.ImportOptions.ValidationMode == ExcelImportValidationMode.ConfiguredAndWorkbook,
+            temporaryStorage);
     }
 }

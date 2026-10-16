@@ -31,6 +31,7 @@
     <Compile Include="..\provider-shared\ExcelForwardXlsxFailureWorkbookWriter.cs" Link="Bing\Offices\Internals\ExcelForwardXlsxFailureWorkbookWriter.cs" />
     <Compile Include="..\provider-shared\ExcelWorkbookBatchProjection.cs" Link="Bing\Offices\Imports\ExcelWorkbookBatchProjection.cs" />
     <Compile Include="..\provider-shared\ExcelEntityBatchProjection.cs" Link="Bing\Offices\Entities\ExcelEntityBatchProjection.cs" />
+    <Compile Include="..\provider-shared\ExcelTemporaryStorageBudget.cs" Link="Bing\Offices\Entities\ExcelTemporaryStorageBudget.cs" />
     <Compile Include="..\provider-shared\ExcelEntityRowPlan.cs" Link="Bing\Offices\Entities\ExcelEntityRowPlan.cs" />
     <Compile Include="..\provider-shared\ExcelEntityPageAnchorNames.cs" Link="Bing\Offices\Entities\ExcelEntityPageAnchorNames.cs" />
     <Compile Include="..\provider-shared\ExcelEntitySubtotalImportScanner.cs" Link="Bing\Offices\Entities\ExcelEntitySubtotalImportScanner.cs" />

@@ -50,9 +50,12 @@ internal sealed class ClosedXmlForwardXlsxEntityBatchImporter
         where TEntity : class, new()
     {
         ValidateRequest(source, layout, options, onBatch);
-        using var input = OpenSource(source, options.ImportOptions.ResourceLimits, cancellationToken);
+        var temporaryStorage = new ExcelTemporaryStorageBudget(options.MaxTemporaryStorageBytes, "ClosedXML");
+        using var input = OpenSource(source, options.ImportOptions.ResourceLimits, cancellationToken,
+            temporaryStorage);
         var failureCapture = CreateFailureCapture(options);
-        var result = Read(input.Stream, layout, options, onBatch, cancellationToken, failureCapture);
+        var result = Read(input.Stream, layout, options, onBatch, cancellationToken, failureCapture,
+            temporaryStorage);
         WriteFailureWorkbook(input.Stream, layout, options, result, cancellationToken, failureCapture);
         return result;
     }
@@ -67,11 +70,12 @@ internal sealed class ClosedXmlForwardXlsxEntityBatchImporter
         where TEntity : class, new()
     {
         ValidateRequest(source, layout, options, onBatch);
+        var temporaryStorage = new ExcelTemporaryStorageBudget(options.MaxTemporaryStorageBytes, "ClosedXML");
         await using var input = await OpenSourceAsync(source,
-            options.ImportOptions.ResourceLimits, cancellationToken).ConfigureAwait(false);
+            options.ImportOptions.ResourceLimits, cancellationToken, temporaryStorage).ConfigureAwait(false);
         var failureCapture = CreateFailureCapture(options);
         var result = await ReadAsync(input.Stream, layout, options, onBatch, cancellationToken,
-            failureCapture).ConfigureAwait(false);
+            failureCapture, temporaryStorage).ConfigureAwait(false);
         await WriteFailureWorkbookAsync(input.Stream, layout, options, result, cancellationToken,
             failureCapture)
             .ConfigureAwait(false);
@@ -216,7 +220,8 @@ internal sealed class ClosedXmlForwardXlsxEntityBatchImporter
     private ExcelEntityBatchImportSummary<TEntity> Read<TEntity>(Stream buffered,
         ExcelEntityLayout<TEntity> layout, ExcelEntityBatchImportOptions options,
         Action<ExcelEntityImportBatch<TEntity>> onBatch, CancellationToken cancellationToken,
-        ExcelDataReaderFailureWorkbookCapture failureCapture = null)
+        ExcelDataReaderFailureWorkbookCapture failureCapture = null,
+        ExcelTemporaryStorageBudget temporaryStorage = null)
         where TEntity : class, new()
     {
         var limits = options.ImportOptions.ResourceLimits;
@@ -234,7 +239,8 @@ internal sealed class ClosedXmlForwardXlsxEntityBatchImporter
             ExcelXlsxWorkbookValidation.LoadFailureMetadata(archive, cancellationToken));
         ValidateForwardMerges(archive, workbook, layout, cancellationToken);
         using var sharedStrings = ExcelForwardXlsxReader.ReadSharedStrings(archive,
-            cancellationToken, options.ResultMode == ExcelEntityBatchResultMode.SummaryOnly);
+            cancellationToken, options.ResultMode == ExcelEntityBatchResultMode.SummaryOnly
+                || options.MaxTemporaryStorageBytes.HasValue, temporaryStorage);
         var styles = ExcelForwardXlsxReader.ReadStyles(archive, cancellationToken);
         var entity = new TEntity();
         var errorBudget = new ClosedXmlForwardErrorBudget(
@@ -314,7 +320,8 @@ internal sealed class ClosedXmlForwardXlsxEntityBatchImporter
         ExcelEntityLayout<TEntity> layout, ExcelEntityBatchImportOptions options,
         Func<ExcelEntityImportBatch<TEntity>, CancellationToken, Task> onBatch,
         CancellationToken cancellationToken,
-        ExcelDataReaderFailureWorkbookCapture failureCapture = null)
+        ExcelDataReaderFailureWorkbookCapture failureCapture = null,
+        ExcelTemporaryStorageBudget temporaryStorage = null)
         where TEntity : class, new()
     {
         var limits = options.ImportOptions.ResourceLimits;
@@ -332,7 +339,8 @@ internal sealed class ClosedXmlForwardXlsxEntityBatchImporter
             ExcelXlsxWorkbookValidation.LoadFailureMetadata(archive, cancellationToken));
         ValidateForwardMerges(archive, workbook, layout, cancellationToken);
         using var sharedStrings = ExcelForwardXlsxReader.ReadSharedStrings(archive,
-            cancellationToken, options.ResultMode == ExcelEntityBatchResultMode.SummaryOnly);
+            cancellationToken, options.ResultMode == ExcelEntityBatchResultMode.SummaryOnly
+                || options.MaxTemporaryStorageBytes.HasValue, temporaryStorage);
         var styles = ExcelForwardXlsxReader.ReadStyles(archive, cancellationToken);
         var entity = new TEntity();
         var errorBudget = new ClosedXmlForwardErrorBudget(
@@ -624,8 +632,8 @@ internal sealed class ClosedXmlForwardXlsxEntityBatchImporter
     /// <summary>
     /// 同步复制输入并应用最大字节数限制。
     /// </summary>
-    private static FileStream BufferSource(Stream source, ExcelResourceLimits limits,
-        CancellationToken cancellationToken)
+    private static Stream BufferSource(Stream source, ExcelResourceLimits limits,
+        CancellationToken cancellationToken, ExcelTemporaryStorageBudget temporaryStorage = null)
     {
         limits?.Validate();
         var maximum = limits?.MaxInputBytes;
@@ -633,7 +641,7 @@ internal sealed class ClosedXmlForwardXlsxEntityBatchImporter
             throw new BingOfficesResourceLimitException("输入工作簿超过最大字节数。",
                 provider: "ClosedXML", operation: BingOfficesOperation.Import,
                 stage: BingOfficesStage.Preflight);
-        var buffer = CreateTempBuffer();
+        var buffer = CreateTempBuffer(temporaryStorage);
         var bytes = new byte[81920];
         long total = 0;
         try
@@ -663,8 +671,9 @@ internal sealed class ClosedXmlForwardXlsxEntityBatchImporter
     /// <summary>
     /// 异步复制输入并应用最大字节数限制。
     /// </summary>
-    private static async Task<FileStream> BufferSourceAsync(Stream source,
-        ExcelResourceLimits limits, CancellationToken cancellationToken)
+    private static async Task<Stream> BufferSourceAsync(Stream source,
+        ExcelResourceLimits limits, CancellationToken cancellationToken,
+        ExcelTemporaryStorageBudget temporaryStorage = null)
     {
         limits?.Validate();
         var maximum = limits?.MaxInputBytes;
@@ -672,7 +681,7 @@ internal sealed class ClosedXmlForwardXlsxEntityBatchImporter
             throw new BingOfficesResourceLimitException("输入工作簿超过最大字节数。",
                 provider: "ClosedXML", operation: BingOfficesOperation.Import,
                 stage: BingOfficesStage.Preflight);
-        var buffer = CreateTempBuffer();
+        var buffer = CreateTempBuffer(temporaryStorage);
         var bytes = new byte[81920];
         long total = 0;
         try
@@ -709,24 +718,25 @@ internal sealed class ClosedXmlForwardXlsxEntityBatchImporter
     /// 打开可直接读取或需要暂存的输入流。
     /// </summary>
     private static ForwardInput OpenSource(Stream source, ExcelResourceLimits limits,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, ExcelTemporaryStorageBudget temporaryStorage = null)
     {
         limits?.Validate();
         if (CanReadInPlace(source, limits?.MaxInputBytes))
             return new ForwardInput(source, ownsStream: false);
-        return new ForwardInput(BufferSource(source, limits, cancellationToken), ownsStream: true);
+        return new ForwardInput(BufferSource(source, limits, cancellationToken, temporaryStorage), ownsStream: true);
     }
 
     /// <summary>
     /// 异步打开可直接读取或需要暂存的输入流。
     /// </summary>
     private static async Task<ForwardInput> OpenSourceAsync(Stream source,
-        ExcelResourceLimits limits, CancellationToken cancellationToken)
+        ExcelResourceLimits limits, CancellationToken cancellationToken,
+        ExcelTemporaryStorageBudget temporaryStorage = null)
     {
         limits?.Validate();
         if (CanReadInPlace(source, limits?.MaxInputBytes))
             return new ForwardInput(source, ownsStream: false);
-        return new ForwardInput(await BufferSourceAsync(source, limits, cancellationToken)
+        return new ForwardInput(await BufferSourceAsync(source, limits, cancellationToken, temporaryStorage)
             .ConfigureAwait(false), ownsStream: true);
     }
 
@@ -747,12 +757,12 @@ internal sealed class ClosedXmlForwardXlsxEntityBatchImporter
     /// <summary>
     /// 创建由流所有权自动清理的 Forward 输入暂存文件。
     /// </summary>
-    private static FileStream CreateTempBuffer()
+    private static Stream CreateTempBuffer(ExcelTemporaryStorageBudget temporaryStorage)
     {
         var path = Path.Combine(Path.GetTempPath(),
             $"bing-offices-forward-{Guid.NewGuid():N}.xlsx");
-        return new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.Read,
-            81920, FileOptions.Asynchronous | FileOptions.SequentialScan | FileOptions.DeleteOnClose);
+        return (temporaryStorage ?? new ExcelTemporaryStorageBudget(null, "ClosedXML")).CreateFile(path,
+            FileOptions.Asynchronous | FileOptions.SequentialScan | FileOptions.DeleteOnClose);
     }
 
     /// <summary>

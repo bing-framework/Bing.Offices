@@ -108,7 +108,7 @@ internal sealed class ClosedXmlEntityBatchImporter : IExcelEntityBatchImporter
     {
         if (options == null)
             throw new ArgumentNullException(nameof(options));
-        ValidateResultMode(options);
+        ValidateResultMode(options, template: true);
         if (ShouldUseForward(options))
         {
             var forwardOptions = ToForwardOptions(options);
@@ -148,7 +148,7 @@ internal sealed class ClosedXmlEntityBatchImporter : IExcelEntityBatchImporter
     {
         if (options == null)
             throw new ArgumentNullException(nameof(options));
-        ValidateResultMode(options);
+        ValidateResultMode(options, template: true);
         if (ShouldUseForward(options))
         {
             var forwardOptions = ToForwardOptions(options);
@@ -204,13 +204,20 @@ internal sealed class ClosedXmlEntityBatchImporter : IExcelEntityBatchImporter
         options.ParsingMode == ExcelEntityBatchParsingMode.Forward
             ? options
             : new ExcelEntityBatchImportOptions(options.BatchSize, options.ImportOptions,
-                ExcelEntityBatchParsingMode.Forward, options.ResultMode);
+                ExcelEntityBatchParsingMode.Forward, options.ResultMode, options.MaxTemporaryStorageBytes);
 
     /// <summary>
     /// 校验批次结果保留模式及前向失败输出限制。
     /// </summary>
-    private static void ValidateResultMode(ExcelEntityBatchImportOptions options)
+    private static void ValidateResultMode(ExcelEntityBatchImportOptions options, bool template = false)
     {
+        if (options.MaxTemporaryStorageBytes.HasValue
+            && (!ShouldUseForward(options) || template
+                || options.ImportOptions.FailureOptions != null
+                && options.ImportOptions.FailureOptions.Mode != ExcelImportFailureWorkbookMode.None))
+            throw new BingOfficesUnsupportedFeatureException(
+                "临时存储预算仅支持不带模板和失败工作簿输出的 Forward 或 SummaryOnly 实体批次。",
+                provider: "ClosedXML", operation: BingOfficesOperation.Import, stage: BingOfficesStage.Plan);
         if (ShouldUseForward(options)
             && options.ImportOptions.FailureOptions != null
             && options.ImportOptions.FailureOptions.Mode != ExcelImportFailureWorkbookMode.None

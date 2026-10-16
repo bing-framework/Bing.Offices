@@ -19,5 +19,7 @@
     <Compile Include="..\provider-shared\ExcelPivotTemplateManifestTestCases.cs" Link="Exports\PivotTables\ExcelPivotTemplateManifestTestCases.cs" />
     <Compile Include="..\provider-shared\ExcelPivotTemplateReadStream.cs" Link="Exports\PivotTables\ExcelPivotTemplateReadStream.cs" />
     <Compile Include="..\provider-shared\ExcelForwardXlsxSharedStringsTest.cs" Link="Imports\ExcelForwardXlsxSharedStringsTest.cs" />
+    <Compile Include="..\provider-shared\ExcelTemporaryStorageBudgetTest.cs" Link="Entities\ExcelTemporaryStorageBudgetTest.cs" />
+    <Compile Include="..\provider-shared\EntityTemporaryStorageBudgetContractTest.cs" Link="Entities\EntityTemporaryStorageBudgetContractTest.cs" />
   </ItemGroup>
 </Project>

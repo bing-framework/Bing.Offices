@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Bing.Offices.Exceptions;
 using Bing.Offices.Imports;
+using Bing.Offices.Entities;
 
 namespace Bing.Offices.Npoi.Entities;
 
@@ -21,15 +22,16 @@ internal static class NpoiForwardInputDetector
     /// <param name="source">调用方拥有的源流。</param>
     /// <param name="maxBytes">允许读取的最大字节数。</param>
     /// <param name="cancellationToken">取消令牌。</param>
+    /// <param name="temporaryStorage">与后续解析共享的临时存储预算。</param>
     /// <returns>带格式标识和所有权信息的输入。</returns>
     internal static NpoiForwardInput Open(Stream source, long? maxBytes,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, ExcelTemporaryStorageBudget temporaryStorage = null)
     {
         ValidateSource(source);
         if (CanReadInPlace(source, maxBytes))
             return new NpoiForwardInput(source, IsHssf(source), ownsStream: false);
 
-        var buffer = CreateTempBuffer();
+        var buffer = CreateTempBuffer(temporaryStorage);
         try
         {
             NpoiStreamCopier.Copy(source, buffer, cancellationToken, maxBytes);
@@ -50,15 +52,16 @@ internal static class NpoiForwardInputDetector
     /// <param name="source">调用方拥有的源流。</param>
     /// <param name="maxBytes">允许读取的最大字节数。</param>
     /// <param name="cancellationToken">取消令牌。</param>
+    /// <param name="temporaryStorage">与后续解析共享的临时存储预算。</param>
     /// <returns>带格式标识和所有权信息的输入任务。</returns>
     internal static async Task<NpoiForwardInput> OpenAsync(Stream source, long? maxBytes,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, ExcelTemporaryStorageBudget temporaryStorage = null)
     {
         ValidateSource(source);
         if (CanReadInPlace(source, maxBytes))
             return new NpoiForwardInput(source, IsHssf(source), ownsStream: false);
 
-        var buffer = CreateTempBuffer();
+        var buffer = CreateTempBuffer(temporaryStorage);
         try
         {
             await NpoiStreamCopier.CopyAsync(source, buffer, cancellationToken, maxBytes)
@@ -134,11 +137,11 @@ internal static class NpoiForwardInputDetector
     /// <summary>
     /// 创建由所有权对象自动删除的输入暂存文件。
     /// </summary>
-    private static FileStream CreateTempBuffer()
+    private static Stream CreateTempBuffer(ExcelTemporaryStorageBudget temporaryStorage)
     {
         var path = Path.Combine(Path.GetTempPath(),
             $"bing-offices-forward-input-{Guid.NewGuid():N}.bin");
-        return new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.Read,
-            81920, FileOptions.Asynchronous | FileOptions.SequentialScan | FileOptions.DeleteOnClose);
+        return (temporaryStorage ?? new ExcelTemporaryStorageBudget(null, "NPOI")).CreateFile(path,
+            FileOptions.Asynchronous | FileOptions.SequentialScan | FileOptions.DeleteOnClose);
     }
 }

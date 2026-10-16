@@ -191,13 +191,15 @@ internal static class ExcelForwardXlsxReader
     /// 读取共享字符串表。
     /// </summary>
     internal static ExcelForwardXlsxSharedStrings ReadSharedStrings(ZipArchive archive,
-        CancellationToken cancellationToken, bool diskBacked = false)
+        CancellationToken cancellationToken, bool diskBacked = false,
+        ExcelTemporaryStorageBudget temporaryStorage = null)
     {
         var entry = archive.GetEntry("xl/sharedStrings.xml");
         if (entry == null)
             return ExcelForwardXlsxSharedStrings.FromValues(Array.Empty<string>());
         if (diskBacked)
-            return ExcelForwardXlsxSharedStrings.ReadDiskBacked(entry, cancellationToken);
+            return ExcelForwardXlsxSharedStrings.ReadDiskBacked(entry, cancellationToken,
+                Path.GetTempPath(), temporaryStorage);
         var values = new List<string>();
         using var stream = entry.Open();
         using var reader = CreateReader(stream);
