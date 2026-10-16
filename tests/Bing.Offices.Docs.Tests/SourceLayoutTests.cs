@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -113,16 +114,27 @@ public sealed class SourceLayoutTests
     /// <summary>
     /// 获取仓库根目录。
     /// </summary>
+    /// <param name="sourceFile">编译时的调用方源码路径，用于隔离构建输出的定位。</param>
     /// <returns>包含解决方案的仓库目录。</returns>
-    private static string GetRepositoryDirectory()
+    private static string GetRepositoryDirectory([CallerFilePath] string sourceFile = "")
     {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory != null && !File.Exists(Path.Combine(directory.FullName, "Bing.Offices.sln")))
+        foreach (var candidate in new[]
         {
-            directory = directory.Parent;
+            AppContext.BaseDirectory, Path.GetDirectoryName(sourceFile), Directory.GetCurrentDirectory()
+        })
+        {
+            if (string.IsNullOrEmpty(candidate))
+                continue;
+            var directory = new DirectoryInfo(candidate);
+            while (directory != null)
+            {
+                if (File.Exists(Path.Combine(directory.FullName, "Bing.Offices.sln")))
+                    return directory.FullName;
+                directory = directory.Parent;
+            }
         }
 
-        Assert.NotNull(directory);
-        return directory.FullName;
+        throw new DirectoryNotFoundException(
+            $"未找到 Bing.Offices.sln；程序集目录：{AppContext.BaseDirectory}；源码：{sourceFile}。");
     }
 }

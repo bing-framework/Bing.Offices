@@ -1133,17 +1133,28 @@ public class PublicApiContractTest
     /// <summary>
     /// 查找仓库根目录。
     /// </summary>
-    /// <returns>包含解决方案的祖先目录；未找到时返回当前工作目录。</returns>
-    private static string FindRepositoryRoot()
+    /// <param name="sourceFile">编译时的调用方源码路径，用于隔离构建输出的定位。</param>
+    /// <returns>包含解决方案的仓库目录。</returns>
+    private static string FindRepositoryRoot([CallerFilePath] string sourceFile = "")
     {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
+        foreach (var candidate in new[]
         {
-            if (File.Exists(Path.Combine(directory.FullName, "Bing.Offices.sln")))
-                return directory.FullName;
-            directory = directory.Parent;
+            AppContext.BaseDirectory, Path.GetDirectoryName(sourceFile), Directory.GetCurrentDirectory()
+        })
+        {
+            if (string.IsNullOrEmpty(candidate))
+                continue;
+            var directory = new DirectoryInfo(candidate);
+            while (directory is not null)
+            {
+                if (File.Exists(Path.Combine(directory.FullName, "Bing.Offices.sln")))
+                    return directory.FullName;
+                directory = directory.Parent;
+            }
         }
-        return Directory.GetCurrentDirectory();
+
+        throw new DirectoryNotFoundException(
+            $"未找到 Bing.Offices.sln；程序集目录：{AppContext.BaseDirectory}；源码：{sourceFile}。");
     }
 
     /// <summary>
