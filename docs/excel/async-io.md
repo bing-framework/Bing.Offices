@@ -1,10 +1,10 @@
-# Async IO 合同
+# 异步 IO 合同
 
 ## API
 
 Excel 提供 `IExcelImporter.ImportAsync`、`IExcelExporter.ExportAsync` 和 `IExcelExporter.ExportToFileAsync`；CSV 提供 `ICsvImporter.ImportAsync`、`ICsvExporter.ExportAsync` 和 `ICsvExporter.ExportToFileAsync`。同步 API 保持不变，异步 API 返回与同步 API 相同的结果、错误分类和映射行为。
 
-## 2.0.0 Breaking Change
+## 2.0.0 不兼容变更
 
 `CsvStreamExtensions` 和 `ExcelStreamExtensions` 中与接口实例方法重复的四个 `ExportToFile`/`ExportToFileAsync` 扩展声明已移除。调用方继续通过 `ICsvExporter` 或 `IExcelExporter` 实例调用同名接口成员；`ExportToBytes*`、`ImportFromBytes*` 和 `ImportFromFile*` 扩展仍保留。
 
@@ -31,9 +31,9 @@ Workbook 模板在 NPOI 的 `WorkbookFactory.Create` 阶段仍按同步 `Read` �
 
 Excel DOM 仍会产生与工作簿规模相关的内存分配；Async 不代表零 GC。大文件部署应同时设置 `ExcelResourceLimits` 和进程级内存/CPU 限额，并使用发布任务的 ResourceProbe 结果评估 staging 峰值。
 
-## 2C4G 发布入口并行度
+## 历史 2C4G 发布验证配置
 
-本任务的维护者批准配置为服务器 `2C4G`。`1/4/16/64` 是逻辑请求并发档位，不是允许同时创建 NPOI Workbook DOM 的数量。发布入口必须在调用 `IExcelImporter`、`IExcelExporter` 及其 Async API 之前共享一个进程级 `SemaphoreSlim(1, 1)`；超出的请求排队，不能在入口处先创建 Workbook、任务或 provider 实例后再限流。
+历史 RC 任务的维护者批准验证配置为服务器 `2C4G`；以下是该配置的部署约束，不是库为所有宿主自动安装的限流器。`1/4/16/64` 是逻辑请求并发档位，不是允许同时创建 NPOI Workbook DOM 的数量。发布入口必须在调用 `IExcelImporter`、`IExcelExporter` 及其 Async API 之前共享一个进程级 `SemaphoreSlim(1, 1)`；超出的请求排队，不能在入口处先创建 Workbook、任务或 provider 实例后再限流。
 
 ```csharp
 private static readonly SemaphoreSlim ExcelDomGate = new(1, 1);
@@ -50,3 +50,9 @@ finally
 ```
 
 ResourceProbe formal v8 使用同样的单槽位 gate，覆盖逻辑并发 `1/4/16/64`，结果为所有单元 `measuredActiveOperations=1`，最大排队数 `63`。该结果证明库的 staging 资源包络和排队模型；它不能替代部署应用入口的实际配置检查。发布前必须在部署仓库或启动配置中确认该 gate 的容量仍为 `1`，并保留 CI 双 TFM job 的最终通过记录。
+
+## 核心实现与依赖配置
+
+公开接口位于 `src/Bing.Offices.Abstractions/Bing/Offices/{Imports,Exports,Csv}`；CSV 异步读写位于 `src/Bing.Offices.Core/Bing/Offices/Csv`，原子提交在同项目 `IO`。NPOI 的 `src/Bing.Offices.Npoi/Bing/Offices/IO` 负责异步暂存策略和可清理流；其他 Provider 有各自的输入/输出复制边界。
+
+调用时把同一个取消令牌传入 API 和业务回调，按 Provider 选择资源、暂存目录与准入配置。ClosedXML 的内置 DOM 准入选项和 NPOI 宿主入口限流是不同机制；不应把上面的历史单槽位探针配置当作跨 Provider 通用默认值。更多批次/前向边界见[批量导入](batch-import.md)和[Provider 矩阵](09-providers.md)。

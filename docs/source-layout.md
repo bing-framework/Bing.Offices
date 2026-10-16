@@ -8,6 +8,7 @@
 |---|---|---|
 | `Entities/Layout` | 实体布局、固定单元格、地址与布局校验 | `Bing.Offices.Entities` |
 | `Entities/Lists` | 列表区域及其计算列、动态列、Footer、分组小计 | `Bing.Offices.Entities` |
+| `Entities/Anchors` | 逐页名称及过期名称策略 | `Bing.Offices.Entities` |
 | `Entities/Import`、`Entities/Export` | 实体布局导入、导出契约 | `Bing.Offices.Entities` |
 | `Exports/Workbook`、`Exports/Sheets` | 工作簿与 Sheet 导出请求 | `Bing.Offices.Exports` |
 | `Exports/DynamicColumns`、`Exports/Reports`、`Exports/Charts` | 动态列、报表与图表 | `Bing.Offices.Exports` |
@@ -21,13 +22,13 @@
 
 文档测试项目中的目录检查会验证这三个契约目录的归类和公开命名空间。未来如需调整归类，应同步更新该检查、本文和 API 验证证据。
 
-## 下一阶段盘点
+## 其他实现目录
 
-| 候选范围 | 现状 | 建议 |
+| 目录 | 核心职责 | 定位建议 |
 |---|---|---|
-| NPOI `Imports` | 25 个文件，混有导入执行、失败工作簿与预检校验 | 优先按职责评估目录拆分和内部引用影响 |
-| NPOI `Exports` | 9 个文件，包含规划、写入、报表与样式缓存 | 与导入目录一同评估，保持公开契约兼容 |
-| ClosedXML `Internals` | 11 个文件，覆盖规划、准入、预检与适配 | 评估是否按内部职责分目录 |
-| Core `Mappings` | 17 个文件，仍属于同一映射域 | 观察维护成本后再决定是否拆分 |
+| NPOI `Imports` / `Exports` | 导入物化、失败产物、报表写入、透视缓存及预检 | 先按类型职责查找，不按旧文件数定位 |
+| NPOI / ClosedXML `Entities` | 固定字段、列表、分页、Forward 和实体批次 | 见[实体布局](excel/entity-layout.md)和[批量导入](excel/batch-import.md) |
+| ClosedXML `Internals` | 规划、DOM 准入、行/关系键预检、值和样式适配 | 对照 `ClosedXmlProviderOptions` 查资源配置 |
+| Core `Mappings`、`Dates`、`Configurations` | 映射缓存/合并、日期转换及 JSON/XML 加载 | 公开入口和内部实现类型分开使用 |
 
-Core `Csv` 的 13 个文件目前构成完整的 CSV 能力目录。其余 Provider 的源码较少，暂不因文件数量单独拆分。上述候选范围只是下一阶段的盘点，不改变当前实现。
+Core `Csv` 包含 Reader/Writer、异步与取消适配、列绑定和资源约束。`src/provider-shared` 是由 Provider 项目链接编译的共享内部源码，不是第十个生产项目。测试、构建、客户端探针和包消费者见[构建与验证](development/build-validation.md)。目录本身不增加任何对外能力。

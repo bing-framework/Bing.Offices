@@ -1,64 +1,58 @@
 # Bing.Offices 文档索引
 
-本目录按当前仓库实现整理。功能结论以生产代码、公开契约和对应测试为依据；历史任务记录只作为验证证据，不作为当前能力声明。
+本索引依据当前公开契约、实现及测试整理。完整的修订前状态、代码依据和未完成项见[功能与文档对照清单](documentation-inventory.md)；逐文件操作见[本轮文档变更](documentation-changes.md)。计划和历史记录不能代替当前能力证明。
 
-## 快速入口
+## 入门与项目结构
 
-| 主题 | 文档 | 适用场景 |
-| --- | --- | --- |
-| 项目模块 | [项目模块与实现边界](project-modules.md) | 快速定位程序集、核心逻辑、依赖和限制 |
-| 源码结构 | [源码目录与命名空间](source-layout.md) | 查找契约、Core、Provider 和测试代码 |
-| Excel | [Excel 高级导入导出](excel/README.md) | Workbook、Entity Layout、模板、校验和 Provider 使用 |
-| CSV | [CSV 导入导出](csv/README.md) | 流式 CSV、映射、资源限制和公式注入防护 |
-| Analyzer | [Entity Layout 编译期诊断](excel/entity-layout-analyzers.md) | BOE/BOM 诊断规则与安装方式 |
-| Provider 扩展 | [Entity Layout Provider 合同](excel/entity-provider-contracts.md) | 开发和验证第三方 Provider |
-| AI 工作流 | [Universal Agent Workflow](ai-workflow/README.md) | 仓库内 Agent 计划、执行、审查和修复流程 |
+| 文档 | 简介 |
+| --- | --- |
+| [快速开始](getting-started.md) | 包选择、服务注册及 Excel 导入导出往返示例 |
+| [项目模块](project-modules.md) | 各程序集、Provider、合同工具的职责、依赖和限制 |
+| [源码结构](source-layout.md) | 从契约、Core 和 Provider 目录定位实现 |
+| [构建与验证](development/build-validation.md) | 构建、职责测试、文档测试、API、包消费者和资源探针 |
+| [NuGet 迁移](excel/nuget-migration.md) | 包身份、真实替代接口和不兼容变更 |
 
-## 功能文档
+## Excel 与 CSV
 
-### 映射、导入与导出
+| 文档 | 简介 |
+| --- | --- |
+| [Excel 总览](excel/README.md) | Workbook、Entity、异步和 Provider 选择入口 |
+| [工作簿、模板与报表](excel/workbook-reports.md) | 多表、元数据、报表内容、图片、图表与引擎差异 |
+| [实体布局](excel/entity-layout.md) | 固定字段、多列表区域、命名锚点及模板基础用法 |
+| [动态列与分页布局](excel/dynamic-columns.md) | 动态列、计算列、分组、小计、页眉和 Footer |
+| [批量导入与失败工作簿](excel/batch-import.md) | 单表、多表、实体批次以及 Forward 和摘要模式边界 |
+| [映射 Profile](excel/mapping-profile.md) | 导入导出方向、配置合并、命名转换器与计划缓存 |
+| [JSON/XML 映射](excel/mapping-json-xml.md) | v2 文档、模型别名、加载入口和解析限制 |
+| [导入校验](excel/import-validation.md) | 配置规则、原生校验、错误、资源限制与失败策略 |
+| [日期与 DateTimeOffset](excel/dates.md) | 精确格式、1900/1904 日期系统和显式偏移策略 |
+| [异常与观察器](excel/exceptions-and-observers.md) | 异常分类、注册及取消传播 |
+| [异步 IO](excel/async-io.md) | 真实异步流、同步引擎边界与 DOM 资源准入 |
+| [文件提交器](excel/file-committers.md) | 同目录暂存、原子提交、取消和自定义服务 |
+| [工作表保护](excel/sheet-protection.md) | 保护定义、解锁区域与文件加密的区别 |
+| [两级联动字典](excel/cascade-lookups.md) | 隐藏字典表、名称映射及下拉模板 |
+| [透视表](excel/pivot-tables.md) | 基础/高级聚合、缓存、模板更新与客户端验收限制 |
+| [公式、渲染与格式转换](excel/formula-rendering-conversion.md) | 公式读取、商业计算、PDF/图片、格式与加密转换 |
+| [CSV 导入导出](csv/README.md) | 同步/异步流、映射、错误收集与公式注入防护 |
 
-- [Mapping Profile](excel/mapping-profile.md)
-- [JSON/XML Mapping](excel/mapping-json-xml.md)
-- [导入校验](excel/import-validation.md)
-- [动态列与 Entity Layout](excel/dynamic-columns.md)
-- [日期与 DateTimeOffset](excel/dates.md)
-- [异常与 Observer](excel/exceptions-and-observers.md)
-- [异步 IO 合同](excel/async-io.md)
-- [自定义文件提交服务](excel/file-committers.md)
+## Provider 与扩展开发
 
-### Workbook 与 Provider
+| 文档 | 简介 |
+| --- | --- |
+| [Provider 能力矩阵](excel/09-providers.md) | 六个引擎的实际接口、格式支持、注册与拒绝行为 |
+| [第三方组件与版本](excel/10-third-party-components.md) | 当前依赖版本、用途及商业部署条件 |
+| [NPOI 用户扩展](excel/npoi-extensions.md) | 单元格、工作表与服务注册扩展 |
+| [布局与迁移分析器](excel/entity-layout-analyzers.md) | BOE/BOM 规则、安装、覆盖与限制 |
+| [Entity Provider 合同](excel/entity-provider-contracts.md) | 第三方 Provider 的 SPI、合同包和接入流程 |
+| [Provider 起始模板](../templates/excel-provider-starter/README.md) | 基础 XLSX Provider 模板，不含 Entity 实现 |
 
-- [Provider 能力与边界](excel/09-providers.md)
-- [第三方 Excel 引擎选型](excel/10-third-party-components.md)
-- [NPOI 用户扩展](excel/npoi-extensions.md)
-- [工作表保护](excel/sheet-protection.md)
-- [两级联动字典模板](excel/cascade-lookups.md)
-- [Workbook 透视表](excel/pivot-tables.md)
-- [NuGet 迁移](excel/nuget-migration.md)
+## 协作、夹具与历史资料
 
-## 本次盘点结论
+| 文档 | 简介 |
+| --- | --- |
+| [Agent 工作流索引](ai-workflow/README.md) | 计划、执行、审查、修复、目标生成及运行环境适配 |
+| [Agent 规则片段](../templates/AGENTS.workflow.snippet.md) | 可复用的工作流规则示例 |
+| [Golden 夹具](../tests/Bing.Offices.Testing/Resources/Golden/README.md) | 标准 Open XML 输入的离线生成与哈希维护 |
+| [透视客户端探针](../build/PivotClientProbe/README.md) | Windows Excel 首开、刷新、重开及专用进程清理 |
+| [中文注释历史计划](plans/chinese-comments-plan.md) | 历史治理计划，执行状态需回到源码核实 |
 
-| 模块 | 实现状态 | 文档状态 |
-| --- | --- | --- |
-| Abstractions / Core | 已实现公共契约、映射计划、校验、CSV、文件提交和异常模型 | 已补充项目级模块说明；细节分散在 Excel、CSV 专题 |
-| NPOI | 已实现 XLS/XLSX 主 Provider 和 Entity Layout | 已有专题与能力矩阵；已修正 XLSX 图表说明 |
-| ClosedXML | 已实现富 XLSX Provider、Entity Layout 和透视能力 | 已有能力矩阵与专题 |
-| MiniExcel | 已实现轻量 XLSX 导入导出 | 已有能力矩阵 |
-| ExcelDataReader | 已实现 XLS/XLSX/XLSB 只读与批量导入 | 已有能力矩阵 |
-| SpreadCheetah | 已实现前向流式 XLSX 导出 | 已有能力矩阵 |
-| Aspose.Cells | 已实现商业渲染、转换、公式和加密适配 | 已有能力矩阵；部署许可证和目标环境保真度仍需单独确认 |
-| Analyzer | 已实现 Entity Layout 与旧 API 迁移诊断 | 已有独立文档 |
-| Provider 合同与测试工具 | 已实现可复用 Entity 合同、跨 Provider 合同和资源探针 | Entity 合同已有独立文档；仓库内部测试工具在模块总览中说明 |
-| CSV | 已实现同步/异步导入导出、映射、校验和资源限制 | 本次新增独立专题 |
-
-## 待实现 / 待确认
-
-- **待确认**：NPOI 高级透视表在真实客户端中的文本 Count 等组合尚未完成最终验收，详见[透视表高级模式边界](excel/pivot-tables.md#高级模式与当前验收边界)。
-- **待确认**：Aspose.Cells 需要有效商业许可证；字体替代、页面渲染和格式转换保真度应在实际部署环境验证。
-- **待实现**：`templates/excel-provider-starter` 只覆盖基础 XLSX Provider 起点，尚未实现 Entity Layout；接入前不得声明对应能力。
-- **待确认**：`docs/plans` 与 `ai_docs/tasks` 是计划和历史执行证据，不等同于当前产品能力；使用时应回到源码和本文索引复核。
-
-## 维护约定
-
-新增或调整公开能力时，应同步更新本索引、对应专题和 Provider 能力矩阵。示例优先引用公开接口，限制必须明确区分“不支持”“待实现”和“待确认”，不得根据计划文档推断功能已完成。
+尚未实现或无法由代码确认的内容统一标为“待实现/待确认”，并注明原因。新增公开能力时同步更新专题、Provider 矩阵和本索引；原始任务、日志与客户端记录保留其时间语义。

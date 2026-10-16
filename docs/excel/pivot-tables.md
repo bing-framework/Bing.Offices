@@ -328,3 +328,7 @@ Provider 文件包含透视定义与真实缓存，没有预先写入普通汇�
 本机 1K/10K 行、1/4 个透视的有界矩阵中，相同来源的四个透视共享一个缓存，业务序列仅枚举一次；四个不同来源则分别建立缓存。业务枚举计数不等于 DOM 预检扫描次数，不能据此宣称整个流程只扫描一次。
 
 来源枚举阶段的双 TFM 同步/异步取消均保留既有文件并清理暂存；这些响应时间不代表缓存构建和序列化阶段。资源数据、测量区间和后续建议见 [资源报告](../../ai_docs/tasks/BING-OFFICES-PIVOT-CLIENT-LIFECYCLE-20261005-001/resource-report.md)。更多字段、透视和来源会增加 DOM、分配及缓存开销，应结合部署资源单独评估。
+
+## 核心实现与依赖配置
+
+公共定义位于 `src/Bing.Offices.Abstractions/Bing/Offices/Exports/Reports/ExcelPivot*.cs`；NPOI 的 `Exports/PivotTables` 负责来源验证、目标预算、定义与完整缓存写入，ClosedXML 的对应目录及 `ClosedXmlExcelExporter.cs` 负责引擎适配和缓存修正。模板桥接/清单/缓存部件位于 `src/provider-shared/ExcelPivotTemplate*.cs`。依赖匹配的 NPOI 或 ClosedXML 包；没有独立客户端刷新服务。高级聚合及模板更新客户端结果统一标为**待实现/待确认（待确认）**，不把历史基础验收外推为当前所有组合通过。

@@ -1,6 +1,6 @@
-# NuGet Migration
+# NuGet 迁移
 
-当前工作树包版本为 `2.0.0`，三个包身份和依赖方向保持不变：
+当前工作树包版本为 `2.0.0`，核心三包的身份和依赖方向保持不变（其余 Provider、分析器与合同包见模块总览）：
 
 `Bing.Offices.Abstractions <- Bing.Offices.Core <- Bing.Offices.Npoi`
 
@@ -25,23 +25,23 @@
 
 失败工作簿输出限制已从 `MaxBytes` 更名为 `MaxSerializedBytes`。该限制只约束失败工作簿序列化输出，不代表原始 Workbook、解压内容、实体或失败输出 DOM 的内存上限。
 
-旧的 `OfficeException` 异常层级、`ExcelSetting`/`SheetSetting` 已从发布 API 移除；CSV 实体实现类不再作为发布 API，调用方应通过 `ICsvImporter`/`ICsvExporter` 或 DI 使用。本轮另经成员级批准移除四个重复的 `ExportToFile`/`ExportToFileAsync` 扩展声明，接口实例成员保持不变。`dotnet pack` 和本地 package consumer 验证确认当前 `2.0.0` 包的可消费性。
+旧的 `OfficeException` 异常层级、`ExcelSetting`/`SheetSetting` 已从发布 API 移除；CSV 实体实现类不再作为发布 API，调用方应通过 `ICsvImporter`/`ICsvExporter` 或 DI 使用。本轮另经成员级批准移除四个重复的 `ExportToFile`/`ExportToFileAsync` 扩展声明，接口实例成员保持不变。历史 `dotnet pack` 和本地包消费者记录只能证明当时被测候选的可消费性，不证明当前工作区已重新通过，也不证明公共 NuGet 发布完成。
 
 ## API 迁移对照
 
-下表列出仍保持兼容的旧版入口和候选替代项；已标记移除的类型不应继续在新代码中引用：
+下表区分历史入口、当前真实替代项和兼容状态；审批列属于历史任务记录，不作为本轮新增审批。未实现的 API 名称不列为可调用替代项：
 
-| 当前 2.x 入口 | 新代码建议 | 当前兼容策略 | 批准状态 |
+| 历史或当前入口 | 当前可用替代项 | 当前兼容策略 | 历史记录 |
 | --- | --- | --- | --- |
 | `ExcelMapping.For<T>()` | `ImportMappingBuilder<T>` / `ExportMappingBuilder<T>` | 已移除 | 本次 RC Breaking Change |
-| `Mapping(configuration)` / `Mapping(document)` | 使用具名的 `MappingConfiguration(...)` / `MappingDocument(...)` 入口 | 迁移中 | 当前 Major 仍使用 `Mapping(...)` |
+| `Mapping(configuration)` / `Mapping(document)` | 继续使用实际存在的 `Mapping(...)` 重载 | 当前公开入口 | `MappingConfiguration(...)` / `MappingDocument(...)` 具名方法为待实现/待确认，不能调用 |
 | `HeaderMatch` | `RequireExpectedHeaders` | 删除 | Major 已迁移 |
 | `MaxColumnCount` | `MaxReadColumns` | 删除 | Major 已迁移 |
 | `EnabledEmptyLine` | `ReportEmptyRows` | 删除 | Major 已迁移 |
 | `IgnoreEmptyLineAfterData` | `StopAtFirstEmptyRow` | 删除 | Major 已迁移 |
 | `AddNavigationSheet` | `AddSheet(name, parents.SelectMany(...))` | 保留 | 待批准 |
 | `ExcelSetting` / `SheetSetting` | `ExcelWorkbookMetadataOptions` 与 Sheet request | 已移除 | Round 6 已批准 |
-| `OfficeException` 异常层级 | 标准参数/状态异常与结构化导入错误 | 已移除 | Round 6 已批准 |
+| `OfficeException` 异常层级 | `BingOfficesException` 家族、标准参数/取消异常及结构化导入错误 | 已移除 | Round 6 已批准 |
 | `CsvEntityImporter` / `CsvEntityExporter` | `ICsvImporter` / `ICsvExporter`，优先通过 DI 获取 | 已 internal 化 | Round 6 已批准 |
 | `ICellValueConverter` | `IExcelValueConverter` | 已移除；请迁移到提供程序无关的双向转换器 | 本任务已批准 |
 | `CsvStreamExtensions.ExportToFile*` / `ExcelStreamExtensions.ExportToFile*` | `ICsvExporter.ExportToFile*` / `IExcelExporter.ExportToFile*` | 扩展声明已移除；接口实例成员保留 | FIX-003，`approvedBy=jian玄冰` |
@@ -252,3 +252,9 @@ foreach (var useXls in new[] { true, false })
 迁移时还需区分完整透视缓存与普通汇总单元格。本入口没有写出无客户端静态汇总；本机 Excel 的历史客户端夹具仅验证了基础透视新建后的首次显示、显式刷新和保存重开，不覆盖高级透视；高级透视（尤其文本 Count）尚未完成客户端验收，也不据此承诺 WPS/LibreOffice 或所有 Excel 版本。来源值更新后不要只依赖刷新标志位，需由客户端显式刷新并核对结果。可运行的包消费者与维护步骤见 [透视探针](../../build/PivotClientProbe/README.md)。
 
 模板中如需通过工作簿名称定位最终合计行，将原有 `Footer("合计", ...)` 改为 `FooterNamed("OrderTotal", "合计", ...)`。导出时，NPOI 的 XLS/XLSX 和 ClosedXML 的 XLSX 会把 `OrderTotal` 指向本次最终 marker 单元格；模板中同名、同 Sheet 的单格名称随明细长度更新，缺失时创建。需要定位每个非末页小计时，使用 `PageSubtotalNamed("PageTotal", "页小计", ...)`，生成 `PageTotal_001` 起的逐页名称。页数缩短后模板若保留未使用的同系列名称会报 Plan 错误，需同步清理模板。导入仍使用 marker 文本；名称属于工作簿或目标 Sheet，跨 Sheet、范围名称或重名在导出预检中返回 Plan 配置错误。
+
+## 实现定位、依赖与升级限制
+
+包 ID、TFM 和依赖由 `src/*/*.csproj`、`framework.props`、`version.props` 与 `version.dev.props` 确定。方向 Profile 和请求契约在 Abstractions，映射/流扩展在 Core，NPOI 用户扩展在 NPOI 的 `Bing/Offices/Extensions`。API 快照工具位于 `build/ApiSnapshot`，测试与包消费者入口见[构建与验证](../development/build-validation.md)。
+
+升级应配套选择 Core/Abstractions/Provider，避免旧二进制继续依赖已移除的内部友元或类型。包源中实际可用版本与当前候选门禁为**待实现/待确认（待确认）**，不要把仓库版本号当作线上状态。

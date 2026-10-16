@@ -70,8 +70,15 @@ public sealed class OrderRow
 | 表头、属性与动态列绑定 | `CsvHeaderBinder.cs`、`CsvPropertyBinding.cs`、`CsvDynamicTypeResolver.cs` |
 | 字节和文件便利入口 | `src/Bing.Offices.Core/Bing/Offices/Extensions/CsvStreamExtensions.cs` |
 | 默认依赖注入 | `src/Bing.Offices.Core/Bing/Offices/Mappings/ExcelMappingPlanFactoryProvider.cs` |
+| 职责级测试 | `tests/Bing.Offices.Tests/CsvTest.cs`、`CsvStreamExtensionsTest.cs`、`AsyncPipelineCsvTest.cs`、`tests/Bing.Offices.Tests.Integration/CsvAsyncFileIntegrationTest.cs` |
 
 导出器按 Mapping Plan 决定列顺序、标题、转换和动态列；导入器先绑定表头，再执行转换、值映射、内置/命名校验与唯一值跟踪。请求级 `MappingDocument` 优先作为规范化文档，`MappingConfiguration` 用于本次请求的方向化覆盖。
+
+## 依赖与注册
+
+公共接口、选项和结果位于 `Bing.Offices.Abstractions`；默认解析与写入实现位于 `Bing.Offices.Core`，Core 使用 `CsvHelper` 33.1.0 处理 CSV 记录。仓库没有独立的 CSV Provider 包。NPOI、MiniExcel、ClosedXML、ExcelDataReader 和 SpreadCheetah 注册扩展会调用 Core 默认服务注册；Aspose.Cells 扩展不注册 Core 服务。使用 Aspose.Cells 的应用可另行引用 Core 并调用 `ExcelMappingPlanFactoryProvider.RegisterDefault(services)`，或自行注册 `ICsvImporter`、`ICsvExporter` 实现。
+
+CSV 可用以下公共接口和选项：`ICsvImporter.Import`/`ImportAsync`、`ICsvExporter.Export`/`ExportAsync`/`ExportToFile`/`ExportToFileAsync`，以及 `CsvImportOptions<T>`、`CsvExportOptions<T>`。文件和字节便利方法由 `CsvStreamExtensions` 提供。默认分隔符为逗号、引用符为双引号、编码为 UTF-8 无 BOM；导出换行符默认为 CRLF。导入选项没有 `NewLine`，由解析器识别记录换行。
 
 ## 选项与配置
 
@@ -88,6 +95,7 @@ public sealed class OrderRow
 - `MaxInputBytes`、`MaxRows`、`MaxErrors`、`MaxFieldLength`、`MaxColumns` 和 `MaxTrackedUniqueValues` 提供请求级资源限制。
 - `UniqueComparison` 控制唯一值比较，默认忽略大小写的 Ordinal 比较。
 - `Encoding` 默认 UTF-8 无 BOM；需要拒绝无效字节时应传入启用严格解码的 `UTF8Encoding`。
+- `CsvImportError.RowIndex` 和 `ColumnIndex` 从 1 开始计数；资源限制选项为空时不增加该项请求级上限。
 
 ## IO、错误与生命周期
 
@@ -101,6 +109,7 @@ public sealed class OrderRow
 
 - CSV 是单表、顺序记录格式，不支持 Excel 的 Sheet、模板、样式、合并、图片、公式计算、关系和 Entity Layout。
 - `CsvFormulaInjectionPolicy.Escape` 只降低常见电子表格公式注入风险，不是通用内容清洗或授权机制。
+- `Escape` 对忽略前导空白、控制字符及 BOM 后以 `=`, `@`, `+` 或 `-` 开始的潜在公式字段加前置单引号；简单有符号十进制数不加引号。该规则不是对任意电子表格软件的完整安全保证。
 - 唯一值校验会占用内存；不可信或大规模输入应设置 `MaxTrackedUniqueValues` 及其他资源限制。
 - 自定义分隔符、引用符、换行、区域性和编码必须在导入导出两端保持一致。
 - 当前没有独立的 CSV Provider 包；应用通过官方 Provider 注册 Core 默认服务，或自行注册 `ICsvImporter`/`ICsvExporter` 实现。

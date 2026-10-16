@@ -24,7 +24,7 @@ MiniExcel 与 ClosedXML 都是与 NPOI 并列的独立 XLSX Provider。它们复
 
 ClosedXML 适合富 XLSX 报表、模板样式、合并、公式保存和 Entity Layout（固定 Cell、属性式 Cell、命名锚点、多个 List Region、动态列组、计算列、连续分组小计、分页小计、水平分页符、重复打印标题、实际复制页眉、Footer、Merge、Relations）。NPOI 与 ClosedXML 均支持 Entity List Region 的单字典和多分组动态列、导出计算列、连续分组小计、分页小计、水平分页符、命名锚点、重复标题、实际页眉以及可变明细尾部；MiniExcel、SpreadCheetah 和 ExcelDataReader 不声明该能力。实际页眉与重复打印标题在同一 Sheet 互斥，示例见 [Entity 分页与重复页眉](dynamic-columns.md#重复打印标题与实际页眉)。ClosedXML XLSX 的基础 [Workbook 透视表](pivot-tables.md) 已验收；NPOI XLSX 已接入基础/高级原生透视及完整缓存，当前高级客户端文本 Count 验收仍未通过；NPOI 与 ClosedXML 的已有 XLSX 透视模板保留/更新主链声明 `ExcelProviderFeatures.TemplatePivotTables`，不代表客户端刷新结果。NPOI XLSX 已支持按列 Key 创建柱状图、折线图和单系列饼图；NPOI XLS、ClosedXML、MiniExcel 与 SpreadCheetah 不支持该图表请求。XLSM 宏保留和完整 Excel Formula Engine 仍不支持；公式读取通过独立 `IExcelFormulaProcessor` 暴露，详见 [Provider 能力矩阵](09-providers.md)。
 
-NPOI 和 ClosedXML 还提供隐藏的 `IExcelEntityBatchImporter` Provider SPI。`Complete` 模式先完成完整 Entity Layout 导入，再按 List Region 投影同步或异步批次；`SummaryOnly` 或显式 `Forward` 会对受支持布局使用受限前向解析，不保留最终实体集合或关系导航集合。固定单元格、关系和其他无法归属区域的错误通过诊断批次返回；不支持的布局在读取前返回结构化配置错误。NPOI 支持 XLS/HSSF 与 XLSX/XSSF，ClosedXML 支持 XLSX；两者都保留调用方输入流和模板 `LeaveOpen` 契约。
+NPOI 和 ClosedXML 还提供隐藏的 `IExcelEntityBatchImporter` Provider SPI。默认 `Buffered + Complete` 先完成完整 Entity Layout 导入，再按 List Region 投影批次；显式 `Forward` 使用受限前向解析，但 `Complete` 仍保留最终结果。`SummaryOnly` 即使配合 `Buffered` 也切换到受限前向路径，不保留完整实体列表或关系导航集合。固定字段、关系和其他无法归属区域的错误通过诊断批次返回；不支持的布局在读取前返回结构化配置错误。NPOI 支持 XLS/HSSF 与 XLSX/XSSF，ClosedXML 支持 XLSX；两者都保留输入流和模板 `LeaveOpen` 契约。详见[批量导入](batch-import.md)。
 
 下方完整 Workbook 能力列表以 NPOI Provider 为基准；MiniExcel 只承诺 [Provider 能力矩阵](09-providers.md) 中已验证的常规 XLSX、映射、转换、校验、动态列和关系能力，其余请求必须按结构化 `UnsupportedFeature` fail-fast。
 
@@ -36,7 +36,7 @@ NPOI 和 ClosedXML 还提供隐藏的 `IExcelEntityBatchImporter` Provider SPI�
 - 显式父子关系绑定与结构化导入错误
 - XLSX 柱状、折线和饼图
 
-### Sync 与 Async
+### 同步与异步
 
 `IExcelImporter.ImportAsync`、`IExcelExporter.ExportAsync` 和 `ExportToFileAsync` 仅将外围文件/Stream IO 异步化；NPOI DOM 构建、映射、校验和序列化仍运行在调用线程。模板流在 `WorkbookFactory.Create` 阶段仍要求同步读取，因此 async-only 模板流不属于支持的输入合同。CSV 的 `ImportAsync`、`ExportAsync` 和 `ExportToFileAsync` 使用异步 CSV Parser/Writer 与 Stream IO。两套 API 共享 Mapping、Validation、Conversion、错误结果和取消合同，不应使用 `Task.Run` 替代真实 IO。
 
@@ -49,6 +49,10 @@ exporter.Export(request, stream);
 
 按主题阅读：
 
+- [workbook-reports.md](workbook-reports.md)：工作簿、模板、报表内容、图片与图表
+- [entity-layout.md](entity-layout.md)：固定字段、多个明细区域与模板锚点
+- [batch-import.md](batch-import.md)：单表、多表、Entity 批次及失败工作簿
+- [formula-rendering-conversion.md](formula-rendering-conversion.md)：公式读取、商业渲染与转换
 - [mapping-profile.md](mapping-profile.md)：Profile 与映射优先级
 - [mapping-json-xml.md](mapping-json-xml.md)：JSON/XML 映射文档
 - [import-validation.md](import-validation.md)：Workbook 原生校验、配置校验和错误收集
@@ -56,7 +60,7 @@ exporter.Export(request, stream);
 - [cascade-lookups.md](cascade-lookups.md)：商品类别等两级联动填写字典
 - [dynamic-columns.md](dynamic-columns.md)：动态列、Entity 分页与重复页眉
 - [pivot-tables.md](pivot-tables.md)：Workbook 透视来源、缓存生命周期与客户端验证
-- [entity-provider-contracts.md](entity-provider-contracts.md)：将 Entity Layout 合同源码模板接入 Provider 测试
+- [entity-provider-contracts.md](entity-provider-contracts.md)：将 Entity Layout 合同包接入 Provider 测试
 - [entity-layout-analyzers.md](entity-layout-analyzers.md)：Entity Layout 常量配置的编译期诊断
 - [exceptions-and-observers.md](exceptions-and-observers.md)：异常分类、Observer 与文件提交边界
 - [dates.md](dates.md)：日期、DateTimeOffset 与跨时区合同
@@ -81,4 +85,4 @@ exporter.Export(request, stream);
 - [09-providers.md](09-providers.md)
 - [nuget-migration.md](nuget-migration.md)
 
-ASP.NET Core 上传示例见 `import-validation.md`；公开示例由 `Bing.Offices.Docs.Tests` 对当前源码持续编译和执行，真实 nupkg 可消费性由发布任务中的独立 PackageConsumer 验证。
+ASP.NET Core 上传示例见 `import-validation.md`；`Bing.Offices.Docs.Tests` 只编译执行 `DocsConsumerTest.cs` 固定列表中的 C# 代码块，不自动覆盖全部文档。真实 nupkg 可消费性由独立包消费者验证。模块路径与构建依赖见[项目模块](../project-modules.md)及[构建与验证](../development/build-validation.md)。

@@ -1,4 +1,4 @@
-# JSON/XML Mapping
+# JSON/XML 映射文档
 
 v2 文档统一使用以下结构，JSON 和 XML 会先归一化为 `ExcelMappingDocument`：
 
@@ -63,3 +63,11 @@ var document = ExcelMappingConfigurationLoader.FromJsonDocument(
   "{\"version\":2,\"import\":{\"columns\":[{\"propertyName\":\"Code\",\"title\":\"编码\"}]}}");
 var importMapping = document.Import;
 ```
+
+## 核心实现、依赖与限制值
+
+入口位于 `src/Bing.Offices.Core/Bing/Offices/Configurations/ExcelMappingConfigurationLoader.cs`；文本读取、结构验证和可观察的 DI 入口分别为同目录 `ExcelMappingTextReader.cs`、`ExcelMappingDocumentValidator.cs`、`DefaultExcelMappingConfigurationLoader.cs`。归一化类型与合并器位于 `src/Bing.Offices.Abstractions/Bing/Offices/Configurations`，最终计划由 Core 的 `Mappings/ExcelMappingPlanFactory.cs` 创建。
+
+当前解析器限制文档 1 MiB、JSON 深度 32、每方向 1000 列、每列 100 个别名/100 条校验、单字符串 4096 字符；XML 同时限制字符并禁止 DTD。它们是源码约束，不是可从 JSON 中关闭的配置项。Core 使用 System.Text.Json/XML 与 UTF-8 文本读取；只加载文档不需要 Excel 引擎，实际导入导出仍须注册相应 Provider。
+
+`FromJsonDocument`/`FromXmlDocument` 可直接解析文本或流；需要异常观察器时使用容器中的 `IExcelMappingConfigurationLoader`。v1 自动迁移未提供：**待实现/待确认（待实现）**，已有配置须离线转换后再交给运行时。

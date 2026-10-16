@@ -65,6 +65,8 @@ public sealed class HostFileCommitter : IFileExportCommitter
 两个导入器原五参数构造签名和默认值保持不变，新增重载不会改变现有构造调用。
 移除 Core 的生产友元后，曾直接调用其内部方法的旧 NPOI / ClosedXML Provider 二进制需要与 Core 配套升级。外部组件始终使用公开接口；不要引用内部 AtomicFileCommitter。
 
-## 后续优化建议
+## 已有扩展配套与实现定位
 
-可独立推进第三方 Provider 契约测试套件、最小 Provider 项目模板、Provider SPI 文档索引和提交耗时诊断。本次不新增这些机制。
+第三方合同包和最小 Provider 模板已经存在，分别见[合同接入](entity-provider-contracts.md)和 [Starter](../../templates/excel-provider-starter/README.md)，不再列为尚未实现的机制。更全面的提交耗时诊断属于**待实现/待确认（待确认）**，不构成现有接口承诺。
+
+接口为 `src/Bing.Offices.Abstractions/Bing/Offices/IO/IFileExportCommitter.cs`；默认服务、提交算法和系统文件适配位于 `src/Bing.Offices.Core/Bing/Offices/IO`。算法创建同目录临时目标、调用写委托、刷新并检查取消，再执行替换/移动，失败时清理暂存。默认注册由 `Mappings/ExcelMappingPlanFactoryProvider.cs` 提供。

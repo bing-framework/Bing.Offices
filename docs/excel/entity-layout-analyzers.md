@@ -25,3 +25,7 @@
 命名参数可以调整 `Cell`、`Merge`、`DynamicColumnGroup` 的实参顺序，分析器按参数名称识别其含义。目标类型推断的内联 `new()` 定义可参与检查；条件表达式和其他无法静态确定的定义不会被误判。仓库中的 `Bing.Offices.Analyzers.Consumer` 从本地生成的 NuGet 包验证正常编译，并通过 `BOE_NEGATIVE`、`BOE_AREA_NEGATIVE` 编译符号分别验证 `BOE001`、`BOE005` 会阻止无效布局。
 
 `BOM001` 和 `BOM002` 面向仍引用 1.x 程序集、能够解析旧类型的项目。两个规则只报告已绑定的完整类型，不对未解析名称或业务项目中的同名类型猜测；不提供自动代码修复。`ColumnNameAttribute` 和 `DynamicColumnAttribute` 在 2.x 仍可使用，单独出现不会触发迁移提示。迁移路径见[NuGet 迁移文档](nuget-migration.md)。
+
+## 核心实现与依赖配置
+
+`src/Bing.Offices.Analyzers/EntityLayoutAnalyzer.cs` 通过 Roslyn 语法和语义模型匹配布局调用、常量地址与内联定义；`LegacyApiMigrationAnalyzer.cs` 识别已绑定的旧类型。项目依赖 `Microsoft.CodeAnalysis.CSharp`，目标为 `netstandard2.0`；规则级别可通过宿主标准分析器配置管理，不会改变运行时布局校验。测试入口为 `tests/Bing.Offices.Analyzers.Tests` 和 `tests/Bing.Offices.Analyzers.Consumer`，不提供自动代码修复。

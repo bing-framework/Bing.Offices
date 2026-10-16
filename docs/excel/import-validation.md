@@ -1,4 +1,4 @@
-# Import Validation
+# 导入校验
 
 校验按以下阶段执行：原始单元格空白规范化、Required/Regex、类型转换、Date/MaxValue/Range/MaxLength、Unique、成功后 Setter。
 
@@ -179,3 +179,9 @@ public IResult Upload(IFormFile file, IExcelImporter importer)
     return Results.Ok(result);
 }
 ```
+
+## 核心实现与依赖配置
+
+规则定义、Required/Regex/Range/Unique 等内置实现位于 `src/Bing.Offices.Core/Bing/Offices/Validations`；绑定与计划创建在同项目 `Mappings`。Workbook 原生规则由 NPOI、ClosedXML、ExcelDataReader 的导入管道各自解析，不能按公共枚举推断所有格式均支持。
+
+`ExcelResourceLimits` 位于 `src/Bing.Offices.Abstractions/Bing/Offices/Imports/Resources`，失败策略和诊断位于 `Imports/Failures`。Provider 注册时提供默认规则；宿主可注册公开 `IExcelValidationRule`/`INamedExcelValidationRule`，并通过映射绑定。错误数截断需同时检查结果的截断标记，不应只按 `Errors.Count` 判断完整性。批次回调与失败产物提交顺序详见[批量导入与失败工作簿](batch-import.md)。

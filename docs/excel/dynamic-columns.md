@@ -1,4 +1,4 @@
-# Dynamic Columns
+# 动态列与实体分页布局
 
 动态列使用稳定 `Key` 和 `Alias`，实体属性通常是 `IDictionary<string, object>`。固定列由 `PropertyName` 绑定，CSV 和 Excel 都支持固定列与动态列并存。
 
@@ -255,3 +255,9 @@ var importer = provider.GetRequiredService<ICsvImporter>();
 var result = importer.Import<OrderRow>(input);
 var region = result.Items[0].Values["区域"];
 ```
+
+## 核心实现、依赖与配置
+
+公共动态列定义位于 `src/Bing.Offices.Abstractions/Bing/Offices/Exports/DynamicColumns`；Entity 分组、计算列、页眉和 Footer 在同项目 `Entities/Lists`。Core 的 `Mappings` 编译最终列位置、转换与校验；`src/provider-shared/ExcelEntityRowPlan.cs` 规划明细、小计和页眉/尾部的物理行，NPOI/ClosedXML 的 `Entities` 执行实际读写。
+
+使用前注册所选 Provider 和命名转换/校验服务；Entity 能力仅 NPOI/ClosedXML。地址、marker、动态列 Key、组标识和物理位置是不同概念，模板布局变化后应重新预检。分批摘要不是完整布局的任意低内存替代，另见[批量导入](batch-import.md)；固定字段与模板基础用法见[实体布局](entity-layout.md)。
