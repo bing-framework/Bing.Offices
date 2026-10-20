@@ -4,17 +4,18 @@
 
 ## 构建与生成
 
-F3 验证使用任务产物中的本地 feed、NuGet 配置和隔离缓存。配置位于 `ai_docs/tasks/BING-OFFICES-NPOI-PIVOT-CACHE-20261005-001/artifacts/pivot.NuGet.Config`，包 feed 为同目录下的 `pivot-feed-01`，工具专用缓存为 `pivot-package-cache-01/client-probe`。以下命令显式指定包版本和缓存；不要将工具恢复到未验证的同版本旧包。
+旧任务中的 feed、配置和缓存已清理。重测前先按[构建与验证](../../docs/development/build-validation.md)生成并核对当前候选包，把经过验证的本地 feed 配置到 `artifacts/pivot-probe/NuGet.Config`；配置必须能解析候选包及其依赖。以下路径是重测准备目录，不表示仓库附带配置或包。命令显式指定包版本与隔离缓存，不要恢复到未验证的同版本旧包。
 
 ```powershell
 [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 $OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 
-$probeTask = Join-Path (Get-Location).Path 'ai_docs/tasks/BING-OFFICES-NPOI-PIVOT-CACHE-20261005-001'
-$probeConfig = Join-Path $probeTask 'artifacts/pivot.NuGet.Config'
-$probeCache = Join-Path $probeTask 'artifacts/pivot-package-cache-01/client-probe'
+$probeWorkspace = Join-Path (Get-Location).Path 'artifacts/pivot-probe'
+$probeConfig = Join-Path $probeWorkspace 'NuGet.Config'
+$probeCache = Join-Path $probeWorkspace 'package-cache'
 $probeOutput = Join-Path (Get-Location).Path ('artifacts/pivot-probe-' + (Get-Date -Format 'yyyyMMddHHmmss'))
+if (-not (Test-Path -LiteralPath $probeConfig)) { throw '请先准备经过验证的本地 feed 配置。' }
 New-Item -ItemType Directory -Path $probeOutput | Out-Null
 
 dotnet restore build/PivotClientProbe/PivotClientProbe.csproj --configfile $probeConfig --packages $probeCache -p:BingOfficesPackageVersion=2.0.0
@@ -26,7 +27,7 @@ dotnet build/PivotClientProbe/bin/Release/net8.0/PivotClientProbe.dll --output (
 if ($LASTEXITCODE -ne 0) { throw '夹具生成或完整缓存校验失败。' }
 ```
 
-配置、feed 和包目录由任务验证生成，不随源码提供；换机器时需重新生成本地包及配置。工具支持 net6.0/net8.0，运行对应 DLL 需要对应运行时。`--provider` 接受 `ClosedXML` 或 `NPOI`；省略时仍使用 ClosedXML。基础透视支持两个 Provider 的同步和异步导出，高级透视也通过相同选择器调用指定 Provider。下面运行 NPOI 基础/高级、net6/net8、同步/异步的完整组合，每种组合使用唯一输出路径：
+配置、feed 和包目录不随源码提供；每次重测需准备与当前候选匹配的本地包及配置。示例的 `2.0.0` 是显式包版本参数，必须与实际生成并核对过的包一致。工具支持 net6.0/net8.0，运行对应 DLL 需要对应运行时。`--provider` 接受 `ClosedXML` 或 `NPOI`；省略时仍使用 ClosedXML。基础透视支持两个 Provider 的同步和异步导出，高级透视也通过相同选择器调用指定 Provider。下面运行 NPOI 基础/高级、net6/net8、同步/异步的完整组合，每种组合使用唯一输出路径：
 
 ```powershell
 $probeDll6 = Join-Path (Get-Location).Path 'build/PivotClientProbe/bin/Release/net6.0/PivotClientProbe.dll'
