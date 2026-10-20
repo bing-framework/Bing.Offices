@@ -49,6 +49,8 @@
 
 | 文档 | 简介 |
 | --- | --- |
+| [已实现功能分类](../ai_docs/implemented-features.md) | 按当前能力归类的实现位置、使用入口与边界 |
+| [统一 TODO](../ai_docs/TODO.md) | 合并旧任务后的待实现、待确认事项及关闭条件 |
 | [Agent 工作流索引](ai-workflow/README.md) | 计划、执行、审查、修复、目标生成及运行环境适配 |
 | [Agent 规则片段](../templates/AGENTS.workflow.snippet.md) | 可复用的工作流规则示例 |
 | [Golden 夹具](../tests/Bing.Offices.Testing/Resources/Golden/README.md) | 标准 Open XML 输入的离线生成与哈希维护 |

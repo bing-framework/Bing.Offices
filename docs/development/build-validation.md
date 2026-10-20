@@ -18,7 +18,7 @@ dotnet test tests/Bing.Offices.Docs.Tests/Bing.Offices.Docs.Tests.csproj -c Rele
 
 业务改动应选择对应测试项目和 TFM，例如 NPOI 的 `tests/Bing.Offices.Npoi.Tests`。测试是否可跳过还需遵守仓库 `AGENTS.md` 中关于默认实现、Provider 分支、缓存隔离、文件提交和公共 API 的直接覆盖要求。
 
-`common.props` 将常规构建产物写入根 `output/debug` 或 `output/release`，项目中也有 `obj`、生成 XML 文档等产物。自定义 Probe 或测试可能指定独立输出路径；清理时不要把 `ai_docs/tasks`、Golden 输入或 API 基线当作缓存。
+`common.props` 将常规构建产物写入根 `output/debug` 或 `output/release`，项目中也有 `obj`、生成 XML 文档等产物。自定义 Probe 或测试可能指定独立输出路径；清理旧任务前先把未完成项合并到 `ai_docs/TODO.md`，保留仍被工具引用的审批附件；不要把 Golden 输入或 API 基线当作缓存。
 
 ## 核心验证工具
 
