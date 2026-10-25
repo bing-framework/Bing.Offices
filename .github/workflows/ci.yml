@@ -36,11 +36,45 @@ jobs:
 
       - name: Test
         run: |
-          dotnet test tests/Bing.Offices.Tests/Bing.Offices.Tests.csproj -f net6.0 -c Release --no-restore
-          dotnet test tests/Bing.Offices.Tests/Bing.Offices.Tests.csproj -f net8.0 -c Release --no-restore
-          dotnet test tests/Bing.Offices.Tests.Integration/Bing.Offices.Tests.Integration.csproj -f net6.0 -c Release --no-restore
-          dotnet test tests/Bing.Offices.Tests.Integration/Bing.Offices.Tests.Integration.csproj -f net8.0 -c Release --no-restore
-          dotnet test tests/Bing.Offices.Docs.Tests/Bing.Offices.Docs.Tests.csproj -c Release --no-restore
+          dotnet test tests/Bing.Offices.Tests/Bing.Offices.Tests.csproj -f net6.0 -c Release --no-build --no-restore
+          dotnet test tests/Bing.Offices.Tests/Bing.Offices.Tests.csproj \
+            -f net8.0 -c Release --no-build --no-restore \
+            --collect:"XPlat Code Coverage" \
+            --logger "trx;LogFileName=ci-tests-net8.trx" \
+            --results-directory TestResults
+          dotnet test tests/Bing.Offices.Tests.Integration/Bing.Offices.Tests.Integration.csproj -f net6.0 -c Release --no-build --no-restore
+          dotnet test tests/Bing.Offices.Tests.Integration/Bing.Offices.Tests.Integration.csproj -f net8.0 -c Release --no-build --no-restore
+          dotnet test tests/Bing.Offices.Docs.Tests/Bing.Offices.Docs.Tests.csproj -c Release --no-build --no-restore
+
+      - name: Verify coverage report
+        shell: bash
+        run: |
+          set -euo pipefail
+          coverage_root="TestResults"
+          if [[ ! -d "$coverage_root" ]]; then
+            echo "Coverage results directory is missing: $coverage_root" >&2
+            exit 1
+          fi
+          mapfile -t coverage_reports < <(find "$coverage_root" -type f -name coverage.cobertura.xml -print | LC_ALL=C sort)
+          if [[ ${#coverage_reports[@]} -lt 1 ]]; then
+            echo "Expected at least one Cobertura report; found none." >&2
+            exit 1
+          fi
+          coverage_report="${coverage_reports[0]}"
+          if [[ ! -s "$coverage_report" ]]; then
+            echo "Coverage report is empty: $coverage_report" >&2
+            exit 1
+          fi
+          if ! python3 -c 'import sys; import xml.etree.ElementTree as ET; ET.parse(sys.argv[1])' "$coverage_report"; then
+            echo "Coverage report is not valid XML: $coverage_report" >&2
+            exit 1
+          fi
+          for duplicate in "${coverage_reports[@]:1}"; do
+            if ! cmp -s "$coverage_report" "$duplicate"; then
+              echo "Cobertura reports differ: $coverage_report and $duplicate" >&2
+              exit 1
+            fi
+          done
 
       - name: Resource and benchmark contracts
         shell: bash
@@ -103,3 +137,4 @@ jobs:
             artifacts/packages
             artifacts/consumer-results
             artifacts/ci-contracts
+            TestResults
