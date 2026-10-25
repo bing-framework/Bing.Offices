@@ -36,9 +36,9 @@ public class PublicExtensionCoverageTest
         var publicExtensions = coreMethods.Concat(npoiMethods).ToArray();
         var coverage = BuildDirectCallCoverage(publicExtensions);
 
-        Assert.Equal(15, coreMethods.Length);
+        Assert.Equal(22, coreMethods.Length);
         Assert.Equal(66, npoiMethods.Length);
-        Assert.Equal(81, publicExtensions.Length);
+        Assert.Equal(88, publicExtensions.Length);
 
         var missing = publicExtensions
             .Where(method => !coverage.ContainsKey(GetSignature(method)))
@@ -229,9 +229,9 @@ public class PublicExtensionCoverageTest
         {
             "# Public Extension Coverage Traceability",
             string.Empty,
-            "- Task-ID：`BO-RC-20260908-002`",
+            "- Task-ID：`BO-API-USABILITY-20261025`",
             "- Gate：`PublicExtensionCoverageTest.PublicExtensions_ShouldHaveDirectBehaviorTestForEverySignature`",
-            "- 统计：Core `15/15`，NPOI `66/66`，总计 `81/81`",
+            "- 统计：Core `22/22`，NPOI `66/66`，总计 `88/88`",
             "- 判定：`PASS`（完整签名逐项映射）",
             string.Empty,
             "门禁仅接受真实 `call`/`callvirt`，异步测试通过 `AsyncStateMachineAttribute` 精确定位 `MoveNext`；方法组取址、未执行 lambda 和同名实例方法不会计入覆盖。",

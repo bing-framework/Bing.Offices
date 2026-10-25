@@ -54,6 +54,13 @@ public sealed class ExcelWorkbookImportResult<TWorkbook> where TWorkbook : class
     /// 获取是否没有错误。
     /// </summary>
     public bool IsSuccess => Errors.Count == 0;
+
+    /// <summary>获取是否没有因结构拒绝、资源限制或错误上限而产生不完整结果；普通行错误不影响此标志。</summary>
+    /// <remarks>显式配置的 StopAtFirstEmptyRow 等范围终点算按配置完成，不保证物理文件已读至末尾。</remarks>
+    public bool IsComplete => StopReason == ImportStopReason.None;
+
+    /// <summary>获取跨 Sheet 的不完整原因摘要；多原因优先级为资源限制、错误上限、表头结构。</summary>
+    public ImportStopReason StopReason => ImportResultState.GetReason(Errors, ErrorsTruncated);
 }
 
 /// <summary>

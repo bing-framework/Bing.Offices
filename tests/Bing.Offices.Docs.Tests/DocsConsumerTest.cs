@@ -330,6 +330,35 @@ public sealed class DocsConsumerTest
         {
             declarations = code;
             statements = "_ = new OrderRow();";
+            if (fileName == "import-validation.md" && index == 1)
+            {
+                declarations += " public sealed class OrderValidationWorkbook { public List<OrderRow> Rows { get; } = new List<OrderRow>(); }";
+                statements = "var request = ExcelImport.Workbook<OrderValidationWorkbook>(builder => "
+                    + "builder.Sheet(\"Data\", workbook => workbook.Rows)); "
+                    + "using var validPayload = new MemoryStream(); "
+                    + "exporter.Export(ExcelExport.Workbook(builder => builder.Format(Bing.Offices.ExcelFormat.Xlsx)"
+                    + ".AddSheet(\"Data\", new[] { new OrderRow { Code = \"ORD-123\", "
+                    + "CreatedAt = new DateTime(2026, 10, 25) } })), validPayload); "
+                    + "validPayload.Position = 0; "
+                    + "var validResult = importer.Import(validPayload, request); "
+                    + "if (!validResult.IsSuccess || validResult.Workbook.Rows.Count != 1 "
+                    + "|| validResult.Workbook.Rows[0].Code != \"ORD-123\") "
+                    + "throw new InvalidOperationException(\"OrderRow should accept ORD-123.\"); "
+                    + "using var invalidPayload = new MemoryStream(); "
+                    + "exporter.Export(ExcelExport.Workbook(builder => builder.Format(Bing.Offices.ExcelFormat.Xlsx)"
+                    + ".AddSheet(\"Data\", new[] { new OrderRow { Code = \"BAD\", "
+                    + "CreatedAt = new DateTime(2026, 10, 25) } })), invalidPayload); "
+                    + "invalidPayload.Position = 0; "
+                    + "var invalidResult = importer.Import(invalidPayload, request); "
+                    + "if (invalidResult.IsSuccess || invalidResult.Workbook.Rows.Count != 0 "
+                    + "|| invalidResult.Errors.Count != 1) "
+                    + "throw new InvalidOperationException(\"OrderRow should reject invalid codes.\"); "
+                    + "var error = invalidResult.Errors[0]; "
+                    + "if (error.Code != ExcelImportErrorCode.Validation || error.SheetName != \"Data\" "
+                    + "|| error.RowIndex != 2 || error.ColumnIndex != 1 || error.PropertyName != \"Code\" "
+                    + "|| error.ColumnKey != \"Code\" || error.Header != \"Code\" || (string)error.RawValue != \"BAD\") "
+                    + "throw new InvalidOperationException(\"OrderRow should report the invalid Code cell.\");";
+            }
         }
 
         var prelude = string.Empty;
@@ -348,6 +377,11 @@ public sealed class DocsConsumerTest
             declarations = "public sealed class OrderWorkbook { public List<OrderRow> Rows { get; } = new List<OrderRow>(); }";
             prelude = "var services = new ServiceCollection(); ";
         }
+        else if (fileName == "import-validation.md" && index == 1)
+            prelude = "var validationServices = new ServiceCollection(); validationServices.AddBingOfficesNpoi(); "
+                + "using var validationProvider = validationServices.BuildServiceProvider(); "
+                + "var exporter = validationProvider.GetRequiredService<IExcelExporter>(); "
+                + "var importer = validationProvider.GetRequiredService<IExcelImporter>(); ";
         else if (fileName == "import-validation.md" && index == 2)
             prelude = "var uploadServices = new ServiceCollection(); uploadServices.AddBingOfficesNpoi(); "
                 + "using var uploadProvider = uploadServices.BuildServiceProvider(); "

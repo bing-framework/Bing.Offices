@@ -35,4 +35,13 @@ public sealed class CsvImportResult<T>
 
     /// <summary>获取触发截断的最大错误数。</summary>
     public int? MaxErrors { get; }
+
+    /// <summary>获取是否没有错误且结果完整；截断的空错误列表也不视为成功。</summary>
+    public bool IsSuccess => Errors.Count == 0 && IsComplete;
+
+    /// <summary>获取是否没有因结构拒绝、资源限制或错误上限而产生不完整结果；普通行错误不影响此标志。</summary>
+    public bool IsComplete => StopReason == Imports.ImportStopReason.None;
+
+    /// <summary>获取不完整结果的原因摘要；不代替 Errors 明细或抛出的异常。</summary>
+    public Imports.ImportStopReason StopReason => Imports.ImportResultState.GetReason(Errors, IsTruncated, MaxErrors);
 }

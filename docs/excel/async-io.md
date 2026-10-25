@@ -25,9 +25,13 @@ Workbook 模板在 NPOI 的 `WorkbookFactory.Create` 阶段仍按同步 `Read` �
 
 ## 流所有权与文件提交
 
-调用方提供的输入和输出 Stream 始终由调用方拥有，API 不会关闭它们。`ExportToFileAsync` 使用同目录临时文件，写入、flush 和取消检查完成后再 replace/move；写委托失败原样传播，真正的文件系统提交失败才分类为 FileCommit。失败或取消不会截断已有目标文件。
+导入源流和导出目标流由调用方拥有，API 不会关闭它们。模板流是单独的所有权合同：`UseTemplate(templateStream)` 默认 `leaveOpen:false`，进入模板导出后会在成功或失败时释放模板流；需要复用模板时，显式调用 `UseTemplate(templateStream, leaveOpen:true)`，并由调用方管理释放及每次读取前的位置。进入导出前即已取消或参数校验失败时，不接管模板流。失败工作簿输出流也由调用方管理。
+
+`ExportToFileAsync` 使用同目录临时文件，写入、flush 和取消检查完成后再 replace/move；写委托失败原样传播，真正的文件系统提交失败才分类为 FileCommit。失败或取消不会截断已有目标文件。
 
 ## 资源预期
+
+Excel 的 Workbook 与单表导入在未提供 `ResourceLimits` 时，默认限制原始输入为 128 MiB（134217728 字节）；Sync/Async 都在输入复制阶段检查，恰好等于上限允许继续，超出后抛出 `BingOfficesResourceLimitException`（Stage=Open）。传入 `new ExcelResourceLimits { MaxInputBytes = null }` 可显式关闭这项限制；关闭输入字节限制不会关闭 XLSX ZIP 的其他限制。源流在成功、超限或取消后仍由调用方管理。
 
 Excel DOM 仍会产生与工作簿规模相关的内存分配；Async 不代表零 GC。大文件部署应同时设置 `ExcelResourceLimits` 和进程级内存/CPU 限额，并使用发布任务的 ResourceProbe 结果评估 staging 峰值。
 

@@ -59,10 +59,10 @@ public sealed class ExcelWorkbookExportBuilder
     }
 
     /// <summary>
-    /// 使用已有模板作为 Workbook 来源。
+    /// 使用已有模板作为 Workbook 来源；默认在模板导出结束时关闭模板流。
     /// </summary>
     /// <param name="templateStream">可读取的模板流。</param>
-    /// <param name="leaveOpen">完成导出后是否保持模板流打开。</param>
+    /// <param name="leaveOpen">是否保持模板流打开，默认为 false；需要复用时设置为 true 并自行管理位置和释放。</param>
     /// <returns>当前构建器，用于继续配置 Workbook。</returns>
     public ExcelWorkbookExportBuilder UseTemplate(Stream templateStream, bool leaveOpen = false)
     {

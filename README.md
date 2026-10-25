@@ -1,7 +1,7 @@
 # Bing.Offices
 [![GitHub license](https://img.shields.io/badge/license-MIT-blue.svg)](https://mit-license.org/)
 
-Bing.Offices是Bing应用框架的 Excel 导入导出类库。
+Bing.Offices是Bing应用框架的 Excel/CSV 导入导出类库。
 当前发布程序集提供 Excel/CSV 相关能力；Word、PDF 不属于当前交付范围。
 
 ## Runtime 与异步边界
@@ -19,13 +19,16 @@ Bing.Offices是Bing应用框架的 Excel 导入导出类库。
 |Bing.Offices.Npoi|[![NuGet Badge](https://buildstats.info/nuget/Bing.Offices.Npoi?includePreReleases=true)](https://www.nuget.org/packages/Bing.Offices.Npoi)|
 
 ## 实现功能
+- CSV 流式导入导出（只使用 CSV 时依赖 `Bing.Offices.Core`）
 - Excel 导入
 - Excel 导出
+- 无需声明 Workbook 根模型的单 Sheet 导入
 - Workbook Request 异构多 Sheet、动态列、模板、样式和结构化错误
 - XLSX 柱状图、折线图和饼图
 
 ## Excel 文档
 
+- [首次接入快速开始（CSV / Excel）](docs/excel/quick-start.md)
 - [高级 Excel 导入导出](docs/excel/README.md)
 
 ## 架构文档
@@ -50,8 +53,6 @@ Bing.Offices是Bing应用框架的 Excel 导入导出类库。
 ## 依赖类库
 - [Bing.Utils](https://github.com/bing-framework/Bing.NetCore)
 - [NPOI](https://github.com/tonyqus/npoi)
-
-## Demo
 
 ## 作者
 

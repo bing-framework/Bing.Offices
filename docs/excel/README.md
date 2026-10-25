@@ -1,5 +1,11 @@
 # Excel 高级导入导出
 
+## 首次接入
+
+只需要 CSV 时使用 `Bing.Offices.Core` 并调用 `AddBingOfficesCore()`；该入口注册 CSV 和 Core 服务，不依赖 NPOI。需要 Excel 时使用 `Bing.Offices.Npoi` 并调用 `AddBingOfficesNpoi()`，它会连同 Core 服务一起注册。完整的 CSV 与 Excel 程序见[快速开始](quick-start.md)。
+
+快速开始中的新增 API 以本仓库源码，或包含本次变更的本地构建包为准；这不表示这些 API 已进入当前 NuGet 已发布版本。
+
 ## Excel 主路径
 
 导入和导出统一使用 Workbook Request。Mapping 的最终优先级为 `Attribute < Profile < JSON/XML Document < Request Fluent`，仅 Plan compiler 完成最终合并；JSON/XML 保留为 Document 级 API。
@@ -33,6 +39,7 @@ exporter.Export(request, stream);
 
 按主题阅读：
 
+- [quick-start.md](quick-start.md)：CSV Core 注册、Excel NPOI 注册及完整可运行程序
 - [mapping-profile.md](mapping-profile.md)：Profile 与映射优先级
 - [mapping-json-xml.md](mapping-json-xml.md)：JSON/XML 映射文档
 - [import-validation.md](import-validation.md)：Workbook 原生校验、配置校验和错误收集
@@ -42,17 +49,5 @@ exporter.Export(request, stream);
 - [npoi-extensions.md](npoi-extensions.md)：七个 NPOI 用户扩展容器和 Try/Throw 行为
 - [async-io.md](async-io.md)：Sync/Async API、流所有权、取消和 NPOI 同步边界
 - [nuget-migration.md](nuget-migration.md)：包身份、当前兼容边界和迁移注意事项
-
-迁移与使用：
-
-- [mapping-profile.md](mapping-profile.md)
-- [mapping-json-xml.md](mapping-json-xml.md)
-- [import-validation.md](import-validation.md)
-- [dynamic-columns.md](dynamic-columns.md)
-- [exceptions-and-observers.md](exceptions-and-observers.md)
-- [dates.md](dates.md)
-- [npoi-extensions.md](npoi-extensions.md)
-- [async-io.md](async-io.md)
-- [nuget-migration.md](nuget-migration.md)
 
 ASP.NET Core 上传示例见 `import-validation.md`；公开示例由 `Bing.Offices.Docs.Tests` 对当前源码持续编译和执行，真实 nupkg 可消费性由发布任务中的独立 PackageConsumer 验证。

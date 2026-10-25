@@ -309,7 +309,7 @@ public sealed class ExcelSheetImportBuilder<TItem> where TItem : class, new()
     }
 
     /// <summary>
-    /// 设置最大表头列数安全上限。
+    /// 设置最大表头列数安全上限，默认为 100；宽表必须显式提高此值。
     /// </summary>
     /// <param name="value">允许读取的最大表头列数。</param>
     /// <returns>当前 Sheet 构建器，用于继续配置。</returns>
@@ -398,9 +398,9 @@ public sealed class ExcelSheetImportBuilder<TItem> where TItem : class, new()
     }
 
     /// <summary>
-    /// 设置校验失败处理粒度。
+    /// 设置当前行的校验失败处理粒度，默认遇到该行首个错误即停止该行校验；后续行仍继续处理。
     /// </summary>
-    /// <param name="mode">校验失败时继续读取或立即停止的处理模式。</param>
+    /// <param name="mode">当前行校验失败后继续收集或停止该行校验的模式；整个请求的错误上限由资源限制控制。</param>
     /// <returns>当前 Sheet 构建器，用于继续配置。</returns>
     public ExcelSheetImportBuilder<TItem> Validate(ValidateMode mode)
     {

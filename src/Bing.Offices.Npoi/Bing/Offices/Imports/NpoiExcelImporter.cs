@@ -205,8 +205,10 @@ public sealed class NpoiExcelImporter : IExcelImporter
         Exception primaryException = null;
         try
         {
+            // 省略配置时启用默认预算；显式 MaxInputBytes=null 仍表示关闭输入大小限制。
+            var limits = request.ResourceLimits ?? new ExcelResourceLimits();
             await NpoiStreamCopier.CopyAsync(source, bufferedSource, cancellationToken,
-                request.ResourceLimits?.MaxInputBytes).ConfigureAwait(false);
+                limits.MaxInputBytes).ConfigureAwait(false);
         }
         catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested
             && exception.GetType() != typeof(OperationCanceledException))
@@ -327,7 +329,9 @@ public sealed class NpoiExcelImporter : IExcelImporter
         where TWorkbook : class, new()
     {
         using var bufferedSource = new MemoryStream();
-        NpoiStreamCopier.Copy(source, bufferedSource, cancellationToken, request.ResourceLimits?.MaxInputBytes);
+        // 与异步入口及 ZIP 预检一致，默认对象与显式关闭限制的配置必须区分。
+        var limits = request.ResourceLimits ?? new ExcelResourceLimits();
+        NpoiStreamCopier.Copy(source, bufferedSource, cancellationToken, limits.MaxInputBytes);
         return ImportBufferedCore(bufferedSource, request, cancellationToken, failureDestinationOverride);
     }
 
@@ -393,8 +397,17 @@ public sealed class NpoiExcelImporter : IExcelImporter
         foreach (var resolvedSheet in resolvedSheets)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (errors.IsLimitReached || runtime.RowLimitReached)
+            if (errors.IsLimitReached)
                 break;
+            if (runtime.RowLimitReached)
+            {
+                // 当前 Sheet 尚未执行；不能把耗尽配额后跳过的请求报告为完整导入。
+                if (runtime.TryMarkRowLimitReported())
+                    errors.Add(new ExcelImportError(ExcelImportErrorCode.ResourceLimit,
+                        $"Workbook 数据行数达到限制: {runtime.MaxRows}，仍有未处理的 Sheet。",
+                        resolvedSheet.Name ?? GetSelectorDescription(resolvedSheet.Request.Selector), 0, 0, null));
+                break;
+            }
             var sheetRequest = resolvedSheet.Request;
             if (!resolvedSheet.Exists)
             {

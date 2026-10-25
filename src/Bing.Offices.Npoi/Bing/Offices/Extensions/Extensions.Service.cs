@@ -5,7 +5,7 @@ using Bing.Offices.IO;
 using Bing.Offices.Conversions;
 using Bing.Offices.Providers;
 using Bing.Offices.Validations;
-using Bing.Offices.Mappings;
+using Bing.Offices.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -25,9 +25,7 @@ public static class ExcelNpoiServiceCollectionExtensions
     {
         if (services == null)
             throw new ArgumentNullException(nameof(services));
-        foreach (var rule in ExcelValidationRules.CreateDefault())
-            services.TryAddEnumerable(ServiceDescriptor.Singleton(typeof(IExcelValidationRule), rule.GetType()));
-        ExcelMappingPlanFactoryProvider.RegisterDefault(services);
+        services.AddBingOfficesCore();
         services.TryAddTransient<IExcelImporter>(provider => new NpoiExcelImporter(
             provider.GetServices<IExcelValidationRule>(),
             provider.GetServices<IExcelValueConverter>(),
