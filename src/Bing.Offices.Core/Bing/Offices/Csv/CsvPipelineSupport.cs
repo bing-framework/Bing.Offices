@@ -18,7 +18,18 @@ internal sealed class CsvResourceLimitException : InvalidOperationException
 {
     /// <summary>初始化一个 <see cref="CsvResourceLimitException" /> 类型的实例。</summary>
     /// <param name="message">描述超出资源限制的消息。</param>
-    public CsvResourceLimitException(string message) : base(message) { }
+    /// <param name="rowIndex">解析器已知的一基记录行号；未知时为 null。</param>
+    /// <param name="columnIndex">解析器已知的一基列号；未知时为零。</param>
+    public CsvResourceLimitException(string message, int? rowIndex = null, int columnIndex = 0) : base(message)
+    {
+        RowIndex = rowIndex;
+        ColumnIndex = columnIndex;
+    }
+
+    /// <summary>获取已知的记录行号。</summary>
+    public int? RowIndex { get; }
+    /// <summary>获取已知的字段列号。</summary>
+    public int ColumnIndex { get; }
 }
 
 /// <summary>RFC 4180 风格 CSV 记录读取器。</summary>
@@ -29,23 +40,17 @@ internal static class CsvRecordReader
     /// <param name="delimiter">字段分隔符。</param>
     /// <param name="quote">字段引用字符。</param>
     /// <param name="cancellationToken">读取过程中检查的取消令牌。</param>
+    /// <param name="maxFieldLength">所有表头和正文字段解码后的最大字符数。</param>
     /// <returns>按输入顺序产生的 CSV 字段记录。</returns>
     public static IEnumerable<IReadOnlyList<string>> Read(TextReader reader, char delimiter, char quote,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, int? maxFieldLength = null)
     {
-        var configuration = new CsvConfiguration(CultureInfo.InvariantCulture)
-        {
-            Delimiter = delimiter.ToString(),
-            Quote = quote,
-            HasHeaderRecord = false,
-            Mode = CsvMode.RFC4180,
-            BadDataFound = _ => throw new InvalidOperationException("CSV 包含不符合 RFC 4180 的字段。")
-        };
+        var configuration = CreateConfiguration(delimiter, quote, maxFieldLength);
         using var parser = new CsvParser(reader, configuration, true);
-        while (parser.Read())
+        while (ReadNext(parser, maxFieldLength))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            yield return parser.Record;
+            yield return ValidateRecord(parser, maxFieldLength);
         }
     }
 
@@ -55,27 +60,73 @@ internal static class CsvRecordReader
     /// <param name="quote">字段引用字符。</param>
     /// <param name="onRecord">每读取一条记录时异步调用的处理器。</param>
     /// <param name="cancellationToken">读取和回调过程中检查的取消令牌。</param>
+    /// <param name="maxFieldLength">所有表头和正文字段解码后的最大字符数。</param>
     public static async Task ReadAsync(TextReader reader, char delimiter, char quote,
-        Func<IReadOnlyList<string>, Task> onRecord, CancellationToken cancellationToken)
+        Func<IReadOnlyList<string>, Task> onRecord, CancellationToken cancellationToken,
+        int? maxFieldLength = null)
     {
         if (reader == null)
             throw new ArgumentNullException(nameof(reader));
         if (onRecord == null)
             throw new ArgumentNullException(nameof(onRecord));
-        var configuration = new CsvConfiguration(CultureInfo.InvariantCulture)
+        var configuration = CreateConfiguration(delimiter, quote, maxFieldLength);
+        using var parser = new CsvParser(reader, configuration, true);
+        while (await ReadNextAsync(parser, maxFieldLength).ConfigureAwait(false))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            await onRecord(ValidateRecord(parser, maxFieldLength)).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>为本次读取创建独立配置，使同步与异步解析采用相同规则。</summary>
+    private static CsvConfiguration CreateConfiguration(char delimiter, char quote, int? maxFieldLength) =>
+        new(CultureInfo.InvariantCulture)
         {
             Delimiter = delimiter.ToString(),
             Quote = quote,
             HasHeaderRecord = false,
             Mode = CsvMode.RFC4180,
+            // RFC 4180 转义最多将每个字符变成两个引号，并增加一对外层引号。
+            MaxFieldSize = maxFieldLength.HasValue ? 2d * maxFieldLength.Value + 2 : 0,
             BadDataFound = _ => throw new InvalidOperationException("CSV 包含不符合 RFC 4180 的字段。")
         };
-        using var parser = new CsvParser(reader, configuration, true);
-        while (await parser.ReadAsync().ConfigureAwait(false))
+
+    /// <summary>同步读取一条记录，并将解析阶段的字段大小超限转换为资源错误。</summary>
+    private static bool ReadNext(CsvParser parser, int? maxFieldLength)
+    {
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            await onRecord(parser.Record).ConfigureAwait(false);
+            return parser.Read();
         }
+        catch (MaxFieldSizeException) when (maxFieldLength.HasValue)
+        {
+            throw new CsvResourceLimitException($"CSV 字段超过最大字符数: {maxFieldLength.Value}", parser.Row);
+        }
+    }
+
+    /// <summary>异步读取一条记录，并保留解析阶段的字段大小限制。</summary>
+    private static async Task<bool> ReadNextAsync(CsvParser parser, int? maxFieldLength)
+    {
+        try
+        {
+            return await parser.ReadAsync().ConfigureAwait(false);
+        }
+        catch (MaxFieldSizeException) when (maxFieldLength.HasValue)
+        {
+            throw new CsvResourceLimitException($"CSV 字段超过最大字符数: {maxFieldLength.Value}", parser.Row);
+        }
+    }
+
+    /// <summary>检查所有解码字段，避免未映射列或表头绕过长度限制。</summary>
+    private static IReadOnlyList<string> ValidateRecord(CsvParser parser, int? maxFieldLength)
+    {
+        var record = parser.Record;
+        if (maxFieldLength.HasValue)
+            for (var index = 0; index < record.Length; index++)
+                if (record[index].Length > maxFieldLength.Value)
+                    throw new CsvResourceLimitException($"CSV 字段超过最大字符数: {maxFieldLength.Value}",
+                        parser.Row, index + 1);
+        return record;
     }
 }
 

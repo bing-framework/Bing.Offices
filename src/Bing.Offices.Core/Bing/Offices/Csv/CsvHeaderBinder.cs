@@ -45,22 +45,20 @@ internal static class CsvHeaderBinder
 
         var columns = new List<CsvColumn>();
         var headers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var boundProperties = new HashSet<string>(StringComparer.Ordinal);
+        var boundDynamicKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var propertyLookup = CreatePropertyLookup(properties);
+        var dynamicLookup = dynamicProperties.Count == 1 ? CreateDynamicLookup(dynamicColumns) : null;
         for (var index = 0; index < header.Count; index++)
         {
             var headerValue = header[index];
             if (!headers.Add(headerValue))
                 throw new CsvInvalidHeaderException($"CSV 包含重复表头: {headerValue}");
-            var property = properties.FirstOrDefault(candidate =>
-                string.Equals(candidate.Title, headerValue, StringComparison.OrdinalIgnoreCase)
-                || candidate.Aliases.Any(alias => string.Equals(alias, headerValue, StringComparison.OrdinalIgnoreCase))
-                || string.Equals(candidate.Name, headerValue, StringComparison.OrdinalIgnoreCase));
+            propertyLookup.TryGetValue(headerValue, out var property);
             IExcelDynamicMappingColumn dynamicColumn = null;
             if (property == null && dynamicProperties.Count == 1)
-                {
-                dynamicColumn = dynamicColumns?.FirstOrDefault(candidate =>
-                    string.Equals(candidate.Title, headerValue, StringComparison.OrdinalIgnoreCase)
-                    || candidate.Aliases.Any(alias => string.Equals(alias, headerValue,
-                        StringComparison.OrdinalIgnoreCase)));
+            {
+                dynamicLookup.TryGetValue(headerValue, out dynamicColumn);
                 if (dynamicColumns == null || dynamicColumns.Count == 0 || dynamicColumn != null)
                     property = dynamicProperties.First();
             }
@@ -68,6 +66,11 @@ internal static class CsvHeaderBinder
                 continue;
             if (!property.Property.CanWrite)
                 throw new CsvInvalidHeaderException($"导入模板属性不可写入: {property.Name}");
+            // 不同标题和别名也可能指向同一目标，必须在写入实体之前拒绝歧义。
+            if (!property.IsDynamicColumn && !boundProperties.Add(property.Name))
+                throw new CsvInvalidHeaderException($"CSV 多个表头映射到同一属性: {property.Name}");
+            if (dynamicColumn != null && !boundDynamicKeys.Add(dynamicColumn.Key))
+                throw new CsvInvalidHeaderException($"CSV 多个表头映射到同一动态列: {dynamicColumn.Key}");
             columns.Add(new CsvColumn(index, property, headerValue, property.IsDynamicColumn, dynamicColumn));
         }
         if (requireExpectedHeaders)
@@ -80,15 +83,67 @@ internal static class CsvHeaderBinder
         return columns;
     }
 
-    /// <summary>在 CSV 不包含表头时按固定属性声明顺序创建列绑定。</summary>
-    /// <param name="properties">按目标 CSV 列顺序排列的固定属性集合。</param>
+    /// <summary>仅为本次绑定建立固定属性索引，冲突词条保留映射顺序中的第一个属性。</summary>
+    private static Dictionary<string, CsvPropertyBinding> CreatePropertyLookup(IEnumerable<CsvPropertyBinding> properties)
+    {
+        var result = new Dictionary<string, CsvPropertyBinding>(StringComparer.OrdinalIgnoreCase);
+        foreach (var property in properties)
+        {
+            AddFirst(result, property.Title, property);
+            foreach (var alias in property.Aliases)
+                AddFirst(result, alias, property);
+            AddFirst(result, property.Name, property);
+        }
+        return result;
+    }
+
+    /// <summary>仅为本次绑定建立动态标题与别名索引，固定属性仍先于动态定义匹配。</summary>
+    private static Dictionary<string, IExcelDynamicMappingColumn> CreateDynamicLookup(
+        IReadOnlyList<IExcelDynamicMappingColumn> definitions)
+    {
+        var result = new Dictionary<string, IExcelDynamicMappingColumn>(StringComparer.OrdinalIgnoreCase);
+        foreach (var definition in definitions ?? Array.Empty<IExcelDynamicMappingColumn>())
+        {
+            AddFirst(result, definition.Title, definition);
+            foreach (var alias in definition.Aliases)
+                AddFirst(result, alias, definition);
+        }
+        return result;
+    }
+
+    /// <summary>一个词条可以属于多个目标，必须与原 FirstOrDefault 的首次匹配规则一致。</summary>
+    private static void AddFirst<T>(IDictionary<string, T> lookup, string token, T value)
+    {
+        if (token != null && !lookup.ContainsKey(token))
+            lookup.Add(token, value);
+    }
+
+    /// <summary>在 CSV 不包含表头时，按导出顺序展开固定属性和显式动态列。</summary>
+    /// <param name="properties">按映射顺序排列的固定属性与动态字典属性。</param>
+    /// <param name="dynamicColumns">动态列定义；按 Order、Key 排序，与导出器一致。</param>
     /// <returns>按零基列索引排列的绑定列集合。</returns>
-    public static IReadOnlyList<CsvColumn> BindByPosition(IReadOnlyList<CsvPropertyBinding> properties)
+    public static IReadOnlyList<CsvColumn> BindByPosition(IReadOnlyList<CsvPropertyBinding> properties,
+        IReadOnlyList<IExcelDynamicMappingColumn> dynamicColumns)
     {
         if (properties == null)
             throw new ArgumentNullException(nameof(properties));
-        return properties.Select((property, index) =>
-                new CsvColumn(index, property, property.Title, false)).ToList();
+        var columns = new List<CsvColumn>();
+        foreach (var property in properties)
+        {
+            if (!property.Property.CanWrite)
+                throw new CsvInvalidHeaderException($"导入模板属性不可写入: {property.Name}");
+            if (!property.IsDynamicColumn)
+                columns.Add(new CsvColumn(columns.Count, property, property.Title, false));
+            else
+            {
+                if (dynamicColumns == null || dynamicColumns.Count == 0)
+                    throw new CsvInvalidHeaderException("无表头 CSV 导入必须显式配置动态列。");
+                foreach (var column in dynamicColumns.OrderBy(column => column.Order)
+                             .ThenBy(column => column.Key, StringComparer.Ordinal))
+                    columns.Add(new CsvColumn(columns.Count, property, column.Title, true, column));
+            }
+        }
+        return columns;
     }
 }
 

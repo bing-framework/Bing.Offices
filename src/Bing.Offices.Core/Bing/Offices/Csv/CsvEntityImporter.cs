@@ -153,10 +153,10 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
             UseConventionFallback = true
         };
         var map = _mappingPlanFactory.Create<T>(document, options.MappingConfiguration, MappingDirection.Import);
-        var properties = map.Columns.Where(property => !property.Ignored && !property.IsDynamicColumn)
+        var allProperties = map.Columns.Where(property => !property.Ignored)
             .Select(CsvPropertyBinding.Create<T>).ToList();
-        var dynamicProperties = map.Columns.Where(property => !property.Ignored && property.IsDynamicColumn)
-            .Select(CsvPropertyBinding.Create<T>).ToList();
+        var properties = allProperties.Where(property => !property.IsDynamicColumn).ToList();
+        var dynamicProperties = allProperties.Where(property => property.IsDynamicColumn).ToList();
         if (dynamicProperties.Count > 1)
             throw new InvalidOperationException($"CSV 模板 {typeof(T).FullName} 只能声明一个动态列属性。");
         if (options.MaxInputBytes.HasValue && source.CanSeek && source.Length - source.Position > options.MaxInputBytes.Value)
@@ -195,8 +195,6 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
                 rowIndex = 1;
                 return;
             }
-            if (columns == null)
-                columns = CsvHeaderBinder.BindByPosition(properties);
             if (options.MaxRows.HasValue && dataRowCount >= options.MaxRows.Value)
             {
                 errors.Add(new CsvImportError($"CSV 数据行数超过限制: {options.MaxRows.Value}", rowIndex + 1, 0,
@@ -220,16 +218,6 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
             foreach (var column in columns)
             {
                 var value = column.Index < record.Count ? record[column.Index] : string.Empty;
-                if (options.MaxFieldLength.HasValue && value.Length > options.MaxFieldLength.Value)
-                {
-                    errors.Add(new CsvImportError(
-                        $"CSV 第 {rowIndex} 行第 {column.Index + 1} 列超过最大字段长度: {options.MaxFieldLength.Value}",
-                        rowIndex, column.Index + 1, column.DynamicColumn?.Key ?? column.Property.Name,
-                        code: CsvImportErrorCode.ResourceLimit));
-                    valid = false;
-                    isTruncated = true;
-                    break;
-                }
                 value = NormalizeText(value, column.Property.ImportWhitespace);
                 try
                 {
@@ -313,8 +301,14 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
 
         try
         {
+            if (!options.HasHeader)
+            {
+                columns = CsvHeaderBinder.BindByPosition(allProperties, map.DynamicColumns);
+                if (options.MaxColumns.HasValue && columns.Count > options.MaxColumns.Value)
+                    return CreateResourceLimitResult($"CSV 映射列数超过最大列数: {options.MaxColumns.Value}", options);
+            }
             await CsvRecordReader.ReadAsync(reader, options.Delimiter, options.Quote, ProcessRecord,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken, options.MaxFieldLength).ConfigureAwait(false);
             if (options.HasHeader && !headerConsumed)
                 throw new CsvInvalidHeaderException("CSV 不包含表头。");
         }
@@ -324,8 +318,7 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
         }
         catch (CsvResourceLimitException exception)
         {
-            errors.Add(new CsvImportError(exception.Message, rowIndex + 1, 0, null,
-                code: CsvImportErrorCode.ResourceLimit));
+            errors.Add(CreateResourceLimitError(exception, rowIndex + 1, columns));
             isTruncated = true;
         }
         catch (CsvInvalidHeaderException exception)
@@ -375,10 +368,10 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
             UseConventionFallback = true
         };
         var map = _mappingPlanFactory.Create<T>(document, options.MappingConfiguration, MappingDirection.Import);
-        var properties = map.Columns.Where(property => !property.Ignored && !property.IsDynamicColumn)
+        var allProperties = map.Columns.Where(property => !property.Ignored)
             .Select(CsvPropertyBinding.Create<T>).ToList();
-        var dynamicProperties = map.Columns.Where(property => !property.Ignored && property.IsDynamicColumn)
-            .Select(CsvPropertyBinding.Create<T>).ToList();
+        var properties = allProperties.Where(property => !property.IsDynamicColumn).ToList();
+        var dynamicProperties = allProperties.Where(property => property.IsDynamicColumn).ToList();
         if (dynamicProperties.Count > 1)
             throw new InvalidOperationException($"CSV 模板 {typeof(T).FullName} 只能声明一个动态列属性。");
         if (options.MaxInputBytes.HasValue && source.CanSeek && source.Length - source.Position > options.MaxInputBytes.Value)
@@ -387,18 +380,22 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
             ? new CsvLimitedReadStream(source, options.MaxInputBytes.Value)
             : null;
         using var reader = new StreamReader(limitedSource ?? source, options.Encoding, true, 1024, true);
-        using var records = CsvRecordReader.Read(reader, options.Delimiter, options.Quote, cancellationToken).GetEnumerator();
+        using var records = CsvRecordReader.Read(reader, options.Delimiter, options.Quote, cancellationToken,
+            options.MaxFieldLength).GetEnumerator();
         IReadOnlyList<CsvColumn> columns;
         try
         {
             columns = options.HasHeader
                 ? CsvHeaderBinder.Bind(records, properties, dynamicProperties, map.DynamicColumns, options.RequireExpectedHeaders,
                     options.MaxColumns)
-                : CsvHeaderBinder.BindByPosition(properties);
+                : CsvHeaderBinder.BindByPosition(allProperties, map.DynamicColumns);
         }
         catch (CsvResourceLimitException exception)
         {
-            return CreateResourceLimitResult(exception.Message, options);
+            return new CsvImportResult<T>(Array.Empty<T>(), new[]
+            {
+                CreateResourceLimitError(exception, 0)
+            }, true, options.MaxErrors);
         }
         catch (CsvInvalidHeaderException exception)
         {
@@ -446,16 +443,6 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
                 foreach (var column in columns)
                 {
                     var value = column.Index < record.Count ? record[column.Index] : string.Empty;
-                    if (options.MaxFieldLength.HasValue && value.Length > options.MaxFieldLength.Value)
-                    {
-                        errors.Add(new CsvImportError(
-                            $"CSV 第 {rowIndex} 行第 {column.Index + 1} 列超过最大字段长度: {options.MaxFieldLength.Value}",
-                            rowIndex, column.Index + 1, column.DynamicColumn?.Key ?? column.Property.Name,
-                            code: CsvImportErrorCode.ResourceLimit));
-                        valid = false;
-                        isTruncated = true;
-                        break;
-                    }
                     value = NormalizeText(value, column.Property.ImportWhitespace);
                     try
                     {
@@ -538,11 +525,20 @@ internal sealed partial class CsvEntityImporter : ICsvImporter
         }
         catch (CsvResourceLimitException exception)
         {
-            errors.Add(new CsvImportError(exception.Message, rowIndex + 1, 0, null,
-                code: CsvImportErrorCode.ResourceLimit));
+            errors.Add(CreateResourceLimitError(exception, rowIndex + 1, columns));
             isTruncated = true;
         }
         return new CsvImportResult<T>(items, errors, isTruncated, options.MaxErrors);
+    }
+
+    /// <summary>将解析资源错误转换为带记录行号、列号和可用属性信息的结果。</summary>
+    private static CsvImportError CreateResourceLimitError(CsvResourceLimitException exception,
+        int fallbackRowIndex, IReadOnlyList<CsvColumn> columns = null)
+    {
+        var column = columns?.FirstOrDefault(item => item.Index == exception.ColumnIndex - 1);
+        return new CsvImportError(exception.Message, exception.RowIndex ?? fallbackRowIndex,
+            exception.ColumnIndex, column?.DynamicColumn?.Key ?? column?.Property.Name,
+            code: CsvImportErrorCode.ResourceLimit);
     }
 
     /// <summary>创建表示输入资源限制已触发的截断导入结果。</summary>

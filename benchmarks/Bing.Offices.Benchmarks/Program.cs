@@ -59,6 +59,7 @@ public static class Program
                 typeof(MappingValidationBenchmarks),
                 typeof(PropertyAccessorBenchmarks),
                 typeof(DynamicPlanBenchmarks),
+                typeof(HeaderBindingBenchmarks),
                 typeof(TenantPlanCacheBenchmarks),
                 typeof(RegexCacheBenchmarks),
                 typeof(UniqueJournalBenchmarks)

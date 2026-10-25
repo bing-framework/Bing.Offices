@@ -180,7 +180,15 @@ internal sealed class NpoiImportSheetExecutor
         var fixedProperties = map.Columns.Where(property => !property.Ignored && !property.IsDynamicColumn).ToList();
         var headerNames = new HashSet<string>(options.HeaderComparison == ExcelNameComparison.Ordinal
             ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase);
+        // 固定属性和动态列键属于不同目标空间，分别检查以允许名称相同的合法绑定。
+        // CLR 属性身份区分大小写，不受表头匹配规则影响，避免将 Name 和 name 合并。
+        var boundFixedProperties = new HashSet<string>(StringComparer.Ordinal);
+        var boundDynamicKeys = new HashSet<string>(options.HeaderComparison == ExcelNameComparison.Ordinal
+            ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase);
         var columns = new Dictionary<int, ExcelColumnPlan>();
+        var comparison = CreateStringComparer(ToStringComparison(options.HeaderComparison));
+        var propertyLookup = CreatePropertyLookup(fixedProperties, comparison);
+        var dynamicLookup = dynamicProperties.Count == 1 ? CreateDynamicLookup(dynamicPlans, comparison) : null;
         foreach (var headerCell in header.Cells)
         {
             if (options.ReadColumnRange != null && !options.ReadColumnRange.Contains(headerCell.ColumnIndex))
@@ -191,12 +199,12 @@ internal sealed class NpoiImportSheetExecutor
                 continue;
             if (!headerNames.Add(headerName))
                 throw new NpoiSheetStructureException($"导入的表格存在重复列:{headerName}");
-            var property = FindProperty(fixedProperties, headerName, options.HeaderComparison);
+            propertyLookup.TryGetValue(headerName, out var property);
             ExcelDynamicColumnDefinition dynamicDefinition = null;
             IExcelDynamicMappingColumn dynamicPlan = null;
             if (property == null && dynamicProperties.Count == 1)
             {
-                dynamicPlan = FindDynamicDefinition(headerName, dynamicPlans, options.HeaderComparison);
+                dynamicLookup.TryGetValue(headerName, out dynamicPlan);
                 dynamicDefinition = dynamicPlan == null ? null : CreateDynamicDefinition(dynamicPlan);
                 if (dynamicPlans.Count > 0 && dynamicDefinition == null)
                 {
@@ -208,6 +216,11 @@ internal sealed class NpoiImportSheetExecutor
             }
             if (property == null)
                 continue;
+            if (!property.IsDynamicColumn && !boundFixedProperties.Add(property.Name))
+                throw new NpoiSheetStructureException($"导入的表格中多个表头映射到同一属性: {property.Name}");
+            if (property.IsDynamicColumn && dynamicDefinition != null
+                && !boundDynamicKeys.Add(dynamicDefinition.Key))
+                throw new NpoiSheetStructureException($"导入的表格中多个表头映射到同一动态列键: {dynamicDefinition.Key}");
             var isUnspecifiedDynamicColumn = property.IsDynamicColumn && dynamicDefinition == null;
             var reflectionProperty = typeof(T).GetProperty(property.Name, BindingFlags.Instance | BindingFlags.Public);
             if (reflectionProperty == null)
@@ -243,19 +256,19 @@ internal sealed class NpoiImportSheetExecutor
         return columns;
     }
 
-    /// <summary>
-    /// 按标题或别名查找动态列定义。
-    /// </summary>
-    /// <param name="headerName">待匹配的表头文本。</param>
-    /// <param name="definitions">可用的动态列定义集合。</param>
-    /// <param name="comparison">表头名称比较规则。</param>
-    /// <returns>匹配的动态列定义；未匹配时返回 <see langword="null" />。</returns>
-    private static IExcelDynamicMappingColumn FindDynamicDefinition(string headerName,
-        IReadOnlyList<IExcelDynamicMappingColumn> definitions, ExcelNameComparison comparison) =>
-        (definitions ?? Array.Empty<IExcelDynamicMappingColumn>()).FirstOrDefault(definition =>
-            string.Equals(definition.Title, headerName, ToStringComparison(comparison))
-            || (definition.Aliases ?? Array.Empty<string>()).Any(alias =>
-                string.Equals(alias, headerName, ToStringComparison(comparison))));
+    /// <summary>按请求比较规则建立本次 Sheet 的动态索引，词条冲突时保留首个定义。</summary>
+    private static Dictionary<string, IExcelDynamicMappingColumn> CreateDynamicLookup(
+        IReadOnlyList<IExcelDynamicMappingColumn> definitions, StringComparer comparison)
+    {
+        var result = new Dictionary<string, IExcelDynamicMappingColumn>(comparison);
+        foreach (var definition in definitions ?? Array.Empty<IExcelDynamicMappingColumn>())
+        {
+            AddFirst(result, definition.Title, definition);
+            foreach (var alias in definition.Aliases ?? Array.Empty<string>())
+                AddFirst(result, alias, definition);
+        }
+        return result;
+    }
 
     /// <summary>
     /// 将内部动态列映射转换为导入执行定义。
@@ -309,20 +322,26 @@ internal sealed class NpoiImportSheetExecutor
         _ => throw new NpoiSheetStructureException($"动态列数据类型不在允许列表中: {name}")
     };
 
-    /// <summary>
-    /// 按标题、别名或属性名查找固定列映射。
-    /// </summary>
-    /// <param name="properties">可用的固定列映射集合。</param>
-    /// <param name="headerName">待匹配的表头文本。</param>
-    /// <param name="comparison">表头名称比较规则。</param>
-    /// <returns>匹配的固定列映射；未匹配时返回 <see langword="null" />。</returns>
-    private static IExcelMappingColumn FindProperty(IEnumerable<IExcelMappingColumn> properties, string headerName,
-        ExcelNameComparison comparison)
+    /// <summary>按映射顺序建立固定属性索引，不改变标题、别名或属性名之间的首次匹配语义。</summary>
+    private static Dictionary<string, IExcelMappingColumn> CreatePropertyLookup(
+        IEnumerable<IExcelMappingColumn> properties, StringComparer comparison)
     {
-        var stringComparison = ToStringComparison(comparison);
-        return properties.FirstOrDefault(property => string.Equals(property.Title, headerName, stringComparison)
-            || property.Aliases.Any(alias => string.Equals(alias, headerName, stringComparison))
-            || string.Equals(property.Name, headerName, stringComparison));
+        var result = new Dictionary<string, IExcelMappingColumn>(comparison);
+        foreach (var property in properties)
+        {
+            AddFirst(result, property.Title, property);
+            foreach (var alias in property.Aliases)
+                AddFirst(result, alias, property);
+            AddFirst(result, property.Name, property);
+        }
+        return result;
+    }
+
+    /// <summary>多个目标共享词条时保留先出现的目标；CLR 属性身份仍由独立的 Ordinal 集合校验。</summary>
+    private static void AddFirst<T>(IDictionary<string, T> lookup, string token, T value)
+    {
+        if (token != null && !lookup.ContainsKey(token))
+            lookup.Add(token, value);
     }
 
     /// <summary>
