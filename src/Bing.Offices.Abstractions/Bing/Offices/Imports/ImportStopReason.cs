@@ -13,7 +13,9 @@ public enum ImportStopReason
     /// <summary>错误收集达到上限，后续处理或错误收集可能未完成。</summary>
     ErrorLimit,
     /// <summary>结果标记为截断，但没有足够的结构化诊断确定原因。</summary>
-    Unspecified
+    Unspecified,
+    /// <summary>流式消费者主动停止，后续数据尚未读取。</summary>
+    ConsumerStopped
 }
 
 /// <summary>从既有结构化诊断归纳结果状态，不改变导入处理策略。</summary>

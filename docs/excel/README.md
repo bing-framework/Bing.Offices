@@ -10,7 +10,7 @@
 
 导入和导出统一使用 Workbook Request。Mapping 的最终优先级为 `Attribute < Profile < JSON/XML Document < Request Fluent`，仅 Plan compiler 完成最终合并；JSON/XML 保留为 Document 级 API。
 
-导出模板写入默认使用 `PreserveTemplate`，保留目标单元格的模板样式和批注；需要清除模板样式和批注时，显式选择 `ReplaceTemplate`。NPOI 管线是 DOM 管线，不承诺 streaming 或零 GC。
+导出模板写入默认使用 `PreserveTemplate`，保留目标单元格的模板样式和批注；需要清除模板样式和批注时，显式选择 `ReplaceTemplate`。既有 IExcelImporter/IExcelExporter 使用 DOM；低内存服务须显式注册，见下文。所有模式均不承诺零 GC。
 
 Workbook 元数据使用请求级 `ExcelWorkbookMetadataOptions` 配置，不依赖进程级默认状态。未显式调用 `Metadata(...)` 时模板 metadata 保留；显式调用时六个字段覆盖模板值，XLS 与 XLSX 采用相同策略。`IExcelExporter.ExportToFile` 和 `ICsvExporter.ExportToFile` 先写同目录临时文件，成功关闭并 flush 后在最终提交点再次检查取消，再替换目标；导出失败或取消不会截断已有目标文件。直接写入调用方 Stream 时不提供回滚保证，失败后可能已经产生部分写入。
 
@@ -52,3 +52,7 @@ exporter.Export(request, stream);
 - [nuget-migration.md](nuget-migration.md)：包身份、当前兼容边界和迁移注意事项
 
 ASP.NET Core 上传示例见 `import-validation.md`；公开示例由 `Bing.Offices.Docs.Tests` 对当前源码持续编译和执行，真实 nupkg 可消费性由发布任务中的独立 PackageConsumer 验证。
+
+## XLSX 低内存处理
+
+新增显式注册的 SXSSF 导出与 ZIP/XML 逐行导入服务，支持有界临时存储和逐行回调。参见 [低内存 API 与迁移说明](streaming.md)。

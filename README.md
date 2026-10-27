@@ -84,3 +84,7 @@ Bing.Offices是Bing应用框架的 Excel/CSV 导入导出类库。
 > 这意味着你可以在任意场景下使用 Bing 应用框架而不会有人找你要钱。
 
 > Bing 会尽量引入开源免费的第三方技术框架，如有意外，还请自行了解。
+
+## XLSX 低内存处理
+
+新增显式注册的 SXSSF 导出与 ZIP/XML 逐行导入服务，支持有界临时存储和逐行回调。参见 [低内存 API 与迁移说明](docs/excel/streaming.md)。

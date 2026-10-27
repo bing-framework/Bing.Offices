@@ -1,0 +1,77 @@
+{
+  "status": "PASS",
+  "consumers": [
+    "Bing.Offices.Consumer.Net6/net6.0",
+    "Bing.Offices.Consumer.Net8/net8.0",
+    "Bing.Offices.Consumer.Core/net6.0",
+    "Bing.Offices.Consumer.Core/net8.0"
+  ],
+  "restoredSources": [
+    {
+      "source": "H:\\Bing_Framework\\Bing.Offices\\artifacts\\low-memory\\package-candidate\\packages",
+      "consumer": "Bing.Offices.Consumer.Net6",
+      "package": "Bing.Offices.Abstractions/2.0.0"
+    },
+    {
+      "source": "H:\\Bing_Framework\\Bing.Offices\\artifacts\\low-memory\\package-candidate\\packages",
+      "consumer": "Bing.Offices.Consumer.Net6",
+      "package": "Bing.Offices.Core/2.0.0"
+    },
+    {
+      "source": "H:\\Bing_Framework\\Bing.Offices\\artifacts\\low-memory\\package-candidate\\packages",
+      "consumer": "Bing.Offices.Consumer.Net6",
+      "package": "Bing.Offices.Npoi/2.0.0"
+    },
+    {
+      "source": "H:\\Bing_Framework\\Bing.Offices\\artifacts\\low-memory\\package-candidate\\packages",
+      "consumer": "Bing.Offices.Consumer.Net8",
+      "package": "Bing.Offices.Abstractions/2.0.0"
+    },
+    {
+      "source": "H:\\Bing_Framework\\Bing.Offices\\artifacts\\low-memory\\package-candidate\\packages",
+      "consumer": "Bing.Offices.Consumer.Net8",
+      "package": "Bing.Offices.Core/2.0.0"
+    },
+    {
+      "source": "H:\\Bing_Framework\\Bing.Offices\\artifacts\\low-memory\\package-candidate\\packages",
+      "consumer": "Bing.Offices.Consumer.Net8",
+      "package": "Bing.Offices.Npoi/2.0.0"
+    },
+    {
+      "source": "H:\\Bing_Framework\\Bing.Offices\\artifacts\\low-memory\\package-candidate\\packages",
+      "consumer": "Bing.Offices.Consumer.Core",
+      "package": "Bing.Offices.Abstractions/2.0.0"
+    },
+    {
+      "source": "H:\\Bing_Framework\\Bing.Offices\\artifacts\\low-memory\\package-candidate\\packages",
+      "consumer": "Bing.Offices.Consumer.Core",
+      "package": "Bing.Offices.Core/2.0.0"
+    }
+  ],
+  "negativeChecks": [
+    "missing-candidate",
+    "bad-identity",
+    "api-mismatch"
+  ],
+  "failure": null,
+  "packageVersion": "2.0.0",
+  "candidateIdentity": {
+    "artifactIdentityFormat": "logical-v3",
+    "baseCommit": "84958c1cc5eec5afbae51d76b0d07b4ab133b748",
+    "worktreeState": "dirty",
+    "candidateSourceManifestSha256": "2893DCDA496E2A9CC0ED1E20C801E69804E8824E28DBE01B69E1286E23E6514C",
+    "breakingApprovalArtifact": "ai_docs/tasks/BO-RC-20260908-002/api-breaking-approval.md",
+    "breakingApprovalSha256": "10F4EE17AD5EE9C316962F6AE524C52BFE2799FA97E09623A2E2B842E3459E1B",
+    "assemblyFiles": {
+      "netstandard2.0/Bing.Offices.Abstractions.dll": "610D991542BCFF658FAAB3059408A25FA50048E5AE4FD73D38D0F9308BC0B7FE",
+      "netstandard2.0/Bing.Offices.Core.dll": "7F1D5081DFE5339C0D327CA8495B4C2F84A0949CB78EE69D3601837BC81B301A",
+      "net6.0/Bing.Offices.Npoi.dll": "E84CF3A9AACFAD991DED21C8C7584F50F7B961607A1F4DA6BC8234A581BDA1C5",
+      "net8.0/Bing.Offices.Npoi.dll": "E84CF3A9AACFAD991DED21C8C7584F50F7B961607A1F4DA6BC8234A581BDA1C5"
+    },
+    "nupkgFiles": {
+      "Bing.Offices.Abstractions.2.0.0.nupkg": "529910E8C3417E0F7A6B9C85FDE3EF01D6CB6F0827E00EB24D04E18214C1D10A",
+      "Bing.Offices.Core.2.0.0.nupkg": "8F1CD38F439A0677420D01DC26BAE08C8D9DE517D72DA175A91A1FCEA1AEC413",
+      "Bing.Offices.Npoi.2.0.0.nupkg": "355D9C74B5B59CBAE2ABB41A9D0F531C1A44F40D3D1FCCD0E5A58A1A6687FA00"
+    }
+  }
+}

@@ -18,6 +18,7 @@
 
 - Excel 导入 / 导出（XLS、XLSX）
 - CSV 导入 / 导出
+- 显式注册的 XLSX 低内存服务：SXSSF 导出、ZIP/XML 逐行导入
 - Workbook Request：异构多 Sheet、动态列、模板、命名区域、样式、结构化错误
 - XLSX 柱状图、折线图、饼图
 - Sync / Async 双 API，共享 Mapping / Validation / Conversion / 错误结果 / 取消合同
@@ -26,7 +27,7 @@
 **明确不在范围内：**
 
 - Word、PDF（不提供相关程序集）
-- 流式（streaming）低内存写入、零 GC 承诺
+- 零 GC 或进程内存固定上限承诺
 - Excel Async 的 DOM 阶段完全异步
 
 ### 1.3 关键设计约束（Non-Goals → Design Rules）
@@ -36,7 +37,7 @@
 | # | 约束 | 由此产生的设计 |
 |---|---|---|
 | C1 | NPOI `WorkbookFactory.Create` / DOM 操作 / `workbook.Write` **没有异步 API** | Async API 只异步化外围文件/Stream IO；生产代码禁止 `Task.Run` / `.Result` / `.Wait` 伪装异步 |
-| C2 | NPOI 是 DOM 模型，全量加载到内存 | 不承诺 streaming / 零 GC；用 `ExcelResourceLimits` + ZIP 预检做防护 |
+| C2 | 既有完整 Workbook API 使用 DOM；新增低内存 API 独立注册 | 普通 XLSX 使用 SXSSF 窗口／ZIP XML 逐行处理；模板等高级功能保留 DOM；均使用有限资源配置 |
 | C3 | 模板流在 `WorkbookFactory.Create` 阶段必须**同步可读** | async-only 模板流不属于支持的输入合同 |
 | C4 | Provider 可替换（NPOI 只是其中之一） | 契约与引擎下沉到 `netstandard2.0` 的 Abstractions / Core，NPOI 细节全部关在 Npoi 程序集内 |
 | C5 | 映射配置来源多、优先级复杂 | 四级合并 + 单一「Plan 编译器」作为唯一生效点 |
@@ -687,7 +688,7 @@ ICsvExporter：IEnumerable<T> → CsvPropertyBinding（含动态列）
 
 | # | 边界 / 风险 | 影响 | 缓解 |
 |---|---|---|---|
-| R1 | NPOI DOM 全量内存，无 streaming | 大文件 OOM | `ExcelResourceLimits` + ZIP 预检 + 进程级配额 |
+| R1 | 既有 NPOI DOM 全量内存 | 大文件 OOM | 普通 XLSX 可显式选择低内存服务；DOM 继续使用 `ExcelResourceLimits` + ZIP 预检 + 进程级配额 |
 | R2 | `MaxInputBytes` ≠ 解压后 DOM 峰值保护 | 高压缩比文件仍可打爆内存 | ZIP 压缩比与解压字节限制 |
 | R3 | 未被映射的图片不进入图片限制器扫描 | 图片型攻击面残留 | 依赖进程级内存配额 |
 | R4 | 计划缓存无 TTL / 主动失效，容量 256 | 动态生成大量映射时缓存抖动 | 稳定 `TenantId` + `ConfigurationVersion`；必要时显式指定缓存容量 |
@@ -755,3 +756,17 @@ ICsvExporter：IEnumerable<T> → CsvPropertyBinding（含动态列）
 - [Sync/Async IO](../excel/async-io.md)
 - [NPOI 扩展](../excel/npoi-extensions.md)
 - [NuGet 迁移](../excel/nuget-migration.md)
+
+## 13. 显式低内存服务
+
+`AddBingOfficesNpoiStreaming` 注册 `IExcelStreamingExporter` 和 `IExcelStreamingImporter`，保持原服务默认行为。Abstractions 仍为 netstandard2.0，NPOI 仍为 2.7.4；没有 Open XML SDK 依赖。
+
+导出链路：Workbook Request → 全配置预检与共享映射计划 → SXSSF（inline strings、有限行/文本窗口、创建单元格时应用最终样式）→ 压缩临时 XML → 文件打包 → 同步/真实异步复制或原子提交 → Dispose SXSSF → Close 基础 XSSF。NPOI 的同步打包阶段不能承诺立即响应取消，写出边界会检查令牌。
+
+导入链路：当前输入位置 → 有额度文件暂存 → ZIP 元数据与真实关系解析 → 有限样式表/共享字符串内存预算及磁盘定长索引 → Sheet XML 当前行 → 共享列绑定/标量转换/校验 → 等待消费者 → 有界摘要。只为表头绑定创建一行有限 XSSF，正文不进入 DOM。未消费部件仅验证 ZIP 元数据，不声称扫描其全部 XML 内容。
+
+每次调用独立拥有临时文件和工作簿。同一个服务实例可以接收独立调用，不对同一 Workbook 并发操作。逐行消费者负责业务事务，已完成的外部写入不回滚。共享字符串查询缓存与内存表共用 8 MiB 计量预算，落盘索引不保留全量偏移数组。
+
+库自有文件每调用默认 512 MiB；NPOI 的系统 poifiles 目录单独监测，不属于该硬额度。异常清理尝试全部资源，不覆盖主异常；清理失败通过异常或异常 Data 可见。
+
+详见 [低内存 API、默认额度与迁移](../excel/streaming.md)。容量验收为 1 万／10 万行 × 10 列、重复／高唯一字符串，共 8 场景；不设固定 MB 门槛，不承诺首版不支持的模板、图片、图表、合并或公式计算。

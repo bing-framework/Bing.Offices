@@ -84,17 +84,18 @@ internal sealed class NpoiImportRowMaterializer
     /// <param name="bodyWhitespace">正文单元格文本的空白处理策略。</param>
     /// <param name="errors">接收原始值校验错误的收集器。</param>
     /// <param name="isDate1904">当前工作簿是否使用 1904 日期系统。</param>
+    /// <param name="readValue">流式读取的单元格访问器；为空时读取 NPOI 行。</param>
     /// <returns>当前行全部原始值校验通过时为 true。</returns>
     internal bool ValidateRawValues(IRow row, IReadOnlyDictionary<int, ExcelColumnPlan> columns,
         IDictionary<string, HashSet<string>> duplicateValues, string sheetName, int rowIndex,
         ValidateMode validateMode, CultureInfo culture, ExcelWhitespacePolicy bodyWhitespace,
-        ExcelImportErrorCollector errors, bool isDate1904)
+        ExcelImportErrorCollector errors, bool isDate1904, Func<int, ExcelCellValue> readValue = null)
     {
         var valid = true;
         foreach (var column in columns)
         {
-            var cell = row.GetCell(column.Key);
-            var cellValue = NormalizeCellValue(NpoiExcelImporter.ReadCellValue(cell, isDate1904),
+            var cellValue = NormalizeCellValue(readValue != null ? readValue(column.Key)
+                    : NpoiExcelImporter.ReadCellValue(row.GetCell(column.Key), isDate1904),
                 column.Value.Property.ImportWhitespace ?? bodyWhitespace);
             var value = cellValue.Text;
             foreach (var binding in column.Value.ValidationBindings.Where(binding => binding.IsRaw))
@@ -165,6 +166,7 @@ internal sealed class NpoiImportRowMaterializer
     /// <param name="imageIndex">按行列坐标索引的图片集合。</param>
     /// <param name="isDate1904">当前工作簿是否使用 1904 日期系统。</param>
     /// <param name="item">成功时返回已物化的实体；失败时为 null。</param>
+    /// <param name="readValue">流式读取的单元格访问器；为空时读取 NPOI 行。</param>
     /// <returns>当前行成功转换并通过校验时为 true。</returns>
     internal bool TryCreateItem<T>(IRow row, IReadOnlyDictionary<int, ExcelColumnPlan> columns,
         IDictionary<string, HashSet<string>> duplicateValues, UniqueTracker uniqueTracker,
@@ -172,7 +174,7 @@ internal sealed class NpoiImportRowMaterializer
         ExcelImportErrorCollector errors, CultureInfo culture, ExcelWhitespacePolicy bodyWhitespace,
         Func<object, object> dynamicTargetGetter,
         IReadOnlyDictionary<(int Row, int Column), IReadOnlyList<PictureInfo>> imageIndex,
-        bool isDate1904, out T item)
+        bool isDate1904, out T item, Func<int, ExcelCellValue> readValue = null)
         where T : class, new()
     {
         item = new T();
@@ -182,7 +184,7 @@ internal sealed class NpoiImportRowMaterializer
             var cellValue = default(ExcelCellValue);
             try
             {
-                var cell = row.GetCell(column.Key);
+                var cell = row?.GetCell(column.Key);
                 var images = imageIndex == null ? null : FindImages(imageIndex, rowIndex, column.Key);
                 var imageMultiplicity = column.Value.ImageMultiplicity;
                 if (images != null && images.Count > 1
@@ -196,7 +198,8 @@ internal sealed class NpoiImportRowMaterializer
                 }
                 var image = images?.FirstOrDefault();
                 cellValue = image == null
-                    ? NormalizeCellValue(NpoiExcelImporter.ReadCellValue(cell, isDate1904),
+                    ? NormalizeCellValue(readValue != null ? readValue(column.Key)
+                            : NpoiExcelImporter.ReadCellValue(cell, isDate1904),
                         column.Value.Property.ImportWhitespace ?? bodyWhitespace)
                     : new ExcelCellValue(image, string.Empty, ExcelCellKind.Empty);
                 var value = cellValue.Text;

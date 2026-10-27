@@ -165,7 +165,7 @@ internal sealed class NpoiImportSheetExecutor
     /// <param name="header">包含导入表头的工作表行。</param>
     /// <param name="options">当前实体类型的导入执行选项。</param>
     /// <returns>按零基列索引排列的列执行计划。</returns>
-    private static IReadOnlyDictionary<int, ExcelColumnPlan> CreateColumns<T>(IRow header,
+    internal static IReadOnlyDictionary<int, ExcelColumnPlan> CreateColumns<T>(IRow header,
         ExcelImportExecutionOptions<T> options) where T : class, new()
     {
         var map = options.MappingPlan;

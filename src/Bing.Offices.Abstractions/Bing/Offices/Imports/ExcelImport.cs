@@ -448,6 +448,13 @@ public sealed class ExcelSheetImportBuilder<TItem> where TItem : class, new()
     /// <returns>已完成校验的 Sheet 导入请求。</returns>
     internal ExcelSheetImportRequest Build()
     {
+        var compiledTarget = ((LambdaExpression)_target).Compile();
+        return BuildSnapshot(value => compiledTarget.DynamicInvoke(value));
+    }
+
+    /// <summary>创建可独立于 Workbook 集合使用的配置快照。</summary>
+    internal ExcelSheetImportRequest BuildSnapshot(Func<object, object> targetGetter)
+    {
         if (_maxReadColumns <= 0)
             throw new ArgumentOutOfRangeException(nameof(_maxReadColumns));
         if (_headerRowIndex < 0 || _dataRowStartIndex < 0 || _dataRowStartIndex <= _headerRowIndex)
@@ -462,8 +469,6 @@ public sealed class ExcelSheetImportBuilder<TItem> where TItem : class, new()
             throw new ArgumentOutOfRangeException(nameof(_bodyWhitespace));
         if (_culture == null)
             throw new ArgumentNullException(nameof(_culture));
-        var compiledTarget = ((LambdaExpression)_target).Compile();
-        Func<object, object> targetGetter = value => compiledTarget.DynamicInvoke(value);
         Func<object, object> dynamicGetter = null;
         if (_dynamicTarget != null)
         {

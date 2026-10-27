@@ -10,6 +10,12 @@ using Microsoft.Extensions.DependencyInjection;
 using System.Xml;
 using Bing.Offices.Exceptions;
 
+if (args.Length >= 1 && string.Equals(args[0], "--streaming-scenario", StringComparison.OrdinalIgnoreCase))
+{
+    if (args.Length != 5)
+        return 2;
+    return await ExcelStreamingResourceMatrix.RunAsync(args[1], args[2], args[3], args[4]);
+}
 if (args.Length >= 2 && string.Equals(args[0], "--staging-matrix", StringComparison.OrdinalIgnoreCase))
     return StagingResourceMatrix.Run(args[1], args.Length >= 3 ? int.Parse(args[2]) : 100000,
         args.Length >= 4 ? args[3] : null, args.Length >= 5 ? args[4] : null);

@@ -1,0 +1,22 @@
+{
+  "rows": 100000,
+  "columns": 10,
+  "kind": "unique",
+  "direction": "export",
+  "elapsedMs": 3113.3118,
+  "rowsPerSecond": 32120.136505440925,
+  "firstRowMs": 323.0311,
+  "peakWorkingSet": 100847616,
+  "sampledPeakWorkingSet": 100839424,
+  "peakManagedBytes": 32124536,
+  "libraryTempPeak": 3700858,
+  "npoiTempPeak": 3701440,
+  "spillObserved": false,
+  "tempFilesRemaining": 0,
+  "libraryTempFilesRemaining": 0,
+  "npoiTempFilesRemaining": 0,
+  "status": "success",
+  "runtime": ".NET 8.0.30",
+  "measurementNotes": "peakWorkingSet \u4F7F\u7528 Process.PeakWorkingSet64\uFF0C\u5305\u542B\u8FDB\u7A0B\u521D\u59CB\u5316\uFF1B\u5176\u4F59\u5CF0\u503C\u4E3A 20ms \u91C7\u6837\u503C\u3002\u5BFC\u5165 fixture \u521B\u5EFA\u548C\u5BFC\u51FA\u7ED3\u679C\u5168\u91CF\u8BFB\u56DE\u5747\u5728 API \u8BA1\u65F6\u533A\u95F4\u4E4B\u5916\u3002",
+  "error": null
+}

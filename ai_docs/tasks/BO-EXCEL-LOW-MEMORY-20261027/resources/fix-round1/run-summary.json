@@ -1,0 +1,30 @@
+[
+  {
+    "name": "streaming-export-repeated-10000",
+    "expected": "EXPECTED_SUCCESS",
+    "exitCode": 0,
+    "protection": null,
+    "reused": true
+  },
+  {
+    "name": "streaming-export-repeated-100000",
+    "expected": "EXPECTED_SUCCESS",
+    "exitCode": 0,
+    "protection": null,
+    "elapsedSeconds": 7.3678461
+  },
+  {
+    "name": "streaming-export-unique-10000",
+    "expected": "EXPECTED_SUCCESS",
+    "exitCode": 0,
+    "protection": null,
+    "elapsedSeconds": 1.6897084
+  },
+  {
+    "name": "streaming-export-unique-100000",
+    "expected": "EXPECTED_SUCCESS",
+    "exitCode": 0,
+    "protection": null,
+    "elapsedSeconds": 7.2057754
+  }
+]

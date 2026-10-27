@@ -11,4 +11,8 @@
     <PackageReference Include="NPOI" Version="2.7.4" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
   </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Bing.Offices.Tests" />
+  </ItemGroup>
 </Project>

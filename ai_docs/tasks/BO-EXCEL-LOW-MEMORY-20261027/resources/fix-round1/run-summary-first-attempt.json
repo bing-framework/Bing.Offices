@@ -1,0 +1,16 @@
+[
+  {
+    "name": "streaming-export-repeated-10000",
+    "expected": "EXPECTED_SUCCESS",
+    "exitCode": 0,
+    "protection": null,
+    "elapsedSeconds": 2.2125915
+  },
+  {
+    "name": "streaming-export-repeated-100000",
+    "expected": "EXPECTED_SUCCESS",
+    "exitCode": -1,
+    "protection": "PROCESS_MEMORY_GUARD",
+    "elapsedSeconds": 6.450189
+  }
+]

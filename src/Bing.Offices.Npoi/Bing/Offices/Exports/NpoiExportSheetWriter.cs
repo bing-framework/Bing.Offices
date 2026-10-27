@@ -16,6 +16,23 @@ namespace Bing.Offices.Exports;
 /// </summary>
 internal sealed class NpoiExportSheetWriter
 {
+    /// <summary>每个实体只调用一次动态读取器，统一 DOM 与流式出口的用户扩展异常。</summary>
+    internal static IDictionary<string, object> ReadDynamicValues(ExcelSheetExportRequest request, object item,
+        IReadOnlyList<ExcelColumnPlan> columns, string sheetName, int rowNumber)
+    {
+        try { return request.DynamicGetter?.Invoke(item); }
+        catch (BingOfficesException) { throw; }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception exception) when (exception is not OutOfMemoryException
+            && exception is not StackOverflowException)
+        {
+            var property = columns.FirstOrDefault(column => column.IsDynamic)?.Property.Name;
+            throw new BingOfficesExportException("Excel 动态值读取器执行失败。", exception, "NPOI",
+                BingOfficesStage.Validate, sheetName, rowNumber, null, property,
+                BingOfficesErrorCode.UserExtensionFailed);
+        }
+    }
+
     /// <summary>
     /// 写入一个已编译映射计划对应的工作表。
     /// </summary>
@@ -55,27 +72,7 @@ internal sealed class NpoiExportSheetWriter
         {
             cancellationToken.ThrowIfCancellationRequested();
             var row = sheet.GetRow(rowIndex) ?? sheet.CreateRow(rowIndex);
-            IDictionary<string, object> dynamicValues;
-            try
-            {
-                dynamicValues = request.DynamicGetter?.Invoke(item);
-            }
-            catch (BingOfficesException)
-            {
-                throw;
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch (Exception exception) when (exception is not OutOfMemoryException
-                && exception is not StackOverflowException)
-            {
-                var dynamicProperty = columns.FirstOrDefault(column => column.IsDynamic)?.Property.Name;
-                throw new BingOfficesExportException("Excel 动态值读取器执行失败。", exception, "NPOI",
-                    BingOfficesStage.Validate, sheet.SheetName, rowIndex + 1, null, dynamicProperty,
-                    BingOfficesErrorCode.UserExtensionFailed);
-            }
+            var dynamicValues = ReadDynamicValues(request, item, columns, sheet.SheetName, rowIndex + 1);
             ValidateUnknownDynamicValues(request, dynamicValues, dynamicKeys);
             for (var columnIndex = 0; columnIndex < columns.Count; columnIndex++)
             {
@@ -104,7 +101,7 @@ internal sealed class NpoiExportSheetWriter
     /// <param name="request">包含动态列失败策略的导出请求。</param>
     /// <param name="values">当前数据项产生的动态值字典。</param>
     /// <param name="dynamicKeys">已声明的动态列键集合。</param>
-    private static void ValidateUnknownDynamicValues(ExcelSheetExportRequest request,
+    internal static void ValidateUnknownDynamicValues(ExcelSheetExportRequest request,
         IDictionary<string, object> values, ISet<string> dynamicKeys)
     {
         if (!request.FailOnUnknownDynamicValues || values == null || dynamicKeys == null)
@@ -289,7 +286,7 @@ internal sealed class NpoiExportSheetWriter
     /// <param name="key">待解析的样式键；为空时不应用样式。</param>
     /// <param name="header">是否解析表头样式。</param>
     /// <returns>解析出的样式；键为空时返回 <see langword="null" />。</returns>
-    private static Styles.ExcelCellStyle ResolveStyle(string key, bool header)
+    internal static Styles.ExcelCellStyle ResolveStyle(string key, bool header)
     {
         if (string.IsNullOrWhiteSpace(key))
             return null;
@@ -420,7 +417,7 @@ internal sealed class NpoiExportSheetWriter
     /// <param name="firstColumnIndex">数据区域的零基起始列。</param>
     /// <param name="originRow">用于计算自适应宽度的零基起始行。</param>
     /// <param name="options">列宽配置；为空或模式为 None 时不处理。</param>
-    private static void ApplyColumnWidths(ISheet sheet, IReadOnlyList<ExcelColumnPlan> columns,
+    internal static void ApplyColumnWidths(ISheet sheet, IReadOnlyList<ExcelColumnPlan> columns,
         int firstColumnIndex, int originRow, ExcelColumnWidthOptions options)
     {
         if (options == null || options.Mode == ExcelColumnWidthMode.None)
@@ -552,7 +549,7 @@ internal sealed class NpoiExportSheetWriter
     /// <param name="rowIndex">错误定位使用的工作表行号。</param>
     /// <param name="columnIndex">错误定位使用的工作表列号。</param>
     /// <param name="culture">值转换和格式化使用的区域性。</param>
-    private static void WriteCell<T>(ICell cell, T item, ExcelColumnPlan column,
+    internal static void WriteCell<T>(ICell cell, T item, ExcelColumnPlan column,
         IDictionary<string, object> dynamicValues, string sheetName, int rowIndex, int columnIndex,
         CultureInfo culture) where T : class, new()
     {

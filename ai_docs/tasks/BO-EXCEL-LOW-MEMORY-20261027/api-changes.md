@@ -1,0 +1,114 @@
+# API 增量及成员追溯
+
+授权：用户明确要求实现低内存执行计划。net6/net8 每个 TFM 新增 Abstractions 67 条、NPOI 1 条 canonical 记录，Core 无变化；删除 0，既有签名变化 0。包括 9 个 User API 类型、选项/结果属性、接口方法、枚举字段、Provider SPI UniqueTracker 兼容构造重载和 DI 扩展。
+
+旧构造函数和枚举数值保留。新 Provider 实现为 internal。请求的 Sheet 快照、行和摘要构造函数属于隐藏的提供程序构建入口，使用 EditorBrowsable(Never) 标记。完整签名及两个 TFM 结果见 api-member-diff.json，Release 快照由现有 build/ApiSnapshot 工具捕获；原基线备份于 artifacts/low-memory/api/previous-baseline.json。
+
+迁移说明及默认额度：docs/excel/streaming.md。无须修改旧接口调用。下面每条 canonical 新成员均给出责任测试（项目 tests/Bing.Offices.Tests）。
+
+|最终生产成员|责任测试|
+|---|---|
+|`constructor: Bing.Offices.Exports.ExcelStreamingExportOptions`|`ExcelStreamingContractTest.Options_ShouldExposeDocumentedDefaults`|
+|`constructor: Bing.Offices.Imports.ExcelImportRow`1`|`ExcelStreamingContractTest.RowAndSummary_ShouldCopyErrorsAndKeepCompletionSeparateFromSuccess`|
+|`constructor: Bing.Offices.Imports.ExcelStreamingImportOptions`|`ExcelStreamingContractTest.Options_ShouldExposeDocumentedDefaults`|
+|`constructor: Bing.Offices.Imports.ExcelStreamingImportSummary`|`ExcelStreamingContractTest.RowAndSummary_ShouldCopyErrorsAndKeepCompletionSeparateFromSuccess`|
+|`constructor: Bing.Offices.Providers.UniqueTracker`|`UniqueTrackerCharacterBudgetTest.Constructors_ShouldPreserveValueLimitAndLegacyCharacterBehavior`|
+|`field: Bing.Offices.Imports.ExcelRowReadDecision.Continue`|`ExcelStreamingContractTest.RowAndSummary_ShouldCopyErrorsAndKeepCompletionSeparateFromSuccess`|
+|`field: Bing.Offices.Imports.ExcelRowReadDecision.Stop`|`ExcelStreamingContractTest.RowAndSummary_ShouldCopyErrorsAndKeepCompletionSeparateFromSuccess`|
+|`field: Bing.Offices.Imports.ExcelRowReadDecision.value__`|`ExcelStreamingContractTest.RowAndSummary_ShouldCopyErrorsAndKeepCompletionSeparateFromSuccess`|
+|`field: Bing.Offices.Imports.ImportStopReason.ConsumerStopped`|`ExcelStreamingContractTest.RowAndSummary_ShouldCopyErrorsAndKeepCompletionSeparateFromSuccess`|
+|`method: Bing.Offices.Exports.ExcelStreamingExportOptions.Validate`|`ExcelStreamingContractTest.ExportOptions_Validate_ShouldRejectInvalidBudgets`|
+|`method: Bing.Offices.Exports.IExcelStreamingExporter.ExportAsync`|`ExcelStreamingLifecycleTest.ExportAsync_AndFileExports_ShouldReturnCompleteXlsx_WithAsyncCopy`|
+|`method: Bing.Offices.Exports.IExcelStreamingExporter.ExportToFileAsync`|`ExcelStreamingLifecycleTest.ExportAsync_AndFileExports_ShouldReturnCompleteXlsx_WithAsyncCopy`|
+|`method: Bing.Offices.Exports.IExcelStreamingExporter.ExportToFile`|`ExcelStreamingLifecycleTest.ExportAsync_AndFileExports_ShouldReturnCompleteXlsx_WithAsyncCopy`|
+|`method: Bing.Offices.Exports.IExcelStreamingExporter.Export`|`NpoiExcelStreamingExporterTest.Export_ShouldWriteAllRowsAcrossWindowsAndPreserveWorkbookContent`|
+|`method: Bing.Offices.Imports.ExcelStreamingImport.Sheet(int)`|`ExcelStreamingContractTest.SheetNameAndIndex_ShouldKeepIndependentConfigurationSnapshots`|
+|`method: Bing.Offices.Imports.ExcelStreamingImport.Sheet(string)`|`ExcelStreamingContractTest.SheetNameAndIndex_ShouldKeepIndependentConfigurationSnapshots`|
+|`method: Bing.Offices.Imports.ExcelStreamingImportOptions.Validate`|`ExcelStreamingContractTest.ImportOptions_Validate_ShouldRejectInvalidBudgetsAndUnboundedPackageLimits`|
+|`method: Bing.Offices.Imports.IExcelStreamingImporter.ImportAsync`|`NpoiExcelStreamingImporterTest.Import_ShouldReadAllRows_FromCurrentPosition_AndKeepSourceOpen`|
+|`method: Bing.Offices.Imports.IExcelStreamingImporter.Import`|`NpoiExcelStreamingImporterTest.Import_ShouldReadAllRows_FromCurrentPosition_AndKeepSourceOpen`|
+|`property: Bing.Offices.Exports.ExcelStreamingExportOptions.CompressTemporaryFiles`|`ExcelStreamingContractTest.Options_ShouldExposeDocumentedDefaults`|
+|`property: Bing.Offices.Exports.ExcelStreamingExportOptions.MaxBufferedCharacters`|`ExcelStreamingContractTest.Options_ShouldExposeDocumentedDefaults`|
+|`property: Bing.Offices.Exports.ExcelStreamingExportOptions.MaxCellCharacters`|`ExcelStreamingContractTest.Options_ShouldExposeDocumentedDefaults`|
+|`property: Bing.Offices.Exports.ExcelStreamingExportOptions.MaxColumns`|`ExcelStreamingContractTest.Options_ShouldExposeDocumentedDefaults`|
+|`property: Bing.Offices.Exports.ExcelStreamingExportOptions.MaxFonts`|`ExcelStreamingContractTest.Options_ShouldExposeDocumentedDefaults`|
+|`property: Bing.Offices.Exports.ExcelStreamingExportOptions.MaxRowCharacters`|`ExcelStreamingContractTest.Options_ShouldExposeDocumentedDefaults`|
+|`property: Bing.Offices.Exports.ExcelStreamingExportOptions.MaxSheets`|`ExcelStreamingContractTest.Options_ShouldExposeDocumentedDefaults`|
+|`property: Bing.Offices.Exports.ExcelStreamingExportOptions.MaxStyles`|`ExcelStreamingContractTest.Options_ShouldExposeDocumentedDefaults`|
+|`property: Bing.Offices.Exports.ExcelStreamingExportOptions.MaxTemporaryBytes`|`ExcelStreamingContractTest.Options_ShouldExposeDocumentedDefaults`|
+|`property: Bing.Offices.Exports.ExcelStreamingExportOptions.RowWindowSize`|`ExcelStreamingContractTest.Options_ShouldExposeDocumentedDefaults`|
+|`property: Bing.Offices.Exports.ExcelStreamingExportOptions.TempDirectory`|`ExcelStreamingContractTest.Options_ShouldExposeDocumentedDefaults`|
+|`property: Bing.Offices.Imports.ExcelImportRow`1.Errors`|`ExcelStreamingContractTest.RowAndSummary_ShouldCopyErrorsAndKeepCompletionSeparateFromSuccess`|
+|`property: Bing.Offices.Imports.ExcelImportRow`1.IsValid`|`ExcelStreamingContractTest.RowAndSummary_ShouldCopyErrorsAndKeepCompletionSeparateFromSuccess`|
+|`property: Bing.Offices.Imports.ExcelImportRow`1.Item`|`ExcelStreamingContractTest.RowAndSummary_ShouldCopyErrorsAndKeepCompletionSeparateFromSuccess`|
+|`property: Bing.Offices.Imports.ExcelImportRow`1.RowIndex`|`ExcelStreamingContractTest.RowAndSummary_ShouldCopyErrorsAndKeepCompletionSeparateFromSuccess`|
+|`property: Bing.Offices.Imports.ExcelStreamingImportOptions.MaxCellCharacters`|`ExcelStreamingContractTest.Options_ShouldExposeDocumentedDefaults`|
+|`property: Bing.Offices.Imports.ExcelStreamingImportOptions.MaxErrorSamples`|`ExcelStreamingContractTest.Options_ShouldExposeDocumentedDefaults`|
+|`property: Bing.Offices.Imports.ExcelStreamingImportOptions.MaxErrors`|`ExcelStreamingContractTest.Options_ShouldExposeDocumentedDefaults`|
+|`property: Bing.Offices.Imports.ExcelStreamingImportOptions.MaxFonts`|`ExcelStreamingContractTest.Options_ShouldExposeDocumentedDefaults`|
+|`property: Bing.Offices.Imports.ExcelStreamingImportOptions.MaxRowCharacters`|`ExcelStreamingContractTest.Options_ShouldExposeDocumentedDefaults`|
+|`property: Bing.Offices.Imports.ExcelStreamingImportOptions.MaxSheets`|`ExcelStreamingContractTest.Options_ShouldExposeDocumentedDefaults`|
+|`property: Bing.Offices.Imports.ExcelStreamingImportOptions.MaxStyles`|`ExcelStreamingContractTest.Options_ShouldExposeDocumentedDefaults`|
+|`property: Bing.Offices.Imports.ExcelStreamingImportOptions.MaxTemporaryBytes`|`ExcelStreamingContractTest.Options_ShouldExposeDocumentedDefaults`|
+|`property: Bing.Offices.Imports.ExcelStreamingImportOptions.MaxTrackedUniqueCharacters`|`ExcelStreamingContractTest.Options_ShouldExposeDocumentedDefaults`|
+|`property: Bing.Offices.Imports.ExcelStreamingImportOptions.MaxTrackedUniqueValues`|`ExcelStreamingContractTest.Options_ShouldExposeDocumentedDefaults`|
+|`property: Bing.Offices.Imports.ExcelStreamingImportOptions.ResourceLimits`|`ExcelStreamingContractTest.Options_ShouldExposeDocumentedDefaults`|
+|`property: Bing.Offices.Imports.ExcelStreamingImportOptions.SharedStringMemoryBytes`|`ExcelStreamingContractTest.Options_ShouldExposeDocumentedDefaults`|
+|`property: Bing.Offices.Imports.ExcelStreamingImportOptions.TempDirectory`|`ExcelStreamingContractTest.Options_ShouldExposeDocumentedDefaults`|
+|`property: Bing.Offices.Imports.ExcelStreamingImportRequest`1.Sheet`|`ExcelStreamingContractTest.SheetNameAndIndex_ShouldKeepIndependentConfigurationSnapshots`|
+|`property: Bing.Offices.Imports.ExcelStreamingImportSummary.DeliveredRows`|`ExcelStreamingContractTest.RowAndSummary_ShouldCopyErrorsAndKeepCompletionSeparateFromSuccess`|
+|`property: Bing.Offices.Imports.ExcelStreamingImportSummary.ErrorsTruncated`|`ExcelStreamingContractTest.RowAndSummary_ShouldCopyErrorsAndKeepCompletionSeparateFromSuccess`|
+|`property: Bing.Offices.Imports.ExcelStreamingImportSummary.Errors`|`ExcelStreamingContractTest.RowAndSummary_ShouldCopyErrorsAndKeepCompletionSeparateFromSuccess`|
+|`property: Bing.Offices.Imports.ExcelStreamingImportSummary.FailedRows`|`ExcelStreamingContractTest.RowAndSummary_ShouldCopyErrorsAndKeepCompletionSeparateFromSuccess`|
+|`property: Bing.Offices.Imports.ExcelStreamingImportSummary.IsComplete`|`ExcelStreamingContractTest.RowAndSummary_ShouldCopyErrorsAndKeepCompletionSeparateFromSuccess`|
+|`property: Bing.Offices.Imports.ExcelStreamingImportSummary.IsSuccess`|`ExcelStreamingContractTest.RowAndSummary_ShouldCopyErrorsAndKeepCompletionSeparateFromSuccess`|
+|`property: Bing.Offices.Imports.ExcelStreamingImportSummary.RowsRead`|`ExcelStreamingContractTest.RowAndSummary_ShouldCopyErrorsAndKeepCompletionSeparateFromSuccess`|
+|`property: Bing.Offices.Imports.ExcelStreamingImportSummary.StopReason`|`ExcelStreamingContractTest.RowAndSummary_ShouldCopyErrorsAndKeepCompletionSeparateFromSuccess`|
+|`property: Bing.Offices.Imports.ExcelStreamingImportSummary.SuccessfulRows`|`ExcelStreamingContractTest.RowAndSummary_ShouldCopyErrorsAndKeepCompletionSeparateFromSuccess`|
+|`property: Bing.Offices.Imports.ExcelStreamingImportSummary.TotalErrors`|`ExcelStreamingContractTest.RowAndSummary_ShouldCopyErrorsAndKeepCompletionSeparateFromSuccess`|
+|`type: Bing.Offices.Exports.ExcelStreamingExportOptions`|`ExcelStreamingContractTest.Options_ShouldExposeDocumentedDefaults`|
+|`type: Bing.Offices.Exports.IExcelStreamingExporter`|`ExcelStreamingLifecycleTest.ExportAsync_AndFileExports_ShouldReturnCompleteXlsx_WithAsyncCopy`|
+|`type: Bing.Offices.Imports.ExcelImportRow`1`|`ExcelStreamingContractTest.RowAndSummary_ShouldCopyErrorsAndKeepCompletionSeparateFromSuccess`|
+|`type: Bing.Offices.Imports.ExcelRowReadDecision`|`ExcelStreamingContractTest.RowAndSummary_ShouldCopyErrorsAndKeepCompletionSeparateFromSuccess`|
+|`type: Bing.Offices.Imports.ExcelStreamingImportOptions`|`ExcelStreamingContractTest.Options_ShouldExposeDocumentedDefaults`|
+|`type: Bing.Offices.Imports.ExcelStreamingImportRequest`1`|`ExcelStreamingContractTest.SheetNameAndIndex_ShouldKeepIndependentConfigurationSnapshots`|
+|`type: Bing.Offices.Imports.ExcelStreamingImportSummary`|`ExcelStreamingContractTest.RowAndSummary_ShouldCopyErrorsAndKeepCompletionSeparateFromSuccess`|
+|`type: Bing.Offices.Imports.ExcelStreamingImport`|`ExcelStreamingContractTest.SheetNameAndIndex_ShouldKeepIndependentConfigurationSnapshots`|
+|`type: Bing.Offices.Imports.IExcelStreamingImporter`|`NpoiExcelStreamingImporterTest.Import_ShouldReadAllRows_FromCurrentPosition_AndKeepSourceOpen`|
+|`method: Bing.Offices.Npoi.Extensions.ExcelNpoiServiceCollectionExtensions.AddBingOfficesNpoiStreaming`|`ExcelStreamingLifecycleTest.Registration_ShouldPreserveCustomServices_AndKeepOptInSeparate`|
+
+## 内部生产符号与关键行为
+
+|生产符号|行为与直接／集成测试|
+|---|---|
+|NpoiExcelStreamingExporter.Prepare/WriteSheet/Generate|NpoiExcelStreamingExporterTest.Export_ShouldWriteAllRowsAcrossWindowsAndPreserveWorkbookContent；Export_WhenTemplateIsConfigured_ShouldRejectBeforeEnumeratingData|
+|NpoiExcelStreamingExporter.DisposeWorkbook|ExcelStreamingLifecycleTest.Sxssf_Dispose_ShouldDeleteCompressedFilesAcrossWindows；Sxssf_CleanupFailure_ShouldContinueOtherWriters_AndBeObservable|
+|ExcelStreamingTempSession / StreamingCleanup / StreamingWriteCancellationStream|ExcelStreamingLifecycleTest.Export_StagingAndOutputFailure_ShouldCleanAndLeaveCallerOpen；CancellationBeforeWrite_ShouldNotEnumerateOrCreateTemporaryFiles；XlsxSharedStringStoreTest.Append_ShouldRollbackDiskFilesWhenSessionBudgetIsExceeded|
+|XlsxSharedStringStore|XlsxSharedStringStoreTest.Add_ShouldKeepExactBudgetInMemoryAndSpillWhenNextValueExceedsIt；SpilledStore_ShouldSupportUtf8RandomReadsAndBoundLruCache；SpillIndex_ShouldUseFixedTwelveByteRecordsWithoutResidentOffsetTable；AddAsync_ShouldUseDiskIoAndRespectCancellation|
+|XlsxPackageSession / XlsxRowReader / StreamingXml|NpoiExcelStreamingImporterTest.Import_ShouldReadAllRows_FromCurrentPosition_AndKeepSourceOpen；Import_ShouldConvertBothDateSystems；XlsxStreamingSecurityTest 全部职责方法|
+|NpoiExcelStreamingImporter.Consume|NpoiExcelStreamingImporterTest.Import_ShouldReuseMappingAndPredeclaredDynamicConversion；Import_ShouldReuseValidationAndStopAtUniqueCharacterBudget；ImportAsync_ShouldUseAsyncInput_AndAwaitConsumerBeforeNextRow|
+|NpoiImportRowMaterializer / NpoiImportSheetExecutor.CreateColumns|NpoiImportHeaderBindingTest、ExcelSingleSheetImportTest（HSSF/XSSF 成功及失败）；新流式映射和校验测试|
+|NpoiXlsxZipPreflight.ValidateMetadata|XlsxStreamingSecurityTest.Import_ShouldRejectDuplicateZipPaths；NpoiFailureWorkbookPreflightTest 旧实现回归|
+|NpoiExportSheetWriter 共享成员|ExcelWorkbookRequestTest 既有导出回归；NpoiExcelStreamingExporterTest 全量读回|
+
+包消费者：tests/Bing.Offices.Consumer.Shared/ExcelSingleSheetPackageChecks.RunStreamingAsync，在仓库外 net6/net8 环境用真实本地 nupkg 验证。文档消费者：DocsConsumerTest.StreamingExample_ExternalConsumer_ShouldRoundTripAndStop。容量工具：ResourceProbe --streaming-scenario，证据 resource-results.md。
+
+并发与文件集成：tests/Bing.Offices.Tests.Integration/ExcelStreamingIntegrationTest.StreamingServices_ShouldIsolateConcurrentCallsAndCleanAllFiles；ExportToFileAsync_ShouldPreserveOldTargetWhenCancelledAcrossWindow，net6/net8 均通过。
+
+## Review Round 1 修复与迁移补充
+
+本轮恢复既定行为，公共成员签名、默认配置和双 TFM API 基线不变。文件出口的 `MaxTemporaryBytes` 现在同时约束暂存包与提交副本；已有显式小额度配置可能受到正确拒绝，需要按两份输出包预留空间。流出口不计调用方目标流。日期字符串恢复 DOM 格式，未绑定列的值错误不再阻断所选数据，消费者 Stop 优先返回 ConsumerStopped，动态读取异常恢复既有公共异常及观察器契约。
+
+下列职责测试均位于 `tests/Bing.Offices.Tests`；除 ResourceProbe 观测测试仅为 net8.0 外，全部在 net6.0/net8.0 运行。
+
+|最终生产符号|关键行为|直接测试方法|
+|---|---|---|
+|NpoiExcelStreamingExporter.ExportCore/ExportCoreAsync/ExportToFile/ExportToFileAsync；ExcelStreamingTempSession.ReserveCommitCopy|同步/异步默认与自定义提交器，双副本总额度，旧目标保护，调用方流不误计|ExcelStreamingExportRegressionTest.FileExport_ShouldBudgetStagingAndCommitTogether_AndPreserveTarget|
+|NpoiScalarText.Date；CellExtensions.GetStringValue；XlsxRowReader.Parse|内置/自定义日期格式、两种日期系统、公式缓存、字符串及转换/校验上下文|ExcelStreamingImportRegressionTest.Import_DateTextAndContexts_ShouldMatchDom；NpoiCellExtensionsTest.GetStringValue_ShouldReadAllSupportedCellKinds（HSSF/XSSF）|
+|XlsxRow.Errors/Cells；NpoiExcelStreamingImporter.Consume|所选列及未映射列隔离，Excel 错误和缺缓存公式的完整诊断|ExcelStreamingImportRegressionTest.Import_UnboundCellFailures_ShouldNotRejectSelectedValues；Import_BoundCellFailures_ShouldRetainStructuredDiagnostics；Import_UnknownExcelError_ShouldDeliverBoundDiagnostic|
+|XlsxRowReader.CurrentRowIndex/Next；NpoiExcelStreamingImporter.Consume|实际物理行的 MaxRows/文本额度诊断；未选列仍限额|ExcelStreamingImportRegressionTest.Import_RowLimit_ShouldLocateActualPhysicalRow；Import_IgnoredColumnStillObeysTextQuota_WithSparseRowLocation|
+|NpoiExcelStreamingImporter.Consume|Continue/Stop 与错误/唯一值阈值交叉，停止后不读下一行|ExcelStreamingImportRegressionTest.Import_ConsumerDecision_ShouldTakePrecedenceOverThreshold|
+|NpoiExportSheetWriter.ReadDynamicValues；NpoiExcelStreamingExporter.WriteSheet|四出口异常上下文、原异常/取消保留、观察一次、getter 一次、清理|ExcelStreamingExportRegressionTest.Export_DynamicFailure_ShouldPreserveContextAndNotifyOnce；DomExport_SharedDynamicReader_ShouldPreserveBothProviders（HSSF/XSSF）|
+|ResourceProbe.ExcelStreamingResourceMatrix.CommitTemporaryFileTracker/ResourceSampler/SamplingFileExportCommitter|临时目录与提交副本同时计量，排除旧目标/既有/其他文件，残留检出|ExcelStreamingResourceObservationTest.ResourceSampler_IncludesOnlyCurrentTargetCommitFile_WithSessionBytes；FileExportCommitter_SamplesTheSessionAndCommitCopyOnEveryWrite|
+
+当前实现的流式并发隔离与跨窗口取消文件保护继续由 `tests/Bing.Offices.Tests.Integration/ExcelStreamingIntegrationTest` 验证；文档示例由 `tests/Bing.Offices.Docs.Tests/DocsConsumerTest.StreamingExample_ExternalConsumer_ShouldRoundTripAndStop` 验证。

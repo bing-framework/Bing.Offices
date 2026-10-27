@@ -17,6 +17,7 @@ using Microsoft.CodeAnalysis.Emit;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Linq;
+using System.Threading.Tasks;
 using NPOI.HSSF.UserModel;
 using NPOI.SS.UserModel;
 using NPOI.XSSF.UserModel;
@@ -29,6 +30,28 @@ namespace Bing.Offices.Docs.Tests;
 /// </summary>
 public sealed class DocsConsumerTest
 {
+    /// <summary>低内存文档示例只依赖公开接口，并完整读回两行数据。</summary>
+    [Fact]
+    public async Task StreamingExample_ExternalConsumer_ShouldRoundTripAndStop()
+    {
+        using var provider = new ServiceCollection().AddBingOfficesNpoiStreaming().BuildServiceProvider();
+        var exporter = provider.GetRequiredService<IExcelStreamingExporter>();
+        var importer = provider.GetRequiredService<IExcelStreamingImporter>();
+        using var stream = new MemoryStream();
+        await exporter.ExportAsync(ExcelExport.Workbook(book => book.AddSheet("Data",
+            new[] { new DocsRow { Name = "甲" }, new DocsRow { Name = "乙" } })), stream,
+            new ExcelStreamingExportOptions { RowWindowSize = 1 });
+        stream.Position = 0;
+        var values = new List<string>();
+        var summary = await importer.ImportAsync(ExcelStreamingImport.Sheet<DocsRow>("Data"), stream,
+            (row, token) => { values.Add(row.Item.Name); return Task.FromResult(ExcelRowReadDecision.Continue); });
+        Assert.Equal(new[] { "甲", "乙" }, values); Assert.True(summary.IsSuccess); Assert.Equal(2, summary.RowsRead);
+        stream.Position = 0;
+        summary = importer.Import(ExcelStreamingImport.Sheet<DocsRow>(0), stream, _ => ExcelRowReadDecision.Stop);
+        Assert.Equal(ImportStopReason.ConsumerStopped, summary.StopReason); Assert.False(summary.IsComplete);
+        Assert.True(stream.CanRead);
+    }
+
     /// <summary>
     /// 测试 - 外部消费者应能调用 NPOI 注册入口并解析导入导出接口。
     /// </summary>

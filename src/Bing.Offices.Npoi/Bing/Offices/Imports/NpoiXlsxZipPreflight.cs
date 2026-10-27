@@ -30,50 +30,10 @@ internal static class NpoiXlsxZipPreflight
         try
         {
             using var archive = new ZipArchive(source, ZipArchiveMode.Read, leaveOpen: true);
-            var entryCount = archive.Entries.Count;
-            if (limits.MaxZipEntries.HasValue && entryCount > limits.MaxZipEntries.Value)
-                Throw($"XLSX ZIP entry 数量超过限制: {limits.MaxZipEntries.Value}");
-            if (archive.GetEntry("xl/workbook.xml") == null)
-                throw new BingOfficesImportException("XLSX ZIP 缺少 xl/workbook.xml。", null, "NPOI",
-                    BingOfficesStage.Preflight);
-            long totalUncompressed = 0;
-            long totalWorksheetBytes = 0;
-            var entryNames = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            ValidateMetadata(archive, limits, cancellationToken);
             foreach (var entry in archive.Entries)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                ValidateEntryPath(entry.FullName);
-                if (!entryNames.Add(entry.FullName))
-                    Throw($"XLSX ZIP 存在重复 entry: {entry.FullName}");
-                var uncompressed = entry.Length;
-                var compressed = entry.CompressedLength;
-                if (limits.MaxZipEntryUncompressedBytes.HasValue
-                    && uncompressed > limits.MaxZipEntryUncompressedBytes.Value)
-                    Throw($"XLSX ZIP entry 解压大小超过限制: {entry.FullName}");
-                if (limits.MaxZipTotalUncompressedBytes.HasValue
-                    && uncompressed > limits.MaxZipTotalUncompressedBytes.Value - totalUncompressed)
-                    Throw($"XLSX ZIP 总解压大小超过限制: {limits.MaxZipTotalUncompressedBytes.Value}");
-                totalUncompressed += uncompressed;
-                if (limits.MaxZipCompressionRatio.HasValue && compressed == 0 && uncompressed > 0)
-                    Throw($"XLSX ZIP entry 压缩比超过限制: {entry.FullName}");
-                if (limits.MaxZipCompressionRatio.HasValue && compressed > 0
-                    && (double)uncompressed / compressed > limits.MaxZipCompressionRatio.Value)
-                    Throw($"XLSX ZIP entry 压缩比超过限制: {entry.FullName}");
-                if (string.Equals(entry.FullName, "xl/sharedStrings.xml", StringComparison.OrdinalIgnoreCase))
-                    ValidateSize(uncompressed, limits.MaxSharedStringsBytes, "sharedStrings.xml");
-                else if (string.Equals(entry.FullName, "xl/styles.xml", StringComparison.OrdinalIgnoreCase))
-                    ValidateSize(uncompressed, limits.MaxStylesBytes, "styles.xml");
-                else if (IsWorksheet(entry.FullName))
-                {
-                    ValidateSize(uncompressed, limits.MaxWorksheetBytes, entry.FullName);
-                    if (limits.MaxTotalWorksheetBytes.HasValue
-                        && uncompressed > limits.MaxTotalWorksheetBytes.Value - totalWorksheetBytes)
-                        Throw($"XLSX worksheet XML 总大小超过限制: {limits.MaxTotalWorksheetBytes.Value}");
-                    totalWorksheetBytes += uncompressed;
-                }
                 if (entry.Length > 0)
                     ValidateXmlSafety(entry, cancellationToken, limits.MaxXmlCharacters, limits.MaxXmlDepth);
-            }
         }
         catch (BingOfficesResourceLimitException)
         {
@@ -95,6 +55,54 @@ internal static class NpoiXlsxZipPreflight
         }
     }
 
+
+    /// <summary>仅检查 ZIP 元数据额度，不加载或扫描 XML 内容。</summary>
+    internal static void ValidateMetadata(ZipArchive archive, ExcelResourceLimits limits,
+        CancellationToken cancellationToken, bool requireStandardWorkbook = true)
+    {
+        var entryCount = archive.Entries.Count;
+        if (limits.MaxZipEntries.HasValue && entryCount > limits.MaxZipEntries.Value)
+            Throw($"XLSX ZIP entry 数量超过限制: {limits.MaxZipEntries.Value}");
+        if (requireStandardWorkbook && archive.GetEntry("xl/workbook.xml") == null)
+            throw new BingOfficesImportException("XLSX ZIP 缺少 xl/workbook.xml。", null, "NPOI",
+                BingOfficesStage.Preflight);
+        long totalUncompressed = 0;
+        long totalWorksheetBytes = 0;
+        var entryNames = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in archive.Entries)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ValidateEntryPath(entry.FullName);
+            if (!entryNames.Add(entry.FullName))
+                Throw($"XLSX ZIP 存在重复 entry: {entry.FullName}");
+            var uncompressed = entry.Length;
+            var compressed = entry.CompressedLength;
+            if (limits.MaxZipEntryUncompressedBytes.HasValue
+                && uncompressed > limits.MaxZipEntryUncompressedBytes.Value)
+                Throw($"XLSX ZIP entry 解压大小超过限制: {entry.FullName}");
+            if (limits.MaxZipTotalUncompressedBytes.HasValue
+                && uncompressed > limits.MaxZipTotalUncompressedBytes.Value - totalUncompressed)
+                Throw($"XLSX ZIP 总解压大小超过限制: {limits.MaxZipTotalUncompressedBytes.Value}");
+            totalUncompressed += uncompressed;
+            if (limits.MaxZipCompressionRatio.HasValue && compressed == 0 && uncompressed > 0)
+                Throw($"XLSX ZIP entry 压缩比超过限制: {entry.FullName}");
+            if (limits.MaxZipCompressionRatio.HasValue && compressed > 0
+                && (double)uncompressed / compressed > limits.MaxZipCompressionRatio.Value)
+                Throw($"XLSX ZIP entry 压缩比超过限制: {entry.FullName}");
+            if (string.Equals(entry.FullName, "xl/sharedStrings.xml", StringComparison.OrdinalIgnoreCase))
+                ValidateSize(uncompressed, limits.MaxSharedStringsBytes, "sharedStrings.xml");
+            else if (string.Equals(entry.FullName, "xl/styles.xml", StringComparison.OrdinalIgnoreCase))
+                ValidateSize(uncompressed, limits.MaxStylesBytes, "styles.xml");
+            else if (IsWorksheet(entry.FullName))
+            {
+                ValidateSize(uncompressed, limits.MaxWorksheetBytes, entry.FullName);
+                if (limits.MaxTotalWorksheetBytes.HasValue
+                    && uncompressed > limits.MaxTotalWorksheetBytes.Value - totalWorksheetBytes)
+                    Throw($"XLSX worksheet XML 总大小超过限制: {limits.MaxTotalWorksheetBytes.Value}");
+                totalWorksheetBytes += uncompressed;
+            }
+        }
+    }
     /// <summary>
     /// 根据文件头判断输入流是否为 ZIP 格式。
     /// </summary>

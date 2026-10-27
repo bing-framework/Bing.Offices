@@ -8,6 +8,32 @@ namespace Bing.Offices.Consumer.Shared;
 /// <summary>验证通过 NuGet 包公开的单表导入入口和完整结果契约。</summary>
 public static class ExcelSingleSheetPackageChecks
 {
+    /// <summary>从实际包调用低内存服务的四个出口与两个逐行入口。</summary>
+    public static async Task RunStreamingAsync(IExcelStreamingExporter exporter, IExcelStreamingImporter importer, string directory)
+    {
+        var request = ExcelExport.Workbook(book => book.AddSheet("Data", new[] { new PackageSheetRow { Count = 7 }, new PackageSheetRow { Count = 9 } }));
+        var sheet = ExcelStreamingImport.Sheet<PackageSheetRow>("Data");
+        using var output = new MemoryStream();
+        exporter.Export(request, output, new ExcelStreamingExportOptions { RowWindowSize = 1 });
+        output.Position = 0;
+        var values = new List<int>();
+        var result = importer.Import(sheet, output, row => { values.Add(row.Item.Count); return ExcelRowReadDecision.Continue; });
+        if (!result.IsSuccess || !values.SequenceEqual(new[] { 7, 9 }) || !output.CanRead) throw new InvalidOperationException("streaming sync failed");
+        output.SetLength(0); output.Position = 0;
+        await exporter.ExportAsync(request, output);
+        output.Position = 0; values.Clear();
+        result = await importer.ImportAsync(sheet, output, (row, token) => { values.Add(row.Item.Count); return Task.FromResult(ExcelRowReadDecision.Continue); });
+        if (!result.IsSuccess || !values.SequenceEqual(new[] { 7, 9 }) || !output.CanRead) throw new InvalidOperationException("streaming async failed");
+        var path = Path.Combine(directory, "streaming.xlsx");
+        exporter.ExportToFile(request, path);
+        await exporter.ExportToFileAsync(request, path);
+        using var file = File.OpenRead(path);
+        result = importer.Import(ExcelStreamingImport.Sheet<PackageSheetRow>(0), file, _ => ExcelRowReadDecision.Stop);
+        if (result.StopReason != ImportStopReason.ConsumerStopped || result.IsComplete || result.DeliveredRows != 1)
+            throw new InvalidOperationException("streaming stop failed");
+        Console.WriteLine("package-streaming-ok export=4 import=2 stop=ConsumerStopped");
+    }
+
     private static readonly ImportEntry[] Entries =
     {
         ImportEntry.Stream,

@@ -37,8 +37,8 @@ public class PublicExtensionCoverageTest
         var coverage = BuildDirectCallCoverage(publicExtensions);
 
         Assert.Equal(22, coreMethods.Length);
-        Assert.Equal(66, npoiMethods.Length);
-        Assert.Equal(88, publicExtensions.Length);
+        Assert.Equal(67, npoiMethods.Length);
+        Assert.Equal(89, publicExtensions.Length);
 
         var missing = publicExtensions
             .Where(method => !coverage.ContainsKey(GetSignature(method)))

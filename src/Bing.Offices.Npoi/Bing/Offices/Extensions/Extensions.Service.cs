@@ -16,6 +16,23 @@ namespace Bing.Offices.Npoi.Extensions;
 /// </summary>
 public static class ExcelNpoiServiceCollectionExtensions
 {
+    /// <summary>显式注册低内存 XLSX 服务，不替换既有完整工作簿服务或用户注册。</summary>
+    /// <param name="services">服务集合。</param>
+    /// <returns>原始服务集合。</returns>
+    public static IServiceCollection AddBingOfficesNpoiStreaming(this IServiceCollection services)
+    {
+        if (services == null) throw new ArgumentNullException(nameof(services));
+        services.AddBingOfficesCore();
+        services.TryAddTransient<IExcelStreamingExporter>(provider => new NpoiExcelStreamingExporter(
+            provider.GetServices<IExcelValueConverter>(), provider.GetService<IExcelMappingPlanFactory>(),
+            provider.GetServices<IBingOfficesExceptionObserver>(), provider.GetRequiredService<IFileExportCommitter>()));
+        services.TryAddTransient<IExcelStreamingImporter>(provider => new NpoiExcelStreamingImporter(
+            provider.GetServices<IExcelValidationRule>(), provider.GetServices<IExcelValueConverter>(),
+            provider.GetServices<INamedExcelValidationRule>(), provider.GetService<IExcelMappingPlanFactory>(),
+            provider.GetServices<IBingOfficesExceptionObserver>()));
+        return services;
+    }
+
     /// <summary>
     /// 注册 Bing.Offices 的 NPOI 操作服务。
     /// </summary>

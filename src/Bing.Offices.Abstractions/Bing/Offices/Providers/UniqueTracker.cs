@@ -22,12 +22,18 @@ public sealed class UniqueTracker
     private readonly Stack<IDictionary<string, int>> _pendingFirstRowBuffers;
     /// <summary>允许跟踪的已提交值和待提交值总数上限；为 null 表示不限制。</summary>
     private readonly int? _maxTrackedValues;
+    /// <summary>允许跟踪的已提交值和待提交值字符总数上限；为 null 表示不限制。</summary>
+    private readonly long? _maxTrackedCharacters;
     /// <summary>用于唯一值集合和首行号字典的字符串比较器。</summary>
     private readonly IEqualityComparer<string> _comparer;
     /// <summary>已提交唯一值的总数量。</summary>
     private int _trackedValueCount;
     /// <summary>当前行待提交唯一值的数量。</summary>
     private int _pendingValueCount;
+    /// <summary>已提交唯一值的字符总数。</summary>
+    private long _trackedCharacterCount;
+    /// <summary>当前行待提交唯一值的字符总数。</summary>
+    private long _pendingCharacterCount;
 
     /// <summary>初始化一个 <see cref="UniqueTracker" /> 类型的实例。</summary>
     /// <param name="committed">按唯一键保存的已提交值集合。</param>
@@ -35,17 +41,37 @@ public sealed class UniqueTracker
     /// <param name="comparer">值比较器。</param>
     public UniqueTracker(IDictionary<string, HashSet<string>> committed,
         int? maxTrackedValues = null, IEqualityComparer<string> comparer = null)
+        : this(committed, maxTrackedValues, comparer, null)
+    {
+    }
+
+    /// <summary>初始化一个带唯一值数量和字符数量限制的 <see cref="UniqueTracker" /> 实例。</summary>
+    /// <param name="committed">按唯一键保存的已提交值集合。</param>
+    /// <param name="maxTrackedValues">可跟踪的唯一值上限。</param>
+    /// <param name="comparer">值比较器。</param>
+    /// <param name="maxTrackedCharacters">可跟踪的唯一值字符总数上限；为 null 表示不限制。</param>
+    public UniqueTracker(IDictionary<string, HashSet<string>> committed,
+        int? maxTrackedValues, IEqualityComparer<string> comparer, long? maxTrackedCharacters)
     {
         _committed = committed ?? throw new ArgumentNullException(nameof(committed));
+        if (maxTrackedCharacters.HasValue && maxTrackedCharacters.Value < 0)
+            throw new ArgumentOutOfRangeException(nameof(maxTrackedCharacters));
         _pending = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
         _firstRows = new Dictionary<string, IDictionary<string, int>>(StringComparer.OrdinalIgnoreCase);
         _pendingFirstRows = new Dictionary<string, IDictionary<string, int>>(StringComparer.OrdinalIgnoreCase);
         _pendingValueBuffers = new Stack<HashSet<string>>();
         _pendingFirstRowBuffers = new Stack<IDictionary<string, int>>();
         _maxTrackedValues = maxTrackedValues;
+        _maxTrackedCharacters = maxTrackedCharacters;
         _comparer = comparer ?? StringComparer.OrdinalIgnoreCase;
         foreach (var pair in committed)
+        {
             _trackedValueCount += pair.Value?.Count ?? 0;
+            if (pair.Value == null)
+                continue;
+            foreach (var value in pair.Value)
+                _trackedCharacterCount += value?.Length ?? 0;
+        }
     }
 
     /// <summary>
@@ -106,10 +132,22 @@ public sealed class UniqueTracker
             return false;
         if (_maxTrackedValues.HasValue && _trackedValueCount + _pendingValueCount >= _maxTrackedValues.Value)
             throw new InvalidOperationException($"Unique 跟踪值超过最大数量: {_maxTrackedValues.Value}");
+        var valueCharacterCount = value?.Length ?? 0;
+        if (_maxTrackedCharacters.HasValue)
+        {
+            var maxCharacters = _maxTrackedCharacters.Value;
+            if (_trackedCharacterCount > maxCharacters
+                || _pendingCharacterCount > maxCharacters - _trackedCharacterCount
+                || valueCharacterCount > maxCharacters - _trackedCharacterCount - _pendingCharacterCount)
+                throw new InvalidOperationException($"Unique 跟踪值超过最大字符数: {maxCharacters}");
+        }
         if (!hasPending)
             _pending[key] = pendingValues = RentPendingValues();
         if (pendingValues.Add(value))
+        {
             _pendingValueCount++;
+            _pendingCharacterCount += valueCharacterCount;
+        }
         if (rowNumber > 0 && value != null)
         {
             if (!_pendingFirstRows.TryGetValue(key, out var rows))
@@ -134,7 +172,10 @@ public sealed class UniqueTracker
             foreach (var value in pair.Value)
             {
                 if (committedValues.Add(value))
+                {
                     _trackedValueCount++;
+                    _trackedCharacterCount += value?.Length ?? 0;
+                }
                 if (value != null && pendingRows != null
                     && pendingRows.TryGetValue(value, out var rowNumber))
                 {
@@ -191,5 +232,6 @@ public sealed class UniqueTracker
         }
         _pendingFirstRows.Clear();
         _pendingValueCount = 0;
+        _pendingCharacterCount = 0;
     }
 }

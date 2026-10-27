@@ -16,6 +16,7 @@ try
 {
     var services = new ServiceCollection();
     services.AddBingOfficesNpoi();
+    services.AddBingOfficesNpoiStreaming();
     using var provider = services.BuildServiceProvider();
     var csvExporter = provider.GetRequiredService<ICsvExporter>();
     var csvImporter = provider.GetRequiredService<ICsvImporter>();
@@ -84,6 +85,8 @@ try
         "NPOI extension verification failed.");
 
     await ExcelSingleSheetPackageChecks.RunAsync(excelImporter, excelExporter, directory);
+    await ExcelSingleSheetPackageChecks.RunStreamingAsync(provider.GetRequiredService<IExcelStreamingExporter>(),
+        provider.GetRequiredService<IExcelStreamingImporter>(), directory);
 
     Console.WriteLine($"package-consumer-ok tfm={System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription} package=Bing.Offices.Npoi/{Environment.GetEnvironmentVariable("BING_OFFICES_PACKAGE_VERSION") ?? "2.0.0"} csvBytes={csvAsyncBytes.Length} excelBytes={excelAsyncBytes.Length} npoiExtensions=ok");
 }

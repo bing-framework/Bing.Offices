@@ -1,6 +1,7 @@
 ﻿using System.Globalization;
 using System.Runtime.CompilerServices;
 using Bing.Helpers;
+using Bing.Offices.Conversions;
 using NPOI.SS.UserModel;
 
 namespace Bing.Offices.Npoi.Extensions;
@@ -45,8 +46,7 @@ public static partial class CellExtensions
                 return Convert.ToString(cell.ErrorCellValue, CultureInfo.InvariantCulture);
             case CellType.Numeric:
                 return DateUtil.IsCellDateFormatted(cell)
-                    ? Convert.ToDateTime(cell.DateCellValue, CultureInfo.InvariantCulture)
-                        .ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture)
+                    ? NpoiScalarText.Date(Convert.ToDateTime(cell.DateCellValue, CultureInfo.InvariantCulture))
                     : Convert.ToString(cell.NumericCellValue, CultureInfo.InvariantCulture);
             case CellType.Blank:
                 return string.Empty;
