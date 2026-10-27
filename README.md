@@ -43,7 +43,7 @@ Bing.Offices是Bing应用框架的 Excel/CSV 导入导出类库。
 - 本地生成目录：`docs/generated/`（Markdown 和图表）、`artifacts/docs/`（DOCX / XLSX / PPTX / PDF），均由 Git 忽略
 - 一键生成：`python tools/docgen/run.py all`（5 类文档 × 5 种格式 = 25 个产物）
 
-本地校验命令（未通过返回非 0；本次未接入 CI）：
+本地校验命令（未通过返回非 0；文档 CI 工作流也会执行这些门禁）：
 
 | 命令 | 作用 |
 |---|---|

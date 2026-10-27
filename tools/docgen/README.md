@@ -2,14 +2,15 @@
 
 把仓库里的**原始产物**转成**可交付文档**。
 
-当前仅交付生成工具、使用说明和示例配置；所有生成文档与图表均在本地保留，由 Git 忽略。本次不交付文档工作流、提交规范工作流或测试项目中的示例标记。
+当前工作区包含文档生成工具、文档工作流和测试项目中的示例标记；生成文档与图表由 Git 忽略，CI 会将生成结果作为 Artifact 归档。
 
 ```
-TestResults/*.trx            ┐
-BenchmarkDotNet.Artifacts/   │
-output/release/*.xml         ├─► 采集层 ─► Document 中间模型 ─► 渲染层 ─► md / docx / xlsx / pptx / pdf
-build/api-snapshot-baseline  │
-git log / tags               ┘
+TestResults/*.trx                                      ┐
+TestResults/<collector-guid>/coverage.cobertura.xml   │
+BenchmarkDotNet.Artifacts/                            │
+output/release/*.xml                                  ├─► 采集层 ─► Document 中间模型 ─► 渲染层 ─► md / docx / xlsx / pptx / pdf
+build/api-snapshot-baseline                           │
+git log / tags                                        ┘
                                                     ▲
                                         治理层：gate（门禁）
                                                 docs-check（防腐化）
@@ -64,7 +65,7 @@ tools/docgen/.venv/Scripts/python -m docgen all
 | `--check` | 只做采集与文档自检，不写出文件；有异常时返回非 0，适合挂 CI 门禁 |
 | `--min` | 仅 `gate` 有效：临时覆盖注释覆盖率总阈值（百分比） |
 
-`docs-check` 需要先生成 Markdown，并在示例宿主项目中维护 `// docgen:sample` 标记。本次未提交宿主标记；只有完成该接入后，示例比对才具有验收意义。执行 `gate` 前应准备对应版本的 Release XML 与 API 基线。
+`docs-check` 需要先生成 Markdown；它会将 `tests/Bing.Offices.Docs.Tests/DocsExamples.cs` 中的 6 个可编译 `// docgen:sample` 标记与生成文档中的示例双向比较。文档 CI 工作流先构建并重新生成 Markdown，再执行此检查；它验证示例与可编译源码一致，不比较 Git 中提交的生成文档（`docs/generated/` 已被忽略）。执行 `gate` 前应准备对应版本的 Release XML 与 API 基线。
 
 ### 五类文档
 
@@ -151,8 +152,7 @@ tools/docgen/
 - **提交规范符合率**决定变更日志质量。近 152 条提交实测 71.71%（109 条可自动归类），
   不符合规范的提交只能整条列在「其他」类，无法按范围聚合。
   本地 `gate` 可检查该指标（示例配置阈值为 70%）；提交规范 CI 不在本次交付范围。
-- **代码覆盖率**：采集器已实现，但本机/当前 CI 尚无 Cobertura 数据。
-  需在测试项目配置覆盖率采集器并生成 Cobertura 文件后使用；本次不修改 CI 或测试依赖。
+- **代码覆盖率**：CI 的 net8.0 Unit 测试单次运行同时生成顶层 `TestResults/ci-tests-net8.trx` 与收集器 GUID 子目录中的 Cobertura XML；VSTest 还可能在 `TestResults/<run-id>/In/<machine>/coverage.cobertura.xml` 留下逐字节相同的附件副本。门禁按路径排序，要求至少有一份非空且可解析的 Cobertura XML；存在多份时，只有所有副本与首份逐字节相同才通过。docgen 也按路径排序读取首份，因此重复副本不会改变报告内容。Artifact 保留整个 `TestResults/` 树，以保全 TRX 和其相对引用的附件。本地可用 `dotnet test tests/Bing.Offices.Tests/Bing.Offices.Tests.csproj -f net8.0 --logger "trx;LogFileName=ci-tests-net8.trx" --collect:"XPlat Code Coverage" --results-directory TestResults` 生成同一布局。
 - **基准趋势**：从首次生成起开始积累 `artifacts/benchmark-history/` 快照，
   第二次及以后（不同 commit）才能做方法级趋势对比。
 - DOCX / Markdown 的图表是位图；需要可编辑图表请用 XLSX / PPTX 产物。
