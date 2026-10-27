@@ -271,7 +271,7 @@ public sealed class DocsConsumerTest
         var fences = System.Linq.Enumerable.SelectMany(documents, document => ExtractFences(document)).ToArray();
 
         // Act / Assert
-        Assert.Equal(10, fences.Length);
+        Assert.Equal(11, fences.Length);
         foreach (var fence in fences)
         {
             var source = BuildFenceSource(fence.FileName, fence.Index, fence.Code);
@@ -313,6 +313,35 @@ public sealed class DocsConsumerTest
 
     private static string BuildFenceSource(string fileName, int index, string code)
     {
+        if (fileName == "dates.md")
+        {
+            // 保留示例的 using 和实体声明原文，并通过公开 CSV 服务验证日期特性真正生效。
+            return @"using Bing.Offices.Csv;
+using Bing.Offices.Extensions;
+using Microsoft.Extensions.DependencyInjection;
+" + code + @"
+namespace FenceConsumer
+{
+    public static class FenceEntry
+    {
+        public static void Run()
+        {
+            var services = new ServiceCollection();
+            services.AddBingOfficesCore();
+            using var provider = services.BuildServiceProvider();
+            var importer = provider.GetRequiredService<ICsvImporter>();
+            using var source = new System.IO.MemoryStream(
+                System.Text.Encoding.UTF8.GetBytes(""CreatedAt\r\n27/10/2026\r\n""));
+            var result = importer.Import<ImportRow>(source);
+            if (!result.IsSuccess || !result.IsComplete || result.Errors.Count != 0
+                || result.Items.Count != 1 || result.Items[0].CreatedAt != new DateTime(2026, 10, 27)
+                || result.Items[0].CreatedAt.Kind != DateTimeKind.Unspecified)
+                throw new InvalidOperationException(""Date attribute example should parse dd/MM/yyyy."");
+        }
+    }
+}";
+        }
+
         var declarations = string.Empty;
         var statements = code;
         if (code.Contains("public IResult Upload", StringComparison.Ordinal))

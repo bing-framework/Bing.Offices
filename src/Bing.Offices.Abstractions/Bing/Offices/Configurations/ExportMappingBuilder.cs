@@ -16,13 +16,17 @@ public sealed class ExportMappingBuilder<T> where T : class, new()
     /// 配置导出模型属性。
     /// </summary>
     /// <typeparam name="TProperty">所配置属性的类型。</typeparam>
-    /// <param name="expression">指向导出模型直接属性的表达式。</param>
+    /// <param name="expression">指向当前 lambda 参数直接实例属性的表达式。</param>
     /// <returns>指定属性的导出映射配置器。</returns>
+    /// <exception cref="ArgumentNullException">表达式为空。</exception>
+    /// <exception cref="ArgumentException">表达式未指向当前 lambda 参数上由导出模型声明的直接实例属性。</exception>
     public ExportColumnMappingBuilder<T, TProperty> Property<TProperty>(Expression<Func<T, TProperty>> expression)
     {
         if (expression == null)
             throw new ArgumentNullException(nameof(expression));
-        if (expression.Body is not MemberExpression { Member: PropertyInfo property }
+        // 仅保存属性名，因此必须先排除嵌套对象、捕获对象和静态属性，避免误映射到根对象。
+        if (expression.Body is not MemberExpression { Member: PropertyInfo property } member
+            || member.Expression != expression.Parameters[0]
             || property.DeclaringType != typeof(T))
             throw new ArgumentException("表达式必须指向实体的直接属性。", nameof(expression));
         var configuration = _configuration.Columns.FirstOrDefault(column =>
