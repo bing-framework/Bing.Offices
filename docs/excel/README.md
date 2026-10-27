@@ -40,6 +40,7 @@ exporter.Export(request, stream);
 按主题阅读：
 
 - [quick-start.md](quick-start.md)：CSV Core 注册、Excel NPOI 注册及完整可运行程序
+- [package-validation.md](package-validation.md)：独立 NuGet 消费、候选身份与 CI 验证
 - [mapping-profile.md](mapping-profile.md)：Profile 与映射优先级
 - [mapping-json-xml.md](mapping-json-xml.md)：JSON/XML 映射文档
 - [import-validation.md](import-validation.md)：Workbook 原生校验、配置校验和错误收集

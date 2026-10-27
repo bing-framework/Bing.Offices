@@ -5,6 +5,7 @@ using Bing.Offices.Exports;
 using Bing.Offices.Extensions;
 using Bing.Offices.Imports;
 using Bing.Offices.Npoi.Extensions;
+using Bing.Offices.Consumer.Shared;
 using Microsoft.Extensions.DependencyInjection;
 using NPOI.XSSF.UserModel;
 
@@ -81,6 +82,8 @@ try
     Ensure(extensionWorkbook.GetExcelFormat() == ExcelFormat.Xlsx
         && extensionSheet.GetRow(0).GetCell(0).GetStringValue() == "extension",
         "NPOI extension verification failed.");
+
+    await ExcelSingleSheetPackageChecks.RunAsync(excelImporter, excelExporter, directory);
 
     Console.WriteLine($"package-consumer-ok tfm={System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription} package=Bing.Offices.Npoi/{Environment.GetEnvironmentVariable("BING_OFFICES_PACKAGE_VERSION") ?? "2.0.0"} csvBytes={csvAsyncBytes.Length} excelBytes={excelAsyncBytes.Length} npoiExtensions=ok");
 }

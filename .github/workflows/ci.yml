@@ -91,50 +91,16 @@ jobs:
             | tee artifacts/ci-contracts/benchmark-list.log
           grep -q 'RealIoBenchmarks' artifacts/ci-contracts/benchmark-list.log
 
-      - name: Pack
-        run: |
-          dotnet pack src/Bing.Offices.Abstractions/Bing.Offices.Abstractions.csproj -c Release --no-restore -o artifacts/packages
-          dotnet pack src/Bing.Offices.Core/Bing.Offices.Core.csproj -c Release --no-restore -o artifacts/packages
-          dotnet pack src/Bing.Offices.Npoi/Bing.Offices.Npoi.csproj -c Release --no-restore -o artifacts/packages
-
-      - name: Verify packages
-        shell: bash
-        run: |
-          test "$(find artifacts/packages -name '*.nupkg' | wc -l)" -eq 3
-          test "$(find artifacts/packages -name '*.snupkg' | wc -l)" -eq 3
-          for package in artifacts/packages/*.nupkg; do
-            unzip -l "$package" | grep -q 'lib/'
-            unzip -l "$package" | grep -q '\.xml$'
-          done
-
-      - name: Package consumers
-        shell: bash
-        run: |
-          set -o pipefail
-          mkdir -p artifacts/consumer-results artifacts/consumer-cache/net6 artifacts/consumer-cache/net8
-          dotnet restore tests/Bing.Offices.Consumer.Net6/Bing.Offices.Consumer.Net6.csproj \
-            --configfile tests/Bing.Offices.Consumer.Net6/NuGet.Config \
-            --packages artifacts/consumer-cache/net6
-          dotnet restore tests/Bing.Offices.Consumer.Net8/Bing.Offices.Consumer.Net8.csproj \
-            --configfile tests/Bing.Offices.Consumer.Net8/NuGet.Config \
-            --packages artifacts/consumer-cache/net8
-          dotnet build tests/Bing.Offices.Consumer.Net6/Bing.Offices.Consumer.Net6.csproj \
-            -c Release --no-restore | tee artifacts/consumer-results/net6-build.log
-          dotnet build tests/Bing.Offices.Consumer.Net8/Bing.Offices.Consumer.Net8.csproj \
-            -c Release --no-restore | tee artifacts/consumer-results/net8-build.log
-          dotnet run --project tests/Bing.Offices.Consumer.Net6/Bing.Offices.Consumer.Net6.csproj \
-            -c Release --no-build --no-restore | tee artifacts/consumer-results/net6-run.log
-          dotnet run --project tests/Bing.Offices.Consumer.Net8/Bing.Offices.Consumer.Net8.csproj \
-            -c Release --no-build --no-restore | tee artifacts/consumer-results/net8-run.log
-          grep -q 'package-consumer-ok' artifacts/consumer-results/net6-run.log
-          grep -q 'package-consumer-ok' artifacts/consumer-results/net8-run.log
+      - name: Verify package candidate
+        shell: pwsh
+        run: ./build/Verify-PackageCandidate.ps1 -OutputDirectory artifacts/package-candidate
 
       - name: Upload package evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: bing-offices-package-evidence
           path: |
-            artifacts/packages
-            artifacts/consumer-results
+            artifacts/package-candidate
             artifacts/ci-contracts
             TestResults

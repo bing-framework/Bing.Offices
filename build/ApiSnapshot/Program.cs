@@ -18,13 +18,21 @@ var dependencies = arguments.GetValueOrDefault("dependencies");
 var packages = arguments.GetValueOrDefault("packages");
 var repository = Path.GetFullPath(arguments.GetValueOrDefault("repository") ?? Directory.GetCurrentDirectory());
 var captureOnly = string.Equals(arguments.GetValueOrDefault("capture"), "true", StringComparison.OrdinalIgnoreCase);
+var candidatePath = arguments.GetValueOrDefault("candidate");
 var targetFrameworks = new[] { "net6.0", "net8.0" };
 var jsonOptions = new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
 if (string.Equals(arguments.GetValueOrDefault("identity-self-test"), "true", StringComparison.OrdinalIgnoreCase))
     return CandidateIdentityContractTest.Run();
 
+if (captureOnly && candidatePath is not null)
+{
+    Console.Error.WriteLine("--candidate cannot be combined with --capture true.");
+    return 2;
+}
+
 ApiBaselineDocument? baseline = null;
+ApiBaselineDocument? identityDocument = null;
 if (!captureOnly)
 {
     if (!File.Exists(baselinePath))
@@ -35,6 +43,35 @@ if (!captureOnly)
     baseline = JsonSerializer.Deserialize<ApiBaselineDocument>(
         File.ReadAllText(baselinePath, System.Text.Encoding.UTF8), jsonOptions)
         ?? throw new InvalidOperationException("API snapshot baseline is empty.");
+
+    // 批准基线决定 API 合同；候选清单只提供本轮源码、程序集和包的身份。
+    // 未提供新参数时保持原来校验基线内身份的行为。
+    identityDocument = baseline;
+    if (candidatePath is not null)
+    {
+        candidatePath = Path.GetFullPath(candidatePath);
+        if (!File.Exists(candidatePath))
+        {
+            Console.Error.WriteLine($"API candidate manifest is missing: {candidatePath}");
+            return 2;
+        }
+        try
+        {
+            identityDocument = JsonSerializer.Deserialize<ApiBaselineDocument>(
+                File.ReadAllText(candidatePath, Encoding.UTF8), jsonOptions)
+                ?? throw new JsonException("Candidate manifest is empty.");
+        }
+        catch (Exception exception) when (exception is JsonException or IOException or UnauthorizedAccessException)
+        {
+            Console.Error.WriteLine($"API candidate manifest could not be read: {exception.Message}");
+            return 2;
+        }
+        if (identityDocument.Schema != schema || identityDocument.GeneratorVersion != generatorVersion)
+        {
+            Console.Error.WriteLine("API candidate manifest schema/generator mismatch.");
+            return 2;
+        }
+    }
 }
 
 var candidate = new ApiBaselineDocument
@@ -51,7 +88,9 @@ var candidateAssemblyPaths = GetCandidateAssemblyPaths(root);
 
 if (!captureOnly)
 {
-    CandidateIdentityVerifier.Validate(baseline!, candidateAssemblyPaths, packages, repository, failures);
+    CandidateIdentityVerifier.Validate(identityDocument!, candidateAssemblyPaths, packages, repository, failures);
+    candidate.CandidateIdentity = identityDocument!.CandidateIdentity;
+    candidate.BaselineCommit = identityDocument.BaselineCommit;
 }
 
 foreach (var tfm in targetFrameworks)
@@ -126,8 +165,11 @@ foreach (var tfm in targetFrameworks)
 }
 
 if (captureOnly)
+{
     candidate.CandidateIdentity = CandidateIdentityVerifier.Capture(
         candidateAssemblyPaths, packages, repository, candidate.BaselineCommit, failures);
+    candidate.BaselineCommit = candidate.CandidateIdentity.BaseCommit;
+}
 
 if (output is not null)
 {

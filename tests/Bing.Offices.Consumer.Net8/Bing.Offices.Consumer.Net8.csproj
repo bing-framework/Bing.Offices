@@ -11,4 +11,9 @@
     <PackageReference Include="Bing.Offices.Npoi" Version="$(BingOfficesPackageVersion)" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Bing.Offices.Consumer.Shared\ExcelSingleSheetPackageChecks.cs"
+             Link="ExcelSingleSheetPackageChecks.cs" />
+  </ItemGroup>
 </Project>
